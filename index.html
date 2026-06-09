@@ -14592,6 +14592,110 @@
             switchHrTab('my');
         }
 
+        // ── Emergency Leave ───────────────────────────────────────────────────
+        function openEmergencyLeaveModal() {
+            if (!isAdmin()) return toast('Only admins can add emergency leaves', 'error');
+
+            // Populate employee dropdown
+            const sel = document.getElementById('el-employee');
+            if (sel) {
+                sel.innerHTML = Array.from(allUsersMap.values())
+                    .filter(u => u.email && u.email !== '123')
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                    .map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`)
+                    .join('');
+            }
+
+            // Default dates to today
+            const today = todayIso();
+            const fromEl = document.getElementById('el-from');
+            const toEl   = document.getElementById('el-to');
+            if (fromEl) fromEl.value = today;
+            if (toEl)   toEl.value   = today;
+
+            // Clear reason
+            const reasonEl = document.getElementById('el-reason');
+            if (reasonEl) reasonEl.value = '';
+
+            document.getElementById('emergencyLeaveModal').showModal();
+        }
+
+        async function submitEmergencyLeave() {
+            if (!isAdmin()) return toast('Only admins can add emergency leaves', 'error');
+
+            const employeeEmail = document.getElementById('el-employee')?.value?.trim();
+            const fromDate      = document.getElementById('el-from')?.value;
+            const toDate        = document.getElementById('el-to')?.value;
+            const reason        = document.getElementById('el-reason')?.value?.trim();
+            const status        = document.getElementById('el-status')?.value || 'approved';
+
+            if (!employeeEmail) return toast('Select an employee', 'error');
+            if (!fromDate || !toDate) return toast('Select leave dates', 'error');
+            if (new Date(toDate) < new Date(fromDate)) return toast('To Date cannot be before From Date', 'error');
+            if (!reason) return toast('Enter a reason', 'error');
+
+            const employee = allUsersMap.get(employeeEmail.toLowerCase()) || knownUserByEmail(employeeEmail);
+
+            // Calculate leave days
+            const from  = new Date(fromDate);
+            const to    = new Date(toDate);
+            const diffMs = to - from;
+            const leaveDays = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+            // Build approval chain for the employee
+            const approvalChain = getLeaveApprovalChainForRequester(employeeEmail);
+            const approvals = approvalChain.map((approverEmail, index) => ({
+                approverEmail,
+                approverName: knownUserByEmail(approverEmail)?.name || approverEmail,
+                step: index + 1,
+                status: status === 'approved' ? 'approved' : 'pending',
+                approvedAt: status === 'approved' ? Date.now() : null,
+                note: status === 'approved' ? 'Emergency leave added by admin' : null
+            }));
+
+            const req = {
+                type:               'leave',
+                userId:             employeeEmail,
+                userName:           employee?.name || employeeEmail,
+                userRole:           employee?.role || 'Employee',
+                leaveType:          'Emergency Leave',
+                leaveDuration:      'full',
+                leaveDurationLabel: `${leaveDays} Day${leaveDays > 1 ? 's' : ''}`,
+                leaveDays,
+                fromDate,
+                toDate,
+                reason,
+                status,
+                submittedAt:        Date.now(),
+                reviewedBy:         currentUser.email,
+                reviewNote:         'Emergency leave added by admin',
+                reviewedAt:         status === 'approved' ? Date.now() : null,
+                approvalChain,
+                approvals,
+                currentApprovalStep: approvalChain.length
+            };
+
+            try {
+                await push(ref(db, 'worksync/requests'), req);
+
+                // Update monthly leave organiser count
+                const orgCount = (currentOrganisers?.leave?.count || 0) + 1;
+                await update(ref(db, 'worksync/monthly_organisers/leave'), { count: orgCount });
+
+                // Notify team
+                await sendAutomaticAnnouncement(
+                    '⚠️ Emergency Leave Logged',
+                    `${employee?.name || employeeEmail} is on emergency leave from ${fromDate} to ${toDate}. Reason: ${reason.substring(0, 80)}`
+                );
+
+                document.getElementById('emergencyLeaveModal').close();
+                toast(`Emergency leave added for ${employee?.name || employeeEmail}`, 'success');
+            } catch (err) {
+                console.error('Emergency leave submission failed:', err);
+                toast('Failed to add emergency leave: ' + err.message, 'error');
+            }
+        }
+
         function loadMyRequests() {
             const q = query(ref(db, 'worksync/requests'), orderByChild('userId'), equalTo(currentUser.email));
             onValue(q, snap => {
@@ -18100,6 +18204,7 @@
         window.handleDpSort = handleDpSort;
         window.openSettings = openSettings; window.toggleChatMute = toggleChatMute; window.openProfile = openProfile; window.uploadPhoto = uploadPhoto; window.saveProfile = saveProfile;
         window.switchHrTab = switchHrTab; window.setReqType = setReqType; window.submitHrRequest = submitHrRequest;
+        window.openEmergencyLeaveModal = openEmergencyLeaveModal; window.submitEmergencyLeave = submitEmergencyLeave;
         window.leaveCalNav = leaveCalNav; window.renderLeaveCalendar = renderLeaveCalendar;
         window.calcDays = calcDays; window.syncHalfDayLeaveDates = syncHalfDayLeaveDates; window.handleLeaveDurationChange = handleLeaveDurationChange; window.toggleOtherReason = toggleOtherReason;
         window.openApproveModal = openApproveModal; window.closeApproveModal = closeApproveModal; window.submitApproval = submitApproval;
