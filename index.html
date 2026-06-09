@@ -9047,32 +9047,37 @@
         }
 
         async function doStartTask(id) {
-            // If another task is active, log its time before switching.
+            // If another task is active, log its time and put it on hold before switching.
             if (activeTaskId && activeTaskId !== id) {
                 stopTaskTimer();
                 // Accurate final duration calculation before logging
                 if (!taskOnHold && taskStartTime) {
                     taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
                 }
-                
-                // If previous task was on hold, persist that hold state to Firebase
-                if (taskOnHold && activeTaskId) {
-                    const prevTask = tasks.find(t => t.id === activeTaskId);
-                    if (prevTask) {
-                        prevTask.isOnHold = true;
-                        if (prevTask.manual) {
-                            try {
-                                await update(ref(db, `worksync/manual_tasks/${eKey(prevTask.userId || currentUser.email)}/${activeTaskId}`), { isOnHold: true });
-                            } catch(e) { /* non-critical */ }
-                        }
+
+                const prevTask = tasks.find(t => t.id === activeTaskId);
+
+                // Auto-hold the previous task (whether it was running or already on hold)
+                if (prevTask) {
+                    prevTask.isOnHold = true;
+                    // Update status to Hold for internal tasks (not morning learning)
+                    if (isInternalTask(prevTask) && !isMorningLearningTask(prevTask)) {
+                        prevTask.status = 'Hold';
+                        try {
+                            await update(ref(db, `worksync/manual_tasks/${eKey(prevTask.userId || currentUser.email)}/${activeTaskId}`), { isOnHold: true, status: 'Hold' });
+                        } catch(e) { /* non-critical */ }
+                    } else {
+                        try {
+                            await update(ref(db, `worksync/manual_tasks/${eKey(prevTask.userId || currentUser.email)}/${activeTaskId}`), { isOnHold: true });
+                        } catch(e) { /* non-critical */ }
                     }
                 }
-                
-                const oldTask = tasks.find(t => t.id === activeTaskId);
+
+                // Log the time segment for the previous task
                 const log = {
                     taskId: activeTaskId,
-                    taskDesc: oldTask?.desc || '',
-                    client: oldTask?.client || '',
+                    taskDesc: prevTask?.desc || '',
+                    client: prevTask?.client || '',
                     userId: currentUser.email,
                     userName: currentUser.name,
                     startTime: taskStartTime,
@@ -9081,7 +9086,7 @@
                     durationFormatted: formatTime(taskSeconds)
                 };
                 await push(ref(db, 'worksync/timelogs'), log);
-                toast(`Task ${activeTaskId} ${taskOnHold ? 'kept on hold' : 'ended'} — ${formatTime(taskSeconds)} logged`, 'info');
+                toast(`Task ${activeTaskId} put on hold — ${formatTime(taskSeconds)} logged`, 'info');
             }
 
             // Now, start the new task.
@@ -9197,6 +9202,14 @@
             taskStartTime = Date.now() - (taskSeconds * 1000);
             startTaskTimer();
             saveCurrentTaskState('working');
+            // Update status back to In Progress for internal tasks
+            if (activeTaskId) {
+                const task = tasks.find(t => t.id === activeTaskId);
+                if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
+                    task.isOnHold = false;
+                    updateInternalTaskStatus(activeTaskId, 'In Progress');
+                }
+            }
             renderTasks();
             if (isInternalTabActive()) renderInternalTasks();
             renderActiveTaskCard();
@@ -13621,8 +13634,10 @@
                         if (taskStatus.toLowerCase() === 'to do') return;
                         processedTaskIds.add(log.taskId);
                         let client = log.client || 'Additional Tasks';
-                        if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com' && client === 'Internal') {
-                            client = 'Recurring Tasks';
+                        if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                            if (client === 'Internal') client = 'Recurring Tasks';
+                            // Client Sent tasks go under Vilpower DM for Murugesh
+                            else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
                         }
                         if (!clientGroups[client]) clientGroups[client] = [];
                         
@@ -13640,18 +13655,20 @@
                     if (current && !processedTaskIds.has(current.taskId)) {
                         const task = tasks.find(t => t.id === current.taskId);
                         const taskStatus = task?.status || '';
-                        // Skip learning/learnings tasks for all users
-                        const isLearningCurrent = String(current.taskId || '').startsWith('LEARN-')
+                        // Skip ALL learning/morning-learning tasks — same rules as logs block
+                        const isLearningCurrent = isMorningLearningTask(task || { id: current.taskId })
+                            || String(current.taskId || '').startsWith('LEARN-')
+                            || String(current.taskDesc || '').toLowerCase().includes('morning learning')
                             || String(current.taskDesc || '').toLowerCase().startsWith('learning')
-                            || isMorningLearningTask(current)
-                            || (task && (task.status === 'Learnings' || task.status === 'Learning' || isMorningLearningTask(task)))
+                            || (task && (task.status === 'Learnings' || task.status === 'Learning'))
                             || String(taskStatus).toLowerCase() === 'design to do';
                         // Skip tasks still at "To do"
                         const isTodoTask = taskStatus.toLowerCase() === 'to do';
                         if (!isLearningCurrent && !isTodoTask) {
                             let client = current.client || 'Additional Tasks';
-                            if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com' && client === 'Internal') {
-                                client = 'Recurring Tasks';
+                            if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                                if (client === 'Internal') client = 'Recurring Tasks';
+                                else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
                             }
                             if (!clientGroups[client]) clientGroups[client] = [];
                             
@@ -13671,7 +13688,7 @@
                     const clientEntries = Object.entries(clientGroups);
                     if (!clientEntries.length) return; // all tasks were filtered out (todo/learning)
                     contentAdded = true;
-                    report += `${user.name || user.email}\n`;
+                    report += `*${user.name || user.email}*\n`;
                     clientEntries.forEach(([client, items]) => {
                         report += `${client}\n`;
                         items.forEach(item => report += `  ${taskNumber++}. ${item}\n`);
@@ -13698,12 +13715,25 @@
             const modal = document.getElementById('dailyTaskReportModal');
             if (!dateEl || !contentEl || !modal) return toast('Report modal is unavailable', 'error');
             dateEl.textContent = reportDate;
-            contentEl.textContent = reportContent;
+            // Display: render *Name* as bold, escape everything else
+            const htmlContent = reportContent
+                .split('\n')
+                .map(line => {
+                    const escaped = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    // Bold lines wrapped in *...*
+                    return escaped.replace(/^\*(.*)\*$/, '<strong>$1</strong>');
+                })
+                .join('\n');
+            contentEl.innerHTML = htmlContent;
+            // Store plain text for copy (keeps * for WhatsApp bold)
+            contentEl.dataset.plainText = reportContent;
             if (!modal.open) modal.showModal();
         }
 
         function copyDailyReport() {
-            const reportContent = document.getElementById('daily-report-content').textContent;
+            const contentEl = document.getElementById('daily-report-content');
+            // Use stored plain text (with * markers intact for WhatsApp/Telegram bold)
+            const reportContent = contentEl.dataset.plainText || contentEl.textContent;
             navigator.clipboard.writeText(reportContent).then(() => {
                 toast('Report copied to clipboard!', 'success');
             }).catch(err => {
