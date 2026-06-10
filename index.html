@@ -5428,6 +5428,7 @@
                 initDailyPlan();
                 registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
                 restoreTimerState();
+                restoreCheckinFromFirebase();
                 initDailyReportScheduler();
                 restoreActiveTask();
                 initTaskNotifications();
@@ -6292,6 +6293,81 @@
                     if (headerDisplay) headerDisplay.textContent = formatted;
                 }
                 setTimerState('paused');
+            }
+        }
+
+        // ── Restore check-in state from Firebase (handles new browser / cleared storage) ──
+        async function restoreCheckinFromFirebase() {
+            // If localStorage already restored state, nothing to do
+            if (isCheckedIn) return;
+            if (!db || !currentUser) return;
+
+            try {
+                const today = new Date().toISOString().slice(0, 10);
+                const q = query(
+                    ref(db, 'worksync/attendance_events'),
+                    orderByChild('userId'),
+                    equalTo(currentUser.email)
+                );
+                const snap = await get(q);
+                if (!snap.exists()) return;
+
+                // Collect today's events sorted by timestamp
+                const todayEvents = Object.values(snap.val())
+                    .filter(e => e.date === today)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                if (!todayEvents.length) return;
+
+                const lastEvent = todayEvents[todayEvents.length - 1];
+
+                // Already checked out today — stay idle
+                if (lastEvent.type === 'check_out') return;
+
+                // Has a check_in — restore state
+                const checkInEvent = todayEvents.find(e => e.type === 'check_in');
+                if (!checkInEvent) return;
+
+                isCheckedIn = true;
+                checkInTime = checkInEvent.timestamp;
+
+                // Calculate total break duration from paired break_start/break_end events
+                let calcBreak = 0;
+                let bStart = null;
+                todayEvents.forEach(e => {
+                    if (e.type === 'break_start') bStart = e.timestamp;
+                    if (e.type === 'break_end' && bStart) {
+                        calcBreak += (e.timestamp - bStart);
+                        bStart = null;
+                    }
+                });
+                totalBreakDuration = calcBreak;
+
+                // Seed localStorage so timer calculations work correctly
+                localStorage.setItem('worksync_checkInTime', String(checkInTime));
+                localStorage.setItem('worksync_totalBreakDuration', String(totalBreakDuration));
+
+                if (lastEvent.type === 'break_start') {
+                    // Currently on break
+                    breakStartTime = lastEvent.timestamp;
+                    localStorage.setItem('worksync_timerState', 'paused');
+                    localStorage.setItem('worksync_breakStartTime', String(breakStartTime));
+                    const workMs = (breakStartTime - checkInTime) - totalBreakDuration;
+                    seconds = Math.floor(Math.max(0, workMs / 1000));
+                    document.getElementById('timer-display').textContent = formatTime(seconds);
+                    setTimerState('paused');
+                    toast('Check-in restored — currently on break', 'info');
+                } else {
+                    // Currently working
+                    localStorage.setItem('worksync_timerState', 'running');
+                    setTimerState('running');
+                    clearInterval(timerRef);
+                    timerRef = setInterval(tickTimer, 1000);
+                    tickTimer();
+                    toast('Check-in status restored ✓', 'info');
+                }
+            } catch (err) {
+                console.warn('[restoreCheckinFromFirebase] failed:', err);
             }
         }
 
