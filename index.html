@@ -5549,7 +5549,13 @@
         async function logout() {
             if (db && currentUser) {
                 await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false);
-                await clearCurrentTask();
+                // Save the latest task timer state before signing out so it can be
+                // restored accurately on next login.
+                if (activeTaskId) {
+                    await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                }
+                // NOTE: Do NOT clear currentTask or timer state here —
+                // they are preserved so the user can resume exactly where they left off after re-login.
             }
             await signOut(auth);
             Object.values(convListeners).forEach(off => off && off());
@@ -5590,10 +5596,8 @@
             updateOrganiserNavVisibility();
             clearInterval(timerRef); seconds = 0; activeConvId = null; unreadCounts = {}; unreadAnnouncements = 0;
             localStorage.removeItem('worksync_user');
-            localStorage.removeItem('worksync_timerState');
-            localStorage.removeItem('worksync_checkInTime');
-            localStorage.removeItem('worksync_totalBreakDuration');
-            localStorage.removeItem('worksync_breakStartTime');
+            // Timer & check-in keys are intentionally kept in localStorage so state
+            // is restored immediately on the next login on the same device.
             appInitialized = false;
             document.documentElement.classList.remove('has-user');
             document.documentElement.classList.remove('auth-pending');
