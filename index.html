@@ -5448,6 +5448,8 @@
                 }
                 initAdminCheckoutReasonNotifications();
                 setInterval(checkAutoCheckout, 60000);
+                // Show the floating chat bubble now that everything is ready
+                if (typeof showFloatBtn === 'function') showFloatBtn();
                 setInterval(checkBirthdays, 60000); // Check for birthdays every minute
                 setInterval(checkDailyPlanProgressNotification, 60000);
                 // Removed auto-update mechanism to stop page reloads
@@ -5602,6 +5604,7 @@
             document.documentElement.classList.remove('has-user');
             document.documentElement.classList.remove('auth-pending');
             resetTimerUI(); setTimerState('idle');
+            if (typeof hideFloatBtn === 'function') hideFloatBtn();
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('login-view').classList.remove('hidden');
         }
@@ -19026,7 +19029,13 @@
         const panel = document.getElementById('float-chat-panel');
         if (fcpOpen) {
             panel.style.display = 'flex';
-            fcpRenderList();
+            // Retry if data not ready yet
+            if (!allUsersMap || allUsersMap.size === 0) {
+                document.getElementById('fcp-dm-list').innerHTML = '<p style="padding:16px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">Loading…</p>';
+                setTimeout(() => { if (fcpOpen) fcpRenderList(); }, 1000);
+            } else {
+                fcpRenderList();
+            }
         } else {
             panel.style.display = 'none';
         }
@@ -19350,7 +19359,7 @@
     };
 
     // Show the bubble once the user is logged in (has-user class added by auth)
-    // Helper: show/hide the bubble reliably
+    // Show/hide the bubble — called directly from finishLogin() and logout()
     function showFloatBtn() {
         const btn = document.getElementById('float-chat-btn');
         if (btn) btn.style.display = 'flex';
@@ -19360,22 +19369,20 @@
         if (btn) btn.style.display = 'none';
     }
 
-    const _floatObserver = new MutationObserver(() => {
-        const loggedIn = document.documentElement.classList.contains('has-user');
-        const onChatView = (typeof activeView !== 'undefined') && activeView === 'chat';
-        if (loggedIn && !onChatView) showFloatBtn(); else hideFloatBtn();
-    });
-    _floatObserver.observe(document.documentElement, { attributeFilter: ['class'] });
-
-    // Hook into switchView lazily — wait until it's defined on window
+    // Hook into switchView lazily — hide bubble on Chat view, show on all others
     (function patchSwitchView() {
         if (typeof window.switchView === 'function') {
             const _orig = window.switchView;
             window.switchView = function(view) {
                 _orig(view);
-                const loggedIn = document.documentElement.classList.contains('has-user');
-                if (loggedIn && view !== 'chat') showFloatBtn(); else hideFloatBtn();
-                if (view === 'chat' && fcpOpen) toggleFloatChat();
+                const btn = document.getElementById('float-chat-btn');
+                if (!btn || btn.style.display === 'none') return; // not logged in yet
+                if (view === 'chat') {
+                    btn.style.display = 'none';
+                    if (fcpOpen) toggleFloatChat();
+                } else {
+                    btn.style.display = 'flex';
+                }
             };
         } else {
             setTimeout(patchSwitchView, 200);
