@@ -9721,6 +9721,18 @@
             discussionPopupShown = false;
         }
 
+        // Join a discussion directly from the upcoming list (no popup needed)
+        async function joinDiscussionById(discId) {
+            const disc = discussions.find(d => d.id === discId);
+            if (!disc) return toast('Discussion not found', 'error');
+            // Already joined?
+            if ((disc.joinedBy || []).includes(currentUser.email)) {
+                return toast('You have already joined this discussion', 'info');
+            }
+            currentDiscussion = disc;
+            await joinDiscussion();
+        }
+
         function dismissDiscussionPopup() {
             const popup = document.getElementById('discussionJoinPopup');
             popup.close();
@@ -9743,10 +9755,8 @@
                     discussions = [];
                     snapshot.forEach(childSnapshot => {
                         const disc = childSnapshot.val();
-                        // Only track discussions where the current user is a participant
-                        if (disc && disc.participants && disc.participants.includes(currentUser.email)) {
-                            discussions.push(disc);
-                        }
+                        // Load ALL discussions so every user can see and join upcoming ones
+                        if (disc) discussions.push(disc);
                     });
                     startDiscussionListener();
                     if (activeView === 'discussions') {
@@ -9870,8 +9880,16 @@
                             </div>
                             <h5 class="text-xs font-black text-slate-900">${escapeHtml(disc.title)}</h5>
                             <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(disc.description || 'No description.')}</p>
-                            <div class="pt-2 border-t border-slate-200/50 text-[10px] text-slate-400 font-bold">
-                                Participants: <span class="text-slate-600 font-medium">${escapeHtml(participantNames)}</span>
+                            <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between gap-3">
+                                <div class="text-[10px] text-slate-400 font-bold">
+                                    Participants: <span class="text-slate-600 font-medium">${escapeHtml(participantNames)}</span>
+                                </div>
+                                ${(disc.joinedBy || []).includes(currentUser.email)
+                                    ? `<span class="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><iconify-icon icon="solar:check-circle-bold" width="13"></iconify-icon> Joined</span>`
+                                    : `<button onclick="joinDiscussionById('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                        <iconify-icon icon="solar:users-group-rounded-bold" width="13"></iconify-icon> Join
+                                       </button>`
+                                }
                             </div>
                         </div>
                     `;
@@ -18604,7 +18622,7 @@
         window.sendReportEmail = sendReportEmail; window.toggleEmailReportSetting = toggleEmailReportSetting;
         window.holdTask = holdTask; window.resumeTaskTimer = resumeTaskTimer; window.endTask = endTask;
         window.openAddTaskModal = openAddTaskModal; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.deleteManualTask = deleteManualTask;
-        window.openScheduleDiscussionModal = openScheduleDiscussionModal; window.submitScheduleDiscussion = submitScheduleDiscussion; window.joinDiscussion = joinDiscussion; window.dismissDiscussionPopup = dismissDiscussionPopup;
+        window.openScheduleDiscussionModal = openScheduleDiscussionModal; window.submitScheduleDiscussion = submitScheduleDiscussion; window.joinDiscussion = joinDiscussion; window.joinDiscussionById = joinDiscussionById; window.dismissDiscussionPopup = dismissDiscussionPopup;
         window.loadUsersList = loadUsersList; window.openAdminUserModal = openAdminUserModal; window.saveAdminUser = saveAdminUser; window.auUploadPhoto = auUploadPhoto; window.deleteAdminUser = deleteAdminUser;
         window.openClientMapModal = openClientMapModal; window.saveClientMapEntry = saveClientMapEntry; window.deleteClientMapEntry = deleteClientMapEntry;
         window.openCustomClientModal = openCustomClientModal; window.saveCustomClientEntry = saveCustomClientEntry; window.deleteCustomClient = deleteCustomClient;
@@ -19346,17 +19364,20 @@
     });
     _floatObserver.observe(document.documentElement, { attributeFilter: ['class'] });
 
-    // Also hide/show bubble when navigating views
-    const _origSwitchView = window.switchView;
-    if (typeof _origSwitchView === 'function') {
-        window.switchView = function(view) {
-            _origSwitchView(view);
-            const loggedIn = document.documentElement.classList.contains('has-user');
-            if (loggedIn && view !== 'chat') showFloatBtn(); else hideFloatBtn();
-            // Close the popup if navigating to full chat
-            if (view === 'chat' && fcpOpen) toggleFloatChat();
-        };
-    }
+    // Hook into switchView lazily — wait until it's defined on window
+    (function patchSwitchView() {
+        if (typeof window.switchView === 'function') {
+            const _orig = window.switchView;
+            window.switchView = function(view) {
+                _orig(view);
+                const loggedIn = document.documentElement.classList.contains('has-user');
+                if (loggedIn && view !== 'chat') showFloatBtn(); else hideFloatBtn();
+                if (view === 'chat' && fcpOpen) toggleFloatChat();
+            };
+        } else {
+            setTimeout(patchSwitchView, 200);
+        }
+    })();
 
     window.toggleFloatChat   = toggleFloatChat;
     window.switchFloatTab    = switchFloatTab;
