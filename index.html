@@ -18912,7 +18912,7 @@
 
     <!-- Bubble Button -->
     <button id="float-chat-btn" onclick="toggleFloatChat()"
-        class="hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl shadow-indigo-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+        class="hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl shadow-indigo-200 items-center justify-center transition-all hover:scale-105 active:scale-95"
         title="Open Chat">
         <iconify-icon icon="solar:chat-round-dots-bold" width="26"></iconify-icon>
         <span id="float-chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[1.1rem] text-center border-2 border-white">0</span>
@@ -19329,13 +19329,20 @@
     };
 
     // Show the bubble once the user is logged in (has-user class added by auth)
-    const _floatObserver = new MutationObserver(() => {
+    // Helper: show/hide the bubble reliably
+    function showFloatBtn() {
         const btn = document.getElementById('float-chat-btn');
-        if (!btn) return;
+        if (btn) { btn.style.display = 'flex'; }
+    }
+    function hideFloatBtn() {
+        const btn = document.getElementById('float-chat-btn');
+        if (btn) { btn.style.display = 'none'; }
+    }
+
+    const _floatObserver = new MutationObserver(() => {
         const loggedIn = document.documentElement.classList.contains('has-user');
-        // Hide on the full Chat view — no need for bubble there
         const onChatView = (typeof activeView !== 'undefined') && activeView === 'chat';
-        btn.classList.toggle('hidden', !loggedIn || onChatView);
+        if (loggedIn && !onChatView) showFloatBtn(); else hideFloatBtn();
     });
     _floatObserver.observe(document.documentElement, { attributeFilter: ['class'] });
 
@@ -19344,8 +19351,8 @@
     if (typeof _origSwitchView === 'function') {
         window.switchView = function(view) {
             _origSwitchView(view);
-            const btn = document.getElementById('float-chat-btn');
-            if (btn) btn.classList.toggle('hidden', view === 'chat' || !document.documentElement.classList.contains('has-user'));
+            const loggedIn = document.documentElement.classList.contains('has-user');
+            if (loggedIn && view !== 'chat') showFloatBtn(); else hideFloatBtn();
             // Close the popup if navigating to full chat
             if (view === 'chat' && fcpOpen) toggleFloatChat();
         };
