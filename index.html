@@ -18928,21 +18928,22 @@
          FLOATING CHAT BUBBLE  (Google Chat-style popup)
     ═══════════════════════════════════════════════════════ -->
 
-    <!-- Bubble Button -->
+    <!-- Bubble Button — starts hidden via style, shown by JS after login -->
     <button id="float-chat-btn" onclick="toggleFloatChat()"
-        class="hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl shadow-indigo-200 items-center justify-center transition-all hover:scale-105 active:scale-95"
+        style="display:none; position:fixed; bottom:24px; right:24px; z-index:9999; width:56px; height:56px; background:#4f46e5; border:none; border-radius:50%; box-shadow:0 8px 32px rgba(79,70,229,0.35); cursor:pointer; align-items:center; justify-content:center; transition:transform 0.15s;"
+        onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'"
         title="Open Chat">
-        <iconify-icon icon="solar:chat-round-dots-bold" width="26"></iconify-icon>
-        <span id="float-chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[1.1rem] text-center border-2 border-white">0</span>
+        <iconify-icon icon="solar:chat-round-dots-bold" width="26" style="color:white;pointer-events:none;"></iconify-icon>
+        <span id="float-chat-badge"
+            style="display:none; position:absolute; top:-4px; right:-4px; background:#ef4444; color:white; font-size:10px; font-weight:900; padding:2px 5px; border-radius:999px; min-width:18px; text-align:center; border:2px solid white; pointer-events:none;">0</span>
     </button>
 
-    <!-- Floating Panel -->
+    <!-- Floating Panel — hidden by default -->
     <div id="float-chat-panel"
-        class="hidden fixed bottom-24 right-6 z-50 w-80 bg-white rounded-2xl shadow-2xl shadow-slate-300/60 border border-slate-200 flex flex-col overflow-hidden"
-        style="height:480px; max-height:calc(100vh - 120px);">
+        style="display:none; position:fixed; bottom:92px; right:24px; z-index:9998; width:320px; height:480px; max-height:calc(100vh - 110px); background:white; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.18); border:1px solid #e2e8f0; flex-direction:column; overflow:hidden;">
 
         <!-- Panel: Conversation List -->
-        <div id="fcp-list-view" class="flex flex-col h-full">
+        <div id="fcp-list-view" style="display:flex; flex-direction:column; height:100%;">
             <!-- Header -->
             <div class="bg-indigo-600 px-4 py-3 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2">
@@ -19024,12 +19025,10 @@
         fcpOpen = !fcpOpen;
         const panel = document.getElementById('float-chat-panel');
         if (fcpOpen) {
-            panel.classList.remove('hidden');
-            panel.classList.add('flex', 'flex-col');
+            panel.style.display = 'flex';
             fcpRenderList();
         } else {
-            panel.classList.add('hidden');
-            panel.classList.remove('flex', 'flex-col');
+            panel.style.display = 'none';
         }
     }
 
@@ -19150,8 +19149,8 @@
         fcpUpdateFloatBadge();
 
         // Switch to conv view
-        document.getElementById('fcp-list-view').classList.add('hidden');
-        document.getElementById('fcp-conv-view').classList.remove('hidden');
+        document.getElementById('fcp-list-view').style.display = 'none';
+        document.getElementById('fcp-conv-view').style.display = 'flex';
         document.getElementById('fcp-conv-name').textContent = name;
 
         const avatarEl = document.getElementById('fcp-conv-avatar');
@@ -19306,12 +19305,16 @@
     function fcpUpdateAttachmentPreview() {
         const preview = document.getElementById('fcp-attachment-preview');
         const list = document.getElementById('fcp-attachment-list');
-        if (!fcpStagedAttachments.length) { preview.classList.add('hidden'); list.innerHTML = ''; return; }
-        preview.classList.remove('hidden');
+        if (!fcpStagedAttachments.length) { 
+            if (preview) preview.style.display = 'none';
+            if (list) list.innerHTML = ''; 
+            return; 
+        }
+        if (preview) preview.style.display = 'block';
         list.innerHTML = fcpStagedAttachments.map((f, i) => `
-            <div class="relative">
-                <div class="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-600 font-bold max-w-[100px] truncate">${escapeHtml(f.name)}</div>
-                <button onclick="fcpRemoveAttachment(${i})" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] flex items-center justify-center">✕</button>
+            <div style="position:relative;display:inline-block;">
+                <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px 8px;font-size:10px;color:#475569;font-weight:700;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.name)}</div>
+                <button onclick="fcpRemoveAttachment(${i})" style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#ef4444;color:white;border:none;border-radius:50%;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
             </div>`).join('');
     }
 
@@ -19325,8 +19328,8 @@
         fcpConvId = null;
         fcpStagedAttachments = [];
         fcpUpdateAttachmentPreview();
-        document.getElementById('fcp-conv-view').classList.add('hidden');
-        document.getElementById('fcp-list-view').classList.remove('hidden');
+        document.getElementById('fcp-conv-view').style.display = 'none';
+        document.getElementById('fcp-list-view').style.display = 'flex';
         fcpRenderList();
     }
 
@@ -19335,7 +19338,7 @@
         const badge = document.getElementById('float-chat-badge');
         if (!badge) return;
         badge.textContent = total;
-        badge.classList.toggle('hidden', total === 0);
+        badge.style.display = total > 0 ? 'block' : 'none';
     }
 
     // Hook into renderChatBadge to also update the float bubble badge
@@ -19350,11 +19353,11 @@
     // Helper: show/hide the bubble reliably
     function showFloatBtn() {
         const btn = document.getElementById('float-chat-btn');
-        if (btn) { btn.style.display = 'flex'; }
+        if (btn) btn.style.display = 'flex';
     }
     function hideFloatBtn() {
         const btn = document.getElementById('float-chat-btn');
-        if (btn) { btn.style.display = 'none'; }
+        if (btn) btn.style.display = 'none';
     }
 
     const _floatObserver = new MutationObserver(() => {
