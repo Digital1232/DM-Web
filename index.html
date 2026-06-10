@@ -4326,6 +4326,10 @@
         };
 
         const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'AshmithaSree'];
+
+        // Sub-clients managed under Vilpower DM — used for Murugesh daily task client selection
+        const VILPOWER_DM_CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'AshmithaSree', 'Quade'];
+
         let clientLabelMap = {};
         let customClients = [...CLIENTS];
         
@@ -9062,8 +9066,12 @@
 
             const select = document.getElementById('murugesh-client-select');
             if (select) {
-                select.innerHTML = '<option value="" disabled selected>Select a client...</option>' + 
-                    CLIENTS.map(c => `<option value="${c}">${c}</option>`).join('');
+                // Use Vilpower DM sub-clients for daily recurring tasks; fall back to full list
+                const clientList = VILPOWER_DM_CLIENTS.length
+                    ? VILPOWER_DM_CLIENTS.slice().sort((a, b) => a.localeCompare(b))
+                    : customClients;
+                select.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
+                    clientList.map(c => `<option value="${c}">${c}</option>`).join('');
             }
 
             document.getElementById('murugeshClientModal').showModal();
