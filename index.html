@@ -5795,6 +5795,36 @@
             });
         }
 
+        // ── Cloudinary upload for chat attachments ────────────────────────────
+        const CLOUDINARY_CLOUD = 'dhmcegvco';
+        const CLOUDINARY_PRESET = 'One Desk';
+
+        async function uploadToCloudinary(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_PRESET);
+            formData.append('folder', 'worksync_chat');
+
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `Cloudinary upload failed (${res.status})`);
+            }
+
+            const data = await res.json();
+            return {
+                url:  data.secure_url,
+                type: file.type || 'application/octet-stream',
+                name: file.name,
+                size: data.bytes,
+                cloudinary: true
+            };
+        }
+
         async function uploadPhoto() {
             const file = document.getElementById('photo-upload').files[0];
             if (!file || !currentUser) return;
@@ -11438,11 +11468,18 @@
                 if (stagedAttachments.length) {
                     const attachments = [];
                     for (const file of stagedAttachments) {
-                        attachments.push({
-                            url: await fileToBase64(file),
-                            type: file.type || 'application/octet-stream',
-                            name: file.name
-                        });
+                        try {
+                            const uploaded = await uploadToCloudinary(file);
+                            attachments.push(uploaded);
+                        } catch (cloudErr) {
+                            console.warn('Cloudinary upload failed, falling back to base64:', cloudErr);
+                            // Fallback to base64 if Cloudinary fails
+                            attachments.push({
+                                url: await fileToBase64(file),
+                                type: file.type || 'application/octet-stream',
+                                name: file.name
+                            });
+                        }
                     }
                     payload.attachments = attachments;
                     if (attachments.length === 1) {
