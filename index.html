@@ -16673,7 +16673,7 @@
                                 </button>
                             `}
                             ${isAdmin() ? `
-                            <button onclick="openDpEditModal('${t.id}','${t.plannedForUser}',${JSON.stringify(JSON.stringify(t.planData))})" class="p-2 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors" title="Edit plan entry">
+                            <button onclick="openDpEditModal('${t.id}','${t.plannedForUser}','${(t.planData?.date || todayIso())}')" class="p-2 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors" title="Edit plan entry">
                                 <iconify-icon icon="solar:pen-2-bold" width="16"></iconify-icon>
                             </button>
                             <button onclick="removeFromDailyPlan('${t.id}', '${t.plannedForUser}')" class="p-2 text-slate-400 hover:text-rose-500 rounded-lg transition-colors" title="Remove from plan">
@@ -18298,12 +18298,11 @@
         // ── Daily Plan Edit Modal ─────────────────────────────────────────────
         let _dpEditCtx = {};   // holds { taskId, oldUserEmail, planData } while modal is open
 
-        function openDpEditModal(taskId, currentUserEmail, planDataJson) {
+        function openDpEditModal(taskId, currentUserEmail, planDate) {
             if (!isAdmin()) return toast('Only admins can edit plan entries', 'error');
-            const planData = JSON.parse(planDataJson);
             const task = tasks.find(t => t.id === taskId);
 
-            _dpEditCtx = { taskId, oldUserEmail: currentUserEmail, planData };
+            _dpEditCtx = { taskId, oldUserEmail: currentUserEmail, planDate };
 
             // Populate task info
             document.getElementById('dp-edit-task-id').textContent  = taskId;
@@ -18318,14 +18317,14 @@
                 .join('');
 
             // Populate date
-            document.getElementById('dp-edit-date').value = planData.date || todayIso();
+            document.getElementById('dp-edit-date').value = planDate || todayIso();
 
             document.getElementById('dpEditModal').showModal();
         }
 
         async function saveDpEdit() {
             if (!isAdmin()) return toast('Only admins can edit plan entries', 'error');
-            const { taskId, oldUserEmail, planData } = _dpEditCtx;
+            const { taskId, oldUserEmail } = _dpEditCtx;
             const newUserEmail = document.getElementById('dp-edit-assignee').value;
             const newDate      = document.getElementById('dp-edit-date').value;
 
