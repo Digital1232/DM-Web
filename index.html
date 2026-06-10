@@ -18904,6 +18904,463 @@
             </div>
         </div>
     </dialog>
+
+
+    <!-- ═══════════════════════════════════════════════════════
+         FLOATING CHAT BUBBLE  (Google Chat-style popup)
+    ═══════════════════════════════════════════════════════ -->
+
+    <!-- Bubble Button -->
+    <button id="float-chat-btn" onclick="toggleFloatChat()"
+        class="hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl shadow-indigo-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+        title="Open Chat">
+        <iconify-icon icon="solar:chat-round-dots-bold" width="26"></iconify-icon>
+        <span id="float-chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[1.1rem] text-center border-2 border-white">0</span>
+    </button>
+
+    <!-- Floating Panel -->
+    <div id="float-chat-panel"
+        class="hidden fixed bottom-24 right-6 z-50 w-80 bg-white rounded-2xl shadow-2xl shadow-slate-300/60 border border-slate-200 flex flex-col overflow-hidden"
+        style="height:480px; max-height:calc(100vh - 120px);">
+
+        <!-- Panel: Conversation List -->
+        <div id="fcp-list-view" class="flex flex-col h-full">
+            <!-- Header -->
+            <div class="bg-indigo-600 px-4 py-3 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <iconify-icon icon="solar:chat-round-dots-bold" class="text-white" width="18"></iconify-icon>
+                    <span class="text-sm font-black text-white">Team Chat</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="toggleFloatChat()" class="p-1.5 text-white/70 hover:text-white rounded-lg transition-colors" title="Minimise">
+                        <iconify-icon icon="solar:minus-circle-bold" width="18"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-100 shrink-0 bg-white">
+                <button onclick="switchFloatTab('dm')" id="fct-dm"
+                    class="flex-1 py-2.5 text-[11px] font-bold text-indigo-600 border-b-2 border-indigo-600 transition-all">
+                    <iconify-icon icon="solar:user-bold" width="13" class="inline mr-1"></iconify-icon>Direct
+                </button>
+                <button onclick="switchFloatTab('group')" id="fct-group"
+                    class="flex-1 py-2.5 text-[11px] font-bold text-slate-400 border-b-2 border-transparent transition-all">
+                    <iconify-icon icon="solar:users-group-rounded-bold" width="13" class="inline mr-1"></iconify-icon>Groups
+                </button>
+            </div>
+            <!-- DM List -->
+            <div id="fcp-dm-list" class="flex-1 overflow-y-auto"></div>
+            <!-- Group List -->
+            <div id="fcp-group-list" class="hidden flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Panel: Active Conversation -->
+        <div id="fcp-conv-view" class="hidden flex flex-col h-full">
+            <!-- Conv Header -->
+            <div class="bg-indigo-600 px-3 py-2.5 flex items-center gap-2 shrink-0">
+                <button onclick="floatChatBack()" class="p-1 text-white/70 hover:text-white rounded-lg transition-colors">
+                    <iconify-icon icon="solar:arrow-left-bold" width="18"></iconify-icon>
+                </button>
+                <div id="fcp-conv-avatar" class="w-7 h-7 rounded-lg bg-white/20 text-white text-xs font-black flex items-center justify-center shrink-0 overflow-hidden"></div>
+                <div class="flex-1 min-w-0">
+                    <p id="fcp-conv-name" class="text-xs font-black text-white truncate"></p>
+                    <p id="fcp-conv-status" class="text-[9px] text-white/60 font-bold uppercase tracking-wider"></p>
+                </div>
+                <button onclick="toggleFloatChat()" class="p-1.5 text-white/70 hover:text-white rounded-lg transition-colors">
+                    <iconify-icon icon="solar:minus-circle-bold" width="18"></iconify-icon>
+                </button>
+            </div>
+            <!-- Messages -->
+            <div id="fcp-messages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/40 text-xs"></div>
+            <!-- Attachment preview -->
+            <div id="fcp-attachment-preview" class="hidden px-3 py-2 border-t border-slate-100 bg-white">
+                <div id="fcp-attachment-list" class="flex flex-wrap gap-2"></div>
+            </div>
+            <!-- Input -->
+            <div class="p-3 border-t border-slate-100 bg-white shrink-0 flex items-end gap-2">
+                <label class="p-2 text-slate-400 hover:text-indigo-600 cursor-pointer rounded-lg transition-colors" title="Attach file">
+                    <iconify-icon icon="solar:paperclip-bold" width="17"></iconify-icon>
+                    <input type="file" id="fcp-file-input" class="hidden" multiple onchange="fcpHandleAttachment(event)">
+                </label>
+                <textarea id="fcp-msg-input" rows="1" placeholder="Message…"
+                    class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none transition-all"
+                    onkeydown="fcpHandleKey(event)" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+                <button onclick="fcpSendMessage()" class="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all" title="Send">
+                    <iconify-icon icon="solar:arrow-up-bold" width="16"></iconify-icon>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── Floating Chat Popup Logic ──────────────────────────────────────────────
+    let fcpOpen = false;
+    let fcpConvId = null;
+    let fcpConvName = '';
+    let fcpConvType = '';
+    let fcpMsgListener = null;
+    let fcpStagedAttachments = [];
+    let fcpActiveTab = 'dm';
+
+    function toggleFloatChat() {
+        fcpOpen = !fcpOpen;
+        const panel = document.getElementById('float-chat-panel');
+        if (fcpOpen) {
+            panel.classList.remove('hidden');
+            panel.classList.add('flex', 'flex-col');
+            fcpRenderList();
+        } else {
+            panel.classList.add('hidden');
+            panel.classList.remove('flex', 'flex-col');
+        }
+    }
+
+    function switchFloatTab(tab) {
+        fcpActiveTab = tab;
+        const dmList   = document.getElementById('fcp-dm-list');
+        const grpList  = document.getElementById('fcp-group-list');
+        const dmBtn    = document.getElementById('fct-dm');
+        const grpBtn   = document.getElementById('fct-group');
+
+        if (tab === 'dm') {
+            dmList.classList.remove('hidden');
+            grpList.classList.add('hidden');
+            dmBtn.className  = 'flex-1 py-2.5 text-[11px] font-bold text-indigo-600 border-b-2 border-indigo-600 transition-all';
+            grpBtn.className = 'flex-1 py-2.5 text-[11px] font-bold text-slate-400 border-b-2 border-transparent transition-all';
+        } else {
+            grpList.classList.remove('hidden');
+            dmList.classList.add('hidden');
+            grpBtn.className = 'flex-1 py-2.5 text-[11px] font-bold text-indigo-600 border-b-2 border-indigo-600 transition-all';
+            dmBtn.className  = 'flex-1 py-2.5 text-[11px] font-bold text-slate-400 border-b-2 border-transparent transition-all';
+        }
+    }
+
+    function fcpRenderList() {
+        fcpRenderDmList();
+        fcpRenderGroupList();
+    }
+
+    function fcpRenderDmList() {
+        const el = document.getElementById('fcp-dm-list');
+        if (!el || !currentUser || !allUsersMap) return;
+
+        const pinnedKey = `worksync_pinned_chats_${eKey(currentUser.email)}`;
+        const pinned = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
+
+        const others = Array.from(allUsersMap.values())
+            .filter(u => u.email && u.email !== currentUser.email && u.email !== '123');
+
+        const mapped = others.map(u => {
+            const cid = dmId(currentUser.email, u.email);
+            const conv = chatConversations[cid] || {};
+            return { u, cid, lastTs: conv.lastTimestamp || 0, pinned: pinned.includes(cid) };
+        }).sort((a, b) => {
+            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+            return b.lastTs - a.lastTs || (a.u.name || '').localeCompare(b.u.name || '');
+        });
+
+        el.innerHTML = mapped.map(({ u, cid }) => {
+            const unread = unreadCounts[cid] || 0;
+            const conv = chatConversations[cid] || {};
+            const lastMsg = conv.lastMessage ? (conv.lastMessage.length > 28 ? conv.lastMessage.slice(0, 28) + '…' : conv.lastMessage) : '';
+            return `
+            <button onclick="fcpOpenConv('${cid}','${escapeHtml(u.name || u.email).replace(/'/g,"\\'")}','dm','${u.profilePicture || ''}')"
+                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 transition-all text-left">
+                <div class="relative shrink-0">
+                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}"
+                        class="w-9 h-9 rounded-xl object-cover border border-slate-200 bg-slate-100">
+                    <div id="fcp-online-${eKey(u.email)}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-slate-300"></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[11px] font-bold text-slate-800 truncate">${escapeHtml(u.name || u.email)}</p>
+                        ${unread > 0 ? `<span class="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">${unread}</span>` : ''}
+                    </div>
+                    <p class="text-[9px] text-slate-400 truncate">${lastMsg || u.role || 'Member'}</p>
+                </div>
+            </button>`;
+        }).join('') || '<p class="p-4 text-center text-[10px] text-slate-400 italic">No conversations</p>';
+
+        // online presence dots
+        others.forEach(u => {
+            onValue(ref(db, `worksync/users/${eKey(u.email)}/online`), sn => {
+                const dot = document.getElementById(`fcp-online-${eKey(u.email)}`);
+                if (dot) dot.className = `absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
+            });
+        });
+    }
+
+    function fcpRenderGroupList() {
+        const el = document.getElementById('fcp-group-list');
+        if (!el || !currentUser) return;
+
+        const myKey = eKey(currentUser.email);
+        const groups = Object.entries(chatConversations || {})
+            .filter(([, c]) => c.type === 'group' && c.members && c.members[myKey])
+            .sort((a, b) => (b[1].lastTimestamp || 0) - (a[1].lastTimestamp || 0));
+
+        el.innerHTML = groups.map(([id, g]) => {
+            const unread = unreadCounts[id] || 0;
+            const name = g.name || 'Group';
+            const safeName = escapeHtml(name);
+            const safeJs = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            const lastMsg = g.lastMessage ? (g.lastMessage.length > 28 ? g.lastMessage.slice(0,28)+'…' : g.lastMessage) : '';
+            const avatar = g.profilePicture
+                ? `<img src="${g.profilePicture}" class="w-9 h-9 rounded-xl object-cover border border-slate-200">`
+                : `<div class="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black text-sm shrink-0">${safeName.charAt(0)}</div>`;
+            return `
+            <button onclick="fcpOpenConv('${id}','${safeJs}','group','${g.profilePicture || ''}')"
+                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 transition-all text-left">
+                ${avatar}
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[11px] font-bold text-slate-800 truncate">${safeName}</p>
+                        ${unread > 0 ? `<span class="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">${unread}</span>` : ''}
+                    </div>
+                    <p class="text-[9px] text-slate-400 truncate">${lastMsg || 'Team Group'}</p>
+                </div>
+            </button>`;
+        }).join('') || '<p class="p-4 text-center text-[10px] text-slate-400 italic">No groups yet</p>';
+    }
+
+    async function fcpOpenConv(convId, name, type, avatar) {
+        fcpConvId = convId;
+        fcpConvName = name;
+        fcpConvType = type;
+        unreadCounts[convId] = 0;
+        renderChatBadge();
+        fcpUpdateFloatBadge();
+
+        // Switch to conv view
+        document.getElementById('fcp-list-view').classList.add('hidden');
+        document.getElementById('fcp-conv-view').classList.remove('hidden');
+        document.getElementById('fcp-conv-name').textContent = name;
+
+        const avatarEl = document.getElementById('fcp-conv-avatar');
+        if (avatar && avatar.startsWith('http')) {
+            avatarEl.innerHTML = `<img src="${avatar}" class="w-full h-full object-cover rounded-lg">`;
+        } else {
+            avatarEl.textContent = name.charAt(0).toUpperCase();
+        }
+
+        const statusEl = document.getElementById('fcp-conv-status');
+        statusEl.textContent = type === 'group' ? 'Group Chat' : 'Direct Message';
+
+        // Ensure conversation exists for DMs
+        if (type === 'dm') {
+            const snap = await get(ref(db, `worksync/conversations/${convId}`));
+            if (!snap.exists()) {
+                const otherEmail = convId.split('_').filter(p => p !== eKey(currentUser.email)).join('_');
+                await set(ref(db, `worksync/conversations/${convId}`), {
+                    type: 'dm',
+                    members: { [eKey(currentUser.email)]: true, [otherEmail]: true },
+                    lastTimestamp: Date.now()
+                });
+            }
+        }
+
+        fcpLoadMessages(convId);
+    }
+
+    function fcpLoadMessages(convId) {
+        if (fcpMsgListener) { try { fcpMsgListener(); } catch(e) {} fcpMsgListener = null; }
+
+        const msgArea = document.getElementById('fcp-messages');
+        msgArea.innerHTML = '<p class="text-center text-[10px] text-slate-400 py-4">Loading…</p>';
+
+        const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(40));
+        fcpMsgListener = onValue(q, snap => {
+            const msgs = snap.val() ? Object.entries(snap.val()).map(([id, m]) => ({ id, ...m }))
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)) : [];
+            fcpRenderMessages(msgs);
+        });
+
+        // Mark as read
+        if (unreadCounts[convId]) { unreadCounts[convId] = 0; renderChatBadge(); fcpUpdateFloatBadge(); }
+    }
+
+    function fcpRenderMessages(msgs) {
+        const el = document.getElementById('fcp-messages');
+        if (!el) return;
+
+        if (!msgs.length) {
+            el.innerHTML = '<p class="text-center text-[10px] text-slate-400 py-6 italic">No messages yet. Say hi! 👋</p>';
+            return;
+        }
+
+        el.innerHTML = msgs.map(m => {
+            const isMe = m.senderEmail === currentUser?.email;
+            const unsent = m.unsent;
+            const bubble = unsent
+                ? `<span class="text-[10px] italic text-slate-400">Message unsent</span>`
+                : `<span class="text-[11px] leading-snug">${escapeHtml(m.text || '')}</span>`;
+
+            let attachHtml = '';
+            const allAtts = m.attachments?.length ? m.attachments : (m.attachmentUrl ? [{ url: m.attachmentUrl, type: m.attachmentType, name: m.attachmentName }] : []);
+            if (allAtts.length) {
+                attachHtml = allAtts.map(a => {
+                    if ((a.type || '').startsWith('image/') || a.url?.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+                        return `<img src="${a.url}" class="mt-1 max-w-[180px] rounded-lg border border-slate-200 cursor-pointer" onclick="openImagePreview('${a.url}','${escapeHtml(a.name || 'Image')}')">`;
+                    }
+                    return `<a href="${a.url}" target="_blank" class="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 hover:underline"><iconify-icon icon="solar:paperclip-bold" width="12"></iconify-icon>${escapeHtml(a.name || 'File')}</a>`;
+                }).join('');
+            }
+
+            const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+            return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} gap-1.5">
+                ${!isMe ? `<img src="${allUsersMap.get(m.senderEmail?.toLowerCase())?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.senderName}`}" class="w-6 h-6 rounded-lg object-cover shrink-0 self-end border border-slate-200">` : ''}
+                <div class="max-w-[70%]">
+                    ${!isMe ? `<p class="text-[9px] font-bold text-slate-500 mb-0.5 ml-1">${escapeHtml(m.senderName || '')}</p>` : ''}
+                    <div class="${isMe ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-800'} rounded-2xl ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'} px-3 py-2 shadow-sm">
+                        ${m.text || unsent ? bubble : ''}
+                        ${attachHtml}
+                    </div>
+                    <p class="text-[9px] text-slate-400 mt-0.5 ${isMe ? 'text-right' : 'text-left'} px-1">${timeStr}</p>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Scroll to bottom
+        el.scrollTop = el.scrollHeight;
+    }
+
+    async function fcpSendMessage() {
+        if (!fcpConvId) return;
+        const input = document.getElementById('fcp-msg-input');
+        const text = input.value.trim();
+        if (!text && !fcpStagedAttachments.length) return;
+
+        try {
+            const payload = {
+                senderEmail: currentUser.email,
+                senderName: currentUser.name,
+                text,
+                timestamp: Date.now()
+            };
+            let lastMsg = text;
+
+            if (fcpStagedAttachments.length) {
+                const attachments = [];
+                for (const file of fcpStagedAttachments) {
+                    try {
+                        const uploaded = await uploadToCloudinary(file);
+                        attachments.push(uploaded);
+                    } catch {
+                        attachments.push({ url: await fileToBase64(file), type: file.type, name: file.name });
+                    }
+                }
+                payload.attachments = attachments;
+                if (attachments.length === 1) {
+                    payload.attachmentUrl  = attachments[0].url;
+                    payload.attachmentType = attachments[0].type;
+                    payload.attachmentName = attachments[0].name;
+                }
+                lastMsg = text || `📎 ${attachments.length > 1 ? attachments.length + ' attachments' : attachments[0].name}`;
+                fcpStagedAttachments = [];
+                fcpUpdateAttachmentPreview();
+            }
+
+            await push(ref(db, `worksync/messages/${fcpConvId}`), payload);
+            await update(ref(db, `worksync/conversations/${fcpConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() });
+
+            input.value = '';
+            input.style.height = 'auto';
+        } catch (err) {
+            toast('Failed to send: ' + err.message, 'error');
+        }
+    }
+
+    function fcpHandleKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fcpSendMessage(); }
+    }
+
+    function fcpHandleAttachment(event) {
+        const files = Array.from(event.target.files || []);
+        document.getElementById('fcp-file-input').value = '';
+        files.forEach(f => {
+            if (f.size > 10 * 1024 * 1024) { toast(`${f.name} skipped — max 10MB`, 'error'); return; }
+            fcpStagedAttachments.push(f);
+        });
+        fcpUpdateAttachmentPreview();
+    }
+
+    function fcpUpdateAttachmentPreview() {
+        const preview = document.getElementById('fcp-attachment-preview');
+        const list = document.getElementById('fcp-attachment-list');
+        if (!fcpStagedAttachments.length) { preview.classList.add('hidden'); list.innerHTML = ''; return; }
+        preview.classList.remove('hidden');
+        list.innerHTML = fcpStagedAttachments.map((f, i) => `
+            <div class="relative">
+                <div class="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-600 font-bold max-w-[100px] truncate">${escapeHtml(f.name)}</div>
+                <button onclick="fcpRemoveAttachment(${i})" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] flex items-center justify-center">✕</button>
+            </div>`).join('');
+    }
+
+    function fcpRemoveAttachment(i) {
+        fcpStagedAttachments.splice(i, 1);
+        fcpUpdateAttachmentPreview();
+    }
+
+    function floatChatBack() {
+        if (fcpMsgListener) { try { fcpMsgListener(); } catch(e) {} fcpMsgListener = null; }
+        fcpConvId = null;
+        fcpStagedAttachments = [];
+        fcpUpdateAttachmentPreview();
+        document.getElementById('fcp-conv-view').classList.add('hidden');
+        document.getElementById('fcp-list-view').classList.remove('hidden');
+        fcpRenderList();
+    }
+
+    function fcpUpdateFloatBadge() {
+        const total = Object.values(unreadCounts).reduce((s, c) => s + c, 0);
+        const badge = document.getElementById('float-chat-badge');
+        if (!badge) return;
+        badge.textContent = total;
+        badge.classList.toggle('hidden', total === 0);
+    }
+
+    // Hook into renderChatBadge to also update the float bubble badge
+    const _origRenderChatBadge = window.renderChatBadge || function(){};
+    window.renderChatBadge = function() {
+        _origRenderChatBadge();
+        fcpUpdateFloatBadge();
+        if (fcpOpen && fcpConvId === null) fcpRenderList(); // refresh unread counts in list
+    };
+
+    // Show the bubble once the user is logged in (has-user class added by auth)
+    const _floatObserver = new MutationObserver(() => {
+        const btn = document.getElementById('float-chat-btn');
+        if (!btn) return;
+        const loggedIn = document.documentElement.classList.contains('has-user');
+        // Hide on the full Chat view — no need for bubble there
+        const onChatView = (typeof activeView !== 'undefined') && activeView === 'chat';
+        btn.classList.toggle('hidden', !loggedIn || onChatView);
+    });
+    _floatObserver.observe(document.documentElement, { attributeFilter: ['class'] });
+
+    // Also hide/show bubble when navigating views
+    const _origSwitchView = window.switchView;
+    if (typeof _origSwitchView === 'function') {
+        window.switchView = function(view) {
+            _origSwitchView(view);
+            const btn = document.getElementById('float-chat-btn');
+            if (btn) btn.classList.toggle('hidden', view === 'chat' || !document.documentElement.classList.contains('has-user'));
+            // Close the popup if navigating to full chat
+            if (view === 'chat' && fcpOpen) toggleFloatChat();
+        };
+    }
+
+    window.toggleFloatChat   = toggleFloatChat;
+    window.switchFloatTab    = switchFloatTab;
+    window.fcpOpenConv       = fcpOpenConv;
+    window.fcpSendMessage    = fcpSendMessage;
+    window.fcpHandleKey      = fcpHandleKey;
+    window.fcpHandleAttachment = fcpHandleAttachment;
+    window.fcpRemoveAttachment = fcpRemoveAttachment;
+    window.floatChatBack     = floatChatBack;
+    </script>
+
 </body>
 </html>
         }
