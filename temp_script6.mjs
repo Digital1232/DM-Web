@@ -3694,9 +3694,108 @@
             { title: "Client message for closing", needsClient: false }
         ];
 
+        const AJITH_TASKS_CONFIG = [
+            { title: "Client Message", needsClient: false },
+            { title: "Social Media Upload", needsClient: true },
+            { title: "Social Media Comments", needsClient: true },
+            { title: "Ads Management", needsClient: true },
+            { title: "Internal Reporting", needsClient: false }
+        ];
+
         let murugeshTasksEnsureStarted = false;
+        let ajithTasksEnsureStarted = false;
+        let pendingAjithTaskId = null;
+
+        function showAjithClientPopup(taskId) {
+            pendingAjithTaskId = taskId;
+            const modal = document.getElementById('ajithClientModal');
+            if (modal) modal.showModal();
+        }
+
+        function confirmAjithClientStart() {
+            const clientInput = document.getElementById('ajith-client-input');
+            const clientName = clientInput?.value?.trim();
+            if (clientName && pendingAjithTaskId) {
+                const task = tasks.find(t => t.id === pendingAjithTaskId);
+                if (task) {
+                    task.client = clientName;
+                    toggleActiveTask(task.id);
+                }
+                const modal = document.getElementById('ajith-client-modal');
+                if (modal) modal.classList.add('hidden');
+                clientInput.value = '';
+                pendingAjithTaskId = null;
+            }
+        }
 
         async function ensureMurugeshDailyTasks() {
+        // existing code
+    }
+
+    // Ensure Ajith recurring tasks
+    async function ensureAjithDailyTasks() {
+        if (!currentUser || currentUser.email.toLowerCase() !== 'ajithvilpower@gmail.com') return;
+        if (ajithTasksEnsureStarted) return;
+        ajithTasksEnsureStarted = true;
+        try {
+            const email = currentUser.email;
+            const ownerKey = eKey(email);
+            const today = todayIso();
+            for (let i = 0; i < AJITH_TASKS_CONFIG.length; i++) {
+                const taskConfig = AJITH_TASKS_CONFIG[i];
+                const baseIdStr = taskConfig.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                const taskId = `A-${baseIdStr}-${i}`;
+                const path = `worksync/manual_tasks/${ownerKey}/${taskId}`;
+                const snap = await get(ref(db, path));
+                if (!snap.exists()) {
+                    const task = {
+                        id: taskId,
+                        desc: taskConfig.title,
+                        description: taskConfig.needsClient ? 'Requires Client Selection' : 'Daily Recurring Task',
+                        client: 'Internal',
+                        status: 'To Do',
+                        priority: 'Medium',
+                        assignee: currentUser.name,
+                        assigneeEmail: email,
+                        manual: true,
+                        taskType: 'internal',
+                        ajithTask: true,
+                        needsClient: taskConfig.needsClient,
+                        userId: email,
+                        createdAt: Date.now(),
+                        duedate: today
+                    };
+                    await set(ref(db, path), task);
+                    tasks = mergeTasksById([task, ...tasks]);
+                } else {
+                    const existing = snap.val();
+                    const completedToday = existing.lastCompletedDate === today;
+                    const needsDailyReset = existing.lastCompletedDate && existing.lastCompletedDate < today && (existing.status === 'Completed' || isInternalDone(existing.status));
+                    let updates = {};
+                    if (needsDailyReset && !completedToday) {
+                        updates.status = 'To Do';
+                        updates.duedate = today;
+                    } else if (!existing.duedate || existing.duedate < today) {
+                        if (existing.status !== 'Completed' && !isInternalDone(existing.status)) {
+                            updates.duedate = today;
+                        }
+                    }
+                    if (!existing.ajithTask) updates.ajithTask = true;
+                    if (existing.needsClient !== taskConfig.needsClient) updates.needsClient = taskConfig.needsClient;
+                    if (Object.keys(updates).length) {
+                        await update(ref(db, path), updates);
+                        const idx = tasks.findIndex(t => t.id === taskId);
+                        if (idx >= 0) Object.assign(tasks[idx], updates);
+                    }
+                }
+            }
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            if (activeView === 'dailyplan') renderDailyPlan();
+        } catch (err) {
+            console.warn('Ajith tasks setup failed:', err);
+            ajithTasksEnsureStarted = false;
+        }
+    }
             if (!currentUser || currentUser.email.toLowerCase() !== 'murugeshvilpower@gmail.com') return;
             if (murugeshTasksEnsureStarted) return;
             murugeshTasksEnsureStarted = true;
@@ -4027,8 +4126,36 @@
         }
 
         let pendingMurugeshTaskId = null;
+let pendingAjithTaskId = null;
         
         function showMurugeshClientPopup(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        pendingMurugeshTaskId = taskId;
+        const nameEl = document.getElementById('murugesh-task-name');
+        if (nameEl) nameEl.textContent = task.id + ' — ' + (task.desc || '');
+        const select = document.getElementById('murugesh-client-select');
+        if (select) {
+            select.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
+                CLIENTS.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+        document.getElementById('murugeshClientModal').showModal();
+    }
+
+    // Ajith client selection popup
+    function showAjithClientPopup(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        pendingAjithTaskId = taskId;
+        const nameEl = document.getElementById('ajith-task-name');
+        if (nameEl) nameEl.textContent = task.id + ' — ' + (task.desc || '');
+        const select = document.getElementById('ajith-client-select');
+        if (select) {
+            select.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
+                CLIENTS.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+        document.getElementById('ajithClientModal').showModal();
+    }
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
             pendingMurugeshTaskId = taskId;
@@ -4046,6 +4173,54 @@
         }
 
         async function confirmMurugeshClientStart() {
+        if (!pendingMurugeshTaskId) return;
+        const select = document.getElementById('murugesh-client-select');
+        const client = select.value;
+        if (!client) return toast('Please select a client', 'error');
+        document.getElementById('murugeshClientModal').close();
+        const baseTask = tasks.find(t => t.id === pendingMurugeshTaskId);
+        pendingMurugeshTaskId = null;
+        const newTaskId = `M-${Math.floor(Math.random() * 900000) + 100000}`;
+        const newTask = {
+            ...baseTask,
+            id: newTaskId,
+            desc: `${baseTask.desc} - ${client}`,
+            client: client,
+            murugeshTask: false,
+            needsClient: false,
+            status: 'In Progress',
+            createdAt: Date.now()
+        };
+        const ownerKey = eKey(newTask.userId || currentUser.email);
+        await set(ref(db, `worksync/manual_tasks/${ownerKey}/${newTaskId}`), newTask);
+        tasks.unshift(newTask);
+        await doStartTask(newTaskId);
+    }
+
+    async function confirmAjithClientStart() {
+        if (!pendingAjithTaskId) return;
+        const select = document.getElementById('ajith-client-select');
+        const client = select.value;
+        if (!client) return toast('Please select a client', 'error');
+        document.getElementById('ajithClientModal').close();
+        const baseTask = tasks.find(t => t.id === pendingAjithTaskId);
+        pendingAjithTaskId = null;
+        const newTaskId = `A-${Math.floor(Math.random() * 900000) + 100000}`;
+        const newTask = {
+            ...baseTask,
+            id: newTaskId,
+            desc: `${baseTask.desc} - ${client}`,
+            client: client,
+            ajithTask: false,
+            needsClient: false,
+            status: 'In Progress',
+            createdAt: Date.now()
+        };
+        const ownerKey = eKey(newTask.userId || currentUser.email);
+        await set(ref(db, `worksync/manual_tasks/${ownerKey}/${newTaskId}`), newTask);
+        tasks.unshift(newTask);
+        await doStartTask(newTaskId);
+    }
             if (!pendingMurugeshTaskId) return;
             const select = document.getElementById('murugesh-client-select');
             const client = select.value;
@@ -4086,6 +4261,10 @@
             if (task && task.murugeshTask && task.needsClient) {
                 showMurugeshClientPopup(id);
                 return; // Don't start yet, wait for client selection
+            }
+            if (task && task.ajithTask && task.needsClient) {
+                showAjithClientPopup(id);
+                return; // Wait for client selection
             }
 
             // Sneha task preparation popup: only show for Sneha starting any Jira (non-internal) task
