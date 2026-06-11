@@ -6840,7 +6840,7 @@
 
         // TASK STATUS HELPERS
         function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Shoot Completed'].includes(s); }
-        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Content In Progress', 'Client Content Approval', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Quality Check', 'Client Sent', 'Analytics', 'Shoot In Progress'].includes(s); }
+        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Content In Progress', 'Client Content Approval', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Quality Check', 'Client Sent', 'Analytics', 'Shoot In Progress', 'Design Hold', 'Design hold', 'Hold', 'hold', 'On Hold', 'on hold'].includes(s); }
         function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Design To Do'].includes(s); }
         function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
         function isInternalInProgress(s) { return ['In Progress', 'Learnings', 'Learning'].includes(s); }
@@ -16634,35 +16634,71 @@
                 (t.desc || '').toLowerCase().includes('shoot') ||
                 t.status === 'Shoot Needed'
             );
+            const otherTasks = projectTasks.filter(t => !videoTasks.includes(t));
 
-            if (videoTasks.length === 0) {
-                contentEl.innerHTML = `<p class="text-center text-slate-500 py-8">No video-related tasks found for this project.</p>`;
-            } else {
-                contentEl.innerHTML = `
-                    <h4 class="text-sm font-bold text-slate-800">Video Details (${videoTasks.length})</h4>
-                    <div class="border border-slate-100 rounded-2xl overflow-hidden">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50">
-                                <tr>
-                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Task</th>
-                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Status</th>
-                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Assignee</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                ${videoTasks.map(t => `
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="font-semibold text-slate-800">${escapeHtml(t.desc)}</p><p class="text-xs text-slate-500">${t.id}</p></td>
-                                        <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
-                                        <td class="px-4 py-3 text-xs text-slate-600">${assigneeName(t)}</td>
+            let html = '';
+
+            if (videoTasks.length > 0) {
+                html += `
+                    <div class="space-y-2">
+                        <h4 class="text-sm font-bold text-slate-800">Video & Shoot Tasks (${videoTasks.length})</h4>
+                        <div class="border border-slate-100 rounded-2xl overflow-hidden">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Task</th>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Status</th>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Assignee</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${videoTasks.map(t => `
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="font-semibold text-slate-800">${escapeHtml(t.desc)}</p><p class="text-xs text-slate-500">${t.id}</p></td>
+                                            <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
+                                            <td class="px-4 py-3 text-xs text-slate-600">${assigneeName(t)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 `;
             }
 
+            if (otherTasks.length > 0) {
+                html += `
+                    <div class="space-y-2 pt-2">
+                        <h4 class="text-sm font-bold text-slate-800">Design & Other Tasks (${otherTasks.length})</h4>
+                        <div class="border border-slate-100 rounded-2xl overflow-hidden">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Task</th>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Status</th>
+                                        <th class="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase">Assignee</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${otherTasks.map(t => `
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="font-semibold text-slate-800">${escapeHtml(t.desc)}</p><p class="text-xs text-slate-500">${t.id}</p></td>
+                                            <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
+                                            <td class="px-4 py-3 text-xs text-slate-600">${assigneeName(t)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (projectTasks.length === 0) {
+                html = `<p class="text-center text-slate-500 py-8">No tasks found for this project.</p>`;
+            }
+
+            contentEl.innerHTML = html;
             modal.showModal();
         }
 
