@@ -1389,7 +1389,7 @@
                                 <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Verify deliverables for excellence</p>
                             </div>
                             <div class="flex items-center gap-3 w-full md:w-auto">
-                                <select id="qc-task-select" onchange="loadQcTaskDetails(this.value)" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 min-w-[200px]">
+                                <select id="qc-task-select" onchange="loadQcTaskDetails(this.value)" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 w-full max-w-sm">
                                     <option value="">Select Task for QC...</option>
                                 </select>
                             </div>
@@ -1399,7 +1399,7 @@
                             <div class="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                                 <div class="flex-1">
                                     <p id="qc-task-id" class="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest"></p>
-                                    <h4 id="qc-task-desc" class="text-sm font-bold text-slate-900 truncate"></h4>
+                                    <h4 id="qc-task-desc" class="text-sm font-bold text-slate-900 break-words whitespace-normal leading-snug"></h4>
                                     <p id="qc-task-assignee" class="text-[10px] text-slate-400 font-bold uppercase"></p>
                                 </div>
                                 <div class="w-px h-10 bg-slate-200"></div>
@@ -1433,7 +1433,8 @@
                                     </div>
                                     <div class="flex-1 w-full min-w-0">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Feedback & Observations</label>
-                                        <input id="qc-notes" type="text" placeholder="Add optional comments about the work quality..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 truncate">
+                                        <textarea id="qc-notes" rows="3" placeholder="Add feedback, observations, and specific issues about the work quality..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 resize-none" oninput="analyseQcNotes(this.value)"></textarea>
+                                        <div id="qc-notes-analysis" class="hidden mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl space-y-1"></div>
                                     </div>
                                 </div>
                                 <button onclick="submitQcReport()" class="w-full lg:w-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
@@ -5037,6 +5038,46 @@
                 </button>
             `).join('');
         }
+
+        // ── Analyse QC Feedback & Observations text to produce a notes-based score adjustment ──
+        const QC_NOTES_NEGATIVE = ['mistake','error','wrong','incorrect','blurry','pixelated','overlapping','mismatch','off-brand','inconsistent','incomplete','missing','poor','bad','ugly','amateur','amateurish','unreadable','unclear','cropped','cut off','distorted','noisy','low quality','low resolution','too small','too large','overcrowded','cluttered','outdated','outdated font','outdated color','wrong font','wrong color','wrong size','wrong dimension','wrong aspect','wrong ratio','needs redo','redo','rejected'];
+        const QC_NOTES_POSITIVE = ['excellent','perfect','great','good','clean','crisp','sharp','professional','on-brand','consistent','accurate','precise','well done','nice','smooth','high quality','clear','readable','outstanding','impressive','flawless','approved'];
+
+        function analyseQcNotes(text) {
+            const analysisEl = document.getElementById('qc-notes-analysis');
+            if (!analysisEl) return;
+            if (!text || text.trim().length < 5) { analysisEl.classList.add('hidden'); return; }
+
+            const lower = text.toLowerCase();
+            const negHits = QC_NOTES_NEGATIVE.filter(w => lower.includes(w));
+            const posHits = QC_NOTES_POSITIVE.filter(w => lower.includes(w));
+
+            const severity = negHits.length;
+            let adjustment = 0;
+            let sentiment = 'neutral';
+            let sentimentColor = 'text-slate-500';
+            let sentimentBg = 'bg-slate-50 border-slate-100';
+
+            if (severity >= 4)      { adjustment = -20; sentiment = 'Major Issues';   sentimentColor = 'text-rose-600';   sentimentBg = 'bg-rose-50 border-rose-100'; }
+            else if (severity >= 2) { adjustment = -10; sentiment = 'Minor Issues';   sentimentColor = 'text-amber-600';  sentimentBg = 'bg-amber-50 border-amber-100'; }
+            else if (severity === 1){ adjustment = -5;  sentiment = 'Small Issue';    sentimentColor = 'text-amber-500';  sentimentBg = 'bg-amber-50 border-amber-100'; }
+            else if (posHits.length >= 2) { adjustment = +5; sentiment = 'Positive';  sentimentColor = 'text-emerald-600'; sentimentBg = 'bg-emerald-50 border-emerald-100'; }
+            else                    { adjustment = 0;   sentiment = 'Neutral';        sentimentColor = 'text-slate-500';  sentimentBg = 'bg-slate-50 border-slate-100'; }
+
+            analysisEl.className = `mt-2 p-3 border rounded-xl space-y-1 ${sentimentBg}`;
+            analysisEl.classList.remove('hidden');
+            analysisEl.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-black uppercase tracking-wider ${sentimentColor}">📝 Observation Analysis: ${sentiment}</span>
+                    <span class="text-[10px] font-black ${adjustment < 0 ? 'text-rose-600' : adjustment > 0 ? 'text-emerald-600' : 'text-slate-400'}">${adjustment > 0 ? '+' : ''}${adjustment !== 0 ? adjustment + ' pts to score' : 'No score change'}</span>
+                </div>
+                ${negHits.length > 0 ? `<p class="text-[10px] text-rose-600">⚠ Issues detected: <strong>${negHits.slice(0,5).join(', ')}</strong></p>` : ''}
+                ${posHits.length > 0 ? `<p class="text-[10px] text-emerald-600">✓ Positives: <strong>${posHits.slice(0,5).join(', ')}</strong></p>` : ''}
+            `;
+
+            // Store for use in submitQcReport
+            window._qcNotesAdjustment = adjustment;
+        }
         
         let qcStartTime = null;
         function renderQcTasks() {
@@ -5053,7 +5094,7 @@
             }
             
            const optionsHtml = `<option value="">Select Task for QC (${qcTasks.length})...</option>` +
-                qcTasks.map(t => `<option value="${t.id}">${t.id} - ${escapeHtml(t.desc)}</option>`).join('');
+                qcTasks.map(t => `<option value="${t.id}" title="${escapeHtml(t.desc)}">${t.id} — ${escapeHtml(t.desc)}</option>`).join('');
             
             if (sel.innerHTML !== optionsHtml) sel.innerHTML = optionsHtml;
             
@@ -5124,7 +5165,10 @@
             
             setQcRating(0); // Reset rating
             qcCustomItems = {};
+            window._qcNotesAdjustment = 0;
             document.getElementById('qc-notes').value = '';
+            const analysisEl = document.getElementById('qc-notes-analysis');
+            if (analysisEl) analysisEl.classList.add('hidden');
 
             const isVideo = task.desc.toLowerCase().includes('video') || task.desc.toLowerCase().includes('reel');
             document.getElementById('qc-type').value = isVideo ? 'video' : 'poster';
@@ -5181,7 +5225,12 @@
             const totalItems = [...document.querySelectorAll('input[name="qc_item"]')].length; 
             
             const passedCount = totalItems - mistakeItems.length;
-            const qcScore = totalItems > 0 ? Math.round((passedCount / totalItems) * 100) : 0;
+            const checklistScore = totalItems > 0 ? Math.round((passedCount / totalItems) * 100) : 0;
+
+            // Factor in Feedback & Observations text analysis
+            const notesAdjustment = window._qcNotesAdjustment || 0;
+            const qcScore = Math.max(0, Math.min(100, checklistScore + notesAdjustment));
+
             // Automate rating: 0-20=1, 21-40=2, 41-60=3, 61-80=4, 81-100=5
             const autoRating = Math.max(1, Math.ceil(qcScore / 20));
 
@@ -20764,6 +20813,7 @@
         <div>
             <p style="font-size:10px;font-weight:900;color:#0c4a6e;margin:0;">Reminders</p>
             <p style="font-size:9px;color:#94a3b8;font-weight:600;margin:1px 0 0;">Every 30 min while active</p>
+            <p id="water-reminder-status-text" style="font-size:9px;font-weight:900;margin:2px 0 0;color:#0ea5e9;"></p>
         </div>
         <!-- Toggle switch -->
         <button id="water-toggle-btn" onclick="waterToggleReminder()" title="Enable/Disable reminders"
@@ -21044,9 +21094,24 @@
         var btn   = document.getElementById('water-toggle-btn');
         var knob  = document.getElementById('water-toggle-knob');
         var nxtl  = document.getElementById('water-next-label');
+        var wbtn  = document.getElementById('water-widget-btn');
         if (btn)  btn.style.background  = waterEnabled ? '#0ea5e9' : '#cbd5e1';
         if (knob) knob.style.left       = waterEnabled ? '21px' : '3px';
         if (nxtl) nxtl.style.display    = waterEnabled ? 'block' : 'none';
+        // Show a muted indicator on the floating button when reminders are off
+        var muteTag = document.getElementById('water-mute-tag');
+        if (!muteTag && wbtn) {
+            muteTag = document.createElement('span');
+            muteTag.id = 'water-mute-tag';
+            muteTag.style.cssText = 'position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#94a3b8;color:#fff;font-size:7px;font-weight:900;padding:1px 5px;border-radius:999px;white-space:nowrap;pointer-events:none;';
+            muteTag.textContent = 'OFF';
+            var innerBtn = wbtn.querySelector('button');
+            if (innerBtn) { innerBtn.style.position = 'relative'; innerBtn.appendChild(muteTag); }
+        }
+        if (muteTag) muteTag.style.display = waterEnabled ? 'none' : 'block';
+        // Status text inside panel
+        var st = document.getElementById('water-reminder-status-text');
+        if (st) { st.textContent = waterEnabled ? '✓ Reminders ON' : '✕ Reminders OFF — tap toggle to re-enable'; st.style.color = waterEnabled ? '#0ea5e9' : '#f97316'; }
     }
 
     // ── Reset at midnight ──
