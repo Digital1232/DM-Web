@@ -26,6 +26,10 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
       .drag-handle { cursor: grab; }
+      body.dragging-active [data-kanban-col] *,
+      body.dragging-active [data-internal-kanban-col] * {
+          pointer-events: none !important;
+      }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -5461,20 +5465,27 @@
             }
         }
         
+        let draggedTaskId = null;
+
         function dragTask(event, taskId) {
+            console.log('FCP/Kanban: dragTask started for taskId:', taskId);
+            draggedTaskId = taskId;
             event.dataTransfer.setData('text/plain', taskId);
             event.dataTransfer.effectAllowed = 'move';
-            // Add dragging class to the card
+            document.body.classList.add('dragging-active');
             const card = event.currentTarget || event.target;
             if (card) setTimeout(() => card.classList.add('opacity-50'), 0);
         }
 
         function dragTaskEnd(event) {
-            // Remove dragging styles
+            console.log('FCP/Kanban: dragTaskEnd triggered');
+            draggedTaskId = null;
+            document.body.classList.remove('dragging-active');
             const card = event.currentTarget || event.target;
             if (card) card.classList.remove('opacity-50');
-            // Remove all drag-over highlights from columns
-            document.querySelectorAll('[data-kanban-col]').forEach(col => col.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50/30'));
+            document.querySelectorAll('[data-kanban-col], [data-internal-kanban-col]').forEach(col => {
+                col.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50/30');
+            });
         }
 
         function dragTaskEnter(event, col) {
@@ -5489,16 +5500,28 @@
         async function dropTask(event, newStatusCategory) {
             event.preventDefault();
             event.stopPropagation();
-            // Remove column highlight
+            console.log('FCP/Kanban: dropTask triggered for status:', newStatusCategory);
+            
+            document.body.classList.remove('dragging-active');
             const col = event.currentTarget;
             if (col) col.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50/30');
 
-            const taskId = event.dataTransfer.getData('text/plain');
-            if (!taskId) return;
+            const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
+            console.log('FCP/Kanban: dropTask task ID resolved to:', taskId);
+            if (!taskId) {
+                console.error('FCP/Kanban: dropTask failed - no taskId in dataTransfer or fallback variable');
+                return;
+            }
             
             const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
-            if (task.status === newStatusCategory) return;
+            if (!task) {
+                console.error('FCP/Kanban: dropTask failed - task not found in global tasks list for ID:', taskId);
+                return;
+            }
+            if (task.status === newStatusCategory || task._canonicalStatus === newStatusCategory) {
+                console.log('FCP/Kanban: task already has target status');
+                return;
+            }
 
             const oldStatus = task.status;
             task.status = newStatusCategory;
@@ -5509,25 +5532,27 @@
                 await endTask();
             }
 
-            if (task.manual) {
+            if (isInternalTask(task)) {
                 try {
-                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { status: newStatusCategory });
+                    const userKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
+                    if (!userKey) throw new Error('Could not resolve user key for task ' + taskId);
+                    await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatusCategory });
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                     toast('Task moved successfully', 'success');
                     if (newStatusCategory === 'Quality Check') sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
                 } catch (err) {
+                    console.error('FCP/Kanban: failed to update manual task status:', err);
                     task.status = oldStatus;
                     renderTasks(); updateStats();
+                    if (isInternalTabActive()) renderInternalTasks();
                     toast('Failed to save status: ' + err.message, 'error');
                 }
             } else {
                 toast('Syncing to Jira...', 'info');
-                // Map Kanban column titles to Jira status names (adjust if they differ)
                 const jiraStatusMap = {
                     'To Do': 'To Do',
                     'In Progress': 'In Progress',
-                    'Done': 'Done',
-                    // Add custom mappings as needed
+                    'Done': 'Done'
                 };
                 const jiraStatus = jiraStatusMap[newStatusCategory] || newStatusCategory;
                 const jiraSuccess = await updateJiraStatus(taskId, jiraStatus);
@@ -19452,6 +19477,8 @@
     var fcpMsgListener = null;
     var fcpStagedAttachments = [];
     var fcpActiveTab = 'dm';
+    var fcpOnlineStates = {};
+    var fcpOnlineListeners = {};
 
 
     // Bridge: resolve scoped variables from the main script block
@@ -19597,12 +19624,25 @@
 
             // Online dots
             others.forEach(function(u) {
-                var refPath = _ref('worksync/users/' + _fcpEK(u.email) + '/online');
-                if (refPath) {
-                    _onVal(refPath, function(sn) {
-                        var dot = document.getElementById('fcp-online-' + _fcpEK(u.email));
-                        if (dot) dot.style.background = sn.val() ? '#22c55e' : '#94a3b8';
-                    });
+                var emailKey = u.email;
+                var htmlKey = _fcpEK(u.email);
+                
+                // Immediately set current cached state if we have it
+                var dot = document.getElementById('fcp-online-' + htmlKey);
+                if (dot && emailKey in fcpOnlineStates) {
+                    dot.style.background = fcpOnlineStates[emailKey] ? '#22c55e' : '#94a3b8';
+                }
+
+                if (!fcpOnlineListeners[emailKey]) {
+                    var refPath = _ref('worksync/users/' + htmlKey + '/online');
+                    if (refPath) {
+                        fcpOnlineListeners[emailKey] = _onVal(refPath, function(sn) {
+                            var status = !!sn.val();
+                            fcpOnlineStates[emailKey] = status;
+                            var d = document.getElementById('fcp-online-' + htmlKey);
+                            if (d) d.style.background = status ? '#22c55e' : '#94a3b8';
+                        });
+                    }
                 }
             });
         } catch (e) {
@@ -19668,7 +19708,7 @@
         }
     }
 
-    async function fcpOpenConv(convId, name, type, avatar) {
+    function fcpOpenConv(convId, name, type, avatar) {
         fcpConvId = convId;
         fcpConvName = name;
         fcpConvType = type;
@@ -19687,15 +19727,18 @@
         document.getElementById('fcp-conv-status').textContent = type === 'group' ? 'Group Chat' : 'Direct Message';
 
         if (type === 'dm') {
-            var snap = await _get(_ref('worksync/conversations/' + convId));
-            if (!snap.exists()) {
-                var parts = convId.replace('dm_', '').split('_');
-                var myKey2 = _fcpEK(_fcpCU()?.email);
-                var members2 = {};
-                members2[myKey2] = true;
-                parts.forEach(function(p) { members2[p] = true; });
-                await _set(_ref('worksync/conversations/' + convId), { type: 'dm', members: members2, lastTimestamp: Date.now() });
-            }
+            _get(_ref('worksync/conversations/' + convId)).then(function(snap) {
+                if (!snap.exists()) {
+                    var parts = convId.replace('dm_', '').split('_');
+                    var myKey2 = _fcpEK(_fcpCU()?.email);
+                    var members2 = {};
+                    members2[myKey2] = true;
+                    parts.forEach(function(p) { members2[p] = true; });
+                    _set(_ref('worksync/conversations/' + convId), { type: 'dm', members: members2, lastTimestamp: Date.now() });
+                }
+            }).catch(function(err) {
+                console.error("FCP DM init error:", err);
+            });
         }
 
         fcpLoadMessages(convId);
