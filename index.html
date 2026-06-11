@@ -64,6 +64,7 @@
 
         /* ── DARK MODE ── */
         html.dark body { background-color: #0f1117; color: #e2e8f0; }
+        html.dark img[src*="onedesk-logo.png"] { filter: brightness(0) invert(1); }
         html.dark aside,
         html.dark .glass-header { background: rgba(17,24,39,0.95) !important; border-color: #1e2535 !important; }
         html.dark .bg-white { background-color: #1a2236 !important; }
@@ -76,9 +77,9 @@
         html.dark .text-slate-900 { color: #f1f5f9 !important; }
         html.dark .text-slate-800 { color: #e2e8f0 !important; }
         html.dark .text-slate-700 { color: #cbd5e1 !important; }
-        html.dark .text-slate-600 { color: #94a3b8 !important; }
-        html.dark .text-slate-500 { color: #64748b !important; }
-        html.dark .text-slate-400 { color: #475569 !important; }
+        html.dark .text-slate-600 { color: #a3b3c9 !important; }
+        html.dark .text-slate-500 { color: #94a3b8 !important; }
+        html.dark .text-slate-400 { color: #8a99ad !important; }
         html.dark .shadow-xl,
         html.dark .shadow-lg,
         html.dark .shadow-sm { box-shadow: 0 4px 24px 0 rgba(0,0,0,0.5) !important; }
@@ -86,7 +87,7 @@
         html.dark textarea,
         html.dark select { background-color: #131929 !important; border-color: #253347 !important; color: #e2e8f0 !important; }
         html.dark input::placeholder,
-        html.dark textarea::placeholder { color: #475569 !important; }
+        html.dark textarea::placeholder { color: #64748b !important; }
         html.dark .nav-active { background: #1e2a3a; color: #e2e8f0; border-right-color: #4f46e5; }
         html.dark .hover\:bg-slate-50:hover { background-color: #1e2a3a !important; }
         html.dark .hover\:bg-slate-100:hover { background-color: #253347 !important; }
@@ -165,7 +166,7 @@
             color: #e2e8f0 !important;
         }
         html.dark #fcp-msg-input::placeholder {
-            color: #475569 !important;
+            color: #64748b !important;
         }
         /* Attachment preview */
         html.dark #fcp-attachment-preview {
@@ -179,7 +180,7 @@
         }
         /* Attachment icon color */
         html.dark #fcp-conv-view label[style*="color:#94a3b8"] {
-            color: #64748b !important;
+            color: #94a3b8 !important;
         }
         /* Empty state text */
         html.dark #fcp-dm-list p,
@@ -191,7 +192,7 @@
         html.dark #fcp-dm-list div[style*="border:2px solid white"] {
             border-color: #1a2236 !important;
         }
-
+ 
         /* ── DARK MODE: Main Chat Sidebar (DM list & Group list cards) ── */
         html.dark #view-chat-panel .chat-sidebar-view > div {
             background: #1a2236 !important;
@@ -225,7 +226,7 @@
         }
         html.dark #dm-list button .text-slate-400,
         html.dark #group-list button .text-slate-400 {
-            color: #475569 !important;
+            color: #94a3b8 !important;
         }
         html.dark #dm-list .border-l-2,
         html.dark #group-list .border-l-2 {
@@ -247,9 +248,9 @@
         /* Empty state */
         html.dark #dm-list p,
         html.dark #group-list p {
-            color: #475569 !important;
+            color: #64748b !important;
         }
-
+ 
         /* ── DARK MODE: Main Chat Window ── */
         html.dark #chat-window-wrapper {
             background: #1a2236 !important;
@@ -291,7 +292,7 @@
             color: #e2e8f0 !important;
         }
         html.dark #msg-input::placeholder {
-            color: #475569 !important;
+            color: #64748b !important;
         }
         html.dark #mention-dropdown {
             background: #1a2236 !important;
@@ -8379,7 +8380,7 @@
 
                 kanban.innerHTML = cols.map(col => {
                     const colTasks = filtered.filter(t => t.status === col.title);
-                    const statusJs = JSON.stringify(col.title);
+                    const statusJs = `'${col.title.replace(/'/g, "\\'")}'`;
                     return `
                     <div data-kanban-col="${escapeHtml(col.title)}" class="flex flex-col rounded-2xl ${col.bg} border ${col.border} p-4 h-full min-h-[300px] w-80 flex-shrink-0 transition-all" ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move';" ondragenter="dragTaskEnter(event, this)" ondragleave="dragTaskLeave(event, this)" ondrop="dropTask(event, ${statusJs})">
                         <div class="flex items-center justify-between mb-4 gap-2">
@@ -8410,7 +8411,7 @@
                                     }
                                 }
                                 return `
-                                <div draggable="true" ondragstart="dragTask(event, '${t.id}')" class="bg-white p-4 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group ${isOverdue ? 'border-rose-200 bg-rose-50/50' : (t.isOnHold && activeTaskId !== t.id ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100')}">
+                                <div draggable="true" ondragstart="dragTask(event, '${t.id}')" ondragend="dragTaskEnd(event)" class="bg-white p-4 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group ${isOverdue ? 'border-rose-200 bg-rose-50/50' : (t.isOnHold && activeTaskId !== t.id ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100')}">
                                     <div class="flex items-start justify-between mb-2">
                                         <span class="text-[10px] font-mono font-bold text-indigo-600">${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800">${t.id}</a>`}</span>
                                         <div class="flex items-center gap-2">
@@ -8648,9 +8649,9 @@
                     const colTasks = boardTasks.filter(t => t._canonicalStatus === status)
                         .sort((a, b) => (a.duedate || '9999').localeCompare(b.duedate || '9999'));
                     const { bg, border, titleColor } = statusColors(status);
-                    const statusJs = JSON.stringify(status);
+                    const statusJs = `'${status.replace(/'/g, "\\'")}'`;
                     return `
-                    <div data-internal-kanban-col="${escapeHtml(status)}" class="flex flex-col rounded-2xl ${bg} border ${border} p-4 h-full min-h-[300px] w-80 flex-shrink-0 transition-all">
+                    <div data-internal-kanban-col="${escapeHtml(status)}" class="flex flex-col rounded-2xl ${bg} border ${border} p-4 h-full min-h-[300px] w-80 flex-shrink-0 transition-all" ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move';" ondragenter="dragTaskEnter(event, this)" ondragleave="dragTaskLeave(event, this)" ondrop="dropTask(event, ${statusJs})">
                         <div class="flex items-center justify-between mb-4 gap-2">
                             <h3 class="text-sm font-black ${titleColor} truncate flex-1">${escapeHtml(status)}</h3>
                             <div class="flex items-center gap-1 shrink-0">
@@ -8673,7 +8674,7 @@
                                         : `<span class="text-slate-500 font-medium text-[10px]">${dateStr}</span>`;
                                 }
                                 return `
-                                <div class="bg-white p-4 rounded-xl shadow-sm border hover:shadow-md transition-all group ${isOverdue ? 'border-rose-200 bg-rose-50/50' : (t.isOnHold && activeTaskId !== t.id ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100')}">
+                                <div draggable="true" ondragstart="dragTask(event, '${t.id}')" ondragend="dragTaskEnd(event)" class="bg-white p-4 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group ${isOverdue ? 'border-rose-200 bg-rose-50/50' : (t.isOnHold && activeTaskId !== t.id ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100')}">
                                     <div class="flex items-start justify-between mb-2 gap-1">
                                         <button onclick="openEditTaskModal('${t.id}')" class="text-[10px] font-mono font-bold text-indigo-600 hover:underline hover:text-indigo-800 text-left leading-tight">${escapeHtml(t.id)}</button>
                                         <div class="flex items-center gap-1.5 shrink-0 ml-2">
@@ -9747,7 +9748,7 @@
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
                             ${t.client ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${t.client}</span>` : ''}
                         </div>
-                        <p class="text-sm font-bold text-slate-900">${t.desc}</p>
+                        <p class="text-sm font-bold text-slate-900">${escapeHtml(t.desc)}</p>
                     </div>
                     <button onclick="toggleActiveTask('${t.id}')" class="text-rose-400 p-1 hover:bg-rose-50 rounded-lg transition-colors shrink-0">
                         <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
@@ -16626,7 +16627,7 @@
                             <tbody class="divide-y divide-slate-100">
                                 ${videoTasks.map(t => `
                                     <tr class="hover:bg-slate-50">
-                                        <td class="px-4 py-3"><p class="font-semibold text-slate-800">${escapeHtml(t.desc)}</p><p class="text-xs text-slate-500">${t.id}</p></td>
+                                        <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="font-semibold text-slate-800">${escapeHtml(t.desc)}</p><p class="text-xs text-slate-500">${t.id}</p></td>
                                         <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
                                         <td class="px-4 py-3 text-xs text-slate-600">${assigneeName(t)}</td>
                                     </tr>
@@ -16710,7 +16711,7 @@
                                 return `
                                 <tr class="hover:bg-slate-50 transition-colors">
                                     <td class="px-4 py-3 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
-                                    <td class="px-4 py-3"><p class="text-xs font-bold text-slate-900">${escapeHtml(t.desc)}</p></td>
+                                    <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="text-xs font-bold text-slate-900">${escapeHtml(t.desc)}</p></td>
                                     <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
                                     <td class="px-4 py-3 text-xs text-slate-600">${escapeHtml(assigneeName(t))}</td>
                                     <td class="px-4 py-3 text-center text-xs font-black ${qcColor}">${avgQc !== null ? avgQc + '%' : '—'}</td>
