@@ -690,6 +690,12 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Strategy Calendar
                     </button>
+                    <button onclick="switchView('plan-tracking')" id="nav-plan-tracking"
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:chart-2-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Plan Tracking
+                    </button>
                     <button onclick="switchView('daily-summary')" id="nav-daily-summary"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:document-add-linear" width="20" class="group-hover:scale-110 transition-transform"></iconify-icon>
@@ -1667,6 +1673,162 @@
                             <div id="strategy-sidebar-list" class="space-y-4 max-h-[520px] overflow-y-auto pr-1">
                                 <!-- Populated dynamically by JS -->
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ PLAN TRACKING VIEW ════ -->
+                <div id="view-plan-tracking-panel" class="hidden space-y-6 fade-in">
+                    <!-- Header -->
+                    <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                                <iconify-icon icon="solar:chart-2-bold-duotone" width="24"></iconify-icon>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-black text-slate-900">Plan Tracking</h3>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Strategy Calendar vs Jira Tasks — Daily Production View</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <!-- Month nav -->
+                            <div class="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                                <button onclick="navigatePlanTracking(-1)" class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon icon="solar:alt-arrow-left-linear" width="18"></iconify-icon></button>
+                                <span id="pt-month-title" class="text-sm font-black text-slate-800 min-w-[130px] text-center">Month Year</span>
+                                <button onclick="navigatePlanTracking(1)" class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon icon="solar:alt-arrow-right-linear" width="18"></iconify-icon></button>
+                            </div>
+                            <button onclick="navigatePlanTracking(0)" class="text-xs font-bold text-violet-600 hover:underline">Today</button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Switcher -->
+                    <div class="flex gap-2">
+                        <button id="pt-tab-calendar" onclick="switchPlanTab('calendar')" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white shadow transition-all">
+                            <iconify-icon icon="solar:calendar-bold" width="14" class="mr-1"></iconify-icon> Calendar View
+                        </button>
+                        <button id="pt-tab-tracker" onclick="switchPlanTab('tracker')" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
+                            <iconify-icon icon="solar:list-check-bold" width="14" class="mr-1"></iconify-icon> Strategy vs Jira
+                        </button>
+                        <button id="pt-tab-risk" onclick="switchPlanTab('risk')" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
+                            <iconify-icon icon="solar:danger-triangle-bold" width="14" class="mr-1"></iconify-icon> At Risk
+                        </button>
+                    </div>
+
+                    <!-- Stat Cards Row -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Strategy Events</p>
+                            <p id="pt-stat-events" class="text-2xl font-black text-slate-900 mt-1">—</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">this month</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jira Tasks Linked</p>
+                            <p id="pt-stat-linked" class="text-2xl font-black text-slate-900 mt-1">—</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">matched to strategy</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-emerald-100 bg-emerald-50/40">
+                            <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">On Track</p>
+                            <p id="pt-stat-ontrack" class="text-2xl font-black text-emerald-700 mt-1">—</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">ready 3 days before post</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-rose-100 bg-rose-50/40">
+                            <p class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">At Risk</p>
+                            <p id="pt-stat-atrisk" class="text-2xl font-black text-rose-700 mt-1">—</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">behind production deadline</p>
+                        </div>
+                    </div>
+
+                    <!-- Calendar View Tab -->
+                    <div id="pt-panel-calendar">
+                        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                            <!-- Weekday headers -->
+                            <div class="grid grid-cols-7 border-b border-slate-100 text-center bg-slate-50/60 py-3">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mon</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tue</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wed</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thu</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fri</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
+                            </div>
+                            <div id="pt-calendar-grid" class="grid grid-cols-7 min-h-[500px]">
+                                <!-- JS-rendered -->
+                            </div>
+                        </div>
+                        <!-- Day Detail Panel -->
+                        <div id="pt-day-detail" class="hidden mt-6 bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-5">
+                            <div class="flex items-center justify-between">
+                                <h4 id="pt-day-detail-title" class="text-base font-black text-slate-900"></h4>
+                                <button onclick="document.getElementById('pt-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition-colors"><iconify-icon icon="solar:close-circle-linear" width="20"></iconify-icon></button>
+                            </div>
+                            <!-- Strategy Events for that day -->
+                            <div id="pt-day-strategy" class="space-y-3"></div>
+                            <!-- Team Capacity Bars -->
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Team Capacity</p>
+                                <div id="pt-day-capacity" class="space-y-3"></div>
+                            </div>
+                            <!-- Jira Tasks for that day -->
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Jira Tasks Due</p>
+                                <div id="pt-day-tasks" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Strategy vs Jira Tracker Tab -->
+                    <div id="pt-panel-tracker" class="hidden">
+                        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                            <div class="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+                                <h4 class="text-sm font-black text-slate-900">Strategy Events vs Production Status</h4>
+                                <div class="flex gap-2 flex-wrap">
+                                    <select id="pt-tracker-client-filter" onchange="renderPlanTracker()" class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none">
+                                        <option value="all">All Clients</option>
+                                    </select>
+                                    <select id="pt-tracker-person-filter" onchange="renderPlanTracker()" class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none">
+                                        <option value="all">All Team</option>
+                                        <option value="barathvilpower@gmail.com">Barath (Design 50%)</option>
+                                        <option value="thanushvilpower@gmail.com">Thanush (Content 40%)</option>
+                                        <option value="immanuelvilpower@gmail.com">Immanuel (Video 10%)</option>
+                                        <option value="anithavilpower@gmail.com">Karthika (Thumbnails)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-100">
+                                        <tr>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Strategy Event</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Client</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Post Date</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Prod. Deadline (D-3)</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Jira Task</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Assignee</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                            <th class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Track</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pt-tracker-tbody" class="divide-y divide-slate-50">
+                                        <!-- JS-rendered -->
+                                    </tbody>
+                                </table>
+                                <div id="pt-tracker-empty" class="hidden text-center py-12 text-slate-400 text-xs italic">No strategy events found for this period.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- At Risk Tab -->
+                    <div id="pt-panel-risk" class="hidden space-y-4">
+                        <div class="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-start gap-3">
+                            <iconify-icon icon="solar:danger-triangle-bold" class="text-rose-500 mt-0.5 flex-shrink-0" width="18"></iconify-icon>
+                            <p class="text-xs text-rose-700 font-medium">Tasks shown here are linked to a strategy post date but <strong>production is not ready 3 days before the scheduled post</strong>. Immediate attention needed.</p>
+                        </div>
+                        <div id="pt-risk-list" class="space-y-3">
+                            <!-- JS-rendered -->
+                        </div>
+                        <div id="pt-risk-empty" class="hidden text-center py-12">
+                            <iconify-icon icon="solar:shield-check-bold-duotone" class="text-emerald-400 mb-3" width="40"></iconify-icon>
+                            <p class="text-sm font-bold text-slate-500">All good! No at-risk tasks this month.</p>
                         </div>
                     </div>
                 </div>
@@ -5944,6 +6106,7 @@
             document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
             document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
             document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
+            document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
             document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
             if (hasClientWideAccess() && !isAdmin() && !isManager()) {
                 // Client-wide only access
@@ -6746,10 +6909,11 @@
             if (view === 'organisers-admin' && !isAdmin()) view = 'dashboard';
             if (view === 'clients-admin' && !isAdmin()) view = 'dashboard';
             if (view === 'strategy-calendar' && !canViewStrategyCalendar()) view = 'dashboard';
+            if (view === 'plan-tracking' && !canViewPlanTracking()) view = 'dashboard';
 
             activeView = view;
             localStorage.setItem('worksync_activeView', view);
-            ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions'].forEach(v => {
+            ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking'].forEach(v => {
                 document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                 const navEl = document.getElementById(`nav-${v}`);
                 if (navEl) navEl.classList.remove('nav-active');
@@ -6782,6 +6946,7 @@
                 'organisers-admin': 'Monthly Organisers & Activity',
                 'dm-content-org': 'DM Content Organiser Board',
                 'strategy-calendar': 'Strategy Calendar',
+                'plan-tracking': 'Plan Tracking',
                 discussions: 'Discussion History & Schedule'
             };
             document.getElementById('view-title').textContent = titles[view] || 'One Desk';
@@ -6815,6 +6980,7 @@
             else if (view === 'workplace-org') { renderWorkplaceOrgPanel(); }
             else if (view === 'dm-content-org') { renderDmContentOrgPanel(); }
             else if (view === 'strategy-calendar') { initStrategyCalendar(); }
+            else if (view === 'plan-tracking') { initPlanTracking(); }
             else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
             else if (view === 'discussions') { renderDiscussionsView(); }
             
@@ -6839,9 +7005,9 @@
         }
 
         // TASK STATUS HELPERS
-        function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Shoot Completed'].includes(s); }
-        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Content In Progress', 'Client Content Approval', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Quality Check', 'Client Sent', 'Analytics', 'Shoot In Progress', 'Design Hold', 'Design hold', 'Hold', 'hold', 'On Hold', 'on hold'].includes(s); }
-        function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Design To Do'].includes(s); }
+        function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Analytics', 'Client Sent', 'Shoot Completed'].includes(s); }
+        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Design Hold', 'Design hold', 'Design In Progress', 'Design To Do', 'Quality Check', 'Thumbnail', 'Rework Designs', 'Shoot In Progress', 'Hold', 'hold', 'On Hold', 'on hold'].includes(s); }
+        function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Content In Progress', 'Client Content Approval'].includes(s); }
         function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
         function isInternalInProgress(s) { return ['In Progress', 'Learnings', 'Learning'].includes(s); }
         function isInternalDone(s) { return ['Completed', 'Done'].includes(s); }
@@ -7273,10 +7439,15 @@
 
         function normalizeStrategyStatus(statusName) {
             const val = (statusName || 'Planned').trim();
-            const completedStatuses = ['posted', 'done', 'analytics', 'completed', 'client approved', 'client sent'];
-            if (completedStatuses.includes(val.toLowerCase())) {
-                return 'Completed';
-            }
+            // ── Done group ──
+            const doneStatuses = ['posted', 'analytics', 'client approved', 'client sent', 'design completed', 'done', 'completed', 'resolved', 'closed'];
+            if (doneStatuses.includes(val.toLowerCase())) return 'Done';
+            // ── In Progress group ──
+            const inProgressStatuses = ['design hold', 'design in progress', 'design to do', 'quality check', 'thumbnail', 'rework designs'];
+            if (inProgressStatuses.includes(val.toLowerCase())) return val; // keep exact name
+            // ── Planned group ──
+            const plannedStatuses = ['shoot needed', 'to do', 'content in progress', 'client content approval'];
+            if (plannedStatuses.includes(val.toLowerCase())) return val; // keep exact name
             return val;
         }
 
@@ -7578,6 +7749,516 @@
                 console.error(err);
                 toast('Failed to delete event', 'error');
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // PLAN TRACKING — Palani's Production Calendar
+        // ══════════════════════════════════════════════════════════════════
+
+        let ptCurrentDate = new Date();
+        let ptActiveTab = 'calendar';
+
+        const PT_TEAM = [
+            { email: 'barathvilpower@gmail.com',    name: 'Barath',   label: 'Design',    pct: 50, color: 'violet',  taskTypes: ['Design To Do','Design In Progress','Rework Designs','Design Hold','Quality Check','Thumbnail'] },
+            { email: 'thanushvilpower@gmail.com',   name: 'Thanush',  label: 'Content',   pct: 40, color: 'blue',    taskTypes: ['Content In Progress','Client Content Approval','To Do'] },
+            { email: 'immanuelvilpower@gmail.com',  name: 'Immanuel', label: 'Video',     pct: 10, color: 'amber',   taskTypes: ['In Progress','To Do','Design In Progress'] },
+            { email: 'anithavilpower@gmail.com',    name: 'Karthika', label: 'Thumbnails',pct: null, color: 'pink',  taskTypes: ['Thumbnail'] }
+        ];
+
+        function canViewPlanTracking() {
+            if (!currentUser) return false;
+            const allowed = [
+                'digitalmarketing@vilpower.com',  // Palani
+                'nanjil@vilpower.com',             // Nanjil
+                'murugeshvilpower@gmail.com'       // Murugesh
+            ];
+            return allowed.includes(currentUser.email.toLowerCase()) || isAdmin();
+        }
+
+        function ptDateStr(date) {
+            return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        }
+
+        function ptAddDays(dateStr, days) {
+            const d = new Date(dateStr + 'T00:00:00');
+            d.setDate(d.getDate() + days);
+            return ptDateStr(d);
+        }
+
+        function ptFormatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
+        }
+
+        /** Match Jira tasks to a strategy event by title keywords + client label + due date window.
+         *  Includes done tasks so we can correctly show "on-track" for posted items. */
+        function ptMatchedTasks(ev) {
+            if (!ev || !ev.date) return [];
+            const windowStart = ptAddDays(ev.date, -14); // look back 14 days
+            const windowEnd   = ptAddDays(ev.date, 3);   // allow 3 days after post (late posts)
+
+            // Build keyword tokens from the strategy event title
+            const stopWords = new Set(['a','an','the','and','or','of','in','on','at','to','for','is','are','was','were','be','been','being','with','by','from','as','it','its','this','that','these','those','i','we','you','he','she','they']);
+            const titleTokens = (ev.title || '').toLowerCase()
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length > 2 && !stopWords.has(w));
+
+            return tasks.filter(t => {
+                // ── Client match (required) ──
+                const clientMatch = ev.client && t.client && t.client.toLowerCase() === ev.client.toLowerCase();
+                const labelMatch  = ev.client && (t.clientLabels || []).some(l => l.toLowerCase().includes(ev.client.toLowerCase()));
+                if (!clientMatch && !labelMatch) return false;
+
+                // ── Title keyword match ──
+                // If the strategy event title has keywords, at least one must appear in the Jira task description
+                if (titleTokens.length > 0) {
+                    const descLower = (t.desc || '').toLowerCase();
+                    const hasKeyword = titleTokens.some(token => descLower.includes(token));
+                    if (!hasKeyword) return false;
+                }
+
+                // ── Due date window (if task has a due date) ──
+                if (t.duedate) {
+                    return t.duedate >= windowStart && t.duedate <= windowEnd;
+                }
+                // No due date — include by client + keyword match alone
+                return true;
+            });
+        }
+
+        /** Get all Jira tasks due on a specific date (non-done) */
+        function ptTasksDueOn(dateStr) {
+            return tasks.filter(t => t.duedate === dateStr && !isDone(t.status));
+        }
+
+        /** Determine production track status for an event */
+        function ptTrackStatus(ev) {
+            const today    = ptDateStr(new Date());
+            const deadline = ptAddDays(ev.date, -3); // D-3 production deadline
+            const matched  = ptMatchedTasks(ev);
+
+            if (matched.length === 0) return 'no-tasks';
+
+            // If the strategy event itself is marked done (Posted, Analytics, etc.) → on-track
+            if (isDone(ev.status || '')) return 'on-track';
+
+            // If ANY matched Jira task is done (Posted/Analytics/Client Approved/etc.) → on-track
+            const anyDone = matched.some(t => isDone(t.status));
+            if (anyDone) return 'on-track';
+
+            // All matched tasks are done → on-track
+            const allDone = matched.every(t => isDone(t.status));
+            if (allDone) return 'on-track';
+
+            // Past D-3 and nothing is done → at-risk
+            if (today > deadline) return 'at-risk';
+
+            // Within 5 days of post and still in Planned/To Do state → watch
+            const anyStillPlanned = matched.some(t => isTodo(t.status));
+            if (today > ptAddDays(ev.date, -5) && anyStillPlanned) return 'watch';
+
+            return 'on-track';
+        }
+
+        function ptTrackBadge(status) {
+            const map = {
+                'on-track':  '<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full text-[9px] font-black">✓ On Track</span>',
+                'watch':     '<span class="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full text-[9px] font-black">⚠ Watch</span>',
+                'at-risk':   '<span class="bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full text-[9px] font-black">✕ At Risk</span>',
+                'no-tasks':  '<span class="bg-slate-50 text-slate-400 border border-slate-100 px-2 py-0.5 rounded-full text-[9px] font-black">No Jira</span>',
+            };
+            return map[status] || '';
+        }
+
+        /** Get month strategy events */
+        function ptMonthEvents() {
+            const month = ptCurrentDate.getMonth();
+            const year  = ptCurrentDate.getFullYear();
+            return Object.entries(strategyEvents)
+                .map(([id, ev]) => ({ id, ...ev }))
+                .filter(ev => {
+                    if (!ev.date) return false;
+                    const d = new Date(ev.date + 'T00:00:00');
+                    return d.getMonth() === month && d.getFullYear() === year;
+                })
+                .sort((a,b) => a.date.localeCompare(b.date));
+        }
+
+        function initPlanTracking() {
+            // Make sure strategy events are loaded
+            if (!strategyEventsUnsub) {
+                if (db) {
+                    strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
+                        strategyEvents = snap.val() || {};
+                        renderPlanTrackingView();
+                    });
+                }
+            }
+            // Populate tracker client filter
+            const cf = document.getElementById('pt-tracker-client-filter');
+            if (cf) {
+                const clients = [...new Set(Object.values(strategyEvents).map(e => e.client).filter(Boolean))].sort();
+                cf.innerHTML = '<option value="all">All Clients</option>' + clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            }
+            renderPlanTrackingView();
+        }
+
+        function navigatePlanTracking(dir) {
+            if (dir === 0) {
+                ptCurrentDate = new Date();
+            } else {
+                ptCurrentDate.setMonth(ptCurrentDate.getMonth() + dir);
+            }
+            renderPlanTrackingView();
+        }
+
+        function switchPlanTab(tab) {
+            ptActiveTab = tab;
+            ['calendar','tracker','risk'].forEach(t => {
+                const btn   = document.getElementById(`pt-tab-${t}`);
+                const panel = document.getElementById(`pt-panel-${t}`);
+                if (btn)   btn.className = t === tab
+                    ? 'px-5 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white shadow transition-all'
+                    : 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
+                if (panel) panel.classList.toggle('hidden', t !== tab);
+            });
+            if (tab === 'tracker') renderPlanTracker();
+            if (tab === 'risk')    renderPlanRisk();
+        }
+
+        function renderPlanTrackingView() {
+            document.getElementById('pt-month-title').textContent =
+                ptCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+            updatePlanStats();
+            if (ptActiveTab === 'calendar') renderPlanCalendar();
+            if (ptActiveTab === 'tracker')  renderPlanTracker();
+            if (ptActiveTab === 'risk')     renderPlanRisk();
+        }
+
+        function updatePlanStats() {
+            const evs     = ptMonthEvents();
+            const linked  = evs.filter(ev => ptMatchedTasks(ev).length > 0);
+            const onTrack = evs.filter(ev => ['on-track','no-tasks'].includes(ptTrackStatus(ev)));
+            const atRisk  = evs.filter(ev => ptTrackStatus(ev) === 'at-risk');
+
+            document.getElementById('pt-stat-events').textContent   = evs.length;
+            document.getElementById('pt-stat-linked').textContent   = linked.length;
+            document.getElementById('pt-stat-ontrack').textContent  = onTrack.length;
+            document.getElementById('pt-stat-atrisk').textContent   = atRisk.length;
+        }
+
+        function renderPlanCalendar() {
+            const grid = document.getElementById('pt-calendar-grid');
+            if (!grid) return;
+
+            const month = ptCurrentDate.getMonth();
+            const year  = ptCurrentDate.getFullYear();
+            const firstDay     = new Date(year, month, 1).getDay();
+            const daysInMonth  = new Date(year, month+1, 0).getDate();
+            const todayStr     = ptDateStr(new Date());
+
+            // Map strategy events by date
+            const evByDate = {};
+            Object.entries(strategyEvents).forEach(([id, ev]) => {
+                if (!ev.date) return;
+                const d = new Date(ev.date + 'T00:00:00');
+                if (d.getMonth() !== month || d.getFullYear() !== year) return;
+                if (!evByDate[ev.date]) evByDate[ev.date] = [];
+                evByDate[ev.date].push({ id, ...ev });
+            });
+
+            // Map D-3 deadlines by date
+            const deadlineByDate = {};
+            Object.entries(strategyEvents).forEach(([id, ev]) => {
+                if (!ev.date) return;
+                const d = new Date(ev.date + 'T00:00:00');
+                if (d.getMonth() !== month || d.getFullYear() !== year) return;
+                const dl = ptAddDays(ev.date, -3);
+                if (!deadlineByDate[dl]) deadlineByDate[dl] = [];
+                deadlineByDate[dl].push({ id, ...ev });
+            });
+
+            grid.innerHTML = '';
+
+            // Leading blank cells
+            for (let i = 0; i < firstDay; i++) {
+                grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[130px]"></div>`;
+            }
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr  = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const isToday  = dateStr === todayStr;
+                const dayEvs   = evByDate[dateStr]   || [];
+                const dlEvs    = deadlineByDate[dateStr] || [];
+                const jiraTasks = ptTasksDueOn(dateStr);
+
+                // Strategy event chips (post date — violet)
+                const stratHtml = dayEvs.map(ev => {
+                    const track = ptTrackStatus(ev);
+                    const chipColor = track === 'at-risk' ? 'bg-rose-500' : track === 'watch' ? 'bg-amber-500' : 'bg-violet-600';
+                    return `<div class="${chipColor} text-white px-2 py-0.5 rounded text-[9px] font-black mb-0.5 truncate" title="POST: ${escapeHtml(ev.title)}">
+                        📅 ${escapeHtml(ev.title.length > 18 ? ev.title.slice(0,18)+'…' : ev.title)}
+                    </div>`;
+                }).join('');
+
+                // D-3 deadline chips (amber)
+                const dlHtml = dlEvs.map(ev => {
+                    return `<div class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-bold mb-0.5 truncate" title="D-3 DEADLINE: ${escapeHtml(ev.title)}">
+                        ⚡ ${escapeHtml(ev.title.length > 16 ? ev.title.slice(0,16)+'…' : ev.title)}
+                    </div>`;
+                }).join('');
+
+                // Jira task count dot
+                const jiraHtml = jiraTasks.length > 0
+                    ? `<div class="mt-1 text-[9px] text-slate-500 font-bold">${jiraTasks.length} Jira task${jiraTasks.length>1?'s':''}</div>`
+                    : '';
+
+                // Background highlight
+                let dayBg = '';
+                if (isToday) dayBg = 'bg-violet-50/60';
+                else if (dayEvs.length > 0) dayBg = 'bg-violet-50/20';
+                else if (dlEvs.length > 0) dayBg = 'bg-amber-50/30';
+
+                grid.innerHTML += `
+                    <div onclick="openPtDayDetail('${dateStr}')"
+                         class="relative p-2 border-r border-b border-slate-100 min-h-[130px] flex flex-col group ${dayBg} hover:bg-slate-50 transition-colors cursor-pointer">
+                        <span class="font-black text-xs ${isToday ? 'text-violet-600 bg-violet-100 px-2 py-0.5 rounded-lg' : 'text-slate-500'} w-fit mb-1">${d}</span>
+                        <div class="flex-1 overflow-hidden">
+                            ${dlHtml}
+                            ${stratHtml}
+                            ${jiraHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Trailing blank cells
+            const total = firstDay + daysInMonth;
+            const tail  = (7 - (total % 7)) % 7;
+            for (let i = 0; i < tail; i++) {
+                grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[130px]"></div>`;
+            }
+        }
+
+        function openPtDayDetail(dateStr) {
+            const detail = document.getElementById('pt-day-detail');
+            if (!detail) return;
+
+            detail.classList.remove('hidden');
+            document.getElementById('pt-day-detail-title').textContent = ptFormatDate(dateStr);
+
+            // Strategy events on this day
+            const dayEvs = Object.entries(strategyEvents)
+                .map(([id,ev]) => ({ id,...ev }))
+                .filter(ev => ev.date === dateStr);
+
+            // D-3 deadline events pointing to this day
+            const dlEvs = Object.entries(strategyEvents)
+                .map(([id,ev]) => ({ id,...ev }))
+                .filter(ev => ev.date && ptAddDays(ev.date, -3) === dateStr);
+
+            const stratEl = document.getElementById('pt-day-strategy');
+            stratEl.innerHTML = '';
+
+            if (dayEvs.length > 0) {
+                stratEl.innerHTML += `<p class="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-2">📅 Post Date Events</p>`;
+                dayEvs.forEach(ev => {
+                    const track   = ptTrackStatus(ev);
+                    const matched = ptMatchedTasks(ev);
+                    stratEl.innerHTML += `
+                        <div class="bg-violet-50 border border-violet-100 rounded-xl p-3 flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-black text-violet-900">${escapeHtml(ev.title)}</p>
+                                <p class="text-[10px] text-violet-500 mt-0.5">${escapeHtml(ev.client||'General')} · ${escapeHtml(ev.platform||'')} · Prod. Deadline: <strong>${ptFormatDate(ptAddDays(ev.date,-3))}</strong></p>
+                                <p class="text-[10px] text-slate-500 mt-0.5">${matched.length} Jira task${matched.length!==1?'s':''} linked</p>
+                            </div>
+                            ${ptTrackBadge(track)}
+                        </div>
+                    `;
+                });
+            }
+            if (dlEvs.length > 0) {
+                stratEl.innerHTML += `<p class="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2 mt-3">⚡ D-3 Production Deadlines Due Today</p>`;
+                dlEvs.forEach(ev => {
+                    const track = ptTrackStatus(ev);
+                    stratEl.innerHTML += `
+                        <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-black text-amber-900">${escapeHtml(ev.title)}</p>
+                                <p class="text-[10px] text-amber-600 mt-0.5">Post Date: <strong>${ptFormatDate(ev.date)}</strong> · ${escapeHtml(ev.client||'General')}</p>
+                            </div>
+                            ${ptTrackBadge(track)}
+                        </div>
+                    `;
+                });
+            }
+            if (dayEvs.length === 0 && dlEvs.length === 0) {
+                stratEl.innerHTML = `<p class="text-xs text-slate-400 italic">No strategy events or deadlines on this day.</p>`;
+            }
+
+            // Team capacity bars
+            const capEl = document.getElementById('pt-day-capacity');
+            const jiraTasks = ptTasksDueOn(dateStr);
+            capEl.innerHTML = PT_TEAM.map(member => {
+                const myTasks = jiraTasks.filter(t =>
+                    (t.assigneeEmail||'').toLowerCase() === member.email.toLowerCase()
+                );
+                const allMyTasks = tasks.filter(t =>
+                    (t.assigneeEmail||'').toLowerCase() === member.email.toLowerCase() &&
+                    !isDone(t.status)
+                );
+                const load = allMyTasks.length;
+                const capPct = member.pct;
+                const barColor = {violet:'bg-violet-500', blue:'bg-blue-500', amber:'bg-amber-500', pink:'bg-pink-500'}[member.color] || 'bg-slate-400';
+                const pctLabel = capPct !== null ? `${capPct}% allocation` : 'Thumbnail tasks';
+                return `
+                    <div class="flex items-center gap-3">
+                        <div class="w-20 flex-shrink-0">
+                            <p class="text-xs font-black text-slate-700">${member.name}</p>
+                            <p class="text-[9px] text-slate-400">${member.label} · ${pctLabel}</p>
+                        </div>
+                        <div class="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div class="${barColor} h-2.5 rounded-full transition-all" style="width: ${Math.min(100, load * 10)}%"></div>
+                        </div>
+                        <div class="text-[10px] font-bold text-slate-500 w-16 text-right">${myTasks.length} due · ${load} open</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Jira tasks due
+            const taskEl = document.getElementById('pt-day-tasks');
+            if (jiraTasks.length === 0) {
+                taskEl.innerHTML = `<p class="text-xs text-slate-400 italic">No Jira tasks due on this day.</p>`;
+            } else {
+                taskEl.innerHTML = jiraTasks.map(t => {
+                    const member = PT_TEAM.find(m => (t.assigneeEmail||'').toLowerCase() === m.email.toLowerCase());
+                    const avatarColor = member ? `text-${member.color}-600 bg-${member.color}-50` : 'text-slate-600 bg-slate-50';
+                    return `
+                        <div class="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                            <span class="text-[9px] font-black ${avatarColor} px-2 py-1 rounded-lg flex-shrink-0">${escapeHtml(t.id)}</span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(t.desc||'')}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(t.assignee||'Unassigned')} · ${escapeHtml(t.client||'')} · ${escapeHtml(t.status)}</p>
+                            </div>
+                            <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">${escapeHtml(t.status)}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function renderPlanTracker() {
+            const tbody   = document.getElementById('pt-tracker-tbody');
+            const empty   = document.getElementById('pt-tracker-empty');
+            if (!tbody) return;
+
+            const clientF = (document.getElementById('pt-tracker-client-filter')?.value || 'all');
+            const personF = (document.getElementById('pt-tracker-person-filter')?.value || 'all');
+
+            let evs = ptMonthEvents();
+            if (clientF !== 'all') evs = evs.filter(ev => ev.client === clientF);
+
+            tbody.innerHTML = '';
+            let anyRow = false;
+
+            evs.forEach(ev => {
+                const matched = ptMatchedTasks(ev).filter(t =>
+                    personF === 'all' || (t.assigneeEmail||'').toLowerCase() === personF.toLowerCase()
+                );
+                const deadline = ptAddDays(ev.date, -3);
+                const track    = ptTrackStatus(ev);
+
+                if (personF !== 'all' && matched.length === 0) return; // skip if person filter active and no tasks
+
+                if (matched.length === 0) {
+                    anyRow = true;
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-3 font-bold text-slate-800 text-xs">${escapeHtml(ev.title)}</td>
+                            <td class="px-4 py-3 text-slate-500 text-xs">${escapeHtml(ev.client||'General')}</td>
+                            <td class="px-4 py-3 text-slate-700 font-bold text-xs">${ptFormatDate(ev.date)}</td>
+                            <td class="px-4 py-3 text-amber-700 font-bold text-xs">${ptFormatDate(deadline)}</td>
+                            <td class="px-4 py-3 text-slate-400 text-xs italic" colspan="3">No Jira tasks linked</td>
+                            <td class="px-4 py-3">${ptTrackBadge('no-tasks')}</td>
+                        </tr>
+                    `;
+                } else {
+                    matched.forEach((t, idx) => {
+                        anyRow = true;
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                ${idx === 0 ? `<td class="px-4 py-3 font-bold text-slate-800 text-xs" rowspan="${matched.length}">${escapeHtml(ev.title)}</td>
+                                <td class="px-4 py-3 text-slate-500 text-xs" rowspan="${matched.length}">${escapeHtml(ev.client||'General')}</td>
+                                <td class="px-4 py-3 text-slate-700 font-bold text-xs" rowspan="${matched.length}">${ptFormatDate(ev.date)}</td>
+                                <td class="px-4 py-3 text-amber-700 font-bold text-xs" rowspan="${matched.length}">${ptFormatDate(deadline)}</td>` : ''}
+                                <td class="px-4 py-3 text-xs">
+                                    <span class="font-black text-slate-700">${escapeHtml(t.id)}</span>
+                                    <p class="text-[10px] text-slate-400 truncate max-w-[180px]">${escapeHtml(t.desc||'')}</p>
+                                </td>
+                                <td class="px-4 py-3 text-xs text-slate-600">${escapeHtml(t.assignee||'—')}</td>
+                                <td class="px-4 py-3"><span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full">${escapeHtml(t.status)}</span></td>
+                                ${idx === 0 ? `<td class="px-4 py-3" rowspan="${matched.length}">${ptTrackBadge(track)}</td>` : ''}
+                            </tr>
+                        `;
+                    });
+                }
+            });
+
+            empty.classList.toggle('hidden', anyRow);
+        }
+
+        function renderPlanRisk() {
+            const list  = document.getElementById('pt-risk-list');
+            const empty = document.getElementById('pt-risk-empty');
+            if (!list) return;
+
+            const evs = ptMonthEvents().filter(ev => ptTrackStatus(ev) === 'at-risk');
+            list.innerHTML = '';
+
+            if (evs.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            evs.forEach(ev => {
+                const matched  = ptMatchedTasks(ev);
+                const deadline = ptAddDays(ev.date, -3);
+                const today    = ptDateStr(new Date());
+                const daysOver = Math.round((new Date(today+'T00:00:00') - new Date(deadline+'T00:00:00')) / 86400000);
+
+                list.innerHTML += `
+                    <div class="bg-white border border-rose-100 rounded-2xl p-4 shadow-sm">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                                <p class="text-sm font-black text-slate-900">${escapeHtml(ev.title)}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(ev.client||'General')} · Post: <strong>${ptFormatDate(ev.date)}</strong> · D-3 was: <strong class="text-rose-600">${ptFormatDate(deadline)}</strong> · <span class="text-rose-600 font-bold">${daysOver > 0 ? daysOver+' day'+(daysOver>1?'s':'')+' overdue' : 'Due today'}</span></p>
+                            </div>
+                            ${ptTrackBadge('at-risk')}
+                        </div>
+                        <div class="space-y-2">
+                            ${matched.length === 0
+                                ? `<p class="text-xs text-slate-400 italic">No Jira tasks linked.</p>`
+                                : matched.map(t => `
+                                    <div class="flex items-center gap-3 bg-rose-50/50 rounded-xl px-3 py-2">
+                                        <span class="text-[9px] font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded">${escapeHtml(t.id)}</span>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-xs font-bold text-slate-700 truncate">${escapeHtml(t.desc||'')}</p>
+                                            <p class="text-[10px] text-slate-400">${escapeHtml(t.assignee||'Unassigned')} · ${escapeHtml(t.status)}</p>
+                                        </div>
+                                        <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">${escapeHtml(t.status)}</span>
+                                    </div>
+                                `).join('')
+                            }
+                        </div>
+                    </div>
+                `;
+            });
         }
 
         async function jiraRequest(jiraUrl, method = 'get', payload = null) {
@@ -19155,6 +19836,10 @@
         window.saveStrategyEvent = saveStrategyEvent;
         window.deleteStrategyEvent = deleteStrategyEvent;
         window.setStrategyClientFilter = setStrategyClientFilter;
+        window.navigatePlanTracking = navigatePlanTracking;
+        window.switchPlanTab = switchPlanTab;
+        window.openPtDayDetail = openPtDayDetail;
+        window.renderPlanTracker = renderPlanTracker;
         window.renderDiscussionsView = renderDiscussionsView;
         window.saveLiveDiscussionNotes = saveLiveDiscussionNotes;
         window.endCurrentDiscussionLive = endCurrentDiscussionLive;
@@ -19367,7 +20052,6 @@
                 <div style="display:flex;align-items:center;gap:8px;">
                     <iconify-icon icon="solar:chat-round-dots-bold" style="color:white;" width="18"></iconify-icon>
                     <span style="color:white;font-size:13px;font-weight:900;">Team Chat</span>
-                    <button onclick="toggleFcpDebugLogs(event)" style="background:rgba(255,255,255,.2);border:none;border-radius:4px;color:white;font-size:9px;padding:2px 6px;cursor:pointer;font-weight:bold;margin-left:5px;">Logs</button>
                 </div>
                 <button onclick="toggleFloatChat()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;" title="Minimise">−</button>
             </div>
@@ -19418,65 +20102,9 @@
                 </button>
             </div>
         </div>
-        <!-- Debug Logs View -->
-        <div id="fcp-debug-logs" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:#0f172a;color:#38bdf8;font-family:monospace;font-size:10px;padding:10px;overflow-y:auto;z-index:99999;box-sizing:border-box;">
-            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155;padding-bottom:5px;margin-bottom:8px;">
-                <span style="font-weight:bold;color:white;">FCP Diagnostics</span>
-                <button onclick="toggleFcpDebugLogs(event)" style="background:#ef4444;color:white;border:none;padding:2px 6px;cursor:pointer;border-radius:4px;font-size:9px;font-weight:bold;">Close</button>
-            </div>
-            <pre id="fcp-debug-logs-pre" style="white-space:pre-wrap;margin:0;font-family:inherit;line-height:1.4;text-align:left;"></pre>
-        </div>
     </div>
 
     <script>
-    // ── Diagnostic Log Capture ──────────────────────────────────────────────────
-    (function() {
-        window._fcpLogs = [];
-        function log(type, args) {
-            var msg = Array.from(args).map(function(arg) {
-                if (typeof arg === 'object' && arg !== null) {
-                    try { return JSON.stringify(arg); } catch(e) { return String(arg); }
-                }
-                return String(arg);
-            }).join(" ");
-            window._fcpLogs.push("[" + type + "] " + msg);
-        }
-        var _log = console.log;
-        var _error = console.error;
-        var _warn = console.warn;
-        console.log = function() { log("LOG", arguments); _log.apply(console, arguments); };
-        console.error = function() { log("ERR", arguments); _error.apply(console, arguments); };
-        console.warn = function() { log("WRN", arguments); _warn.apply(console, arguments); };
-        window.addEventListener('error', function(e) {
-            window._fcpLogs.push("[CRASH] " + e.message + " at " + e.filename + ":" + e.lineno + ":" + e.colno);
-        });
-    })();
-
-    function toggleFcpDebugLogs(e) {
-        if (e) e.stopPropagation();
-        var el = document.getElementById('fcp-debug-logs');
-        if (!el) return;
-        var open = el.style.display === 'block';
-        el.style.display = open ? 'none' : 'block';
-        if (!open) {
-            var pre = document.getElementById('fcp-debug-logs-pre');
-            if (pre) {
-                var statusInfo = [
-                    "User: " + JSON.stringify(_fcpCU()),
-                    "AllUsersMap Size: " + (_fcpUM() ? _fcpUM().size : "null"),
-                    "ChatConvs Size: " + (_fcpCC() ? Object.keys(_fcpCC()).length : "null"),
-                    "UnreadCounts: " + JSON.stringify(_fcpUC()),
-                    "Active Tab: " + fcpActiveTab,
-                    "fcpOpen: " + fcpOpen,
-                    "HTML Dark Class: " + document.documentElement.classList.contains('dark'),
-                    "----------------------------------------"
-                ].join('\n');
-                pre.textContent = statusInfo + '\n' + (window._fcpLogs || []).join('\n') || 'No logs captured yet.';
-            }
-        }
-    }
-    window.toggleFcpDebugLogs = toggleFcpDebugLogs;
-
     // ── Dark Mode Theme Toggle ──────────────────────────────────────────────────
     function toggleDarkModeTheme() {
         var isDark = document.documentElement.classList.toggle('dark');
