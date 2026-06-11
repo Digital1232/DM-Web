@@ -6587,33 +6587,34 @@
         function checkDailyPlanProgressNotification() {
             if (!currentUser || !db) return;
             const now = new Date();
-            // We want to trigger it at or after 5:00 PM (17:00)
-            if (now.getHours() < 17) return;
+            const hour = now.getHours();
+            // Only run between 5:00 PM and 6:30 PM
+            if (hour < 17 || hour >= 19) return;
 
             const today = todayIso();
             const localKey = `worksync_speedup_notified_${today}`;
             if (localStorage.getItem(localKey)) return;
 
             const stats = getDailyPlanStats(currentUser.email, today);
-            if (stats.total === 0) return; // No tasks planned
+            if (stats.total === 0) return; // No tasks planned — no warning needed
 
             const completionRate = stats.completed / stats.total;
+            const pending = stats.total - stats.completed;
+
             if (completionRate < 0.75) {
-                // Show local toast
-                toast(`⚠️ Speed up the work! You have completed only ${Math.round(completionRate * 100)}% of your daily plan by 5:00 PM.`, 'info');
-                
-                // Write to task_notifications for record / push notification
-                const notifData = {
-                    title: 'Speed Up Reminder',
-                    body: `Speed up the work! You have completed only ${Math.round(completionRate * 100)}% of your daily plan (${stats.completed}/${stats.total} completed) by 5:00 PM.`,
+                const pct = Math.round(completionRate * 100);
+                const msg = `⚡ Speed up! ${pending} task${pending > 1 ? 's' : ''} still pending in your daily plan (${pct}% done). Wrap up before checkout.`;
+                toast(msg, 'info');
+
+                push(ref(db, 'worksync/task_notifications'), {
+                    title: 'Daily Plan Reminder',
+                    body: msg,
                     timestamp: Date.now(),
                     readBy: {},
                     notifyEmails: [currentUser.email]
-                };
-                push(ref(db, 'worksync/task_notifications'), notifData);
+                });
             }
-            
-            // Set flag so we don't check again today
+
             localStorage.setItem(localKey, 'true');
         }
         function setTimerState(state) {
@@ -7889,22 +7890,31 @@
         }
 
         function initPlanTracking() {
-            // Make sure strategy events are loaded
+            // Subscribe to strategy events if not already
             if (!strategyEventsUnsub) {
                 if (db) {
                     strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
                         strategyEvents = snap.val() || {};
+                        // Refresh client filter whenever events change
+                        ptRefreshClientFilter();
                         renderPlanTrackingView();
                     });
                 }
+            } else {
+                // Already subscribed — just refresh
+                ptRefreshClientFilter();
+                renderPlanTrackingView();
             }
-            // Populate tracker client filter
+        }
+
+        function ptRefreshClientFilter() {
             const cf = document.getElementById('pt-tracker-client-filter');
-            if (cf) {
-                const clients = [...new Set(Object.values(strategyEvents).map(e => e.client).filter(Boolean))].sort();
-                cf.innerHTML = '<option value="all">All Clients</option>' + clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-            }
-            renderPlanTrackingView();
+            if (!cf) return;
+            const currentVal = cf.value;
+            // Get clients from ALL strategy events (not just this month) for a full filter list
+            const clients = [...new Set(Object.values(strategyEvents).map(e => e.client).filter(Boolean))].sort();
+            cf.innerHTML = '<option value="all">All Clients</option>' +
+                clients.map(c => `<option value="${escapeHtml(c)}" ${c === currentVal ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
         }
 
         function navigatePlanTracking(dir) {
@@ -8159,30 +8169,54 @@
             const empty   = document.getElementById('pt-tracker-empty');
             if (!tbody) return;
 
-            const clientF = (document.getElementById('pt-tracker-client-filter')?.value || 'all');
-            const personF = (document.getElementById('pt-tracker-person-filter')?.value || 'all');
+            const clientF = (document.getElementById('pt-tracker-client-filter')?.value || 'all').trim();
+            const personF = (document.getElementById('pt-tracker-person-filter')?.value || 'all').trim();
+
+            // Repopulate client filter dropdown with current month's strategy clients
+            const cf = document.getElementById('pt-tracker-client-filter');
+            if (cf) {
+                const currentVal = cf.value;
+                const clients = [...new Set(
+                    ptMonthEvents().map(e => e.client).filter(Boolean)
+                )].sort();
+                cf.innerHTML = '<option value="all">All Clients</option>' +
+                    clients.map(c => `<option value="${escapeHtml(c)}" ${c === currentVal ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+            }
 
             let evs = ptMonthEvents();
-            if (clientF !== 'all') evs = evs.filter(ev => ev.client === clientF);
+
+            // Apply client filter
+            if (clientF !== 'all') {
+                evs = evs.filter(ev => (ev.client || '').toLowerCase() === clientF.toLowerCase());
+            }
 
             tbody.innerHTML = '';
             let anyRow = false;
 
             evs.forEach(ev => {
-                const matched = ptMatchedTasks(ev).filter(t =>
-                    personF === 'all' || (t.assigneeEmail||'').toLowerCase() === personF.toLowerCase()
-                );
-                const deadline = ptAddDays(ev.date, -3);
-                const track    = ptTrackStatus(ev);
+                // Get ALL matched tasks for track status (unfiltered by person)
+                const allMatched = ptMatchedTasks(ev);
+                const track      = ptTrackStatus(ev);
+                const deadline   = ptAddDays(ev.date, -3);
 
-                if (personF !== 'all' && matched.length === 0) return; // skip if person filter active and no tasks
+                // Apply person filter only to the displayed task rows
+                let displayTasks = allMatched;
+                if (personF !== 'all') {
+                    displayTasks = allMatched.filter(t =>
+                        (t.assigneeEmail || '').toLowerCase() === personF.toLowerCase()
+                    );
+                    // If person filter active and no tasks for this person, skip this event row
+                    if (displayTasks.length === 0) return;
+                }
 
-                if (matched.length === 0) {
-                    anyRow = true;
+                anyRow = true;
+
+                if (displayTasks.length === 0) {
+                    // No Jira tasks linked at all
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-4 py-3 font-bold text-slate-800 text-xs">${escapeHtml(ev.title)}</td>
-                            <td class="px-4 py-3 text-slate-500 text-xs">${escapeHtml(ev.client||'General')}</td>
+                            <td class="px-4 py-3 text-slate-500 text-xs">${escapeHtml(ev.client || 'General')}</td>
                             <td class="px-4 py-3 text-slate-700 font-bold text-xs">${ptFormatDate(ev.date)}</td>
                             <td class="px-4 py-3 text-amber-700 font-bold text-xs">${ptFormatDate(deadline)}</td>
                             <td class="px-4 py-3 text-slate-400 text-xs italic" colspan="3">No Jira tasks linked</td>
@@ -8190,28 +8224,44 @@
                         </tr>
                     `;
                 } else {
-                    matched.forEach((t, idx) => {
-                        anyRow = true;
+                    displayTasks.forEach((t, idx) => {
+                        const memberLabel = PT_TEAM.find(m => (t.assigneeEmail||'').toLowerCase() === m.email.toLowerCase());
                         tbody.innerHTML += `
                             <tr class="hover:bg-slate-50 transition-colors">
-                                ${idx === 0 ? `<td class="px-4 py-3 font-bold text-slate-800 text-xs" rowspan="${matched.length}">${escapeHtml(ev.title)}</td>
-                                <td class="px-4 py-3 text-slate-500 text-xs" rowspan="${matched.length}">${escapeHtml(ev.client||'General')}</td>
-                                <td class="px-4 py-3 text-slate-700 font-bold text-xs" rowspan="${matched.length}">${ptFormatDate(ev.date)}</td>
-                                <td class="px-4 py-3 text-amber-700 font-bold text-xs" rowspan="${matched.length}">${ptFormatDate(deadline)}</td>` : ''}
+                                ${idx === 0 ? `
+                                <td class="px-4 py-3 font-bold text-slate-800 text-xs align-top" rowspan="${displayTasks.length}">${escapeHtml(ev.title)}</td>
+                                <td class="px-4 py-3 text-slate-500 text-xs align-top" rowspan="${displayTasks.length}">
+                                    <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-bold">${escapeHtml(ev.client || 'General')}</span>
+                                </td>
+                                <td class="px-4 py-3 text-slate-700 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(ev.date)}</td>
+                                <td class="px-4 py-3 text-amber-700 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(deadline)}</td>` : ''}
                                 <td class="px-4 py-3 text-xs">
                                     <span class="font-black text-slate-700">${escapeHtml(t.id)}</span>
-                                    <p class="text-[10px] text-slate-400 truncate max-w-[180px]">${escapeHtml(t.desc||'')}</p>
+                                    <p class="text-[10px] text-slate-400 truncate max-w-[180px] mt-0.5">${escapeHtml(t.desc || '')}</p>
                                 </td>
-                                <td class="px-4 py-3 text-xs text-slate-600">${escapeHtml(t.assignee||'—')}</td>
-                                <td class="px-4 py-3"><span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full">${escapeHtml(t.status)}</span></td>
-                                ${idx === 0 ? `<td class="px-4 py-3" rowspan="${matched.length}">${ptTrackBadge(track)}</td>` : ''}
+                                <td class="px-4 py-3 text-xs">
+                                    <span class="font-bold text-slate-700">${escapeHtml(t.assignee || '—')}</span>
+                                    ${memberLabel ? `<p class="text-[9px] text-slate-400 mt-0.5">${memberLabel.label}</p>` : ''}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full">${escapeHtml(t.status)}</span>
+                                </td>
+                                ${idx === 0 ? `<td class="px-4 py-3 align-top" rowspan="${displayTasks.length}">${ptTrackBadge(track)}</td>` : ''}
                             </tr>
                         `;
                     });
                 }
             });
 
-            empty.classList.toggle('hidden', anyRow);
+            if (!anyRow) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                empty.textContent = clientF !== 'all'
+                    ? `No strategy events found for client "${clientF}" this month.`
+                    : 'No strategy events found for this period.';
+            } else {
+                empty.classList.add('hidden');
+            }
         }
 
         function renderPlanRisk() {
@@ -20915,16 +20965,18 @@
         }
     }
 
-    // ── Show reminder popup ──
+    // ── Show reminder popup (cross-browser, no Notification API required) ──
     function waterShowReminder() {
-        // Browser notification if permitted
-        if (window.Notification && Notification.permission === 'granted') {
-            new Notification('💧 Time to drink water!', {
-                body: 'Stay hydrated — have a glass of water now.',
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="26" font-size="28">💧</text></svg>'
-            });
+        // Try browser notification if supported & permitted (Chrome/Edge/Firefox)
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+                new Notification('💧 Time to drink water!', {
+                    body: 'Stay hydrated — have a glass of water now.',
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="26" font-size="28">💧</text></svg>'
+                });
+            } catch(e) { /* Safari/iOS may throw — silent fallback */ }
         }
-        // In-app popup
+        // Always show in-app popup (works on ALL browsers including Safari, Firefox, mobile)
         var popup = document.getElementById('water-reminder-popup');
         if (popup) {
             popup.style.display = 'block';
@@ -20976,9 +21028,9 @@
         localStorage.setItem('worksync_water_enabled', String(waterEnabled));
         waterUpdateToggleUI();
         if (waterEnabled) {
-            // Request notification permission
-            if (window.Notification && Notification.permission === 'default') {
-                Notification.requestPermission();
+            // Request notification permission (Chrome/Firefox/Edge — gracefully ignored on Safari/iOS)
+            if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                try { Notification.requestPermission(); } catch(e) {}
             }
             waterScheduleReminder();
         } else {
@@ -21022,13 +21074,88 @@
         if (wbtn) wbtn.style.display = 'flex';
         // Start reminder if enabled
         if (waterEnabled) {
-            if (window.Notification && Notification.permission === 'default') {
-                Notification.requestPermission();
+            // Request notification permission (gracefully ignored if not supported)
+            if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                try { Notification.requestPermission(); } catch(e) {}
             }
             waterScheduleReminder();
         }
         // Midnight reset check every minute
         setInterval(waterCheckMidnightReset, 60000);
+        // Enable drag after a short delay (DOM ready)
+        setTimeout(waterEnableDrag, 400);
+    }
+
+    // ── Drag to move ──
+    function waterEnableDrag() {
+        var btn = document.getElementById('water-widget-btn');
+        if (!btn) return;
+
+        var isDragging = false, startX, startY, origLeft, origBottom, origTop, useTop = false;
+
+        function onMouseDown(e) {
+            // Only drag on the wrapper div, not inner button click
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SVG' || e.target.tagName === 'path' || e.target.tagName === 'rect') return;
+            isDragging = true;
+            startX = e.clientX || (e.touches && e.touches[0].clientX);
+            startY = e.clientY || (e.touches && e.touches[0].clientY);
+            var rect = btn.getBoundingClientRect();
+            origLeft = rect.left;
+            origTop  = rect.top;
+            btn.style.left   = origLeft + 'px';
+            btn.style.bottom = 'auto';
+            btn.style.top    = origTop + 'px';
+            useTop = true;
+            btn.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            var cx = e.clientX || (e.touches && e.touches[0].clientX);
+            var cy = e.clientY || (e.touches && e.touches[0].clientY);
+            var dx = cx - startX, dy = cy - startY;
+            var newLeft = origLeft + dx;
+            var newTop  = origTop  + dy;
+            // Clamp within viewport
+            newLeft = Math.max(0, Math.min(window.innerWidth  - 60, newLeft));
+            newTop  = Math.max(0, Math.min(window.innerHeight - 60, newTop));
+            btn.style.left = newLeft + 'px';
+            btn.style.top  = newTop  + 'px';
+            // Move panel with it
+            var panel = document.getElementById('water-panel');
+            if (panel && waterPanelOpen) {
+                panel.style.left   = newLeft + 'px';
+                panel.style.top    = Math.max(0, newTop - 360) + 'px';
+                panel.style.bottom = 'auto';
+            }
+            e.preventDefault();
+        }
+        function onMouseUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            btn.style.cursor = 'pointer';
+            // Save position
+            localStorage.setItem('worksync_water_pos', JSON.stringify({ left: parseInt(btn.style.left), top: parseInt(btn.style.top) }));
+        }
+
+        // Restore saved position
+        try {
+            var saved = JSON.parse(localStorage.getItem('worksync_water_pos') || 'null');
+            if (saved && saved.left >= 0 && saved.top >= 0) {
+                btn.style.left   = Math.min(saved.left, window.innerWidth  - 60) + 'px';
+                btn.style.top    = Math.min(saved.top,  window.innerHeight - 60) + 'px';
+                btn.style.bottom = 'auto';
+            }
+        } catch(e) {}
+
+        // Mouse events
+        btn.addEventListener('mousedown',  onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup',   onMouseUp);
+        // Touch events (mobile/tablet)
+        btn.addEventListener('touchstart', onMouseDown, { passive: false });
+        document.addEventListener('touchmove',  onMouseMove, { passive: false });
+        document.addEventListener('touchend',   onMouseUp);
     }
 
     // Hide widget on logout
