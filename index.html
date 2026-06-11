@@ -5905,6 +5905,7 @@
                 setInterval(checkAutoCheckout, 60000);
                 // Show the floating chat bubble now that everything is ready
                 if (typeof showFloatBtn === 'function') showFloatBtn();
+                if (typeof initWaterWidget === 'function') initWaterWidget();
                 setInterval(checkBirthdays, 60000); // Check for birthdays every minute
                 setInterval(checkDailyPlanProgressNotification, 60000);
                 // Removed auto-update mechanism to stop page reloads
@@ -6060,6 +6061,7 @@
             document.documentElement.classList.remove('auth-pending');
             resetTimerUI(); setTimerState('idle');
             if (typeof hideFloatBtn === 'function') hideFloatBtn();
+            if (typeof hideWaterWidget === 'function') hideWaterWidget();
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('login-view').classList.remove('hidden');
         }
@@ -20616,6 +20618,440 @@
     window.showFloatBtn        = showFloatBtn;
     window.hideFloatBtn        = hideFloatBtn;
     </script>
+
+<!-- ═══════════════════════════════════════════════════════
+     WATER REMINDER WIDGET
+     ═══════════════════════════════════════════════════════ -->
+
+<!-- Floating Water Bottle Button -->
+<div id="water-widget-btn" style="display:none;position:fixed;bottom:92px;left:24px;z-index:9990;flex-direction:column;align-items:center;gap:4px;">
+    <span id="water-next-timer" style="background:rgba(15,23,42,.75);color:#7dd3fc;font-size:9px;font-weight:900;padding:2px 7px;border-radius:999px;letter-spacing:.04em;white-space:nowrap;display:none;"></span>
+    <button onclick="toggleWaterPanel()" title="Water Reminder"
+        style="width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 4px 18px rgba(14,165,233,.45);display:flex;align-items:center;justify-content:center;position:relative;transition:transform .15s,box-shadow .15s;"
+        onmouseover="this.style.transform='scale(1.12)';this.style.boxShadow='0 8px 26px rgba(14,165,233,.6)'"
+        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 18px rgba(14,165,233,.45)'">
+        <!-- Animated SVG bottle -->
+        <svg id="water-bottle-svg" viewBox="0 0 32 48" width="22" height="32" style="display:block;">
+            <!-- Bottle shape -->
+            <rect x="10" y="0" width="12" height="5" rx="2" fill="rgba(255,255,255,.7)"/>
+            <path d="M8 7 Q6 10 6 14 L6 42 Q6 45 9 46 L23 46 Q26 45 26 42 L26 14 Q26 10 24 7 Z" fill="rgba(255,255,255,.25)" stroke="rgba(255,255,255,.7)" stroke-width="1.2"/>
+            <!-- Water fill (animated) -->
+            <clipPath id="bottle-clip">
+                <path d="M8 7 Q6 10 6 14 L6 42 Q6 45 9 46 L23 46 Q26 45 26 42 L26 14 Q26 10 24 7 Z"/>
+            </clipPath>
+            <rect id="water-fill-rect" x="6" y="46" width="20" height="0" clip-path="url(#bottle-clip)" fill="url(#waterGrad)" style="transition:y 1.2s cubic-bezier(.4,0,.2,1),height 1.2s cubic-bezier(.4,0,.2,1);">
+                <animate id="wave-anim" attributeName="x" values="6;4;6" dur="2s" repeatCount="indefinite"/>
+            </rect>
+            <!-- Wave on top of water -->
+            <path id="water-wave" d="" fill="rgba(125,211,252,.5)" clip-path="url(#bottle-clip)" style="transition:d .8s;"/>
+            <defs>
+                <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#38bdf8"/>
+                    <stop offset="100%" stop-color="#0369a1"/>
+                </linearGradient>
+            </defs>
+        </svg>
+        <!-- Intake count badge -->
+        <span id="water-count-badge" style="position:absolute;top:-4px;right:-4px;background:#f97316;color:#fff;font-size:8px;font-weight:900;padding:1px 5px;border-radius:999px;min-width:14px;text-align:center;border:2px solid #fff;display:none;"></span>
+    </button>
+</div>
+
+<!-- Water Panel Popup -->
+<div id="water-panel" style="display:none;position:fixed;bottom:155px;left:24px;z-index:9991;width:270px;background:#fff;border-radius:18px;box-shadow:0 8px 40px rgba(0,0,0,.18);border:1px solid #e0f2fe;overflow:hidden;">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <p style="color:white;font-size:13px;font-weight:900;margin:0;">💧 Water Tracker</p>
+            <p id="water-panel-date" style="color:rgba(255,255,255,.7);font-size:9px;font-weight:700;margin:2px 0 0;text-transform:uppercase;letter-spacing:.06em;"></p>
+        </div>
+        <button onclick="toggleWaterPanel()" style="background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;">×</button>
+    </div>
+
+    <!-- Bottle + intake visual -->
+    <div style="padding:16px;display:flex;align-items:center;gap:14px;">
+        <!-- Big bottle -->
+        <div style="flex-shrink:0;position:relative;">
+            <svg id="water-panel-bottle" viewBox="0 0 48 72" width="52" height="72">
+                <rect x="16" y="0" width="16" height="7" rx="3" fill="#bae6fd"/>
+                <path d="M12 10 Q9 15 9 20 L9 62 Q9 66 13 67 L35 67 Q39 66 39 62 L39 20 Q39 15 36 10 Z" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
+                <clipPath id="panel-bottle-clip">
+                    <path d="M12 10 Q9 15 9 20 L9 62 Q9 66 13 67 L35 67 Q39 66 39 62 L39 20 Q39 15 36 10 Z"/>
+                </clipPath>
+                <rect id="panel-water-fill" x="9" y="67" width="30" height="0" clip-path="url(#panel-bottle-clip)" fill="url(#panelWaterGrad)" style="transition:y 1.4s cubic-bezier(.4,0,.2,1),height 1.4s cubic-bezier(.4,0,.2,1);"/>
+                <defs>
+                    <linearGradient id="panelWaterGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#38bdf8"/>
+                        <stop offset="100%" stop-color="#0369a1"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <!-- "Empty!" label shown when fully emptied -->
+            <div id="water-empty-label" style="display:none;position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:900;color:#0ea5e9;white-space:nowrap;">All done! 🎉</div>
+        </div>
+        <!-- Stats -->
+        <div style="flex:1;">
+            <p style="font-size:22px;font-weight:900;color:#0c4a6e;margin:0;line-height:1;"><span id="water-intake-count">0</span><span style="font-size:11px;font-weight:700;color:#7dd3fc;margin-left:3px;">/ <span id="water-goal">8</span> glasses</span></p>
+            <p style="font-size:10px;color:#7dd3fc;font-weight:700;margin:3px 0 8px;">Today's intake</p>
+            <!-- Progress bar -->
+            <div style="background:#e0f2fe;border-radius:999px;height:6px;overflow:hidden;">
+                <div id="water-progress-bar" style="background:linear-gradient(90deg,#38bdf8,#0284c7);height:100%;width:0%;border-radius:999px;transition:width 1s ease;"></div>
+            </div>
+            <p id="water-next-label" style="font-size:9px;color:#94a3b8;font-weight:700;margin:6px 0 0;">Next reminder in <span id="water-next-min">30</span> min</p>
+        </div>
+    </div>
+
+    <!-- Drink button -->
+    <div style="padding:0 16px 14px;">
+        <button onclick="waterLogDrink()" id="water-drink-btn"
+            style="width:100%;padding:10px;background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:white;font-size:12px;font-weight:900;border:none;border-radius:12px;cursor:pointer;transition:opacity .15s;letter-spacing:.03em;"
+            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            💧 I Drank Water!
+        </button>
+    </div>
+
+    <!-- Settings row -->
+    <div style="padding:10px 16px 14px;border-top:1px solid #f0f9ff;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div>
+            <p style="font-size:10px;font-weight:900;color:#0c4a6e;margin:0;">Reminders</p>
+            <p style="font-size:9px;color:#94a3b8;font-weight:600;margin:1px 0 0;">Every 30 min while active</p>
+        </div>
+        <!-- Toggle switch -->
+        <button id="water-toggle-btn" onclick="waterToggleReminder()" title="Enable/Disable reminders"
+            style="width:40px;height:22px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:background .25s;background:#cbd5e1;flex-shrink:0;">
+            <span id="water-toggle-knob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:left .25s;display:block;"></span>
+        </button>
+    </div>
+
+    <!-- Intake log -->
+    <div style="padding:0 16px 14px;">
+        <p style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin:0 0 6px;">Today's log</p>
+        <div id="water-log-list" style="max-height:80px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:4px;"></div>
+    </div>
+</div>
+
+<!-- Water Reminder Popup (toast-style) -->
+<div id="water-reminder-popup" style="display:none;position:fixed;bottom:170px;left:50%;transform:translateX(-50%);z-index:10000;background:white;border:2px solid #38bdf8;border-radius:16px;padding:14px 20px;box-shadow:0 8px 40px rgba(14,165,233,.3);text-align:center;min-width:240px;animation:waterPopIn .3s ease;">
+    <div style="font-size:28px;margin-bottom:4px;">💧</div>
+    <p style="font-size:13px;font-weight:900;color:#0c4a6e;margin:0 0 2px;">Time to drink water!</p>
+    <p style="font-size:10px;color:#7dd3fc;font-weight:700;margin:0 0 10px;">Stay hydrated — your body needs it</p>
+    <div style="display:flex;gap:8px;justify-content:center;">
+        <button onclick="waterPopupDrink()" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:white;border:none;border-radius:10px;padding:7px 16px;font-size:11px;font-weight:900;cursor:pointer;">✓ Drank it!</button>
+        <button onclick="waterDismissPopup()" style="background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;">Later</button>
+    </div>
+</div>
+
+<style>
+@keyframes waterPopIn {
+    from { opacity:0; transform:translateX(-50%) translateY(16px) scale(.95); }
+    to   { opacity:1; transform:translateX(-50%) translateY(0)    scale(1); }
+}
+@keyframes bottleDrain {
+    0%   { transform: rotate(0deg); }
+    20%  { transform: rotate(-18deg); }
+    80%  { transform: rotate(-18deg); }
+    100% { transform: rotate(0deg); }
+}
+#water-panel-bottle.draining { animation: bottleDrain 1.2s ease; }
+@keyframes waterRipple {
+    0%   { opacity:.8; transform:scale(0); }
+    100% { opacity:0; transform:scale(2.5); }
+}
+</style>
+
+<script>
+(function() {
+    // ── State ──
+    var WATER_INTERVAL_MS  = 30 * 60 * 1000; // 30 minutes
+    var WATER_GOAL         = 8;
+    var waterEnabled       = localStorage.getItem('worksync_water_enabled') !== 'false'; // default ON
+    var waterPanelOpen     = false;
+    var waterReminderTimer = null;
+    var waterCountdownTimer= null;
+    var waterNextReminderAt= null;
+    var waterTodayLog      = [];   // array of timestamps
+
+    function waterTodayKey() {
+        var d = new Date();
+        return 'worksync_water_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate();
+    }
+
+    function waterLoadToday() {
+        try { waterTodayLog = JSON.parse(localStorage.getItem(waterTodayKey()) || '[]'); }
+        catch(e) { waterTodayLog = []; }
+    }
+
+    function waterSaveToday() {
+        localStorage.setItem(waterTodayKey(), JSON.stringify(waterTodayLog));
+    }
+
+    function waterCount() { return waterTodayLog.length; }
+
+    // ── Bottle fill animation ──
+    function waterUpdateBottle() {
+        var pct   = Math.min(1, waterCount() / WATER_GOAL);
+        var full  = pct >= 1;
+
+        // Floating button bottle (32×48 viewbox, bottle interior ~y7 to y46, height~39)
+        var fillH = Math.round(pct * 34);
+        var fillY = 46 - fillH;
+        var fr = document.getElementById('water-fill-rect');
+        if (fr) { fr.setAttribute('y', fillY); fr.setAttribute('height', fillH); }
+
+        // Panel bottle (48×72 viewbox, interior ~y10 to y67, height~57)
+        var pFillH = Math.round(pct * 52);
+        var pFillY = 67 - pFillH;
+        var pfr = document.getElementById('panel-water-fill');
+        if (pfr) { pfr.setAttribute('y', pFillY); pfr.setAttribute('height', pFillH); }
+
+        // Progress bar
+        var pb = document.getElementById('water-progress-bar');
+        if (pb) pb.style.width = Math.round(pct * 100) + '%';
+
+        // Count
+        var ci = document.getElementById('water-intake-count');
+        if (ci) ci.textContent = waterCount();
+
+        // Badge on floating btn
+        var badge = document.getElementById('water-count-badge');
+        if (badge) {
+            if (waterCount() > 0) {
+                badge.textContent = waterCount();
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Empty label
+        var el = document.getElementById('water-empty-label');
+        if (el) el.style.display = full ? 'block' : 'none';
+    }
+
+    // ── Log a drink ──
+    function waterLogDrink() {
+        waterLoadToday();
+        if (waterCount() >= WATER_GOAL) return; // already at goal
+        waterTodayLog.push(Date.now());
+        waterSaveToday();
+
+        // Drain animation on panel bottle
+        var pb = document.getElementById('water-panel-bottle');
+        if (pb) {
+            pb.classList.remove('draining');
+            void pb.offsetWidth; // reflow
+            pb.classList.add('draining');
+            setTimeout(function() { pb.classList.remove('draining'); }, 1300);
+        }
+
+        waterUpdateBottle();
+        waterUpdateLog();
+        waterReschedule();
+
+        // If goal reached — show toast
+        if (waterCount() >= WATER_GOAL) {
+            waterShowGoalToast();
+        }
+    }
+
+    // ── Update log chips ──
+    function waterUpdateLog() {
+        waterLoadToday();
+        var el = document.getElementById('water-log-list');
+        if (!el) return;
+        if (waterTodayLog.length === 0) {
+            el.innerHTML = '<span style="font-size:9px;color:#cbd5e1;font-style:italic;">No drinks logged yet</span>';
+            return;
+        }
+        el.innerHTML = waterTodayLog.map(function(ts, i) {
+            var d = new Date(ts);
+            var t = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+            return '<span style="background:#e0f2fe;color:#0369a1;font-size:9px;font-weight:900;padding:2px 7px;border-radius:999px;">' + (i+1) + '. ' + t + '</span>';
+        }).join('');
+    }
+
+    // ── Reminder timer ──
+    function waterScheduleReminder() {
+        if (waterReminderTimer) clearTimeout(waterReminderTimer);
+        if (waterCountdownTimer) clearInterval(waterCountdownTimer);
+        if (!waterEnabled) { waterUpdateCountdownLabel(null); return; }
+
+        // Don't remind if goal reached
+        waterLoadToday();
+        if (waterCount() >= WATER_GOAL) { waterUpdateCountdownLabel(null); return; }
+
+        waterNextReminderAt = Date.now() + WATER_INTERVAL_MS;
+        waterReminderTimer = setTimeout(function() {
+            waterShowReminder();
+        }, WATER_INTERVAL_MS);
+
+        // Countdown label update every 30s
+        waterCountdownTimer = setInterval(function() {
+            if (!waterEnabled || !waterNextReminderAt) return;
+            var left = Math.max(0, waterNextReminderAt - Date.now());
+            var mins = Math.ceil(left / 60000);
+            waterUpdateCountdownLabel(mins);
+            var ml = document.getElementById('water-next-min');
+            if (ml) ml.textContent = mins;
+        }, 30000);
+
+        var initMins = Math.ceil(WATER_INTERVAL_MS / 60000);
+        waterUpdateCountdownLabel(initMins);
+        var ml = document.getElementById('water-next-min');
+        if (ml) ml.textContent = initMins;
+    }
+
+    function waterReschedule() {
+        waterScheduleReminder();
+    }
+
+    function waterUpdateCountdownLabel(mins) {
+        var el = document.getElementById('water-next-timer');
+        if (!el) return;
+        if (mins === null || !waterEnabled) {
+            el.style.display = 'none';
+        } else {
+            el.textContent = mins + 'm';
+            el.style.display = 'block';
+        }
+    }
+
+    // ── Show reminder popup ──
+    function waterShowReminder() {
+        // Browser notification if permitted
+        if (window.Notification && Notification.permission === 'granted') {
+            new Notification('💧 Time to drink water!', {
+                body: 'Stay hydrated — have a glass of water now.',
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="26" font-size="28">💧</text></svg>'
+            });
+        }
+        // In-app popup
+        var popup = document.getElementById('water-reminder-popup');
+        if (popup) {
+            popup.style.display = 'block';
+            // Auto-dismiss after 60s
+            setTimeout(function() { waterDismissPopup(); }, 60000);
+        }
+    }
+
+    function waterDismissPopup() {
+        var popup = document.getElementById('water-reminder-popup');
+        if (popup) popup.style.display = 'none';
+        waterReschedule();
+    }
+
+    function waterPopupDrink() {
+        waterDismissPopup();
+        waterLogDrink();
+    }
+
+    // ── Goal toast ──
+    function waterShowGoalToast() {
+        var popup = document.getElementById('water-reminder-popup');
+        if (!popup) return;
+        popup.innerHTML = '<div style="font-size:32px;margin-bottom:4px;">🎉</div><p style="font-size:13px;font-weight:900;color:#0c4a6e;margin:0 0 2px;">Daily goal reached!</p><p style="font-size:10px;color:#7dd3fc;font-weight:700;margin:0 0 10px;">You drank ' + WATER_GOAL + ' glasses today. Amazing!</p><button onclick="document.getElementById(\'water-reminder-popup\').style.display=\'none\'" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:white;border:none;border-radius:10px;padding:7px 18px;font-size:11px;font-weight:900;cursor:pointer;">🎊 Yay!</button>';
+        popup.style.display = 'block';
+        setTimeout(function() { popup.style.display = 'none'; }, 8000);
+    }
+
+    // ── Toggle panel ──
+    function toggleWaterPanel() {
+        waterPanelOpen = !waterPanelOpen;
+        var panel = document.getElementById('water-panel');
+        if (!panel) return;
+        panel.style.display = waterPanelOpen ? 'block' : 'none';
+        if (waterPanelOpen) {
+            waterLoadToday();
+            waterUpdateBottle();
+            waterUpdateLog();
+            waterUpdateToggleUI();
+            // Date label
+            var dl = document.getElementById('water-panel-date');
+            if (dl) dl.textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+        }
+    }
+
+    // ── Toggle reminders on/off ──
+    function waterToggleReminder() {
+        waterEnabled = !waterEnabled;
+        localStorage.setItem('worksync_water_enabled', String(waterEnabled));
+        waterUpdateToggleUI();
+        if (waterEnabled) {
+            // Request notification permission
+            if (window.Notification && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            waterScheduleReminder();
+        } else {
+            if (waterReminderTimer) clearTimeout(waterReminderTimer);
+            if (waterCountdownTimer) clearInterval(waterCountdownTimer);
+            waterUpdateCountdownLabel(null);
+        }
+    }
+
+    function waterUpdateToggleUI() {
+        var btn   = document.getElementById('water-toggle-btn');
+        var knob  = document.getElementById('water-toggle-knob');
+        var nxtl  = document.getElementById('water-next-label');
+        if (btn)  btn.style.background  = waterEnabled ? '#0ea5e9' : '#cbd5e1';
+        if (knob) knob.style.left       = waterEnabled ? '21px' : '3px';
+        if (nxtl) nxtl.style.display    = waterEnabled ? 'block' : 'none';
+    }
+
+    // ── Reset at midnight ──
+    function waterCheckMidnightReset() {
+        var lastDate = localStorage.getItem('worksync_water_last_date');
+        var today = new Date().toDateString();
+        if (lastDate !== today) {
+            localStorage.setItem('worksync_water_last_date', today);
+            // Old day's key is naturally different, so today starts fresh
+            waterTodayLog = [];
+            waterUpdateBottle();
+            waterUpdateLog();
+        }
+    }
+
+    // ── Init (called after user logs in) ──
+    function initWaterWidget() {
+        waterLoadToday();
+        waterCheckMidnightReset();
+        waterUpdateBottle();
+        waterUpdateToggleUI();
+        waterUpdateLog();
+        // Show the widget button
+        var wbtn = document.getElementById('water-widget-btn');
+        if (wbtn) wbtn.style.display = 'flex';
+        // Start reminder if enabled
+        if (waterEnabled) {
+            if (window.Notification && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            waterScheduleReminder();
+        }
+        // Midnight reset check every minute
+        setInterval(waterCheckMidnightReset, 60000);
+    }
+
+    // Hide widget on logout
+    function hideWaterWidget() {
+        var wbtn = document.getElementById('water-widget-btn');
+        if (wbtn) wbtn.style.display = 'none';
+        var panel = document.getElementById('water-panel');
+        if (panel) panel.style.display = 'none';
+        waterPanelOpen = false;
+        if (waterReminderTimer) clearTimeout(waterReminderTimer);
+        if (waterCountdownTimer) clearInterval(waterCountdownTimer);
+    }
+
+    // Expose globally
+    window.initWaterWidget     = initWaterWidget;
+    window.hideWaterWidget     = hideWaterWidget;
+    window.toggleWaterPanel    = toggleWaterPanel;
+    window.waterLogDrink       = waterLogDrink;
+    window.waterToggleReminder = waterToggleReminder;
+    window.waterPopupDrink     = waterPopupDrink;
+    window.waterDismissPopup   = waterDismissPopup;
+})();
+</script>
 
 </body>
 </html>
