@@ -5061,6 +5061,28 @@ if (!filtered.length) {
             setReportDatePreset('this_week');
         }
 
+        // Initialize performance date filters with default range (this week)
+        function initPerformanceFilters() {
+            if (!canViewReports()) return;
+            const fromInput = document.getElementById('perf-date-from');
+            const toInput = document.getElementById('perf-date-to');
+            if (!fromInput || !toInput) return;
+            const today = new Date();
+            const fromDate = new Date();
+            // Set start of week (Monday)
+            fromDate.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+            const toDate = new Date();
+            fromInput.value = fromDate.toISOString().slice(0, 10);
+            toInput.value = toDate.toISOString().slice(0, 10);
+            // Sync global vars
+            reportDateFrom = fromInput.value;
+            reportDateTo = toInput.value;
+            // Render initial performance report if needed
+            if (activeView === 'reports' && currentReportTab === 'performance') {
+                renderPerformanceReport();
+            }
+        }
+
         function setReportDatePreset(preset) {
             const fromInput = document.getElementById('report-date-from');
             const toInput = document.getElementById('report-date-to');
@@ -5068,11 +5090,11 @@ if (!filtered.length) {
             const today = new Date();
             let fromDate = new Date();
 
-            if (preset === 'today') { /* fromDate is today */ } 
+            if (preset === 'today') { } 
             else if (preset === 'this_week') { fromDate.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); } 
             else if (preset === 'this_month') { fromDate = new Date(today.getFullYear(), today.getMonth(), 1); }
             
-            const toDate = new Date(); // always end today for presets
+            const toDate = new Date();
             fromInput.value = fromDate.toISOString().slice(0, 10);
             toInput.value = toDate.toISOString().slice(0, 10);
 
@@ -5122,7 +5144,19 @@ if (!filtered.length) {
             }
         }
 
-        async function sendAnnouncement() {
+        function handlePerformanceFilterChange(){
+    if (!canViewReports()) return;
+    const fromInput = document.getElementById('perf-date-from');
+    const toInput = document.getElementById('perf-date-to');
+    if (fromInput && toInput) {
+        reportDateFrom = fromInput.value;
+        reportDateTo = toInput.value;
+    }
+    // Re-render performance report
+    renderPerformanceReport();
+}
+
+async function sendAnnouncement() {
             if (!isAdmin()) return toast('Only admins can send announcements', 'error');
             const titleInput = document.getElementById('announcement-title');
             const bodyInput = document.getElementById('announcement-body');
