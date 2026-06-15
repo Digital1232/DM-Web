@@ -18231,14 +18231,28 @@
                         ].includes(usrEmail.toLowerCase());
 
                         const isInternalOnlyUser = [
-                            'anithavilpower@gmail.com',
                             'alexvilpower@gmail.com',
                             'alex@vilpower.com',
                             'snehavilpower@gmail.com'
+                            // Karthika removed — she gets both internal + Jira tasks via daily plan
                         ].includes(usrEmail.toLowerCase());
+
+                        // Ajith recurring tasks to exclude from his analytics
+                        const AJITH_RECURRING_TASK_KEYWORDS = ['internal reporting', 'social media comments', 'client message', 'ads management'];
+                        const isAjithRecurringTask = (t) => {
+                            if (!t) return false;
+                            if ((usrEmail || '').toLowerCase() !== 'ajithvilpower@gmail.com') return false;
+                            const desc = (t.desc || '').toLowerCase();
+                            return AJITH_RECURRING_TASK_KEYWORDS.some(kw => desc.includes(kw));
+                        };
 
                         const filteredTasks = tasks.filter(t => {
                             if (isExcludedTask(t)) return false;
+                            if (isAjithRecurringTask(t)) return false;
+                            if (usrEmail.toLowerCase() === 'anithavilpower@gmail.com') {
+                                // Karthika: include all tasks (Jira + internal) — filtered via daily plan
+                                return true;
+                            }
                             if (isInternalOnlyUser) {
                                 return isInternalTask(t);
                             }
@@ -18378,12 +18392,10 @@
                     const teamAvgLogged = Math.round(teamLoggedSecSum / teamCount);
                     const teamAvgBreak = Math.round(teamBreakSecSum / (teamCount * currDays));
 
-                    const userCompleted = currStats.completed.length;
+                    let userCompleted = currStats.completed.length; // overridden below for Sneha
                     const userPending = currStats.pending.length;
                     const userLogged = currStats.loggedSec;
-                    const userAvgBreak = Math.round(currStats.breakSec / currDays);
-
-                    const getAiQcScore = (st, start, end) => {
+                    const userAvgBreak = Math.round(currStats.breakSec / currDays); = (st, start, end) => {
                         let score = 70;
                         const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
                         const completionRate = userAllTasks.length > 0
@@ -18556,6 +18568,9 @@
 
                     let snehaBreakdownHtml = '';
                     let snehaWorkedTaskCount = 0; // for the Completed Tasks tile
+                    let snehaContentCount = 0;
+                    let snehaQcCount = 0;
+                    let snehaThumbnailCount = 0;
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s =>
                             s.userId === 'snehavilpower@gmail.com' &&
@@ -18594,6 +18609,12 @@
                         const posterContentCount = posterTasks.size;
                         const qcTasksCount = snehaQcReports.length;
                         snehaWorkedTaskCount = allSnehaTasks.size + qcTasksCount;
+                        // Expose for tiles
+                        snehaContentCount = posterContentCount + videoContentCount + captionsCount;
+                        snehaQcCount = qcTasksCount;
+                        snehaThumbnailCount = thumbnailCount;
+                        // Update userCompleted for Sneha
+                        userCompleted = snehaWorkedTaskCount;
 
                         snehaBreakdownHtml = `
                         <!-- Sneha Content & QC Breakdown -->
@@ -18720,17 +18741,36 @@
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.completed.length} prev period</p>
                             </div>
                             
-                            <!-- Assigned Tasks (Clickable) — for Sneha shows Completed content tasks -->
+                            ${email === 'snehavilpower@gmail.com' ? `
+                            <!-- Sneha: Content Tasks tile -->
+                            <div class="bg-indigo-50/30 border border-indigo-100 rounded-2xl p-4 shadow-sm">
+                                <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">Content Tasks</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaContentCount||0)}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">Poster · Video · Captions</p>
+                            </div>
+                            <!-- Sneha: QC Tasks tile -->
+                            <div class="bg-violet-50/30 border border-violet-100 rounded-2xl p-4 shadow-sm">
+                                <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">QC Tasks</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaQcCount||0)}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">completed reviews</p>
+                            </div>
+                            <!-- Sneha: Thumbnail Tasks tile -->
+                            <div class="bg-pink-50/30 border border-pink-100 rounded-2xl p-4 shadow-sm">
+                                <p class="text-[9px] font-black text-pink-600 uppercase tracking-wider mb-1">Thumbnail Tasks</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaThumbnailCount||0)}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
+                            </div>
+                            ` : `
+                            <!-- Assigned Tasks (Clickable) -->
                             <div class="bg-sky-50/30 border border-sky-100 hover:border-sky-300 hover:bg-sky-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
                                  onclick="showIndivPerfTasks('${email}', 'assigned', '${escapeHtml(user.name)}')">
                                 <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'snehavilpower@gmail.com' ? 'Completed Tasks' : email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
+                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-slate-900">${email === 'snehavilpower@gmail.com' ? snehaWorkedTaskCount : currStats.assigned.length}</p>
+                                <p class="text-xl font-black text-slate-900">${currStats.assigned.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.assigned.length} prev period</p>
                             </div>
-
                             <!-- Hold Tasks (Clickable) -->
                             <div class="bg-rose-50/30 border border-rose-100 hover:border-rose-300 hover:bg-rose-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
                                  onclick="showIndivPerfTasks('${email}', 'hold', '${escapeHtml(user.name)}')">
@@ -18741,7 +18781,6 @@
                                 <p class="text-xl font-black text-rose-600">${currStats.hold.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.hold.length} prev period</p>
                             </div>
-
                             <!-- Reworked Tasks (Clickable) -->
                             <div class="bg-amber-50/30 border border-amber-100 hover:border-amber-300 hover:bg-amber-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
                                  onclick="showIndivPerfTasks('${email}', 'rework', '${escapeHtml(user.name)}')">
@@ -18752,6 +18791,7 @@
                                 <p class="text-xl font-black text-amber-600">${currStats.rework.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.rework.length} prev period</p>
                             </div>
+                            `}
 
                             <!-- QC Score -->
                             <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
