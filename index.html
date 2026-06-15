@@ -7473,6 +7473,7 @@
                     runMorningLearningSetup();
                     ensureMurugeshDailyTasks();
                     ensureAjithDailyTasks();
+                    ensurePalaniDailyTasks();
                     if (activeView === 'chat') renderDmList();
                     if (canViewDailySummary()) {
                         if (currentWorkUnsub) {
@@ -11658,6 +11659,132 @@
                     sessionStorage.removeItem('ajithTasks_lastRun');
                 }
             }
+
+            const PALANI_TASKS_CONFIG = [
+                { title: "Task Allocation", needsClient: false, client: "Vilpower DM" }
+            ];
+
+            let palaniTasksEnsureStarted = false;
+
+            async function ensurePalaniDailyTasks() {
+                if (!currentUser || currentUser.email.toLowerCase() !== 'digitalmarketing@vilpower.com') return;
+
+                const todayKey = todayIso();
+                const lastRunDay = sessionStorage.getItem('palaniTasks_lastRun');
+                if (lastRunDay !== todayKey) {
+                    palaniTasksEnsureStarted = false;
+                    sessionStorage.removeItem('palaniTasks_lastRun');
+                }
+                if (palaniTasksEnsureStarted) return;
+
+                try {
+                    const requestsSnap = await get(ref(db, 'worksync/requests'));
+                    if (requestsSnap.exists()) {
+                        const allRequests = Object.values(requestsSnap.val());
+                        const palaniEmail = currentUser.email.toLowerCase();
+                        const isOnLeaveToday = allRequests.some(r => {
+                            if ((r.userId || r.userEmail || '').toLowerCase() !== palaniEmail) return false;
+                            if (r.type !== 'leave') return false;
+                            const fullyApproved = r.status === 'approved' ||
+                                (Array.isArray(r.approvals) && r.approvals.length > 0 &&
+                                    r.approvals.every(a => a.status === 'approved'));
+                            if (!fullyApproved) return false;
+                            const from = r.fromDate || r.date || '';
+                            const to = r.toDate || r.date || from;
+                            return from <= todayKey && todayKey <= to;
+                        });
+                        if (isOnLeaveToday) {
+                            palaniTasksEnsureStarted = true;
+                            sessionStorage.setItem('palaniTasks_lastRun', todayKey);
+                            console.log('Palani is on approved leave today — skipping recurring task creation.');
+                            return;
+                        }
+                    }
+                } catch (leaveCheckErr) {
+                    console.warn('Leave check failed for Palani tasks:', leaveCheckErr);
+                }
+
+                palaniTasksEnsureStarted = true;
+                sessionStorage.setItem('palaniTasks_lastRun', todayKey);
+
+                try {
+                    const email = currentUser.email;
+                    const ownerKey = eKey(email);
+                    const today = todayKey;
+
+                    for (let i = 0; i < PALANI_TASKS_CONFIG.length; i++) {
+                        const taskConfig = PALANI_TASKS_CONFIG[i];
+                        const baseIdStr = taskConfig.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                        const taskId = `P-${baseIdStr}-${i}`;
+                        const path = `worksync/manual_tasks/${ownerKey}/${taskId}`;
+
+                        const snap = await get(ref(db, path));
+
+                        if (!snap.exists()) {
+                            const task = {
+                                id: taskId,
+                                desc: taskConfig.title,
+                                description: taskConfig.needsClient ? 'Requires Client Selection' : 'Daily Recurring Task',
+                                client: taskConfig.client || 'Others',
+                                status: 'To do',
+                                priority: 'Medium',
+                                assignee: currentUser.name,
+                                assigneeEmail: email,
+                                manual: true,
+                                taskType: 'internal',
+                                palaniTask: true,
+                                needsClient: taskConfig.needsClient,
+                                userId: email,
+                                createdAt: Date.now(),
+                                duedate: today
+                            };
+                            await set(ref(db, path), task);
+                            tasks = mergeTasksById([task, ...tasks]);
+                        } else {
+                            const existing = snap.val();
+                            const completedToday = existing.lastCompletedDate === today;
+
+                            const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
+                            const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
+                            const stuckCompleted = isTerminal && !existing.lastCompletedDate && existing.duedate && existing.duedate < today;
+                            const needsDailyReset = !completedToday && (completedPreviousDay || stuckCompleted) && isTerminal;
+
+                            let updates = {};
+                            if (needsDailyReset && !completedToday) {
+                                updates.status = 'To do';
+                                updates.duedate = today;
+                            } else if (!existing.duedate || existing.duedate < today) {
+                                updates.duedate = today;
+                            }
+
+                            if (existing.status === 'To Do') {
+                                updates.status = 'To do';
+                            }
+
+                            if (existing.client === 'Internal' || existing.client === 'Recurring Tasks') {
+                                updates.client = taskConfig.client || 'Others';
+                            }
+                            if (!existing.palaniTask) updates.palaniTask = true;
+                            if (existing.needsClient !== taskConfig.needsClient) updates.needsClient = taskConfig.needsClient;
+
+                            if (Object.keys(updates).length) {
+                                await update(ref(db, path), updates);
+                                const idx = tasks.findIndex(t => t.id === taskId);
+                                if (idx >= 0) Object.assign(tasks[idx], updates);
+                            }
+                        }
+                    }
+
+                    if (isInternalTabActive()) renderInternalTasks();
+                    if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+
+                } catch (err) {
+                    console.warn('Palani tasks setup failed:', err);
+                    palaniTasksEnsureStarted = false;
+                    sessionStorage.removeItem('palaniTasks_lastRun');
+                }
+            }
+
 
             async function runMorningLearningSetup() {
                 if (!currentUser) return;
