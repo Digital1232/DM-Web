@@ -18204,6 +18204,17 @@
                     const toDateStr  = new Date(toTs - 1).toISOString().slice(0, 10);
                     const fromDateStr = new Date(fromTs).toISOString().slice(0, 10);
 
+                    // ── Shared helpers defined once at top level of this callback ──
+                    const isExcludedTask = (t) => {
+                        if (!t) return false;
+                        const client = (t.client || '').toLowerCase().trim();
+                        const status = (t.status || '').toLowerCase().trim();
+                        const id     = (t.id || '').toLowerCase().trim();
+                        return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
+                               status === 'learnings' || status === 'discussion' ||
+                               id.startsWith('learn-') || id.startsWith('disc-');
+                    };
+
                     const nameToEmail = {};
                     Array.from(allUsersMap.values()).forEach(u => {
                         if (u.name && u.email) nameToEmail[u.name.toLowerCase()] = u.email.toLowerCase();
@@ -18212,15 +18223,7 @@
                     const user = allUsersMap.get(email) || knownUserByEmail(email) || { name: email, email, role: '' };
 
                     const getStatsFor = (usrEmail, start, end) => {
-                        const isExcludedTask = (t) => {
-                            if (!t) return false;
-                            const client = (t.client || '').toLowerCase().trim();
-                            const status = (t.status || '').toLowerCase().trim();
-                            const id = (t.id || '').toLowerCase().trim();
-                            return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                                   status === 'learnings' || status === 'discussion' ||
-                                   id.startsWith('learn-') || id.startsWith('disc-');
-                        };
+                        // isExcludedTask defined at outer scope above
 
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
                         const isDailyPlanUser = [
@@ -18557,19 +18560,8 @@
                         return 'bg-slate-50 text-slate-700 border-slate-100';
                     };
 
-                    // Hoist isExcludedTask to outer scope so Karthika block can use it
-                    const isExcludedTask = (t) => {
-                        if (!t) return false;
-                        const client = (t.client || '').toLowerCase().trim();
-                        const status = (t.status || '').toLowerCase().trim();
-                        const id = (t.id || '').toLowerCase().trim();
-                        return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                               status === 'learnings' || status === 'discussion' ||
-                               id.startsWith('learn-') || id.startsWith('disc-');
-                    };
-
                     let snehaBreakdownHtml = '';
-                    let snehaWorkedTaskCount = 0; // for the Completed Tasks tile
+                    let snehaWorkedTaskCount = 0;
                     let snehaContentCount = 0;
                     let snehaQcCount = 0;
                     let snehaThumbnailCount = 0;
