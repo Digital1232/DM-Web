@@ -18409,15 +18409,15 @@
                     let snehaQcCountEarly = 0;
                     let snehaThumbnailCountEarly = 0;
                     if (email === 'snehavilpower@gmail.com') {
-                        const earlySnehaSelections = (snehaSelections || []).filter(s =>
-                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
-                            s.timestamp >= fromTs &&
-                            s.timestamp <= toTs
-                        );
-                        const earlyQcReports = freshQcReports.filter(r =>
-                            (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                            r.timestamp >= fromTs &&
-                            r.timestamp <= toTs
+                        const earlySnehaSelections = (snehaSelections || []).filter(s => {
+                            const uid = (s.userId || '').toLowerCase();
+                            const ts  = Number(s.timestamp || 0); // ensure numeric
+                            return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
+                        });
+                        const earlyQcReports = freshQcReports.filter(r => {
+                            const ts = Number(r.timestamp || 0);
+                            return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                                   ts >= fromTs && ts <= toTs;
                         );
                         const _th = new Set(), _ca = new Set(), _vi = new Set(), _po = new Set(), _all = new Set();
                         earlySnehaSelections.forEach(s => {
@@ -18425,10 +18425,11 @@
                             _all.add(s.taskId);
                             (s.selectedItems || []).forEach(item => {
                                 const l = (item || '').toLowerCase();
-                                if (l.includes('thumbnail')) _th.add(s.taskId);
-                                if (l.includes('caption'))   _ca.add(s.taskId);
-                                if (l.includes('video'))     _vi.add(s.taskId);
-                                if (l.includes('poster'))    _po.add(s.taskId);
+                                const key = s.taskId + '|' + l;
+                                if (l.includes('thumbnail')) _th.add(key);
+                                if (l.includes('caption'))   _ca.add(key);
+                                if (l.includes('video'))     _vi.add(key);
+                                if (l.includes('poster'))    _po.add(key);
                             });
                         });
                         snehaQcCountEarly        = earlyQcReports.length;
@@ -18523,11 +18524,11 @@
                     const workedTasks = [];
                     
                     if (email === 'snehavilpower@gmail.com') {
-                        const periodSnehaSelections = (snehaSelections || []).filter(s =>
-                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
-                            s.timestamp >= fromTs &&
-                            s.timestamp <= toTs
-                        );
+                        const periodSnehaSelections = (snehaSelections || []).filter(s => {
+                            const uid = (s.userId || '').toLowerCase();
+                            const ts  = Number(s.timestamp || 0);
+                            return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
+                        });
                         periodSnehaSelections.forEach(s => {
                             if (s.taskId && !workedTaskIds.has(s.taskId)) {
                                 const t = tasks.find(tk => tk.id === s.taskId);
@@ -18611,17 +18612,17 @@
                     let snehaQcCount = snehaQcCountEarly;
                     let snehaThumbnailCount = snehaThumbnailCountEarly;
                     if (email === 'snehavilpower@gmail.com') {
-                        const periodSnehaSelections = (snehaSelections || []).filter(s =>
-                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
-                            s.timestamp >= fromTs &&
-                            s.timestamp <= toTs
-                        );
+                        const periodSnehaSelections = (snehaSelections || []).filter(s => {
+                            const uid = (s.userId || '').toLowerCase();
+                            const ts  = Number(s.timestamp || 0);
+                            return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
+                        });
                         
-                        const snehaQcReports = freshQcReports.filter(r =>
-                            (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                            r.timestamp >= fromTs &&
-                            r.timestamp <= toTs
-                        );
+                        const snehaQcReports = freshQcReports.filter(r => {
+                            const ts = Number(r.timestamp || 0);
+                            return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                                   ts >= fromTs && ts <= toTs;
+                        });
 
                         const thumbnailTasks = new Set();
                         const captionsTasks = new Set();
@@ -18635,10 +18636,12 @@
                             const items = s.selectedItems || [];
                             items.forEach(item => {
                                 const lower = (item || '').toLowerCase().trim();
-                                if (lower.includes('thumbnail')) thumbnailTasks.add(s.taskId);
-                                if (lower.includes('caption')) captionsTasks.add(s.taskId);
-                                if (lower.includes('video')) videoTasks.add(s.taskId);
-                                if (lower.includes('poster')) posterTasks.add(s.taskId);
+                                // Use taskId+item as key so one task with both Captions+Poster counts in both
+                                const key = s.taskId + '|' + lower;
+                                if (lower.includes('thumbnail')) thumbnailTasks.add(key);
+                                if (lower.includes('caption'))   captionsTasks.add(key);
+                                if (lower.includes('video'))     videoTasks.add(key);
+                                if (lower.includes('poster'))    posterTasks.add(key);
                             });
                         });
 
