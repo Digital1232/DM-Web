@@ -18200,6 +18200,9 @@
                         return entry;
                     });
                     const snehaSelections = Object.values(snehaSnap.val() || {});
+                    // Date strings for DPR period filtering (YYYY-MM-DD)
+                    const toDateStr  = new Date(toTs - 1).toISOString().slice(0, 10);
+                    const fromDateStr = new Date(fromTs).toISOString().slice(0, 10);
 
                     const nameToEmail = {};
                     Array.from(allUsersMap.values()).forEach(u => {
@@ -18223,7 +18226,8 @@
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
                             'thanushvilpower@gmail.com',
-                            'immanuelvilpower@gmail.com'
+                            'immanuelvilpower@gmail.com',
+                            'anithavilpower@gmail.com'   // Karthika: assigned from daily plan
                         ].includes(usrEmail.toLowerCase());
 
                         const isInternalOnlyUser = [
@@ -18486,6 +18490,26 @@
                                 workedTasks.push(t);
                             }
                         });
+                    } else if (email === 'anithavilpower@gmail.com') {
+                        // Karthika: Tasks Worked Log = her daily plan tasks in this period
+                        const karthikaPlans = dailyPlans[eKey(email)] || {};
+                        Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
+                            if (!planData.date) return;
+                            const planTs = new Date(planData.date + 'T00:00:00').getTime();
+                            if (planTs < fromTs || planTs > toTs) return;
+                            const t = tasks.find(tk => tk.id === taskId);
+                            if (t && !isExcludedTask(t) && !workedTaskIds.has(taskId)) {
+                                workedTaskIds.add(taskId);
+                                workedTasks.push(t);
+                            }
+                        });
+                        // Also include completed + hold + rework for completeness
+                        [...currStats.completed, ...currStats.hold, ...currStats.rework].forEach(t => {
+                            if (t && t.id && !workedTaskIds.has(t.id)) {
+                                workedTaskIds.add(t.id);
+                                workedTasks.push(t);
+                            }
+                        });
                     } else {
                         currStats.completed.forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
@@ -18564,30 +18588,82 @@
                                 <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">Breakdown</span>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">QC Reviews Done</p>
+                                <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">QC Reviews Done</p>
                                     <p class="text-xl font-black text-slate-900">${qcTasksCount}</p>
                                     <p class="text-[9px] text-slate-400 font-bold">completed reviews</p>
                                 </div>
-                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Thumbnail Content</p>
+                                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">Thumbnail Content</p>
                                     <p class="text-xl font-black text-slate-900">${thumbnailCount}</p>
                                     <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
                                 </div>
-                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Captions Written</p>
+                                <div class="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-rose-600 uppercase tracking-wider mb-1">Captions Written</p>
                                     <p class="text-xl font-black text-slate-900">${captionsCount}</p>
                                     <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
                                 </div>
-                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Video Content</p>
+                                <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">Video Content</p>
                                     <p class="text-xl font-black text-slate-900">${videoContentCount}</p>
                                     <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
                                 </div>
-                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 col-span-2">
-                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Poster Content</p>
+                                <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 col-span-2">
+                                    <p class="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1">Poster Content</p>
                                     <p class="text-xl font-black text-slate-900">${posterContentCount}</p>
                                     <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }
+
+                    // ── Karthika: thumbnail & poster counts from DPR ──
+                    let karthikaBreakdownHtml = '';
+                    if (email === 'anithavilpower@gmail.com') {
+                        const karthikaDprRows = dprEntries.filter(e =>
+                            e.userId === 'anithavilpower@gmail.com' &&
+                            e.date >= fromDateStr &&
+                            e.date <= toDateStr
+                        );
+                        const posterTotal     = karthikaDprRows.filter(e => e.category === 'Posters').reduce((s, e) => s + Number(e.count || 0), 0);
+                        const thumbnailTotal  = karthikaDprRows.filter(e => e.category === 'Thumbnails').reduce((s, e) => s + Number(e.count || 0), 0);
+                        // Also count Thumbnail-status Jira tasks in daily plan for the period
+                        const dpThumbnailTasks = workedTasks.filter(t =>
+                            (t.status || '').toLowerCase() === 'thumbnail' ||
+                            (t.desc || '').toLowerCase().includes('thumbnail')
+                        ).length;
+                        const dpPosterTasks = workedTasks.filter(t =>
+                            (t.desc || '').toLowerCase().includes('poster')
+                        ).length;
+
+                        karthikaBreakdownHtml = `
+                        <!-- Karthika Thumbnail & Poster Breakdown -->
+                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                            <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Thumbnail & Poster Counts</h4>
+                                <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-pink-50 text-pink-600">DPR + Jira</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-pink-50 border border-pink-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-pink-600 uppercase tracking-wider mb-1">Posters (DPR)</p>
+                                    <p class="text-2xl font-black text-slate-900">${posterTotal}</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">count this period</p>
+                                </div>
+                                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">Thumbnails (DPR)</p>
+                                    <p class="text-2xl font-black text-slate-900">${thumbnailTotal}</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">count this period</p>
+                                </div>
+                                <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1">Poster Tasks (Jira)</p>
+                                    <p class="text-2xl font-black text-slate-900">${dpPosterTasks}</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">daily plan tasks</p>
+                                </div>
+                                <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">Thumbnail Tasks (Jira)</p>
+                                    <p class="text-2xl font-black text-slate-900">${dpThumbnailTasks}</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">daily plan tasks</p>
                                 </div>
                             </div>
                         </div>
@@ -18629,14 +18705,14 @@
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.completed.length} prev period</p>
                             </div>
                             
-                            <!-- Assigned Tasks (Clickable) -->
+                            <!-- Assigned Tasks (Clickable) — for Sneha shows Completed content tasks -->
                             <div class="bg-sky-50/30 border border-sky-100 hover:border-sky-300 hover:bg-sky-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
                                  onclick="showIndivPerfTasks('${email}', 'assigned', '${escapeHtml(user.name)}')">
                                 <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">Assigned Tasks</p>
+                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'snehavilpower@gmail.com' ? 'Completed Tasks' : email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-slate-900">${currStats.assigned.length}</p>
+                                <p class="text-xl font-black text-slate-900">${email === 'snehavilpower@gmail.com' ? currStats.completed.length : currStats.assigned.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.assigned.length} prev period</p>
                             </div>
 
@@ -18684,6 +18760,7 @@
                             </div>
                         </div>
                         ${snehaBreakdownHtml}
+                        ${karthikaBreakdownHtml}
                     </div>
 
                     <!-- Center: Team Comparison & Diagnostic Cards -->
@@ -18792,8 +18869,8 @@
                     <div class="xl:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
                         <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
                             <div>
-                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : 'Tasks Worked Log'}</h4>
-                                <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : 'Tasks worked, logged, or assigned in period'}</p>
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
+                                <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : email === 'anithavilpower@gmail.com' ? 'Tasks from Karthika\'s daily plan in this period' : 'Tasks worked, logged, or assigned in period'}</p>
                             </div>
                             <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">${workedTasks.length} ${email === 'snehavilpower@gmail.com' ? 'worked' : 'tasks'}</span>
                         </div>
