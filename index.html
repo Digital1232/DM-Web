@@ -17725,9 +17725,11 @@
                 // Always fetch QC reports fresh — don't rely on allQcReports being loaded from QC tab visit
                 Promise.all([
                     get(ref(db, 'worksync/attendance_events')),
-                    get(ref(db, 'worksync/qc_reports'))
-                ]).then(([attSnap, qcSnap]) => {
+                    get(ref(db, 'worksync/qc_reports')),
+                    get(ref(db, 'worksync/sneha_work_selections'))
+                ]).then(([attSnap, qcSnap, snehaSnap]) => {
                     const attEvents = Object.values(attSnap.val() || {});
+                    const snehaSelections = Object.values(snehaSnap.val() || {});
 
                     // Parse and normalise QC reports
                     const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => {
@@ -17769,24 +17771,68 @@
                             );
                             const breakSeconds = breaks.reduce((s, e) => s + Math.floor((e.duration || 0) / 1000), 0);
 
-                            // Tasks — completed in this window (by duedate or updatedAt)
-                            const completed = tasks.filter(t =>
-                                assigneeMatches(t, email) &&
-                                isTaskCompletedStatus(t.status) &&
-                                (() => {
-                                    const ts = t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
+                            const isExcludedTask = (t) => {
+                                if (!t) return false;
+                                const client = (t.client || '').toLowerCase().trim();
+                                const status = (t.status || '').toLowerCase().trim();
+                                const id = (t.id || '').toLowerCase().trim();
+                                return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
+                                       status === 'learnings' || status === 'discussion' ||
+                                       id.startsWith('learn-') || id.startsWith('disc-');
+                            };
+
+                            const isDailyPlanUser = [
+                                'barathvilpower@gmail.com',
+                                'thanushvilpower@gmail.com',
+                                'immanuelvilpower@gmail.com'
+                            ].includes(email.toLowerCase());
+
+                            const isInternalOnlyUser = [
+                                'anithavilpower@gmail.com',
+                                'alexvilpower@gmail.com',
+                                'alex@vilpower.com',
+                                'snehavilpower@gmail.com'
+                            ].includes(email.toLowerCase());
+
+                            const filteredTasks = tasks.filter(t => {
+                                if (isExcludedTask(t)) return false;
+                                if (isInternalOnlyUser) {
+                                    return t.manual === true || t.taskType === 'internal';
+                                }
+                                return true;
+                            });
+
+                            const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
+
+                            const matchesUserAndPeriod = (t) => {
+                                if (isDailyPlanUser) {
+                                    const userPlans = dailyPlans[eKey(email)];
+                                    if (!userPlans) return false;
+                                    const dpEntry = userPlans[t.id];
+                                    if (!dpEntry || !dpEntry.date) return false;
+                                    const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
+                                    return dpTs >= fromTs && dpTs <= toTs;
+                                }
+                                return assigneeMatches(t, email) && (() => {
+                                    const ts = getTaskTs(t);
                                     return ts >= fromTs && ts <= toTs;
-                                })()
+                                })();
+                            };
+
+                            const completed = filteredTasks.filter(t =>
+                                matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
                             );
 
-                            // Pending = assigned + not done + duedate in window
-                            const pending = tasks.filter(t =>
-                                assigneeMatches(t, email) &&
-                                !isDone(t.status) &&
-                                t.duedate &&
-                                new Date(t.duedate).getTime() >= fromTs &&
-                                new Date(t.duedate).getTime() <= toTs
-                            );
+                            const pending = filteredTasks.filter(t => {
+                                if (isDailyPlanUser) {
+                                    return matchesUserAndPeriod(t) && !isDone(t.status);
+                                }
+                                return assigneeMatches(t, email) &&
+                                       !isDone(t.status) &&
+                                       t.duedate &&
+                                       new Date(t.duedate).getTime() >= fromTs &&
+                                       new Date(t.duedate).getTime() <= toTs;
+                            });
 
                             // QC score — match ALL reports for this person's tasks
                             // Strategy 1: email match (assigneeEmail stored in QC report)
@@ -17882,6 +17928,65 @@
                         const twQcDisplay = tw.avgQc !== null ? tw.avgQc : computeAiQcScore(tw, currStartTs, currEndTs);
                         const lwQcIsAi = lw.avgQc === null;
                         const twQcIsAi = tw.avgQc === null;
+
+                        let extraBreakdown = '';
+                        if (email.toLowerCase() === 'snehavilpower@gmail.com') {
+                            const snehaQcReports = freshQcReports.filter(r =>
+                                (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                                r.timestamp >= currStartTs &&
+                                r.timestamp <= currEndTs
+                            );
+                            const periodSnehaSelections = (snehaSelections || []).filter(s =>
+                                s.userId === 'snehavilpower@gmail.com' &&
+                                s.timestamp >= currStartTs &&
+                                s.timestamp <= currEndTs
+                            );
+
+                            const thumbnailTasks = new Set();
+                            const captionsTasks = new Set();
+                            const videoTasks = new Set();
+                            const posterTasks = new Set();
+
+                            periodSnehaSelections.forEach(s => {
+                                if (!s.taskId) return;
+                                const items = s.selectedItems || [];
+                                items.forEach(item => {
+                                    const lower = (item || '').toLowerCase().trim();
+                                    if (lower.includes('thumbnail')) thumbnailTasks.add(s.taskId);
+                                    if (lower.includes('caption')) captionsTasks.add(s.taskId);
+                                    if (lower.includes('video')) videoTasks.add(s.taskId);
+                                    if (lower.includes('poster')) posterTasks.add(s.taskId);
+                                });
+                            });
+
+                            extraBreakdown = `
+                            <div class="px-6 pb-5 pt-3 border-t border-slate-50 bg-slate-50/50">
+                                <p class="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-3">Content & QC Breakdown (${currLabel})</p>
+                                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                    <div class="bg-white border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                        <span class="font-bold text-slate-500">QC Reviews</span>
+                                        <span class="font-black text-slate-900">${snehaQcReports.length}</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                        <span class="font-bold text-slate-500">Thumbnails</span>
+                                        <span class="font-black text-slate-900">${thumbnailTasks.size}</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                        <span class="font-bold text-slate-500">Captions</span>
+                                        <span class="font-black text-slate-900">${captionsTasks.size}</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100 rounded-xl p-2.5 flex justify-between items-center">
+                                        <span class="font-bold text-slate-500">Video Content</span>
+                                        <span class="font-black text-slate-900">${videoTasks.size}</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100 rounded-xl p-2.5 col-span-2 flex justify-between items-center">
+                                        <span class="font-bold text-slate-500">Poster Content</span>
+                                        <span class="font-black text-slate-900">${posterTasks.size}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            `;
+                        }
 
                         // Helpers for delta indicators
                         const delta = (curr, prev) => {
@@ -18003,6 +18108,7 @@
                                 <p class="text-[10px] text-violet-700 font-bold">No QC submissions yet — AI score shown above based on productivity signals.</p>
                             </div>
                         </div>`}
+                        ${extraBreakdown}
                     </div>`;
                     });
 
@@ -18112,15 +18218,28 @@
                                    status === 'learnings' || status === 'discussion' ||
                                    id.startsWith('learn-') || id.startsWith('disc-');
                         };
-                        const filteredTasks = tasks.filter(t => !isExcludedTask(t));
 
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
-                            'anithavilpower@gmail.com',
                             'thanushvilpower@gmail.com',
                             'immanuelvilpower@gmail.com'
                         ].includes(usrEmail.toLowerCase());
+
+                        const isInternalOnlyUser = [
+                            'anithavilpower@gmail.com',
+                            'alexvilpower@gmail.com',
+                            'alex@vilpower.com',
+                            'snehavilpower@gmail.com'
+                        ].includes(usrEmail.toLowerCase());
+
+                        const filteredTasks = tasks.filter(t => {
+                            if (isExcludedTask(t)) return false;
+                            if (isInternalOnlyUser) {
+                                return t.manual === true || t.taskType === 'internal';
+                            }
+                            return true;
+                        });
 
                         const getEffectiveDateTs = (t) => {
                             if (isDailyPlanUser) {
@@ -18204,45 +18323,6 @@
 
                         let compList = comp;
                         let assignedList = assigned;
-
-                        if (usrEmail === 'snehavilpower@gmail.com') {
-                            const periodSnehaSelections = (snehaSelections || []).filter(s =>
-                                s.userId === 'snehavilpower@gmail.com' &&
-                                s.timestamp >= start &&
-                                s.timestamp <= end
-                            );
-                            const workedContentTasks = [];
-                            const workedContentTaskIds = new Set();
-                            periodSnehaSelections.forEach(s => {
-                                if (s.taskId && !workedContentTaskIds.has(s.taskId)) {
-                                    const t = tasks.find(tk => tk.id === s.taskId);
-                                    if (t && !isExcludedTask(t)) {
-                                        workedContentTasks.push(t);
-                                        workedContentTaskIds.add(s.taskId);
-                                    }
-                                }
-                            });
-
-                            const snehaQcReports = freshQcReports.filter(r =>
-                                (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                r.timestamp >= start &&
-                                r.timestamp <= end
-                            );
-                            const qcWorkedTasks = [];
-                            const qcWorkedTaskIds = new Set();
-                            snehaQcReports.forEach(r => {
-                                if (r.taskId && !workedContentTaskIds.has(r.taskId) && !qcWorkedTaskIds.has(r.taskId)) {
-                                    const t = tasks.find(tk => tk.id === r.taskId);
-                                    if (t && !isExcludedTask(t)) {
-                                        qcWorkedTasks.push(t);
-                                        qcWorkedTaskIds.add(r.taskId);
-                                    }
-                                }
-                            });
-
-                            assignedList = [...workedContentTasks, ...qcWorkedTasks];
-                            compList = workedContentTasks;
-                        }
 
                         return { completed: compList, assigned: assignedList, hold, rework, pending: pend, loggedSec, breakSec, avgQc, qcReports: periodQc };
                     };
@@ -18396,6 +18476,14 @@
                                     
                                     workedTasks.push(t);
                                 }
+                            }
+                        });
+
+                        // Also add her internal tasks
+                        [...currStats.completed, ...currStats.assigned, ...currStats.hold, ...currStats.rework].forEach(t => {
+                            if (t && t.id && !workedTaskIds.has(t.id)) {
+                                workedTaskIds.add(t.id);
+                                workedTasks.push(t);
                             }
                         });
                     } else {
