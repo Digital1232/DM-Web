@@ -18132,49 +18132,42 @@
                             return getTaskTs(t);
                         };
 
-                        const comp = filteredTasks.filter(t =>
-                            assigneeMatches(t, usrEmail) &&
-                            isTaskCompletedStatus(t.status) &&
-                            (() => {
-                                const ts = getEffectiveDateTs(t);
-                                return ts >= start && ts <= end;
-                            })()
-                        );
-                        const assigned = filteredTasks.filter(t =>
-                            assigneeMatches(t, usrEmail) &&
-                            (() => {
-                                const ts = getEffectiveDateTs(t);
-                                return ts >= start && ts <= end;
-                            })()
-                        );
-                        const hold = filteredTasks.filter(t =>
-                            assigneeMatches(t, usrEmail) &&
-                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) &&
-                            (() => {
-                                const ts = getEffectiveDateTs(t);
-                                return ts >= start && ts <= end;
-                            })()
-                        );
-                        const rework = filteredTasks.filter(t =>
-                            assigneeMatches(t, usrEmail) &&
-                            ((t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase())) &&
-                            (() => {
-                                const ts = getEffectiveDateTs(t);
-                                return ts >= start && ts <= end;
-                            })()
-                        );
-                        const pend = filteredTasks.filter(t => {
-                            if (!assigneeMatches(t, usrEmail)) return false;
-                            if (isDone(t.status)) return false;
+                        const matchesUserAndPeriod = (t) => {
                             if (isDailyPlanUser) {
                                 const userPlans = dailyPlans[eKey(usrEmail)];
-                                if (userPlans && userPlans[t.id] && userPlans[t.id].date) {
-                                    const dpTs = new Date(userPlans[t.id].date + 'T00:00:00').getTime();
-                                    return dpTs >= start && dpTs <= end;
-                                }
-                                return false;
+                                if (!userPlans) return false;
+                                const dpEntry = userPlans[t.id];
+                                if (!dpEntry || !dpEntry.date) return false;
+                                const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
+                                return dpTs >= start && dpTs <= end;
                             }
-                            return t.duedate &&
+                            return assigneeMatches(t, usrEmail) && (() => {
+                                const ts = getTaskTs(t);
+                                return ts >= start && ts <= end;
+                            })();
+                        };
+
+                        const comp = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
+                        );
+                        const assigned = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t)
+                        );
+                        const hold = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) &&
+                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
+                        );
+                        const rework = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) &&
+                            ((t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()))
+                        );
+                        const pend = filteredTasks.filter(t => {
+                            if (isDailyPlanUser) {
+                                return matchesUserAndPeriod(t) && !isDone(t.status);
+                            }
+                            return assigneeMatches(t, usrEmail) &&
+                                   !isDone(t.status) &&
+                                   t.duedate &&
                                    new Date(t.duedate).getTime() >= start &&
                                    new Date(t.duedate).getTime() <= end;
                         });
