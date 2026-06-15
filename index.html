@@ -7332,7 +7332,10 @@
                     const isExactDate = planDate.getTime() === selectedDate.getTime();
                     const isCarryOver = planDate.getTime() < selectedDate.getTime() && dailyPlanCarryStatuses(task).includes(task.status);
 
-                    if (isExactDate || isCarryOver) {
+                    // Exclude completed tasks — they shouldn't stay on the daily plan
+                    const isCompleted = isDone(task.status) || isInternalDone(task.status) || isTaskCompletedStatus(task.status);
+
+                    if ((isExactDate || isCarryOver) && !isCompleted) {
                         plannedTasks.push({
                             ...task,
                             planData,
@@ -18395,7 +18398,44 @@
                     const teamAvgLogged = Math.round(teamLoggedSecSum / teamCount);
                     const teamAvgBreak = Math.round(teamBreakSecSum / (teamCount * currDays));
 
-                    let userCompleted = currStats.completed.length; // overridden below for Sneha
+                    // ── Compute Sneha counts FIRST so userCompleted is correct from the start ──
+                    let snehaWorkedTaskCountEarly = 0;
+                    let snehaContentCountEarly = 0;
+                    let snehaQcCountEarly = 0;
+                    let snehaThumbnailCountEarly = 0;
+                    if (email === 'snehavilpower@gmail.com') {
+                        const earlySnehaSelections = (snehaSelections || []).filter(s =>
+                            s.userId === 'snehavilpower@gmail.com' &&
+                            s.timestamp >= fromTs &&
+                            s.timestamp <= toTs
+                        );
+                        const earlyQcReports = freshQcReports.filter(r =>
+                            (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                            r.timestamp >= fromTs &&
+                            r.timestamp <= toTs
+                        );
+                        const _th = new Set(), _ca = new Set(), _vi = new Set(), _po = new Set(), _all = new Set();
+                        earlySnehaSelections.forEach(s => {
+                            if (!s.taskId) return;
+                            _all.add(s.taskId);
+                            (s.selectedItems || []).forEach(item => {
+                                const l = (item || '').toLowerCase();
+                                if (l.includes('thumbnail')) _th.add(s.taskId);
+                                if (l.includes('caption'))   _ca.add(s.taskId);
+                                if (l.includes('video'))     _vi.add(s.taskId);
+                                if (l.includes('poster'))    _po.add(s.taskId);
+                            });
+                        });
+                        snehaQcCountEarly        = earlyQcReports.length;
+                        snehaWorkedTaskCountEarly = _all.size + snehaQcCountEarly;
+                        snehaContentCountEarly   = _po.size + _vi.size + _ca.size;
+                        snehaThumbnailCountEarly = _th.size;
+                    }
+
+                    // userCompleted uses correct value for Sneha from the start
+                    let userCompleted = email === 'snehavilpower@gmail.com'
+                        ? snehaWorkedTaskCountEarly
+                        : currStats.completed.length;
                     const userPending = currStats.pending.length;
                     const userLogged = currStats.loggedSec;
                     const userAvgBreak = Math.round(currStats.breakSec / currDays);
@@ -18561,10 +18601,10 @@
                     };
 
                     let snehaBreakdownHtml = '';
-                    let snehaWorkedTaskCount = 0;
-                    let snehaContentCount = 0;
-                    let snehaQcCount = 0;
-                    let snehaThumbnailCount = 0;
+                    let snehaWorkedTaskCount = snehaWorkedTaskCountEarly;
+                    let snehaContentCount = snehaContentCountEarly;
+                    let snehaQcCount = snehaQcCountEarly;
+                    let snehaThumbnailCount = snehaThumbnailCountEarly;
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s =>
                             s.userId === 'snehavilpower@gmail.com' &&
