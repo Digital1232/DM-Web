@@ -2607,7 +2607,7 @@
 
                     <div id="dpr-panel-my" class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
                         <div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8">
-                            <div>
+                            <div id="dpr-form-container">
                                 <h3 class="text-sm font-black text-slate-900 mb-5" id="dpr-form-title">Submit Daily DPR
                                 </h3>
                                 <div class="space-y-4">
@@ -2619,6 +2619,7 @@
                                         <option>Video Editing</option>
                                         <option>Shoot</option>
                                         <option>Posters</option>
+                                        <option>Thumbnails</option>
                                         <option>Content</option>
                                         <option>Quality Check</option>
                                         <option>Image Extract</option>
@@ -15337,12 +15338,254 @@
 
             function initDpr() {
                 if (!currentUser) return;
+                renderDprForm();
                 const dateInput = document.getElementById('dpr-date');
                 const monthInput = document.getElementById('dpr-month');
                 if (dateInput) dateInput.value = todayIso(); // Always reset to today
                 if (monthInput && !monthInput.value) monthInput.value = monthKey();
                 loadDprEntries();
             }
+
+            function renderDprForm() {
+                const container = document.getElementById('dpr-form-container');
+                if (!container || !currentUser) return;
+
+                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+
+                if (isKarthika) {
+                    container.innerHTML = `
+                        <h3 class="text-sm font-black text-slate-900 mb-5" id="dpr-form-title">Submit Daily DPR</h3>
+                        <div class="space-y-4">
+                            <input id="dpr-id-edit-poster" type="hidden" value="">
+                            <input id="dpr-id-edit-thumbnail" type="hidden" value="">
+                            
+                            <input id="dpr-date" type="date"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            
+                            <select id="dpr-status"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                                <option value="worked">Worked</option>
+                                <option value="leave">Leave</option>
+                                <option value="weekoff">Week Off</option>
+                            </select>
+
+                            <div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                                <p class="text-xs font-bold text-slate-700 uppercase tracking-wider text-indigo-600">Posters Section</p>
+                                <input id="dpr-count-poster" type="number" min="0" placeholder="Posters completed count"
+                                    class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                                <textarea id="dpr-notes-poster" rows="2" placeholder="Posters notes or task references"
+                                    class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"></textarea>
+                            </div>
+
+                            <div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                                <p class="text-xs font-bold text-slate-700 uppercase tracking-wider text-pink-600">Thumbnails Section</p>
+                                <input id="dpr-count-thumbnail" type="number" min="0" placeholder="Thumbnails completed count"
+                                    class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                                <textarea id="dpr-notes-thumbnail" rows="2" placeholder="Thumbnails notes or task references"
+                                    class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"></textarea>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button onclick="submitDprKarthika()"
+                                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all"
+                                    id="dpr-save-btn">Save DPR</button>
+                                <button onclick="cancelDprEditKarthika()" id="dpr-cancel-btn"
+                                    class="hidden px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all">Cancel</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <h3 class="text-sm font-black text-slate-900 mb-5" id="dpr-form-title">Submit Daily DPR</h3>
+                        <div class="space-y-4">
+                            <input id="dpr-id-edit" type="hidden" value="">
+                            <input id="dpr-date" type="date"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            <select id="dpr-category"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                                <option>Video Editing</option>
+                                <option>Shoot</option>
+                                <option>Posters</option>
+                                <option>Thumbnails</option>
+                                <option>Content</option>
+                                <option>Quality Check</option>
+                                <option>Image Extract</option>
+                                <option>Other</option>
+                            </select>
+                            <input id="dpr-count" type="number" min="0" placeholder="Completed count"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            <select id="dpr-status"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                                <option value="worked">Worked</option>
+                                <option value="leave">Leave</option>
+                                <option value="weekoff">Week Off</option>
+                            </select>
+                            <textarea id="dpr-notes" rows="3" placeholder="Notes or task references"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"></textarea>
+                            <div class="flex gap-2">
+                                <button onclick="submitDpr()"
+                                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all"
+                                    id="dpr-save-btn">Save DPR</button>
+                                <button onclick="cancelDprEdit()" id="dpr-cancel-btn"
+                                    class="hidden px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all">Cancel</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            async function submitDprKarthika() {
+                if (!currentUser) return;
+                const editIdPoster = document.getElementById('dpr-id-edit-poster')?.value || '';
+                const editIdThumbnail = document.getElementById('dpr-id-edit-thumbnail')?.value || '';
+                
+                const date = document.getElementById('dpr-date').value;
+                const status = document.getElementById('dpr-status').value;
+                
+                const posterCount = Number(document.getElementById('dpr-count-poster').value || 0);
+                const posterNotes = document.getElementById('dpr-notes-poster').value.trim();
+                
+                const thumbnailCount = Number(document.getElementById('dpr-count-thumbnail').value || 0);
+                const thumbnailNotes = document.getElementById('dpr-notes-thumbnail').value.trim();
+
+                if (!date) return toast('Select DPR date', 'error');
+
+                if (status === 'worked' && posterCount <= 0 && thumbnailCount <= 0) {
+                    return toast('Enter completed count for Posters or Thumbnails', 'error');
+                }
+
+                if (status === 'leave' || status === 'weekoff') {
+                    const payload = {
+                        date,
+                        month: monthKey(date),
+                        category: 'Posters',
+                        count: 0,
+                        status,
+                        notes: posterNotes || thumbnailNotes || '',
+                        userId: currentUser.email,
+                        userName: currentUser.name,
+                        userRole: currentUser.role,
+                        updatedAt: Date.now()
+                    };
+                    if (editIdPoster) {
+                        await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), payload);
+                    } else {
+                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
+                        if (existing) {
+                            await update(ref(db, `worksync/dpr_entries/${existing.id}`), payload);
+                        } else {
+                            payload.createdAt = Date.now();
+                            await push(ref(db, 'worksync/dpr_entries'), payload);
+                        }
+                    }
+
+                    const existingThumbnail = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
+                    if (existingThumbnail) {
+                        await remove(ref(db, `worksync/dpr_entries/${existingThumbnail.id}`));
+                    }
+                } else {
+                    // Worked: handle posters
+                    if (posterCount > 0 || posterNotes || editIdPoster) {
+                        const posterPayload = {
+                            date,
+                            month: monthKey(date),
+                            category: 'Posters',
+                            count: posterCount,
+                            status: 'worked',
+                            notes: posterNotes,
+                            userId: currentUser.email,
+                            userName: currentUser.name,
+                            userRole: currentUser.role,
+                            updatedAt: Date.now()
+                        };
+
+                        if (editIdPoster) {
+                            await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), posterPayload);
+                        } else {
+                            const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
+                            if (existing) {
+                                await update(ref(db, `worksync/dpr_entries/${existing.id}`), posterPayload);
+                            } else {
+                                posterPayload.createdAt = Date.now();
+                                await push(ref(db, 'worksync/dpr_entries'), posterPayload);
+                            }
+                        }
+                    } else {
+                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
+                        if (existing) {
+                            await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
+                        }
+                    }
+
+                    // Worked: handle thumbnails
+                    if (thumbnailCount > 0 || thumbnailNotes || editIdThumbnail) {
+                        const thumbnailPayload = {
+                            date,
+                            month: monthKey(date),
+                            category: 'Thumbnails',
+                            count: thumbnailCount,
+                            status: 'worked',
+                            notes: thumbnailNotes,
+                            userId: currentUser.email,
+                            userName: currentUser.name,
+                            userRole: currentUser.role,
+                            updatedAt: Date.now()
+                        };
+
+                        if (editIdThumbnail) {
+                            await update(ref(db, `worksync/dpr_entries/${editIdThumbnail}`), thumbnailPayload);
+                        } else {
+                            const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
+                            if (existing) {
+                                await update(ref(db, `worksync/dpr_entries/${existing.id}`), thumbnailPayload);
+                            } else {
+                                thumbnailPayload.createdAt = Date.now();
+                                await push(ref(db, 'worksync/dpr_entries'), thumbnailPayload);
+                            }
+                        }
+                    } else {
+                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
+                        if (existing) {
+                            await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
+                        }
+                    }
+                }
+
+                toast('DPR saved successfully', 'success');
+                cancelDprEditKarthika();
+            }
+
+            function cancelDprEditKarthika() {
+                const ep = document.getElementById('dpr-id-edit-poster');
+                const et = document.getElementById('dpr-id-edit-thumbnail');
+                if (ep) ep.value = '';
+                if (et) et.value = '';
+                
+                const dDate = document.getElementById('dpr-date');
+                if (dDate) dDate.value = todayIso();
+                
+                const dStatus = document.getElementById('dpr-status');
+                if (dStatus) dStatus.value = 'worked';
+                
+                const cp = document.getElementById('dpr-count-poster');
+                const np = document.getElementById('dpr-notes-poster');
+                const ct = document.getElementById('dpr-count-thumbnail');
+                const nt = document.getElementById('dpr-notes-thumbnail');
+                if (cp) cp.value = '';
+                if (np) np.value = '';
+                if (ct) ct.value = '';
+                if (nt) nt.value = '';
+                
+                const titleEl = document.getElementById('dpr-form-title');
+                if (titleEl) titleEl.textContent = 'Submit Daily DPR';
+                
+                const saveBtn = document.getElementById('dpr-save-btn');
+                if (saveBtn) saveBtn.textContent = 'Save DPR';
+                
+                const cancelBtn = document.getElementById('dpr-cancel-btn');
+                if (cancelBtn) cancelBtn.classList.add('hidden');
+            }
+
 
             function loadDprEntries() {
                 if (!db || dprUnsub) return;
@@ -15408,6 +15651,40 @@
             function editDprEntry(id) {
                 const entry = dprEntries.find(e => e.id === id);
                 if (!entry || (entry.userId !== currentUser.email && !isAdmin())) return;
+
+                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                if (isKarthika) {
+                    cancelDprEditKarthika();
+                    document.getElementById('dpr-date').value = entry.date || todayIso();
+                    document.getElementById('dpr-status').value = entry.status || 'worked';
+
+                    // Find if there is another entry for the same date for the other category
+                    const sibling = dprEntries.find(e => e.userId === entry.userId && e.date === entry.date && e.id !== entry.id);
+
+                    const posterEntry = entry.category === 'Posters' ? entry : (sibling?.category === 'Posters' ? sibling : null);
+                    const thumbnailEntry = entry.category === 'Thumbnails' ? entry : (sibling?.category === 'Thumbnails' ? sibling : null);
+
+                    if (posterEntry) {
+                        document.getElementById('dpr-id-edit-poster').value = posterEntry.id;
+                        document.getElementById('dpr-count-poster').value = posterEntry.count || '';
+                        document.getElementById('dpr-notes-poster').value = posterEntry.notes || '';
+                    }
+                    if (thumbnailEntry) {
+                        document.getElementById('dpr-id-edit-thumbnail').value = thumbnailEntry.id;
+                        document.getElementById('dpr-count-thumbnail').value = thumbnailEntry.count || '';
+                        document.getElementById('dpr-notes-thumbnail').value = thumbnailEntry.notes || '';
+                    }
+
+                    const titleEl = document.getElementById('dpr-form-title');
+                    if (titleEl) titleEl.textContent = 'Edit DPR Entry';
+                    document.getElementById('dpr-save-btn').textContent = 'Update DPR';
+                    document.getElementById('dpr-cancel-btn')?.classList.remove('hidden');
+
+                    switchDprTab('my');
+                    document.getElementById('dpr-panel-my')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    return;
+                }
+
                 document.getElementById('dpr-id-edit').value = id;
                 document.getElementById('dpr-date').value = entry.date || todayIso();
                 document.getElementById('dpr-category').value = entry.category || 'Other';
@@ -15425,6 +15702,11 @@
             }
 
             function cancelDprEdit() {
+                const isKarthika = currentUser && currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                if (isKarthika) {
+                    cancelDprEditKarthika();
+                    return;
+                }
                 document.getElementById('dpr-id-edit').value = '';
                 document.getElementById('dpr-date').value = todayIso();
                 document.getElementById('dpr-category').value = 'Video Editing';
@@ -15452,17 +15734,69 @@
                 const list = document.getElementById('my-dpr-list');
                 const totalEl = document.getElementById('my-dpr-total');
                 if (!list || !currentUser) return;
-                const rows = dprEntries
-                    .filter(e => e.userId === currentUser.email)
-                    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
-                    .slice(0, 12);
-                const total = rows.reduce((sum, e) => sum + Number(e.count || 0), 0);
-                if (totalEl) totalEl.textContent = `${total} Total`;
-                if (!rows.length) {
-                    list.innerHTML = `<p class="p-6 text-center text-xs text-slate-400 italic">No DPR entries yet.</p>`;
-                    return;
+
+                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+
+                if (isKarthika) {
+                    const allKarthikaRows = dprEntries.filter(e => e.userId === currentUser.email);
+                    const posterRows = allKarthikaRows
+                        .filter(e => e.category === 'Posters')
+                        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                        .slice(0, 10);
+                    const thumbnailRows = allKarthikaRows
+                        .filter(e => e.category === 'Thumbnails')
+                        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                        .slice(0, 10);
+                        
+                    const posterTotal = allKarthikaRows.filter(e => e.category === 'Posters').reduce((sum, e) => sum + Number(e.count || 0), 0);
+                    const thumbnailTotal = allKarthikaRows.filter(e => e.category === 'Thumbnails').reduce((sum, e) => sum + Number(e.count || 0), 0);
+                    
+                    if (totalEl) {
+                        totalEl.innerHTML = `<span class="mr-3 text-indigo-600">Posters: ${posterTotal}</span> <span class="text-pink-600">Thumbnails: ${thumbnailTotal}</span>`;
+                    }
+                    
+                    let html = '';
+                    
+                    // Posters Section
+                    html += `
+                        <div class="mb-4">
+                            <div class="bg-indigo-50/50 px-4 py-2 flex justify-between items-center border-b border-slate-100">
+                                <span class="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Posters</span>
+                                <span class="text-[9px] font-bold text-indigo-600 bg-indigo-100/50 px-2 py-0.5 rounded-full">${posterTotal} Total</span>
+                            </div>
+                            <div class="divide-y divide-slate-50">
+                                ${posterRows.length ? posterRows.map(e => dprEntryRow(e)).join('') : '<p class="p-3 text-center text-[10px] text-slate-400 italic">No poster entries yet.</p>'}
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Thumbnails Section
+                    html += `
+                        <div>
+                            <div class="bg-pink-50/50 px-4 py-2 flex justify-between items-center border-b border-slate-100">
+                                <span class="text-[10px] font-black text-pink-700 uppercase tracking-widest">Thumbnails</span>
+                                <span class="text-[9px] font-bold text-pink-600 bg-pink-100/50 px-2 py-0.5 rounded-full">${thumbnailTotal} Total</span>
+                            </div>
+                            <div class="divide-y divide-slate-50">
+                                ${thumbnailRows.length ? thumbnailRows.map(e => dprEntryRow(e)).join('') : '<p class="p-3 text-center text-[10px] text-slate-400 italic">No thumbnail entries yet.</p>'}
+                            </div>
+                        </div>
+                    `;
+                    
+                    list.innerHTML = html;
+                } else {
+                    const rows = dprEntries
+                        .filter(e => e.userId === currentUser.email)
+                        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                        .slice(0, 12);
+                    const total = rows.reduce((sum, e) => sum + Number(e.count || 0), 0);
+                    if (totalEl) totalEl.textContent = `${total} Total`;
+                    if (!rows.length) {
+                        list.innerHTML = `<p class="p-6 text-center text-xs text-slate-400 italic">No DPR entries yet.</p>`;
+                        return;
+                    }
+                    list.innerHTML = rows.map(e => dprEntryRow(e)).join('');
                 }
-                list.innerHTML = rows.map(e => dprEntryRow(e)).join('');
             }
 
             function renderTeamDpr() {
