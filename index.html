@@ -18410,7 +18410,7 @@
                     let snehaThumbnailCountEarly = 0;
                     if (email === 'snehavilpower@gmail.com') {
                         const earlySnehaSelections = (snehaSelections || []).filter(s =>
-                            s.userId === 'snehavilpower@gmail.com' &&
+                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
                             s.timestamp >= fromTs &&
                             s.timestamp <= toTs
                         );
@@ -18524,7 +18524,7 @@
                     
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s =>
-                            s.userId === 'snehavilpower@gmail.com' &&
+                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
                             s.timestamp >= fromTs &&
                             s.timestamp <= toTs
                         );
@@ -18612,7 +18612,7 @@
                     let snehaThumbnailCount = snehaThumbnailCountEarly;
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s =>
-                            s.userId === 'snehavilpower@gmail.com' &&
+                            (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com' &&
                             s.timestamp >= fromTs &&
                             s.timestamp <= toTs
                         );
@@ -18647,6 +18647,7 @@
                         const videoContentCount = videoTasks.size;
                         const posterContentCount = posterTasks.size;
                         const qcTasksCount = snehaQcReports.length;
+                        const totalSelections = periodSnehaSelections.length;
                         snehaWorkedTaskCount = allSnehaTasks.size + qcTasksCount;
                         // Expose for tiles
                         snehaContentCount = posterContentCount + videoContentCount + captionsCount;
@@ -18655,9 +18656,17 @@
                         // Update userCompleted for Sneha
                         userCompleted = snehaWorkedTaskCount;
 
+                        // No-data notice for this period
+                        const noDataNotice = totalSelections === 0 && qcTasksCount === 0 ? `
+                            <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[10px] text-amber-700 font-bold flex items-center gap-2">
+                                <iconify-icon icon="solar:info-circle-bold" width="14" class="flex-shrink-0"></iconify-icon>
+                                No content selections logged this period. Sneha needs to select work items when starting tasks.
+                            </div>` : '';
+
                         snehaBreakdownHtml = `
                         <!-- Sneha Content & QC Breakdown -->
                         <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                            ${noDataNotice}
                             <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
                                 <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Content & QC Breakdown</h4>
                                 <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">Breakdown</span>
