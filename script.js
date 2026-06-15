@@ -278,9 +278,9 @@
         const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
         let qcReportDateFrom = null; // New state variable for QC reports filter
         let qcReportDateTo = null;   // New state variable for QC reports filter
-        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
+        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Design Hold', 'Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
         const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
-        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
+        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Hold', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
         const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail', 'Rework Designs'];
         const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed'];
         const DAILY_REPORT_TIMES = [
@@ -804,6 +804,7 @@
             if (task.status === newStatusCategory || (newStatusCategory === 'To Do' && isTodo(task.status)) || (newStatusCategory === 'In Progress' && isInProgress(task.status)) || (newStatusCategory === 'Done' && isDone(task.status))) return;
             const oldStatus = task.status;
             task.status = newStatusCategory;
+            task.updatedAt = Date.now();
             const assigneeEmail = task.assignee || task.userId || '';
             trackStatusChange(taskId, oldStatus, newStatusCategory, assigneeEmail);
             renderTasks(); updateStats();
@@ -814,7 +815,10 @@
             if (task.manual) {
                 try {
                     // Update status in Firebase for manual tasks
-                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { status: newStatusCategory });
+                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { 
+                        status: newStatusCategory, 
+                        updatedAt: Date.now() 
+                    });
                     if (activeView === 'dailyplan') renderDailyPlan();
                     toast('Task moved successfully', 'success');
                     if (newStatusCategory === 'Quality Check') sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
@@ -1638,12 +1642,13 @@
         }
 
         // TASK STATUS HELPERS
-        function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted'].includes(s); }
-        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Content In Progress', 'Client Content Approval', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Quality Check', 'Client Sent', 'Analytics'].includes(s); }
-        function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Content To Do', 'Design To Do'].includes(s); }
-        function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
-        function isInternalInProgress(s) { return ['In Progress', 'Learnings', 'Learning'].includes(s); }
-        function isInternalDone(s) { return ['Completed', 'Done'].includes(s); }
+        function isDone(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['done', 'resolved', 'closed', 'completed', 'design completed', 'client approved', 'posted', 'analytics', 'client sent', 'shoot completed', 'quality check'].includes(lower); }
+        function isInProgress(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['in progress', 'active', 'running', 'in review', 'design in progress', 'design to do', 'thumbnail', 'rework designs', 'shoot in progress', 'content in progress', 'client content approval'].includes(lower); }
+        function isTodo(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['to do', 'open', 'backlog', 'new', 'shoot needed', 'shoot planned', 'content to do'].includes(lower); }
+        function isHold(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['design hold', 'hold', 'on hold'].includes(lower); }
+        function isInternalTodo(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['to do', 'discussion'].includes(lower); }
+        function isInternalInProgress(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['in progress', 'learnings', 'learning'].includes(lower); }
+        function isInternalDone(s) { if (!s) return false; const lower = String(s).toLowerCase().trim(); return ['completed', 'done'].includes(lower); }
 
         async function getAllUsers() {
             const snap = await get(ref(db, 'worksync/users'));
@@ -3614,13 +3619,17 @@ if (!filtered.length) {
 
             // Optimistically update UI
             task.status = newStatus;
+            task.updatedAt = Date.now();
             renderInternalTasks();
             updateStats();
 
             try {
                 if (task.manual || isInternalTask(task)) {
                     // Save to Firebase for manual/internal tasks
-                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId || currentUser.email)}/${taskId}`), { status: newStatus });
+                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId || currentUser.email)}/${taskId}`), { 
+                        status: newStatus, 
+                        updatedAt: Date.now() 
+                    });
                     toast('Status updated', 'success');
                 } else {
                     // Jira task - sync to Jira
@@ -3649,6 +3658,7 @@ if (!filtered.length) {
 
         function loadTodayWorkSummary() {
             if (!canViewDailySummary()) return;
+            loadDprEntries();
             if (todayReportUnsub) return; // Only load once
             const dbRef = ref(db, 'worksync/timelogs');
             const q = canViewDailySummary() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
@@ -3702,7 +3712,8 @@ if (!filtered.length) {
                     videosCompleted: 0,
                     reworkDesignCount: 0,
                     inProgressVideoCount: 0,
-                    snehaDetails: []
+                    snehaDetails: [],
+                    holdCount: 0
                 });
                 return rows.get(key);
             };
@@ -3725,12 +3736,17 @@ if (!filtered.length) {
                     row.activeSeconds = Math.max(Math.floor((Date.now() - (u.currentTask.startedAt || Date.now())) / 1000), 0);
                 }
 
-                const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
+                const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning' && !(t.id && t.id.startsWith('LEARN-')));
                 const isCorrections = (s) => ['Quality Check', 'Quality check', 'Rework Designs', 'Rework designs'].includes(s);
                 row.assignedCount = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status))).length;
                 row.inProgressCount = ut.filter(t => (isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))) && !isCorrections(t.status)).length;
-                row.completedCount = ut.filter(t => isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))).length;
+                
+                const todayLogs = todayTimeLogs.filter(log => log.userId === u.email);
+                const loggedTaskIds = new Set(todayLogs.map(log => log.taskId));
+                row.completedCount = ut.filter(t => (isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))) && loggedTaskIds.has(t.id)).length;
+                
                 row.correctionsCount = ut.filter(t => isCorrections(t.status)).length;
+                row.holdCount = ut.filter(t => isHold(t.status)).length;
 
                 // Status Change Counters
                 const stats = statusChangeStats[u.email] || ensureStats(u.email);
@@ -3752,10 +3768,123 @@ if (!filtered.length) {
                 }
             });
 
+            const todayDprSums = new Map();
+            dprEntries.forEach(entry => {
+                if (entry.date === todayIso() && entry.userId) {
+                    const emailKey = entry.userId.toLowerCase();
+                    todayDprSums.set(emailKey, (todayDprSums.get(emailKey) || 0) + Number(entry.count || 0));
+                }
+            });
+
+            for (const row of rows.values()) {
+                row.dprCount = todayDprSums.get(row.email.toLowerCase()) || 0;
+            }
+
             return [...rows.values()].sort((a, b) => {
                 const activeSort = (b.activeTask ? 1 : 0) - (a.activeTask ? 1 : 0);
                 return activeSort || (b.loggedSeconds + b.activeSeconds) - (a.loggedSeconds + a.activeSeconds) || a.name.localeCompare(b.name);
             });
+        }
+
+        function showDailySummaryTasks(email, category) {
+            const user = allUsersMap.get(email.toLowerCase()) || knownUserByEmail(email) || { name: email, email };
+            const userName = user.name || user.email;
+            const ut = tasks.filter(t => assigneeMatches(t, email) && t.status !== 'Learnings' && t.status !== 'Learning' && !(t.id && t.id.startsWith('LEARN-')));
+            const isCorrections = (s) => ['Quality Check', 'Quality check', 'Rework Designs', 'Rework designs'].includes(s);
+
+            let matchedTasks = [];
+            let titleLabel = '';
+
+            if (category === 'assigned') {
+                matchedTasks = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status)));
+                titleLabel = 'Assigned (To Do)';
+            } else if (category === 'progress') {
+                matchedTasks = ut.filter(t => (isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))) && !isCorrections(t.status));
+                titleLabel = 'In Progress';
+            } else if (category === 'corrections') {
+                matchedTasks = ut.filter(t => isCorrections(t.status));
+                titleLabel = 'Corrections Designs';
+            } else if (category === 'hold') {
+                matchedTasks = ut.filter(t => isHold(t.status));
+                titleLabel = 'Hold';
+            } else if (category === 'done') {
+                const userTodayLogs = todayTimeLogs.filter(log => log.userId === email);
+                const loggedTaskIds = new Set(userTodayLogs.map(log => log.taskId));
+                matchedTasks = ut.filter(t => (isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))) && loggedTaskIds.has(t.id));
+                titleLabel = 'Done';
+            } else if (category === 'logs') {
+                const userLogs = todayTimeLogs.filter(log => log.userId === email);
+                document.getElementById('drilldown-title').textContent = `Today's Logged Work`;
+                document.getElementById('drilldown-subtitle').textContent = `For ${userName} • ${userLogs.length} Log${userLogs.length !== 1 ? 's' : ''}`;
+                const container = document.getElementById('drilldown-tasks-container');
+                if (!userLogs.length) {
+                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No logs recorded today.</p>`;
+                } else {
+                    container.innerHTML = userLogs.map(log => {
+                        const durationStr = formatTime(log.durationSeconds || 0);
+                        const task = tasks.find(t => t.id === log.taskId);
+                        const taskDesc = log.taskDesc || task?.desc || 'No Description';
+                        const clientLabel = log.client || task?.client || '';
+                        const timeStr = new Date(log.endTime || log.startTime || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return `<div class="bg-slate-50 border border-slate-200 p-3 rounded-xl hover:border-indigo-300 transition-colors cursor-pointer" onclick="openEditTaskModal('${log.taskId}')">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest">${log.taskId || 'N/A'}</span>
+                                <span class="text-xs font-black text-indigo-700 font-mono">${durationStr}</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(taskDesc)}</p>
+                            <div class="flex items-center justify-between mt-2">
+                                ${clientLabel ? `<span class="text-[10px] font-medium text-slate-500"><iconify-icon icon="solar:buildings-bold" class="inline align-text-bottom text-slate-400 mr-1"></iconify-icon>${escapeHtml(clientLabel)}</span>` : '<span></span>'}
+                                <span class="text-[10px] text-slate-400 font-bold">${timeStr}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+                document.getElementById('taskDrilldownModal').showModal();
+                return;
+            } else if (category === 'dpr') {
+                const userDprs = dprEntries.filter(entry => entry.userId && entry.userId.toLowerCase() === email.toLowerCase() && entry.date === todayIso());
+                document.getElementById('drilldown-title').textContent = `Today's DPR Entries`;
+                document.getElementById('drilldown-subtitle').textContent = `For ${userName} • ${userDprs.length} Entry${userDprs.length !== 1 ? 'ies' : ''}`;
+                const container = document.getElementById('drilldown-tasks-container');
+                if (!userDprs.length) {
+                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No DPR entries recorded today.</p>`;
+                } else {
+                    container.innerHTML = userDprs.map(entry => {
+                        return `<div class="bg-slate-50 border border-slate-200 p-3 rounded-xl hover:border-indigo-300 transition-colors">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">${escapeHtml(entry.category || 'Other')}</span>
+                                <span class="text-xs font-black text-indigo-700 font-mono">Count: ${entry.count || 0}</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-800">${escapeHtml(entry.notes || 'No notes')}</p>
+                            <div class="flex items-center justify-between mt-2">
+                                <span class="text-[10px] font-medium text-slate-500 uppercase tracking-widest">${escapeHtml(entry.status || '')}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+                document.getElementById('taskDrilldownModal').showModal();
+                return;
+            }
+
+            document.getElementById('drilldown-title').textContent = `${titleLabel} Tasks`;
+            document.getElementById('drilldown-subtitle').textContent = `For ${userName} • ${matchedTasks.length} Task${matchedTasks.length !== 1 ? 's' : ''}`;
+            const container = document.getElementById('drilldown-tasks-container');
+            if (!matchedTasks.length) {
+                container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No tasks in this category.</p>`;
+            } else {
+                container.innerHTML = matchedTasks.map(t => {
+                    return `<div class="bg-slate-50 border border-slate-200 p-3 rounded-xl hover:border-indigo-300 transition-colors cursor-pointer" onclick="openEditTaskModal('${t.id}')">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest">${t.id || 'N/A'}</span>
+                            <span class="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">${t.status || 'No Status'}</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(t.desc || t.summary || t.name || '')}</p>
+                        ${t.client ? `<p class="text-[10px] font-medium text-slate-500 mt-2"><iconify-icon icon="solar:buildings-bold" class="inline align-text-bottom text-slate-400 mr-1"></iconify-icon>${escapeHtml(t.client)}</p>` : ''}
+                    </div>`;
+                }).join('');
+            }
+
+            document.getElementById('taskDrilldownModal').showModal();
         }
 
         function renderDailySummary() {
@@ -3802,30 +3931,38 @@ if (!filtered.length) {
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${row.role || row.email}</p>
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 flex-1">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3 flex-1">
                             <div class="bg-slate-50 rounded-xl px-3 py-2">
                                 <p class="text-[9px] font-bold text-slate-400 uppercase">Total</p>
                                 <p class="text-xs font-black text-slate-900 font-mono">${formatTime(total)}</p>
                             </div>
-                            <div class="bg-sky-50 rounded-xl px-3 py-2">
+                            <div class="bg-sky-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-sky-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'assigned')">
                                 <p class="text-[9px] font-bold text-sky-500 uppercase">Assigned</p>
                                 <p class="text-xs font-black text-sky-600">${row.assignedCount}</p>
                             </div>
-                            <div class="bg-amber-50 rounded-xl px-3 py-2">
+                            <div class="bg-amber-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'progress')">
                                 <p class="text-[9px] font-bold text-amber-500 uppercase">Progress</p>
                                 <p class="text-xs font-black text-amber-600">${row.inProgressCount}</p>
                             </div>
-                            <div class="bg-rose-50 rounded-xl px-3 py-2">
+                            <div class="bg-rose-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-rose-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'corrections')">
                                 <p class="text-[9px] font-bold text-rose-500 uppercase truncate">Corrections Designs</p>
                                 <p class="text-xs font-black text-rose-600">${row.correctionsCount}</p>
                             </div>
-                            <div class="bg-emerald-50 rounded-xl px-3 py-2">
+                            <div class="bg-purple-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-purple-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'hold')">
+                                <p class="text-[9px] font-bold text-purple-500 uppercase">Hold</p>
+                                <p class="text-xs font-black text-purple-600">${row.holdCount}</p>
+                            </div>
+                            <div class="bg-emerald-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-emerald-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'done')">
                                 <p class="text-[9px] font-bold text-emerald-500 uppercase">Done</p>
                                 <p class="text-xs font-black text-emerald-600">${row.completedCount}</p>
                             </div>
-                            <div class="bg-slate-50 rounded-xl px-3 py-2">
+                            <div class="bg-slate-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-slate-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'logs')">
                                 <p class="text-[9px] font-bold text-slate-400 uppercase">Logs</p>
                                 <p class="text-xs font-black text-slate-600">${row.completedTasks}</p>
+                            </div>
+                            <div class="bg-indigo-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-indigo-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'dpr')">
+                                <p class="text-[9px] font-bold text-indigo-500 uppercase">DPR</p>
+                                <p class="text-xs font-black text-indigo-600">${row.dprCount}</p>
                             </div>
                             <div class="bg-indigo-50/50 rounded-xl px-3 py-2">
                                 <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
@@ -5290,6 +5427,9 @@ async function sendAnnouncement() {
             dprUnsub = onValue(ref(db, 'worksync/dpr_entries'), snap => {
                 dprEntries = Object.entries(snap.val() || {}).map(([id, entry]) => ({ id, ...entry }));
                 renderDpr();
+                if (activeView === 'dashboard' || activeView === 'daily-summary') {
+                    renderDailySummary();
+                }
             });
         }
 
@@ -7412,6 +7552,7 @@ async function sendAnnouncement() {
                 duedate: document.getElementById('et-duedate').value,
                 assignee: newAssignee,
                 assigneeEmail: newAssigneeEmail,
+                updatedAt: Date.now()
             };
 
             Object.assign(tasks[taskIndex], updates);
@@ -9067,8 +9208,12 @@ async function sendAnnouncement() {
 
             if (task.manual) {
                 try {
-                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { status: newStatus });
+                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { 
+                        status: newStatus, 
+                        updatedAt: Date.now() 
+                    });
                     task.status = newStatus;
+                    task.updatedAt = Date.now();
                     renderDailyPlan();
                     renderTasks();
                     if (activeView === 'internal-tasks') renderInternalTasks();
@@ -9083,6 +9228,7 @@ async function sendAnnouncement() {
             } else {
                 // Jira task: update locally first, then sync to Jira
                 task.status = newStatus;
+                task.updatedAt = Date.now();
                 renderDailyPlan();
                 renderTasks();
                 if (activeView === 'internal-tasks') renderInternalTasks();
