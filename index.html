@@ -5004,7 +5004,7 @@
                         </select>
                     </div>
                     <div id="ap-task-list"
-                        class="bg-white border border-slate-200 rounded-xl max-h-48 overflow-y-auto space-y-1 p-2">
+                        class="bg-white border border-slate-200 rounded-xl max-h-72 overflow-y-auto space-y-1 p-2">
                         <!-- Populated JS -->
                     </div>
                 </div>
@@ -18543,7 +18543,19 @@
                         return 'bg-slate-50 text-slate-700 border-slate-100';
                     };
 
+                    // Hoist isExcludedTask to outer scope so Karthika block can use it
+                    const isExcludedTask = (t) => {
+                        if (!t) return false;
+                        const client = (t.client || '').toLowerCase().trim();
+                        const status = (t.status || '').toLowerCase().trim();
+                        const id = (t.id || '').toLowerCase().trim();
+                        return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
+                               status === 'learnings' || status === 'discussion' ||
+                               id.startsWith('learn-') || id.startsWith('disc-');
+                    };
+
                     let snehaBreakdownHtml = '';
+                    let snehaWorkedTaskCount = 0; // for the Completed Tasks tile
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s =>
                             s.userId === 'snehavilpower@gmail.com' &&
@@ -18561,9 +18573,11 @@
                         const captionsTasks = new Set();
                         const videoTasks = new Set();
                         const posterTasks = new Set();
+                        const allSnehaTasks = new Set();
 
                         periodSnehaSelections.forEach(s => {
                             if (!s.taskId) return;
+                            allSnehaTasks.add(s.taskId);
                             const items = s.selectedItems || [];
                             items.forEach(item => {
                                 const lower = (item || '').toLowerCase().trim();
@@ -18579,6 +18593,7 @@
                         const videoContentCount = videoTasks.size;
                         const posterContentCount = posterTasks.size;
                         const qcTasksCount = snehaQcReports.length;
+                        snehaWorkedTaskCount = allSnehaTasks.size + qcTasksCount;
 
                         snehaBreakdownHtml = `
                         <!-- Sneha Content & QC Breakdown -->
@@ -18712,7 +18727,7 @@
                                     <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'snehavilpower@gmail.com' ? 'Completed Tasks' : email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-slate-900">${email === 'snehavilpower@gmail.com' ? currStats.completed.length : currStats.assigned.length}</p>
+                                <p class="text-xl font-black text-slate-900">${email === 'snehavilpower@gmail.com' ? snehaWorkedTaskCount : currStats.assigned.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.assigned.length} prev period</p>
                             </div>
 
@@ -23383,10 +23398,10 @@
                 <label class="flex items-center gap-3 p-3 hover:bg-slate-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-200">
                     <input type="checkbox" name="ap_task_select" value="${t.id}" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 shrink-0">
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs font-bold text-slate-900 truncate"><span class="text-indigo-600 font-mono mr-2">${t.id}</span>${escapeHtml(t.desc)}</p>
-                        <p class="text-[10px] text-slate-500 truncate">${escapeHtml(t.status)}${t.client ? ' · ' + escapeHtml(t.client) : ''} · ${escapeHtml(assigneeName(t))}</p>
+                        <p class="text-xs font-bold text-slate-900 break-words leading-snug"><span class="text-indigo-600 font-mono mr-1">${t.id}</span>${escapeHtml(t.desc)}</p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(t.status)}${t.client ? ' · ' + escapeHtml(t.client) : ''} · ${escapeHtml(assigneeName(t))}</p>
                     </div>
-                    <div class="shrink-0 text-right min-w-[72px]">
+                    <div class="shrink-0 text-right min-w-[60px] ml-2">
                         <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Due</p>
                         <p class="text-xs font-bold ${dueClass}">${formatTaskDueDate(t.duedate) || '—'}</p>
                     </div>
