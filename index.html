@@ -17703,13 +17703,15 @@
                     prevEndTs = lastMonthEnd.getTime();
                     prevLabel = lastMonthStart.toLocaleString('default', { month: 'long' });
                 } else {
-                    // This week: Mon → now
+                    // This week: Mon → end of today
                     const todayDay = now.getDay();
                     const diffToMonday = todayDay === 0 ? -6 : 1 - todayDay;
                     const thisWeekStart = new Date(now);
                     thisWeekStart.setDate(now.getDate() + diffToMonday);
                     currStartTs = thisWeekStart.getTime();
-                    currEndTs = Date.now();
+                    const endOfToday = new Date(now);
+                    endOfToday.setHours(23, 59, 59, 999);
+                    currEndTs = endOfToday.getTime();
                     currLabel = 'This Week';
 
                     // Last week: Mon → Sun
@@ -18178,7 +18180,10 @@
                         const thisWeekStart = new Date(now);
                         thisWeekStart.setDate(now.getDate() + diffToMonday);
                         fromTs = thisWeekStart.getTime();
-                        toTs = Date.now();
+                        // End of today (23:59:59.999) so all of today's work is included
+                        const endOfToday = new Date(now);
+                        endOfToday.setHours(23, 59, 59, 999);
+                        toTs = endOfToday.getTime();
                         currLabel = 'This Week';
 
                         const lastWeekStart = new Date(thisWeekStart);
