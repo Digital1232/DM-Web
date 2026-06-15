@@ -10124,6 +10124,21 @@
                 return [...new Set(arr.map(l => resolveClientLabel(l)).filter(Boolean))].join(', ');
             }
 
+            function detectClientFromSummary(summary) {
+                if (!summary) return '';
+                const summaryLower = summary.toLowerCase();
+                const catalog = getClientCatalog();
+                const sorted = [...catalog].sort((a, b) => b.length - a.length);
+                for (const client of sorted) {
+                    if (!client) continue;
+                    if (['others', 'client', 'discussion', 'learning'].includes(client.toLowerCase())) continue;
+                    if (summaryLower.includes(client.toLowerCase())) {
+                        return client;
+                    }
+                }
+                return '';
+            }
+
             function resolveClientDisplay(raw) {
                 if (!raw) return '';
                 return [...new Set(raw.split(',').map(s => resolveClientLabel(s.trim())).filter(Boolean))].join(', ');
@@ -10148,9 +10163,15 @@
                 let changed = false;
                 tasks.forEach(t => {
                     if (t.manual) return;
-                    const next = t.clientLabels?.length
+                    let next = t.clientLabels?.length
                         ? clientFromJiraLabels(t.clientLabels)
-                        : (t.client ? resolveClientDisplay(t.client) : '');
+                        : '';
+                    if (!next) {
+                        next = detectClientFromSummary(t.desc || '');
+                    }
+                    if (!next && t.client) {
+                        next = resolveClientDisplay(t.client);
+                    }
                     if (!next && !t.client) return;
                     if (t.client !== next) {
                         t.client = next;
@@ -10364,13 +10385,17 @@
             function mapJiraIssues(issues) {
                 return (issues || []).map(i => {
                     const labels = i.fields.labels || [];
+                    let client = clientFromJiraLabels(labels);
+                    if (!client) {
+                        client = detectClientFromSummary(i.fields.summary);
+                    }
                     return {
                         id: i.key,
                         desc: i.fields.summary,
                         status: i.fields.status.name,
                         priority: i.fields.priority?.name || 'Medium',
                         clientLabels: labels,
-                        client: clientFromJiraLabels(labels),
+                        client: client,
                         assignee: i.fields.assignee?.displayName || '',
                         assigneeEmail: i.fields.assignee?.emailAddress || '',
                         assigneeAccountId: i.fields.assignee?.accountId || '',
