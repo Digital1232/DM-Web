@@ -18115,18 +18115,35 @@
                         const filteredTasks = tasks.filter(t => !isExcludedTask(t));
 
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
+                        const isDailyPlanUser = [
+                            'barathvilpower@gmail.com',
+                            'anithavilpower@gmail.com',
+                            'thanushvilpower@gmail.com',
+                            'immanuelvilpower@gmail.com'
+                        ].includes(usrEmail.toLowerCase());
+
+                        const getEffectiveDateTs = (t) => {
+                            if (isDailyPlanUser) {
+                                const userPlans = dailyPlans[eKey(usrEmail)];
+                                if (userPlans && userPlans[t.id] && userPlans[t.id].date) {
+                                    return new Date(userPlans[t.id].date + 'T00:00:00').getTime();
+                                }
+                            }
+                            return getTaskTs(t);
+                        };
+
                         const comp = filteredTasks.filter(t =>
                             assigneeMatches(t, usrEmail) &&
                             isTaskCompletedStatus(t.status) &&
                             (() => {
-                                const ts = getTaskTs(t);
+                                const ts = getEffectiveDateTs(t);
                                 return ts >= start && ts <= end;
                             })()
                         );
                         const assigned = filteredTasks.filter(t =>
                             assigneeMatches(t, usrEmail) &&
                             (() => {
-                                const ts = getTaskTs(t);
+                                const ts = getEffectiveDateTs(t);
                                 return ts >= start && ts <= end;
                             })()
                         );
@@ -18134,7 +18151,7 @@
                             assigneeMatches(t, usrEmail) &&
                             ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) &&
                             (() => {
-                                const ts = getTaskTs(t);
+                                const ts = getEffectiveDateTs(t);
                                 return ts >= start && ts <= end;
                             })()
                         );
@@ -18142,17 +18159,25 @@
                             assigneeMatches(t, usrEmail) &&
                             ((t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase())) &&
                             (() => {
-                                const ts = getTaskTs(t);
+                                const ts = getEffectiveDateTs(t);
                                 return ts >= start && ts <= end;
                             })()
                         );
-                        const pend = filteredTasks.filter(t =>
-                            assigneeMatches(t, usrEmail) &&
-                            !isDone(t.status) &&
-                            t.duedate &&
-                            new Date(t.duedate).getTime() >= start &&
-                            new Date(t.duedate).getTime() <= end
-                        );
+                        const pend = filteredTasks.filter(t => {
+                            if (!assigneeMatches(t, usrEmail)) return false;
+                            if (isDone(t.status)) return false;
+                            if (isDailyPlanUser) {
+                                const userPlans = dailyPlans[eKey(usrEmail)];
+                                if (userPlans && userPlans[t.id] && userPlans[t.id].date) {
+                                    const dpTs = new Date(userPlans[t.id].date + 'T00:00:00').getTime();
+                                    return dpTs >= start && dpTs <= end;
+                                }
+                                return false;
+                            }
+                            return t.duedate &&
+                                   new Date(t.duedate).getTime() >= start &&
+                                   new Date(t.duedate).getTime() <= end;
+                        });
                         const logs = allTimeLogs.filter(l =>
                             l.userId === usrEmail &&
                             (l.endTime || l.startTime || 0) >= start &&
