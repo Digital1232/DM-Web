@@ -10115,13 +10115,22 @@
                 const trimmed = String(label || '').trim();
                 if (!trimmed) return '';
                 const mapped = clientLabelMap[normalizeLabelKey(trimmed)];
-                return mapped || trimmed;
+                if (mapped) return mapped;
+                const catalog = getClientCatalog();
+                const matched = catalog.find(c => c.toLowerCase() === trimmed.toLowerCase());
+                return matched || trimmed;
             }
 
             function clientFromJiraLabels(labels) {
                 const arr = (labels || []).map(l => String(l).trim()).filter(Boolean);
                 if (!arr.length) return '';
                 return [...new Set(arr.map(l => resolveClientLabel(l)).filter(Boolean))].join(', ');
+            }
+
+            function clientFromJiraComponents(components) {
+                const arr = (components || []).map(c => String(c?.name || '').trim()).filter(Boolean);
+                if (!arr.length) return '';
+                return [...new Set(arr.map(c => resolveClientLabel(c)).filter(Boolean))].join(', ');
             }
 
             function detectClientFromSummary(summary) {
@@ -10163,9 +10172,14 @@
                 let changed = false;
                 tasks.forEach(t => {
                     if (t.manual) return;
-                    let next = t.clientLabels?.length
-                        ? clientFromJiraLabels(t.clientLabels)
+                    let next = t.clientComponents?.length
+                        ? clientFromJiraComponents(t.clientComponents)
                         : '';
+                    if (!next) {
+                        next = t.clientLabels?.length
+                            ? clientFromJiraLabels(t.clientLabels)
+                            : '';
+                    }
                     if (!next) {
                         next = detectClientFromSummary(t.desc || '');
                     }
@@ -10387,7 +10401,11 @@
             function mapJiraIssues(issues) {
                 return (issues || []).map(i => {
                     const labels = i.fields.labels || [];
-                    let client = clientFromJiraLabels(labels);
+                    const components = i.fields.components || [];
+                    let client = clientFromJiraComponents(components);
+                    if (!client) {
+                        client = clientFromJiraLabels(labels);
+                    }
                     if (!client) {
                         client = detectClientFromSummary(i.fields.summary);
                     }
@@ -10400,6 +10418,7 @@
                         status: i.fields.status.name,
                         priority: i.fields.priority?.name || 'Medium',
                         clientLabels: labels,
+                        clientComponents: components.map(c => c.name).filter(Boolean),
                         client: client,
                         assignee: i.fields.assignee?.displayName || '',
                         assigneeEmail: i.fields.assignee?.emailAddress || '',
@@ -10455,7 +10474,7 @@
                         jql += ` ORDER BY updated DESC`;
                     }
 
-                    const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent');
+                    const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent,components');
                     console.log(`📡 Fetched ${issues.length} Jira issues across pages.`);
                     let jiraTasks = mapJiraIssues(issues);
                     const subtaskCount = jiraTasks.filter(t => t.parentId).length;
@@ -10472,6 +10491,7 @@
                             existingTask.status = jiraTask.status;
                             existingTask.priority = jiraTask.priority;
                             existingTask.clientLabels = jiraTask.clientLabels;
+                            existingTask.clientComponents = jiraTask.clientComponents;
                             existingTask.client = jiraTask.client;
                             existingTask.assignee = jiraTask.assignee;
                             existingTask.assigneeEmail = jiraTask.assigneeEmail;
