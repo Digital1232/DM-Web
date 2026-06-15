@@ -17290,7 +17290,7 @@
                     assigneeMatches(t, currentUser.email) &&
                     isTaskCompletedStatus(t.status) &&
                     (() => {
-                        const getTaskTs = (tk) => tk.updatedAt || (tk.duedate ? new Date(tk.duedate).getTime() : 0) || (tk.created ? new Date(tk.created).getTime() : 0);
+                        const getTaskTs = (tk) => tk.updatedAt || (tk.duedate ? new Date(tk.duedate).getTime() : 0) || tk.createdAt || (tk.created ? new Date(tk.created).getTime() : 0);
                         const ts = getTaskTs(t);
                         return ts >= todayStartTsVal && ts <= Date.now();
                     })() &&
@@ -17797,12 +17797,12 @@
                             const filteredTasks = tasks.filter(t => {
                                 if (isExcludedTask(t)) return false;
                                 if (isInternalOnlyUser) {
-                                    return t.manual === true || t.taskType === 'internal';
+                                    return isInternalTask(t);
                                 }
                                 return true;
                             });
 
-                            const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
+                            const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
 
                             const matchesUserAndPeriod = (t) => {
                                 if (isDailyPlanUser) {
@@ -18219,7 +18219,7 @@
                                    id.startsWith('learn-') || id.startsWith('disc-');
                         };
 
-                        const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || (t.created ? new Date(t.created).getTime() : 0);
+                        const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
                             'thanushvilpower@gmail.com',
@@ -18236,7 +18236,7 @@
                         const filteredTasks = tasks.filter(t => {
                             if (isExcludedTask(t)) return false;
                             if (isInternalOnlyUser) {
-                                return t.manual === true || t.taskType === 'internal';
+                                return isInternalTask(t);
                             }
                             return true;
                         });
