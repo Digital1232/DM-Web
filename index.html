@@ -873,6 +873,12 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Plan Tracking
                     </button>
+                    <button onclick="switchView('files-manager')" id="nav-files-manager"
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:server-path-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Files Manager
+                    </button>
                     <button onclick="switchView('daily-summary')" id="nav-daily-summary"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:document-add-linear" width="20"
@@ -1404,7 +1410,8 @@
                                                     type="checkbox" value="Thumbnail Waiting"
                                                     onchange="toggleStatusFilter(this)"
                                                     class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"><span
-                                                    class="text-xs font-bold text-slate-700">Thumbnail Waiting</span></label>
+                                                    class="text-xs font-bold text-slate-700">Thumbnail
+                                                    Waiting</span></label>
                                             <label
                                                 class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"><input
                                                     type="checkbox" value="Design Hold"
@@ -2447,6 +2454,157 @@
                             <iconify-icon icon="solar:shield-check-bold-duotone" class="text-emerald-400 mb-3"
                                 width="40"></iconify-icon>
                             <p class="text-sm font-bold text-slate-500">All good! No at-risk tasks this month.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ FILES MANAGER VIEW ════ -->
+                <div id="view-files-manager-panel" class="hidden space-y-6 fade-in">
+                    <!-- Header -->
+                    <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <iconify-icon icon="solar:server-path-bold-duotone" width="24"></iconify-icon>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-black text-slate-900">Storage Maintenance Dashboard</h3>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">System storage monitoring & file management</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
+                                <input id="fm-search" type="text" placeholder="Search system..." oninput="fmSearchSystem()"
+                                    class="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-48">
+                            </div>
+                            <button onclick="fmOpenAddSystemModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-100">
+                                <iconify-icon icon="solar:add-circle-bold" width="14"></iconify-icon> Add System
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stat Cards -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Systems</p>
+                            <p id="fm-stat-systems" class="text-2xl font-black text-slate-900 mt-1">—</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Storage</p>
+                            <p id="fm-stat-storage" class="text-2xl font-black text-slate-900 mt-1">—</p>
+                        </div>
+                        <div class="bg-rose-50 rounded-2xl p-4 shadow border border-rose-100">
+                            <p class="text-[9px] font-black text-rose-600 uppercase tracking-widest">Critical Drives</p>
+                            <p id="fm-stat-critical" class="text-2xl font-black text-rose-700 mt-1">—</p>
+                            <p class="text-[9px] text-slate-400 font-bold">&gt;80% used</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Client Count</p>
+                            <p id="fm-stat-clients" class="text-2xl font-black text-slate-900 mt-1">—</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Largest System</p>
+                            <p id="fm-stat-largest" class="text-sm font-black text-slate-900 mt-1 truncate">—</p>
+                        </div>
+                        <div class="bg-emerald-50 rounded-2xl p-4 shadow border border-emerald-100">
+                            <p class="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Free Space</p>
+                            <p id="fm-stat-free" class="text-2xl font-black text-emerald-700 mt-1">—</p>
+                        </div>
+                    </div>
+
+                    <!-- Main Layout: Systems List + Details -->
+                    <div class="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-6 items-start">
+                        <!-- Systems Sidebar -->
+                        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-slate-100">
+                                <h4 class="text-xs font-black text-slate-900">Systems</h4>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Click to view details</p>
+                            </div>
+                            <div id="fm-systems-list" class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto">
+                                <p class="text-xs text-slate-400 italic text-center py-8">No systems added yet.</p>
+                            </div>
+                        </div>
+
+                        <!-- System Detail Panel -->
+                        <div id="fm-detail-panel" class="space-y-5">
+                            <!-- Empty state -->
+                            <div id="fm-detail-empty" class="bg-white rounded-3xl p-12 shadow-xl border border-slate-100 text-center">
+                                <iconify-icon icon="solar:server-path-bold-duotone" class="text-slate-200 mb-4" width="48"></iconify-icon>
+                                <p class="text-sm font-bold text-slate-400">Select a system to view storage details</p>
+                            </div>
+
+                            <!-- System Info Card -->
+                            <div id="fm-system-info" class="hidden bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h4 id="fm-sys-name" class="text-base font-black text-slate-900"></h4>
+                                        <p id="fm-sys-ip" class="text-xs text-slate-400 font-bold mt-0.5"></p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="fmEditSystem()" class="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all">
+                                            <iconify-icon icon="solar:pen-bold" width="12" class="mr-1"></iconify-icon>Edit
+                                        </button>
+                                        <button onclick="fmDeleteSystem()" class="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-xl transition-all">
+                                            <iconify-icon icon="solar:trash-bin-trash-bold" width="12" class="mr-1"></iconify-icon>Delete
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5 text-xs">
+                                    <div class="bg-slate-50 rounded-xl p-3">
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Storage Type</p>
+                                        <p id="fm-sys-type" class="font-black text-slate-800 mt-0.5"></p>
+                                    </div>
+                                    <div class="bg-slate-50 rounded-xl p-3">
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Last Updated</p>
+                                        <p id="fm-sys-updated" class="font-black text-slate-800 mt-0.5"></p>
+                                    </div>
+                                    <div class="bg-slate-50 rounded-xl p-3">
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
+                                        <p id="fm-sys-location" class="font-black text-slate-800 mt-0.5"></p>
+                                    </div>
+                                    <div class="bg-slate-50 rounded-xl p-3">
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Owner</p>
+                                        <p id="fm-sys-owner" class="font-black text-slate-800 mt-0.5"></p>
+                                    </div>
+                                </div>
+                                <!-- Drive Usage Bars -->
+                                <div>
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Drive Usage</p>
+                                    <div id="fm-drives-list" class="space-y-3"></div>
+                                </div>
+                            </div>
+
+                            <!-- Drive Detail Table -->
+                            <div id="fm-drive-detail" class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                                    <div>
+                                        <h4 id="fm-drive-title" class="text-sm font-black text-slate-900"></h4>
+                                        <p id="fm-drive-subtitle" class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5"></p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="fmAddFolder()" class="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1">
+                                            <iconify-icon icon="solar:folder-add-bold" width="13"></iconify-icon> Add Folder
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Drive Stats -->
+                                <div id="fm-drive-stats" class="grid grid-cols-3 gap-4 p-5 border-b border-slate-50"></div>
+                                <!-- Folder Table -->
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs">
+                                        <thead class="bg-slate-50 border-b border-slate-100">
+                                            <tr>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Folder / File Type</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Size</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Usage %</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Notes</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="fm-folder-tbody" class="divide-y divide-slate-50"></tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5088,11 +5246,19 @@
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Due
-                        Date</label>
-                    <input id="et-duedate" type="date"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Due
+                            Date</label>
+                        <input id="et-duedate" type="date"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    </div>
+                    <div id="et-shoot-time-wrap" class="hidden">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Shoot
+                            Time</label>
+                        <input id="et-shoot-time" type="time"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    </div>
                 </div>
                 <div id="et-description-wrap" class="hidden">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Description
@@ -5136,11 +5302,19 @@
                         <select id="sp-client" required
                             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"></select>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Shoot
-                            Date</label>
-                        <input id="sp-date" type="date" required
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label
+                                class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Date</label>
+                            <input id="sp-date" type="date" required
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                        </div>
+                        <div>
+                            <label
+                                class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Time</label>
+                            <input id="sp-time" type="time" required
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -6092,22 +6266,22 @@
             };
 
             onValue = (...args) => {
-                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => {};
+                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => { };
                 try {
                     return _origOnValue(...args);
                 } catch (e) {
                     console.error("Firebase onValue fallback mock:", e);
-                    return () => {};
+                    return () => { };
                 }
             };
 
             onChildAdded = (...args) => {
-                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => {};
+                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => { };
                 try {
                     return _origOnChildAdded(...args);
                 } catch (e) {
                     console.error("Firebase onChildAdded fallback mock:", e);
-                    return () => {};
+                    return () => { };
                 }
             };
 
@@ -6429,8 +6603,8 @@
             const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
             let qcReportDateFrom = null; // New state variable for QC reports filter
             let qcReportDateTo = null;   // New state variable for QC reports filter
-            const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
-            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
+            const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
+            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
             const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Content In Progress', 'Client Content Approval'];
             const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Rework Designs'];
             const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
@@ -7094,7 +7268,7 @@
                         return a.localeCompare(b);
                     });
                 } else {
-                    const defaultOrder = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'In Progress', 'Hold', 'Learnings', 'Discussion', 'Completed'];
+                    const defaultOrder = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Hold', 'Learnings', 'Discussion', 'Completed'];
                     list.sort((a, b) => {
                         const ai = defaultOrder.indexOf(a);
                         const bi = defaultOrder.indexOf(b);
@@ -7695,6 +7869,7 @@
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
+            document.getElementById('nav-files-manager')?.classList.toggle('hidden', !isAdmin());
                 document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
                 if (hasClientWideAccess() && !isAdmin() && !isManager()) {
                     // Client-wide only access
@@ -8521,10 +8696,11 @@
                 if (view === 'clients-admin' && !isAdmin()) view = 'dashboard';
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) view = 'dashboard';
                 if (view === 'plan-tracking' && !canViewPlanTracking()) view = 'dashboard';
+            if (view === 'files-manager' && !isAdmin()) view = 'dashboard';
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking'].forEach(v => {
+                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager'].forEach(v => {
                     document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                     const navEl = document.getElementById(`nav-${v}`);
                     if (navEl) navEl.classList.remove('nav-active');
@@ -8558,6 +8734,7 @@
                     'dm-content-org': 'DM Content Organiser Board',
                     'strategy-calendar': 'Strategy Calendar',
                     'plan-tracking': 'Plan Tracking',
+                'files-manager': 'Files Manager',
                     discussions: 'Discussion History & Schedule'
                 };
                 document.getElementById('view-title').textContent = titles[view] || 'One Desk';
@@ -8592,6 +8769,7 @@
                 else if (view === 'dm-content-org') { renderDmContentOrgPanel(); }
                 else if (view === 'strategy-calendar') { initStrategyCalendar(); }
                 else if (view === 'plan-tracking') { initPlanTracking(); }
+            else if (view === 'files-manager') { initFilesManager(); }
                 else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
                 else if (view === 'discussions') { renderDiscussionsView(); }
 
@@ -8616,7 +8794,7 @@
             }
 
             // TASK STATUS HELPERS
-            function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Analytics', 'Client Sent', 'Shoot Completed'].includes(s); }
+            function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Analytics', 'Client Sent', 'Shoot Completed', 'Shoot Cancelled'].includes(s); }
             function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Design Hold', 'Design hold', 'Design In Progress', 'Design To Do', 'Quality Check', 'Thumbnail Waiting', 'Rework Designs', 'Shoot In Progress', 'Hold', 'hold', 'On Hold', 'on hold'].includes(s); }
             function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Content In Progress', 'Client Content Approval'].includes(s); }
             function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
@@ -8637,6 +8815,18 @@
             }
 
             // SHOOT CALENDAR
+            function formatTime12h(timeStr) {
+                if (!timeStr) return '';
+                const parts = timeStr.split(':');
+                if (parts.length < 2) return timeStr;
+                let hours = parseInt(parts[0], 10);
+                const minutes = parts[1];
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                return `${hours}:${minutes} ${ampm}`;
+            }
+
             function navigateShootCalendar(direction) {
                 if (direction === 0) { // Today
                     shootCalendarDate = new Date();
@@ -8672,7 +8862,7 @@
                     grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/50"></div>`;
                 }
 
-                const SHOOT_STATUSES = ['Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed'];
+                const SHOOT_STATUSES = ['Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled'];
                 const shootTasks = tasks.filter(t => SHOOT_STATUSES.includes(t.status) && t.duedate);
 
                 // Group by date, then by shootGroupId to merge multi-assignee tasks into one card
@@ -8701,6 +8891,7 @@
                         case 'Shoot Planned': return { bg: 'bg-blue-50', border: 'border-blue-200', dot: 'bg-blue-400', text: 'text-blue-700', label: 'Planned', nextStatus: 'Shoot In Progress', nextLabel: 'Start Shoot' };
                         case 'Shoot In Progress': return { bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-400', text: 'text-amber-700', label: 'In Progress', nextStatus: 'Shoot Completed', nextLabel: 'Mark Complete' };
                         case 'Shoot Completed': return { bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-500', text: 'text-emerald-700', label: 'Completed', nextStatus: null, nextLabel: null };
+                        case 'Shoot Cancelled': return { bg: 'bg-rose-50', border: 'border-rose-200', dot: 'bg-rose-500', text: 'text-rose-700', label: 'Cancelled', nextStatus: null, nextLabel: null };
                         default: return { bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-400', text: 'text-slate-600', label: 'Shoot Needed', nextStatus: 'Shoot Planned', nextLabel: 'Mark Planned' };
                     }
                 }
@@ -8735,6 +8926,11 @@
                             <span class="text-[9px] font-bold ${style.text} truncate">${style.label}</span>
                             ${group.client ? `<span class="text-[9px] text-slate-400 truncate">${escapeHtml(group.client)}</span>` : ''}
                         </div>
+                        ${group.shootTime ? `
+                        <div class="flex items-center gap-1 mt-1 text-[9px] font-medium text-slate-600 bg-white/50 px-1 py-0.5 rounded border border-slate-200/50">
+                            <svg class="w-2.5 h-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>${formatTime12h(group.shootTime)}</span>
+                        </div>` : ''}
                         <div class="flex items-center mt-1.5 gap-0.5">
                             ${avatarHtml}${extraCount}
                             ${assigneeList.length > 1 ? `<span class="text-[9px] text-slate-400 ml-1">${assigneeList.length} people</span>` : `<span class="text-[9px] text-slate-500 ml-1 truncate">${escapeHtml(assigneeList[0]?.name || '')}</span>`}
@@ -8753,7 +8949,7 @@
                 const groupTasks = tasks.filter(t => (t.shootGroupId || t.id) === groupId);
                 if (!groupTasks.length) return;
 
-                const statusLabels = { 'Shoot Planned': 'Planned', 'Shoot In Progress': 'In Progress', 'Shoot Completed': 'Completed' };
+                const statusLabels = { 'Shoot Planned': 'Planned', 'Shoot In Progress': 'In Progress', 'Shoot Completed': 'Completed', 'Shoot Cancelled': 'Cancelled' };
                 try {
                     for (const task of groupTasks) {
                         const path = `worksync/manual_tasks/${eKey(task.userId || task.assigneeEmail)}/${task.id}`;
@@ -8809,6 +9005,7 @@
 
                 document.getElementById('sp-title').value = '';
                 document.getElementById('sp-notes').value = '';
+                document.getElementById('sp-time').value = '';
 
                 document.getElementById('shootPlanModal').showModal();
             }
@@ -8817,10 +9014,11 @@
                 const title = document.getElementById('sp-title').value.trim();
                 const client = document.getElementById('sp-client').value;
                 const date = document.getElementById('sp-date').value;
+                const time = document.getElementById('sp-time').value;
                 const assigneeEmails = getSelectedShootAssignees();
                 const notes = document.getElementById('sp-notes').value.trim();
 
-                if (!title || !client || !date) return toast('Please fill all required fields.', 'error');
+                if (!title || !client || !date || !time) return toast('Please fill all required fields.', 'error');
                 if (!assigneeEmails.length) return toast('Select at least one assignee.', 'error');
 
                 const submitBtn = document.querySelector('#shoot-plan-form button[type="submit"]');
@@ -8847,6 +9045,7 @@
                             assignee: assignee?.name || 'Unassigned',
                             assigneeEmail,
                             duedate: date,
+                            shootTime: time,
                             notes,
                             manual: true,
                             taskType: 'internal',
@@ -10121,8 +10320,21 @@
                 if (!trimmed) return '';
                 const mapped = clientLabelMap[normalizeLabelKey(trimmed)];
                 if (mapped) return mapped;
+
+                const normalizedSearch = trimmed.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+                const customMapping = {
+                    'ashmithashree': 'AshmithaSree',
+                    'ezhilvanan': 'Aladi Ezhilvanan',
+                    '3jo_toys': '3Jo Toys',
+                    'dreamdaa': 'DreamDaa'
+                };
+                if (customMapping[normalizedSearch]) return customMapping[normalizedSearch];
+
                 const catalog = getClientCatalog();
-                const matched = catalog.find(c => c.toLowerCase() === trimmed.toLowerCase());
+                const matched = catalog.find(c => {
+                    const normCat = c.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+                    return normCat === normalizedSearch;
+                });
                 return matched || trimmed;
             }
 
@@ -10439,7 +10651,11 @@
                 const map = new Map();
                 (taskList || []).forEach(task => {
                     if (!task?.id) return;
-                    map.set(task.id, { ...(map.get(task.id) || {}), ...task });
+                    const merged = { ...(map.get(task.id) || {}), ...task };
+                    if (merged.client) {
+                        merged.client = resolveClientDisplay(merged.client);
+                    }
+                    map.set(task.id, merged);
                 });
                 return Array.from(map.values());
             }
@@ -11075,6 +11291,7 @@
                     allStatuses = sortInternalBoardStatuses(allStatuses);
 
                     const statusColors = (s) => {
+                        if (s === 'Shoot Cancelled') return { bg: 'bg-rose-50/50', border: 'border-rose-100', titleColor: 'text-rose-600' };
                         if (isInternalDone(s) || isDone(s)) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
                         if (['In Progress', 'Shoot In Progress', 'Shoot Planned'].includes(s)) return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
                         if (s === 'Hold') return { bg: 'bg-orange-50/50', border: 'border-orange-100', titleColor: 'text-orange-600' };
@@ -11532,7 +11749,7 @@
             const AJITH_TASKS_CONFIG = [
                 { title: "Social Media Analysis and Updates", needsClient: true },
                 { title: "Daily Followers Updates", needsClient: true },
-                { title: "Ads Campaign Updates", needsClient: true },
+                { title: "Ads Campaign Updates", needsClient: false, client: "Client" },
                 { title: "GMB Analysis and Updates", needsClient: true },
                 { title: "Competitor Analysis", needsClient: true },
                 { title: "Weekly Report Updates", needsClient: true },
@@ -11594,6 +11811,33 @@
                     const ownerKey = eKey(email);
                     const today = todayKey;
 
+                    // Clean up old recurring tasks that are no longer for Ajith
+                    try {
+                        const ajithTasksRef = ref(db, `worksync/manual_tasks/${ownerKey}`);
+                        const ajithTasksSnap = await get(ajithTasksRef);
+                        if (ajithTasksSnap.exists()) {
+                            const ajithTasksData = ajithTasksSnap.val();
+                            const oldTitles = [
+                                'internal reporting',
+                                'social media comments',
+                                'social media commnts',
+                                'client message',
+                                'ads management',
+                                'social media upload'
+                            ];
+                            for (const taskId in ajithTasksData) {
+                                const t = ajithTasksData[taskId];
+                                if (t && t.desc && oldTitles.includes(t.desc.toLowerCase())) {
+                                    await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
+                                    tasks = tasks.filter(tk => tk.id !== taskId);
+                                    console.log(`Removed old Ajith task from Firebase: ${taskId} (${t.desc})`);
+                                }
+                            }
+                        }
+                    } catch (cleanupErr) {
+                        console.warn('Failed to clean up old Ajith tasks:', cleanupErr);
+                    }
+
                     for (let i = 0; i < AJITH_TASKS_CONFIG.length; i++) {
                         const taskConfig = AJITH_TASKS_CONFIG[i];
                         const baseIdStr = taskConfig.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
@@ -11607,7 +11851,7 @@
                                 id: taskId,
                                 desc: taskConfig.title,
                                 description: taskConfig.needsClient ? 'Requires Client Selection' : 'Daily Recurring Task',
-                                client: 'Internal',
+                                client: taskConfig.client || 'Internal',
                                 status: 'To do',
                                 priority: 'Medium',
                                 assignee: currentUser.name,
@@ -11644,7 +11888,25 @@
                             }
 
                             if (!existing.ajithTask) updates.ajithTask = true;
-                            if (existing.needsClient !== taskConfig.needsClient) updates.needsClient = taskConfig.needsClient;
+
+                            const targetClient = taskConfig.client || 'Internal';
+                            if (existing.client !== targetClient) {
+                                updates.client = targetClient;
+                                if (!taskConfig.needsClient) {
+                                    updates.description = 'Daily Recurring Task';
+                                }
+                            }
+                            if (existing.needsClient !== taskConfig.needsClient) {
+                                updates.needsClient = taskConfig.needsClient;
+                                if (taskConfig.needsClient) {
+                                    updates.description = 'Requires Client Selection';
+                                    if (existing.client === targetClient) {
+                                        updates.client = 'Internal'; // reset if it was hardcoded and now needs selection
+                                    }
+                                } else {
+                                    updates.description = 'Daily Recurring Task';
+                                }
+                            }
 
                             if (Object.keys(updates).length) {
                                 await update(ref(db, path), updates);
@@ -12219,7 +12481,7 @@
                 if (select) {
                     const baseClients = (customClients && customClients.length ? customClients : CLIENTS)
                         .slice().sort((a, b) => a.localeCompare(b));
-                    
+
                     const isGmbTask = task.desc && (task.desc.includes('GMB') || task.desc.toLowerCase().includes('gmb'));
                     let optionsHtml = '<option value="" disabled selected>Select a client...</option>';
 
@@ -12229,11 +12491,11 @@
                             const found = baseClients.find(c => c.toLowerCase() === def.toLowerCase());
                             return found || def;
                         });
-                        
+
                         optionsHtml += matchedDefaults.map(c => `<option value="${c}">${c}</option>`).join('');
                         optionsHtml += '<option value="" disabled>──────────</option>';
                         optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
-                        
+
                         const rest = baseClients.filter(c => !matchedDefaults.includes(c));
                         if (rest.length > 0) {
                             optionsHtml += '<option value="" disabled>──────────</option>';
@@ -12244,7 +12506,7 @@
                         optionsHtml += '<option value="" disabled>──────────</option>';
                         optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
                     }
-                    
+
                     select.innerHTML = optionsHtml;
                 }
 
@@ -14168,17 +14430,17 @@
                     if (!response.ok) throw new Error('Network response was not ok');
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
-                    
+
                     const link = document.createElement('a');
                     link.href = blobUrl;
                     link.download = item.fileName || 'chat-image.png';
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
-                    
+
                     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
                     toast('Download complete', 'success');
-                } catch(e) {
+                } catch (e) {
                     console.error('Download error:', e);
                     window.open(item.url, '_blank');
                     toast('Opened in new tab. Right-click to save.', 'warning');
@@ -15455,13 +15717,13 @@
                 if (!currentUser) return;
                 const editIdPoster = document.getElementById('dpr-id-edit-poster')?.value || '';
                 const editIdThumbnail = document.getElementById('dpr-id-edit-thumbnail')?.value || '';
-                
+
                 const date = document.getElementById('dpr-date').value;
                 const status = document.getElementById('dpr-status').value;
-                
+
                 const posterCount = Number(document.getElementById('dpr-count-poster').value || 0);
                 const posterNotes = document.getElementById('dpr-notes-poster').value.trim();
-                
+
                 const thumbnailCount = Number(document.getElementById('dpr-count-thumbnail').value || 0);
                 const thumbnailNotes = document.getElementById('dpr-notes-thumbnail').value.trim();
 
@@ -15577,13 +15839,13 @@
                 const et = document.getElementById('dpr-id-edit-thumbnail');
                 if (ep) ep.value = '';
                 if (et) et.value = '';
-                
+
                 const dDate = document.getElementById('dpr-date');
                 if (dDate) dDate.value = todayIso();
-                
+
                 const dStatus = document.getElementById('dpr-status');
                 if (dStatus) dStatus.value = 'worked';
-                
+
                 const cp = document.getElementById('dpr-count-poster');
                 const np = document.getElementById('dpr-notes-poster');
                 const ct = document.getElementById('dpr-count-thumbnail');
@@ -15592,13 +15854,13 @@
                 if (np) np.value = '';
                 if (ct) ct.value = '';
                 if (nt) nt.value = '';
-                
+
                 const titleEl = document.getElementById('dpr-form-title');
                 if (titleEl) titleEl.textContent = 'Submit Daily DPR';
-                
+
                 const saveBtn = document.getElementById('dpr-save-btn');
                 if (saveBtn) saveBtn.textContent = 'Save DPR';
-                
+
                 const cancelBtn = document.getElementById('dpr-cancel-btn');
                 if (cancelBtn) cancelBtn.classList.add('hidden');
             }
@@ -15764,16 +16026,16 @@
                         .filter(e => e.category === 'Thumbnails')
                         .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
                         .slice(0, 10);
-                        
+
                     const posterTotal = allKarthikaRows.filter(e => e.category === 'Posters').reduce((sum, e) => sum + Number(e.count || 0), 0);
                     const thumbnailTotal = allKarthikaRows.filter(e => e.category === 'Thumbnails').reduce((sum, e) => sum + Number(e.count || 0), 0);
-                    
+
                     if (totalEl) {
                         totalEl.innerHTML = `<span class="mr-3 text-indigo-600">Posters: ${posterTotal}</span> <span class="text-pink-600">Thumbnails: ${thumbnailTotal}</span>`;
                     }
-                    
+
                     let html = '';
-                    
+
                     // Posters Section
                     html += `
                         <div class="mb-4">
@@ -15786,7 +16048,7 @@
                             </div>
                         </div>
                     `;
-                    
+
                     // Thumbnails Section
                     html += `
                         <div>
@@ -15799,7 +16061,7 @@
                             </div>
                         </div>
                     `;
-                    
+
                     list.innerHTML = html;
                 } else {
                     const rows = dprEntries
@@ -17021,17 +17283,19 @@
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 text-center">
-                                        <span class="text-xs font-black ${c.posters > 0 ? 'text-emerald-600' : 'text-slate-300'}">${c.posters}</span>
+                                        ${c.posters > 0 ? `<button onclick="openClientWideReportDetails('${escapeHtml(c.name).replace(/'/g, "\\'")}', 'posters')" class="text-xs font-black text-emerald-600 hover:underline cursor-pointer" title="Click to view posters tasks">${c.posters}</button>` : `<span class="text-xs font-black text-slate-300">${c.posters}</span>`}
                                     </td>
                                     <td class="px-6 py-4 text-center">
-                                        <span class="text-xs font-black ${c.videos > 0 ? 'text-amber-600' : 'text-slate-300'}">${c.videos}</span>
+                                        ${c.videos > 0 ? `<button onclick="openClientWideReportDetails('${escapeHtml(c.name).replace(/'/g, "\\'")}', 'videos')" class="text-xs font-black text-amber-600 hover:underline cursor-pointer" title="Click to view videos tasks">${c.videos}</button>` : `<span class="text-xs font-black text-slate-300">${c.videos}</span>`}
                                     </td>
                                     <td class="px-6 py-4 text-center">
-                                        <span class="text-xs font-black ${c.other > 0 ? 'text-blue-600' : 'text-slate-300'}">${c.other}</span>
+                                        ${c.other > 0 ? `<button onclick="openClientWideReportDetails('${escapeHtml(c.name).replace(/'/g, "\\'")}', 'other')" class="text-xs font-black text-blue-600 hover:underline cursor-pointer" title="Click to view other tasks">${c.other}</button>` : `<span class="text-xs font-black text-slate-300">${c.other}</span>`}
                                     </td>
-                                    <td class="px-6 py-4 text-xs font-bold text-slate-900 text-center">${c.total}</td>
+                                    <td class="px-6 py-4 text-center text-xs font-bold text-slate-900">
+                                        ${c.total > 0 ? `<button onclick="openClientWideReportDetails('${escapeHtml(c.name).replace(/'/g, "\\'")}', 'total')" class="text-xs font-bold text-slate-900 hover:underline cursor-pointer" title="Click to view all tasks">${c.total}</button>` : `<span class="text-xs font-bold text-slate-300">${c.total}</span>`}
+                                    </td>
                                     <td class="px-6 py-4 text-center">
-                                        <span class="text-xs font-black text-emerald-600">${c.done}</span>
+                                        ${c.done > 0 ? `<button onclick="openClientWideReportDetails('${escapeHtml(c.name).replace(/'/g, "\\'")}', 'completed')" class="text-xs font-black text-emerald-600 hover:underline cursor-pointer" title="Click to view completed tasks">${c.done}</button>` : `<span class="text-xs font-black text-slate-300">${c.done}</span>`}
                                         <div class="w-16 mx-auto h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
                                             <div class="h-full bg-emerald-500 rounded-full" style="width:${completion}%"></div>
                                         </div>
@@ -17079,6 +17343,115 @@
                     </div>
                 </div>` : ''}
             `;
+            }
+
+            function openClientWideReportDetails(clientName, category) {
+                const modal = document.getElementById('clientReportDetailModal');
+                const titleEl = document.getElementById('client-report-detail-title');
+                const contentEl = document.getElementById('client-report-detail-content');
+                if (!modal || !titleEl || !contentEl) return;
+
+                const categoryLabels = {
+                    posters: 'Posters / Static Tasks',
+                    videos: 'Videos / Reels Tasks',
+                    other: 'Other Tasks',
+                    total: 'Total Tasks',
+                    completed: 'Completed Tasks'
+                };
+
+                titleEl.textContent = `${clientName} — ${categoryLabels[category] || 'Tasks'}`;
+
+                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+
+                // Filter tasks by date range and clientName exactly like renderClientWideReport does
+                let filtered = tasks.filter(t => t.client && resolveClientLabel(t.client) === resolveClientLabel(clientName));
+                if (reportDateFrom && reportDateTo) {
+                    const dateFiltered = filtered.filter(t => {
+                        if (!t.duedate) return true;
+                        const dTs = new Date(t.duedate).getTime();
+                        return dTs >= fromTs && dTs < toTs;
+                    });
+                    if (dateFiltered.length) filtered = dateFiltered;
+                }
+
+                // Filter by category
+                let targetTasks = [];
+                if (category === 'posters') {
+                    targetTasks = filtered.filter(t => {
+                        const type = (t.issueType || t.type || '').toLowerCase();
+                        const desc = (t.desc || t.summary || t.name || t.id || '').toLowerCase();
+                        const isVideo = type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || desc.includes('video') || desc.includes('reel');
+                        const isPoster = type.includes('poster') || type.includes('design') || type.includes('static') || type.includes('creative') || desc.includes('poster') || desc.includes('design');
+                        return !isVideo && isPoster;
+                    });
+                } else if (category === 'videos') {
+                    targetTasks = filtered.filter(t => {
+                        const type = (t.issueType || t.type || '').toLowerCase();
+                        const desc = (t.desc || t.summary || t.name || t.id || '').toLowerCase();
+                        return type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || desc.includes('video') || desc.includes('reel');
+                    });
+                } else if (category === 'other') {
+                    targetTasks = filtered.filter(t => {
+                        const type = (t.issueType || t.type || '').toLowerCase();
+                        const desc = (t.desc || t.summary || t.name || t.id || '').toLowerCase();
+                        const isVideo = type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || desc.includes('video') || desc.includes('reel');
+                        const isPoster = type.includes('poster') || type.includes('design') || type.includes('static') || type.includes('creative') || desc.includes('poster') || desc.includes('design');
+                        return !isVideo && !isPoster;
+                    });
+                } else if (category === 'completed') {
+                    targetTasks = filtered.filter(t => isDone(t.status));
+                } else {
+                    targetTasks = filtered;
+                }
+
+                targetTasks.sort((a, b) => isDone(a.status) - isDone(b.status));
+
+                // Build QC score map per task
+                const taskQcMap = {};
+                (allQcReports || []).forEach(r => {
+                    if (!taskQcMap[r.taskId]) taskQcMap[r.taskId] = { scoreSum: 0, count: 0 };
+                    taskQcMap[r.taskId].scoreSum += (r.qcScore || 0);
+                    taskQcMap[r.taskId].count++;
+                });
+
+                if (targetTasks.length === 0) {
+                    contentEl.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">No tasks found for "${escapeHtml(clientName)}" in the selected category/period.</p>`;
+                } else {
+                    contentEl.innerHTML = `
+                <div class="border border-slate-100 rounded-2xl overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Task ID</th>
+                                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</th>
+                                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assignee</th>
+                                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">QC Score</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${targetTasks.map(t => {
+                                const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" onclick="event.stopPropagation();" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
+                                const qc = taskQcMap[t.id];
+                                const avgQc = qc && qc.count > 0 ? Math.round(qc.scoreSum / qc.count) : null;
+                                const qcColor = avgQc === null ? 'text-slate-300' : avgQc >= 85 ? 'text-emerald-600' : avgQc >= 60 ? 'text-amber-500' : 'text-rose-500';
+                                return `
+                                <tr class="hover:bg-slate-50 transition-colors cursor-pointer" onclick="document.getElementById('clientReportDetailModal').close(); openEditTaskModal('${t.id}')">
+                                    <td class="px-4 py-3 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
+                                    <td class="px-4 py-3 max-w-sm whitespace-normal break-words"><p class="text-xs font-bold text-slate-900">${escapeHtml(t.desc || t.summary || '')}</p></td>
+                                    <td class="px-4 py-3"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
+                                    <td class="px-4 py-3 text-xs text-slate-600">${escapeHtml(assigneeName(t))}</td>
+                                    <td class="px-4 py-3 text-center text-xs font-black ${qcColor}">${avgQc !== null ? avgQc + '%' : '—'}</td>
+                                </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+                }
+                modal.showModal();
             }
 
             function renderClientWiseTimingReport() {
@@ -17283,7 +17656,7 @@
                 }, 30 * 1000); // Check every 30 seconds
             }
 
-            window.showFiveThirtyTaskPopup = function(force = false) {
+            window.showFiveThirtyTaskPopup = function (force = false) {
                 const popup = document.getElementById('fiveThirtyPopup');
                 if (!popup) return;
 
@@ -17295,8 +17668,8 @@
                     const status = (t.status || '').toLowerCase().trim();
                     const id = (t.id || '').toLowerCase().trim();
                     return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                           status === 'learnings' || status === 'discussion' ||
-                           id.startsWith('learn-') || id.startsWith('disc-');
+                        status === 'learnings' || status === 'discussion' ||
+                        id.startsWith('learn-') || id.startsWith('disc-');
                 };
 
                 const todayStart = new Date();
@@ -17456,7 +17829,7 @@
                                 const prefixRegex = new RegExp(`^${escapedClient}\\\\s*-\\\\s*`, 'i');
                                 itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '');
                             }
-                            
+
                             const snehaSel = snehaSelections.find(s => s.taskId === log.taskId && s.userId === user.email);
                             if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                 itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
@@ -17495,7 +17868,7 @@
                                     const prefixRegex = new RegExp(`^${escapedClient}\\\\s*-\\\\s*`, 'i');
                                     itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '');
                                 }
-                                
+
                                 const snehaSel = snehaSelections.find(s => s.taskId === current.taskId && s.userId === user.email);
                                 if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                     itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
@@ -17811,8 +18184,8 @@
                                 const status = (t.status || '').toLowerCase().trim();
                                 const id = (t.id || '').toLowerCase().trim();
                                 return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                                       status === 'learnings' || status === 'discussion' ||
-                                       id.startsWith('learn-') || id.startsWith('disc-');
+                                    status === 'learnings' || status === 'discussion' ||
+                                    id.startsWith('learn-') || id.startsWith('disc-');
                             };
 
                             const isDailyPlanUser = [
@@ -17862,10 +18235,10 @@
                                     return matchesUserAndPeriod(t) && !isDone(t.status);
                                 }
                                 return assigneeMatches(t, email) &&
-                                       !isDone(t.status) &&
-                                       t.duedate &&
-                                       new Date(t.duedate).getTime() >= fromTs &&
-                                       new Date(t.duedate).getTime() <= toTs;
+                                    !isDone(t.status) &&
+                                    t.duedate &&
+                                    new Date(t.duedate).getTime() >= fromTs &&
+                                    new Date(t.duedate).getTime() <= toTs;
                             });
 
                             // QC score — match ALL reports for this person's tasks
@@ -18086,7 +18459,7 @@
                                 if (s.taskId) lwAllSnehaTasks.add(s.taskId);
                             });
                             lwCompletedCount = lwAllSnehaTasks.size + lwSnehaQcReports.length;
-                            
+
                             const twAllSnehaTasks = new Set();
                             const twPeriodSnehaSelections = (snehaSelections || []).filter(s =>
                                 s.userId === 'snehavilpower@gmail.com' &&
@@ -18275,7 +18648,7 @@
                     });
                     const snehaSelections = Object.values(snehaSnap.val() || {});
                     // Date strings for DPR period filtering (YYYY-MM-DD)
-                    const toDateStr  = new Date(toTs - 1).toISOString().slice(0, 10);
+                    const toDateStr = new Date(toTs - 1).toISOString().slice(0, 10);
                     const fromDateStr = new Date(fromTs).toISOString().slice(0, 10);
 
                     // ── Shared helpers defined once at top level of this callback ──
@@ -18283,10 +18656,10 @@
                         if (!t) return false;
                         const client = (t.client || '').toLowerCase().trim();
                         const status = (t.status || '').toLowerCase().trim();
-                        const id     = (t.id || '').toLowerCase().trim();
+                        const id = (t.id || '').toLowerCase().trim();
                         return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                               status === 'learnings' || status === 'discussion' ||
-                               id.startsWith('learn-') || id.startsWith('disc-');
+                            status === 'learnings' || status === 'discussion' ||
+                            id.startsWith('learn-') || id.startsWith('disc-');
                     };
 
                     const nameToEmail = {};
@@ -18315,7 +18688,16 @@
                         ].includes(usrEmail.toLowerCase());
 
                         // Ajith recurring tasks to exclude from his analytics
-                        const AJITH_RECURRING_TASK_KEYWORDS = ['internal reporting', 'social media comments', 'client message', 'ads management'];
+                        const AJITH_RECURRING_TASK_KEYWORDS = [
+                            'social media analysis and updates',
+                            'daily followers updates',
+                            'ads campaign updates',
+                            'gmb analysis and updates',
+                            'competitor analysis',
+                            'weekly report updates',
+                            "client's monthly report updates",
+                            'overall post analysis and updates'
+                        ];
                         const isAjithRecurringTask = (t) => {
                             if (!t) return false;
                             if ((usrEmail || '').toLowerCase() !== 'ajithvilpower@gmail.com') return false;
@@ -18380,10 +18762,10 @@
                                 return matchesUserAndPeriod(t) && !isDone(t.status);
                             }
                             return assigneeMatches(t, usrEmail) &&
-                                   !isDone(t.status) &&
-                                   t.duedate &&
-                                   new Date(t.duedate).getTime() >= start &&
-                                   new Date(t.duedate).getTime() <= end;
+                                !isDone(t.status) &&
+                                t.duedate &&
+                                new Date(t.duedate).getTime() >= start &&
+                                new Date(t.duedate).getTime() <= end;
                         });
                         const logs = allTimeLogs.filter(l =>
                             l.userId === usrEmail &&
@@ -18477,13 +18859,13 @@
                     if (email === 'snehavilpower@gmail.com') {
                         const earlySnehaSelections = (snehaSelections || []).filter(s => {
                             const uid = (s.userId || '').toLowerCase();
-                            const ts  = Number(s.timestamp || 0); // ensure numeric
+                            const ts = Number(s.timestamp || 0); // ensure numeric
                             return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
                         });
                         const earlyQcReports = freshQcReports.filter(r => {
                             const ts = Number(r.timestamp || 0);
                             return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                   ts >= fromTs && ts <= toTs;
+                                ts >= fromTs && ts <= toTs;
                         });
                         const _th = new Set(), _ca = new Set(), _vi = new Set(), _po = new Set(), _all = new Set();
                         earlySnehaSelections.forEach(s => {
@@ -18493,14 +18875,14 @@
                                 const l = (item || '').toLowerCase();
                                 const key = s.taskId + '|' + l;
                                 if (l.includes('thumbnail')) _th.add(key);
-                                if (l.includes('caption'))   _ca.add(key);
-                                if (l.includes('video'))     _vi.add(key);
-                                if (l.includes('poster'))    _po.add(key);
+                                if (l.includes('caption')) _ca.add(key);
+                                if (l.includes('video')) _vi.add(key);
+                                if (l.includes('poster')) _po.add(key);
                             });
                         });
-                        snehaQcCountEarly        = earlyQcReports.length;
+                        snehaQcCountEarly = earlyQcReports.length;
                         snehaWorkedTaskCountEarly = _all.size + snehaQcCountEarly + currStats.completed.length + currStats.assigned.length + currStats.hold.length + currStats.rework.length;
-                        snehaContentCountEarly   = _po.size + _vi.size + _ca.size;
+                        snehaContentCountEarly = _po.size + _vi.size + _ca.size;
                         snehaThumbnailCountEarly = _th.size;
                     }
 
@@ -18509,13 +18891,13 @@
                     if (email === 'snehavilpower@gmail.com') {
                         const prevSnehaSelections = (snehaSelections || []).filter(s => {
                             const uid = (s.userId || '').toLowerCase();
-                            const ts  = Number(s.timestamp || 0);
+                            const ts = Number(s.timestamp || 0);
                             return uid === 'snehavilpower@gmail.com' && ts >= prevStartTs && ts <= prevEndTs;
                         });
                         const prevQcReports = freshQcReports.filter(r => {
                             const ts = Number(r.timestamp || 0);
                             return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                   ts >= prevStartTs && ts <= prevEndTs;
+                                ts >= prevStartTs && ts <= prevEndTs;
                         });
                         const _prevAll = new Set();
                         prevSnehaSelections.forEach(s => {
@@ -18523,7 +18905,7 @@
                         });
                         prevSnehaWorkedTaskCount = _prevAll.size + prevQcReports.length;
                     }
-                    
+
                     let prevUserCompleted = email === 'snehavilpower@gmail.com'
                         ? prevSnehaWorkedTaskCount
                         : prevStats.completed.length;
@@ -18612,11 +18994,11 @@
                     });
                     const workedTaskIds = new Set();
                     const workedTasks = [];
-                    
+
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s => {
                             const uid = (s.userId || '').toLowerCase();
-                            const ts  = Number(s.timestamp || 0);
+                            const ts = Number(s.timestamp || 0);
                             return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
                         });
                         periodSnehaSelections.forEach(s => {
@@ -18624,22 +19006,22 @@
                                 const t = tasks.find(tk => tk.id === s.taskId);
                                 if (t && !isExcludedTask(t)) {
                                     workedTaskIds.add(s.taskId);
-                                    
+
                                     const allItemsForTask = new Set();
                                     periodSnehaSelections.filter(sel => sel.taskId === s.taskId).forEach(sel => {
                                         (sel.selectedItems || []).forEach(item => allItemsForTask.add(item));
                                     });
                                     t.snehaItems = Array.from(allItemsForTask);
-                                    
+
                                     workedTasks.push(t);
                                 }
                             }
                         });
-                        
+
                         const periodQcReports = freshQcReports.filter(r => {
                             const ts = Number(r.timestamp || 0);
                             return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                   ts >= fromTs && ts <= toTs;
+                                ts >= fromTs && ts <= toTs;
                         });
                         periodQcReports.forEach(r => {
                             if (r.taskId && !workedTaskIds.has(r.taskId)) {
@@ -18665,10 +19047,10 @@
                             if (!t) return false;
                             const client = (t.client || '').toLowerCase().trim();
                             const status = (t.status || '').toLowerCase().trim();
-                            const id     = (t.id || '').toLowerCase().trim();
+                            const id = (t.id || '').toLowerCase().trim();
                             return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
-                                   status === 'learnings' || status === 'discussion' ||
-                                   id.startsWith('learn-') || id.startsWith('disc-');
+                                status === 'learnings' || status === 'discussion' ||
+                                id.startsWith('learn-') || id.startsWith('disc-');
                         };
                         Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
                             if (!planData.date) return;
@@ -18728,14 +19110,14 @@
                     if (email === 'snehavilpower@gmail.com') {
                         const periodSnehaSelections = (snehaSelections || []).filter(s => {
                             const uid = (s.userId || '').toLowerCase();
-                            const ts  = Number(s.timestamp || 0);
+                            const ts = Number(s.timestamp || 0);
                             return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
                         });
-                        
+
                         const snehaQcReports = freshQcReports.filter(r => {
                             const ts = Number(r.timestamp || 0);
                             return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                   ts >= fromTs && ts <= toTs;
+                                ts >= fromTs && ts <= toTs;
                         });
 
                         const thumbnailTasks = new Set();
@@ -18753,9 +19135,9 @@
                                 // Use taskId+item as key so one task with both Captions+Poster counts in both
                                 const key = s.taskId + '|' + lower;
                                 if (lower.includes('thumbnail')) thumbnailTasks.add(key);
-                                if (lower.includes('caption'))   captionsTasks.add(key);
-                                if (lower.includes('video'))     videoTasks.add(key);
-                                if (lower.includes('poster'))    posterTasks.add(key);
+                                if (lower.includes('caption')) captionsTasks.add(key);
+                                if (lower.includes('video')) videoTasks.add(key);
+                                if (lower.includes('poster')) posterTasks.add(key);
                             });
                         });
 
@@ -18829,8 +19211,8 @@
                             e.date >= fromDateStr &&
                             e.date <= toDateStr
                         );
-                        const posterTotal     = karthikaDprRows.filter(e => e.category === 'Posters').reduce((s, e) => s + Number(e.count || 0), 0);
-                        const thumbnailTotal  = karthikaDprRows.filter(e => e.category === 'Thumbnails').reduce((s, e) => s + Number(e.count || 0), 0);
+                        const posterTotal = karthikaDprRows.filter(e => e.category === 'Posters').reduce((s, e) => s + Number(e.count || 0), 0);
+                        const thumbnailTotal = karthikaDprRows.filter(e => e.category === 'Thumbnails').reduce((s, e) => s + Number(e.count || 0), 0);
                         // Also count Thumbnail-status Jira tasks in daily plan for the period
                         const dpThumbnailTasks = workedTasks.filter(t =>
                             (t.status || '').toLowerCase() === 'thumbnail waiting' ||
@@ -18913,19 +19295,19 @@
                             <!-- Sneha: Content Tasks tile -->
                             <div class="bg-indigo-50/30 border border-indigo-100 rounded-2xl p-4 shadow-sm">
                                 <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">Content Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaContentCount||0)}</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaContentCount || 0)}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">Poster · Video · Captions</p>
                             </div>
                             <!-- Sneha: QC Tasks tile -->
                             <div class="bg-violet-50/30 border border-violet-100 rounded-2xl p-4 shadow-sm">
                                 <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">QC Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaQcCount||0)}</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaQcCount || 0)}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">completed reviews</p>
                             </div>
                             <!-- Sneha: Thumbnail Tasks tile -->
                             <div class="bg-pink-50/30 border border-pink-100 rounded-2xl p-4 shadow-sm">
                                 <p class="text-[9px] font-black text-pink-600 uppercase tracking-wider mb-1">Thumbnail Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaThumbnailCount||0)}</p>
+                                <p class="text-xl font-black text-slate-900">${(snehaThumbnailCount || 0)}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
                             </div>
                             ` : `
@@ -19101,28 +19483,28 @@
                             ${workedTasks.length > 0 ? `
                                 <div class="space-y-3">
                                     ${workedTasks.map(t => {
-                                        const qcRep = freshQcReports.find(r => r.taskId === t.id);
-                                        const qcScoreVal = qcRep ? qcRep.qcScore : null;
-                                        const qcColor = qcScoreVal === null ? 'text-slate-300' : qcScoreVal >= 85 ? 'text-emerald-600' : qcScoreVal >= 60 ? 'text-amber-500' : 'text-rose-500';
-                                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
-                                        const badgeClass = getStatusBadgeClass(t.status);
-                                        const taskLoggedTime = taskTimeMap.get(t.id) || 0;
+                        const qcRep = freshQcReports.find(r => r.taskId === t.id);
+                        const qcScoreVal = qcRep ? qcRep.qcScore : null;
+                        const qcColor = qcScoreVal === null ? 'text-slate-300' : qcScoreVal >= 85 ? 'text-emerald-600' : qcScoreVal >= 60 ? 'text-amber-500' : 'text-rose-500';
+                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
+                        const badgeClass = getStatusBadgeClass(t.status);
+                        const taskLoggedTime = taskTimeMap.get(t.id) || 0;
 
-                                        const snehaTagsHtml = (t.snehaItems && t.snehaItems.length > 0) ? `
+                        const snehaTagsHtml = (t.snehaItems && t.snehaItems.length > 0) ? `
                                             <div class="flex flex-wrap gap-1 mt-2 mb-1">
                                                 ${t.snehaItems.map(item => {
-                                                    let colorClass = 'bg-slate-100 text-slate-600 border-slate-200';
-                                                    const lower = item.toLowerCase();
-                                                    if (lower.includes('thumbnail')) colorClass = 'bg-violet-50 text-violet-600 border-violet-100';
-                                                    else if (lower.includes('caption')) colorClass = 'bg-rose-50 text-rose-600 border-rose-100';
-                                                    else if (lower.includes('video')) colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
-                                                    else if (lower.includes('poster')) colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100';
-                                                    return `<span class="px-1.5 py-0.5 text-[8px] font-black border rounded-md uppercase tracking-wider ${colorClass}">${escapeHtml(item)}</span>`;
-                                                }).join('')}
+                            let colorClass = 'bg-slate-100 text-slate-600 border-slate-200';
+                            const lower = item.toLowerCase();
+                            if (lower.includes('thumbnail')) colorClass = 'bg-violet-50 text-violet-600 border-violet-100';
+                            else if (lower.includes('caption')) colorClass = 'bg-rose-50 text-rose-600 border-rose-100';
+                            else if (lower.includes('video')) colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
+                            else if (lower.includes('poster')) colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+                            return `<span class="px-1.5 py-0.5 text-[8px] font-black border rounded-md uppercase tracking-wider ${colorClass}">${escapeHtml(item)}</span>`;
+                        }).join('')}
                                             </div>
                                         ` : '';
 
-                                        return `
+                        return `
                                         <div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all cursor-pointer" onclick="openEditTaskModal('${t.id}')">
                                             <div class="flex justify-between items-center gap-2 mb-1.5">
                                                 <span class="text-[10px] font-mono font-bold text-indigo-600">${taskKeyHtml}</span>
@@ -19139,7 +19521,7 @@
                                             </div>
                                         </div>
                                         `;
-                                    }).join('')}
+                    }).join('')}
                                 </div>
                             ` : `
                                 <p class="text-xs italic text-slate-400 text-center py-12">No tasks worked on in this date range.</p>
@@ -19158,15 +19540,25 @@
             function populateClientPerfFilter() {
                 const sel = document.getElementById('client-perf-select');
                 if (!sel) return;
-                if (sel.options.length > 0) return; // Only populate once
 
-                const clientSet = new Set(CLIENTS);
-                tasks.forEach(t => { if (t.client && t.client.trim()) clientSet.add(t.client.trim()); });
+                const clientSet = new Set();
+                const catalog = getClientCatalog();
+                catalog.forEach(c => {
+                    const norm = resolveClientLabel(c);
+                    if (norm) clientSet.add(norm);
+                });
+                tasks.forEach(t => {
+                    if (t.client && t.client.trim()) {
+                        const norm = resolveClientLabel(t.client);
+                        if (norm) clientSet.add(norm);
+                    }
+                });
                 const clientList = Array.from(clientSet).sort((a, b) => a.localeCompare(b));
 
+                const existingValue = sel.value;
                 sel.innerHTML = clientList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                 if (clientList.length > 0) {
-                    sel.value = clientList[0];
+                    sel.value = clientList.includes(existingValue) ? existingValue : clientList[0];
                 }
             }
 
@@ -20626,6 +21018,13 @@
                 document.getElementById('et-title').value = task.desc || '';
                 document.getElementById('et-priority').value = task.priority || 'Medium';
                 document.getElementById('et-duedate').value = task.duedate ? String(task.duedate).slice(0, 10) : '';
+
+                const isShoot = task.shootPlan === true || task.status === 'Shoot Needed' || task.status === 'Shoot Planned' || task.status === 'Shoot In Progress' || task.status === 'Shoot Completed' || task.status === 'Shoot Cancelled';
+                const shootTimeWrap = document.getElementById('et-shoot-time-wrap');
+                if (shootTimeWrap) shootTimeWrap.classList.toggle('hidden', !isShoot);
+                const shootTimeInput = document.getElementById('et-shoot-time');
+                if (shootTimeInput) shootTimeInput.value = task.shootTime || '';
+
                 const descWrap = document.getElementById('et-description-wrap');
                 const descInput = document.getElementById('et-description');
                 if (descWrap) descWrap.classList.toggle('hidden', !isInternalTask(task));
@@ -20675,6 +21074,10 @@
                 if (isInternalTask(originalTask)) {
                     updates.description = document.getElementById('et-description')?.value.trim() || '';
                 }
+                const isShoot = originalTask.shootPlan === true || originalTask.status === 'Shoot Needed' || originalTask.status === 'Shoot Planned' || originalTask.status === 'Shoot In Progress' || originalTask.status === 'Shoot Completed' || originalTask.status === 'Shoot Cancelled';
+                if (isShoot) {
+                    updates.shootTime = document.getElementById('et-shoot-time')?.value || '';
+                }
 
                 if (isMorningLearningTask(originalTask) && (updates.status === 'Completed' || isInternalDone(updates.status))) {
                     originalTask.description = updates.description;
@@ -20693,8 +21096,26 @@
                     await remove(ref(db, `worksync/manual_tasks/${oldUserKey}/${taskId}`));
                     await set(ref(db, `worksync/manual_tasks/${newUserKey}/${taskId}`), tasks[taskIndex]);
                 } else if (originalTask.manual) {
-                    const userKey = eKey(originalTask.userId || originalTask.assigneeEmail || currentUser.email);
-                    await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), updates);
+                    if (originalTask.shootGroupId) {
+                        const groupTasks = tasks.filter(t => t.shootGroupId === originalTask.shootGroupId);
+                        for (const gt of groupTasks) {
+                            const userKey = eKey(gt.userId || gt.assigneeEmail);
+                            const groupUpdates = {
+                                desc: updates.desc,
+                                client: updates.client,
+                                status: updates.status,
+                                priority: updates.priority,
+                                duedate: updates.duedate,
+                                shootTime: updates.shootTime || ''
+                            };
+                            await update(ref(db, `worksync/manual_tasks/${userKey}/${gt.id}`), groupUpdates);
+                            const idx = tasks.findIndex(t => t.id === gt.id);
+                            if (idx !== -1) Object.assign(tasks[idx], groupUpdates);
+                        }
+                    } else {
+                        const userKey = eKey(originalTask.userId || originalTask.assigneeEmail || currentUser.email);
+                        await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), updates);
+                    }
                 }
 
                 if (newAssigneeEmail && newAssigneeEmail !== originalTask.assigneeEmail) {
@@ -20758,6 +21179,7 @@
                         populateInternalClientFilter();
                         renderTasks(); updateStats();
                         if (isInternalTabActive()) renderInternalTasks();
+                        if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                     });
@@ -20772,6 +21194,7 @@
                         populateInternalClientFilter();
                         renderTasks(); updateStats();
                         if (isInternalTabActive()) renderInternalTasks();
+                        if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                     });
@@ -21714,8 +22137,16 @@
                         if (task.isCarryOver) flags.push('Carry Over');
                         if (task.isAutoIncluded) flags.push('Auto');
                         const flagSuffix = flags.length ? ` [${flags.join(', ')}]` : '';
-                        report += `  ${index + 1}. ${task.desc || 'Untitled'}${flagSuffix}\n`;
-                        report += `     Assignee: ${assignee}\n`;
+
+                        // Remove client name from task description if it already appears in the group header
+                        let desc = task.desc || 'Untitled';
+                        // Strip " - ClientName" or "ClientName - " patterns (case-insensitive)
+                        const clientEsc = client.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        desc = desc.replace(new RegExp(`\\s*[-–]\\s*${clientEsc}\\s*$`, 'i'), '').trim();
+                        desc = desc.replace(new RegExp(`^${clientEsc}\\s*[-–]\\s*`, 'i'), '').trim();
+
+                        report += `  ${index + 1}. ${desc}${flagSuffix}\n`;
+                        report += `     Assignee: ${assignee} | Status: ${task.status}\n`;
                     });
                     report += `\n`;
                 });
@@ -23927,7 +24358,7 @@
             window.saveNote = saveNote; window.editNote = editNote; window.deleteNote = deleteNote; window.clearNoteForm = clearNoteForm;
             window.setReportDatePreset = setReportDatePreset;
             window.openProjectDetails = openProjectDetails;
-            window.openClientReportDetails = openClientReportDetails;
+            window.openClientReportDetails = openClientReportDetails; window.openClientWideReportDetails = openClientWideReportDetails;
             window.confirmSnehaTaskStart = confirmSnehaTaskStart;
             window.confirmMurugeshClientStart = confirmMurugeshClientStart;
             window.confirmAjithClientStart = confirmAjithClientStart;
@@ -24060,10 +24491,435 @@
             window.switchPlanTab = switchPlanTab;
             window.openPtDayDetail = openPtDayDetail;
             window.renderPlanTracker = renderPlanTracker;
+            window.initFilesManager = initFilesManager;
+            window.fmSearchSystem = fmSearchSystem;
+            window.fmOpenAddSystemModal = fmOpenAddSystemModal;
+            window.fmSelectSystem = fmSelectSystem;
+            window.fmSelectDrive = fmSelectDrive;
+            window.fmEditSystem = fmEditSystem;
+            window.fmDeleteSystem = fmDeleteSystem;
+            window.fmAddFolder = fmAddFolder;
+            window.fmSaveSystem = fmSaveSystem;
+            window.fmCloseSystemModal = fmCloseSystemModal;
+            window.fmSaveFolder = fmSaveFolder;
+            window.fmCloseFolderModal = fmCloseFolderModal;
+            window.fmDeleteFolder = fmDeleteFolder;
             window.renderDiscussionsView = renderDiscussionsView;
             window.saveLiveDiscussionNotes = saveLiveDiscussionNotes;
             window.endCurrentDiscussionLive = endCurrentDiscussionLive;
             window.togglePastDiscussionNotes = togglePastDiscussionNotes;
+
+            window.endCurrentDiscussionLive = endCurrentDiscussionLive;
+            window.togglePastDiscussionNotes = togglePastDiscussionNotes;
+
+            // ══════════════════════════════════════════════════════════════════
+            // FILES MANAGER
+            // ══════════════════════════════════════════════════════════════════
+            let fmSystems = {};          // Firebase data: { id: { name, ip, type, location, owner, drives: { label: { total, used, folders: [] } } } }
+            let fmUnsub = null;
+            let fmSelectedSystemId = null;
+            let fmSelectedDriveLabel = null;
+
+            function fmFmtBytes(gb) {
+                if (!gb && gb !== 0) return '—';
+                if (gb >= 1024) return (gb / 1024).toFixed(1) + ' TB';
+                return gb + ' GB';
+            }
+
+            function fmPctColor(pct) {
+                if (pct >= 90) return 'bg-rose-500';
+                if (pct >= 75) return 'bg-amber-500';
+                return 'bg-emerald-500';
+            }
+
+            function initFilesManager() {
+                if (fmUnsub) { renderFilesManager(); return; }
+                if (!db) return;
+                fmUnsub = onValue(ref(db, 'worksync/file_systems'), snap => {
+                    fmSystems = snap.val() || {};
+                    renderFilesManager();
+                });
+            }
+
+            function renderFilesManager() {
+                fmUpdateStats();
+                fmRenderSystemsList();
+                if (fmSelectedSystemId && fmSystems[fmSelectedSystemId]) {
+                    fmShowSystemDetail(fmSelectedSystemId);
+                } else {
+                    document.getElementById('fm-detail-empty')?.classList.remove('hidden');
+                    document.getElementById('fm-system-info')?.classList.add('hidden');
+                    document.getElementById('fm-drive-detail')?.classList.add('hidden');
+                }
+            }
+
+            function fmUpdateStats() {
+                const systems = Object.entries(fmSystems);
+                let totalGb = 0, freeGb = 0, critical = 0, largestName = '—', largestGb = 0;
+                const clientSet = new Set();
+                systems.forEach(([id, sys]) => {
+                    Object.values(sys.drives || {}).forEach(d => {
+                        const t = Number(d.total || 0), u = Number(d.used || 0);
+                        totalGb += t; freeGb += (t - u);
+                        if (u / Math.max(t, 1) >= 0.8) critical++;
+                    });
+                    if ((sys.totalGb || 0) > largestGb) { largestGb = sys.totalGb || 0; largestName = sys.name || ''; }
+                    (sys.clients || []).forEach(c => clientSet.add(c));
+                });
+                const allDriveTotal = Object.values(fmSystems).reduce((s, sys) =>
+                    s + Object.values(sys.drives || {}).reduce((ds, d) => ds + Number(d.total || 0), 0), 0);
+
+                document.getElementById('fm-stat-systems').textContent = systems.length;
+                document.getElementById('fm-stat-storage').textContent = fmFmtBytes(allDriveTotal);
+                document.getElementById('fm-stat-critical').textContent = critical;
+                document.getElementById('fm-stat-clients').textContent = clientSet.size || systems.length;
+                document.getElementById('fm-stat-largest').textContent = largestName || '—';
+                document.getElementById('fm-stat-free').textContent = fmFmtBytes(freeGb);
+            }
+
+            function fmRenderSystemsList(filter) {
+                const el = document.getElementById('fm-systems-list');
+                if (!el) return;
+                let entries = Object.entries(fmSystems);
+                if (filter) entries = entries.filter(([, s]) => (s.name || '').toLowerCase().includes(filter.toLowerCase()));
+                if (!entries.length) {
+                    el.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-8 px-4">No systems found.</p>`;
+                    return;
+                }
+                el.innerHTML = entries.map(([id, sys]) => {
+                    const drives = Object.values(sys.drives || {});
+                    const totalGb = drives.reduce((s, d) => s + Number(d.total || 0), 0);
+                    const usedGb  = drives.reduce((s, d) => s + Number(d.used  || 0), 0);
+                    const pct = totalGb > 0 ? Math.round(usedGb / totalGb * 100) : 0;
+                    const active = id === fmSelectedSystemId;
+                    return `
+                    <button onclick="fmSelectSystem('${id}')"
+                        class="w-full text-left px-4 py-3.5 flex items-center gap-3 transition-all ${active ? 'bg-indigo-50 border-l-4 border-indigo-500' : 'hover:bg-slate-50 border-l-4 border-transparent'}">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0 ${pct >= 80 ? 'bg-rose-500' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'}"></span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-black text-slate-900 truncate">${escapeHtml(sys.name || id)}</p>
+                            <p class="text-[9px] text-slate-400 font-bold">${fmFmtBytes(totalGb)} · ${drives.length} drive${drives.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <span class="text-[9px] font-black ${pct >= 80 ? 'text-rose-600' : 'text-slate-400'}">${pct}%</span>
+                    </button>`;
+                }).join('');
+            }
+
+            function fmSearchSystem() {
+                fmRenderSystemsList(document.getElementById('fm-search')?.value || '');
+            }
+
+            function fmSelectSystem(id) {
+                fmSelectedSystemId = id;
+                fmSelectedDriveLabel = null;
+                fmRenderSystemsList(document.getElementById('fm-search')?.value || '');
+                fmShowSystemDetail(id);
+                document.getElementById('fm-drive-detail')?.classList.add('hidden');
+            }
+
+            function fmShowSystemDetail(id) {
+                const sys = fmSystems[id];
+                if (!sys) return;
+                document.getElementById('fm-detail-empty')?.classList.add('hidden');
+                const info = document.getElementById('fm-system-info');
+                if (info) info.classList.remove('hidden');
+
+                document.getElementById('fm-sys-name').textContent = sys.name || id;
+                document.getElementById('fm-sys-ip').textContent = sys.ip ? '🖥 ' + sys.ip : '';
+                document.getElementById('fm-sys-type').textContent = sys.type || 'Local Storage';
+                document.getElementById('fm-sys-location').textContent = sys.location || '—';
+                document.getElementById('fm-sys-owner').textContent = sys.owner || '—';
+                document.getElementById('fm-sys-updated').textContent = sys.updatedAt
+                    ? new Date(sys.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—';
+
+                const drivesEl = document.getElementById('fm-drives-list');
+                const drives = Object.entries(sys.drives || {});
+                if (!drives.length) {
+                    drivesEl.innerHTML = `<p class="text-xs text-slate-400 italic">No drives configured. <button onclick="fmAddDrivePrompt('${id}')" class="text-indigo-600 font-bold underline">Add drive</button></p>`;
+                } else {
+                    drivesEl.innerHTML = drives.map(([label, d]) => {
+                        const total = Number(d.total || 0), used = Number(d.used || 0);
+                        const free = total - used;
+                        const pct = total > 0 ? Math.round(used / total * 100) : 0;
+                        const barColor = fmPctColor(pct);
+                        return `
+                        <div class="cursor-pointer hover:bg-slate-50 -mx-2 px-2 py-2 rounded-xl transition-all" onclick="fmSelectDrive('${id}','${label}')">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-slate-800">${escapeHtml(label)}</span>
+                                <div class="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                                    <span>${fmFmtBytes(used)} / ${fmFmtBytes(total)}</span>
+                                    <span class="${pct >= 80 ? 'text-rose-600 font-black' : ''}">${pct}%</span>
+                                </div>
+                            </div>
+                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="${barColor} h-full rounded-full transition-all" style="width:${pct}%"></div>
+                            </div>
+                            <div class="flex justify-between text-[9px] text-slate-400 mt-1">
+                                <span>Used: ${fmFmtBytes(used)}</span>
+                                <span>Free: ${fmFmtBytes(free)}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+
+            function fmSelectDrive(systemId, driveLabel) {
+                fmSelectedSystemId = systemId;
+                fmSelectedDriveLabel = driveLabel;
+                const sys = fmSystems[systemId];
+                const drive = sys?.drives?.[driveLabel];
+                if (!drive) return;
+
+                const detail = document.getElementById('fm-drive-detail');
+                detail?.classList.remove('hidden');
+
+                const total = Number(drive.total || 0), used = Number(drive.used || 0), free = total - used;
+                const pct = total > 0 ? Math.round(used / total * 100) : 0;
+
+                document.getElementById('fm-drive-title').textContent = `${driveLabel} — ${sys.name}`;
+                document.getElementById('fm-drive-subtitle').textContent = `${fmFmtBytes(used)} used of ${fmFmtBytes(total)} · ${fmFmtBytes(free)} free`;
+
+                const statsEl = document.getElementById('fm-drive-stats');
+                statsEl.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total</p>
+                        <p class="text-xl font-black text-slate-900">${fmFmtBytes(total)}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Used</p>
+                        <p class="text-xl font-black ${pct >= 80 ? 'text-rose-600' : 'text-slate-900'}">${fmFmtBytes(used)}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Free</p>
+                        <p class="text-xl font-black text-emerald-600">${fmFmtBytes(free)}</p>
+                    </div>`;
+
+                const tbody = document.getElementById('fm-folder-tbody');
+                const folders = drive.folders || [];
+                if (!folders.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-xs text-slate-400 italic">No folders added. Click "Add Folder" to track storage usage.</td></tr>`;
+                } else {
+                    tbody.innerHTML = folders.map((f, idx) => {
+                        const fpct = total > 0 ? Math.round(Number(f.size || 0) / total * 100) : 0;
+                        const barColor = fmPctColor(fpct);
+                        return `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <iconify-icon icon="solar:folder-bold" class="text-amber-400 flex-shrink-0" width="16"></iconify-icon>
+                                    <span class="text-xs font-bold text-slate-800">${escapeHtml(f.name || '')}</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-xs font-bold text-slate-700">${fmFmtBytes(Number(f.size || 0))}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden min-w-[60px]">
+                                        <div class="${barColor} h-full rounded-full" style="width:${fpct}%"></div>
+                                    </div>
+                                    <span class="text-[10px] font-black text-slate-600 w-8">${fpct}%</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-[10px] text-slate-500">${escapeHtml(f.notes || '—')}</td>
+                            <td class="px-4 py-3">
+                                <button onclick="fmDeleteFolder('${systemId}','${driveLabel}',${idx})"
+                                    class="text-[9px] font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-all">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>`;
+                    }).join('');
+                }
+            }
+
+            function fmOpenAddSystemModal(id) {
+                const existing = id ? fmSystems[id] : null;
+                const title = existing ? 'Edit System' : 'Add System';
+                const html = `
+                <dialog id="fmSystemModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
+                    <div class="bg-indigo-600 px-8 py-5 flex items-center justify-between">
+                        <h3 class="text-base font-black text-white">${title}</h3>
+                        <button onclick="fmCloseSystemModal()" class="p-1.5 text-white/60 hover:text-white"><iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon></button>
+                    </div>
+                    <div class="p-8 space-y-4">
+                        <input type="hidden" id="fm-modal-id" value="${escapeHtml(id || '')}">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">System Name *</label>
+                                <input id="fm-modal-name" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="e.g. Palani" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">IP Address</label>
+                                <input id="fm-modal-ip" type="text" value="${escapeHtml(existing?.ip || '')}" placeholder="192.168.1.10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Storage Type</label>
+                                <select id="fm-modal-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                    <option value="Local Storage" ${(existing?.type||'Local Storage') === 'Local Storage' ? 'selected' : ''}>Local Storage</option>
+                                    <option value="NAS" ${existing?.type === 'NAS' ? 'selected' : ''}>NAS</option>
+                                    <option value="Cloud" ${existing?.type === 'Cloud' ? 'selected' : ''}>Cloud</option>
+                                    <option value="External HDD" ${existing?.type === 'External HDD' ? 'selected' : ''}>External HDD</option>
+                                    <option value="SSD" ${existing?.type === 'SSD' ? 'selected' : ''}>SSD</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Location</label>
+                                <input id="fm-modal-location" type="text" value="${escapeHtml(existing?.location || '')}" placeholder="e.g. Office Floor 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Owner / Assigned To</label>
+                                <input id="fm-modal-owner" type="text" value="${escapeHtml(existing?.owner || '')}" placeholder="e.g. Palani" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            </div>
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Drives (add after saving)</p>
+                        <div class="flex gap-3 pt-2">
+                            <button onclick="fmCloseSystemModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-3 text-sm font-bold transition-all">Cancel</button>
+                            <button onclick="fmSaveSystem()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold transition-all">Save System</button>
+                        </div>
+                    </div>
+                </dialog>`;
+                document.body.insertAdjacentHTML('beforeend', html);
+                document.getElementById('fmSystemModal').showModal();
+            }
+
+            function fmCloseSystemModal() {
+                const m = document.getElementById('fmSystemModal');
+                if (m) { m.close(); m.remove(); }
+            }
+
+            async function fmSaveSystem() {
+                const id = document.getElementById('fm-modal-id')?.value;
+                const name = document.getElementById('fm-modal-name')?.value.trim();
+                if (!name) return toast('System name is required', 'error');
+                const payload = {
+                    name,
+                    ip:       document.getElementById('fm-modal-ip')?.value.trim(),
+                    type:     document.getElementById('fm-modal-type')?.value,
+                    location: document.getElementById('fm-modal-location')?.value.trim(),
+                    owner:    document.getElementById('fm-modal-owner')?.value.trim(),
+                    updatedAt: Date.now()
+                };
+                try {
+                    if (id) {
+                        await update(ref(db, `worksync/file_systems/${id}`), payload);
+                        toast('System updated', 'success');
+                    } else {
+                        const newRef = await push(ref(db, 'worksync/file_systems'), { ...payload, drives: {} });
+                        fmSelectedSystemId = newRef.key;
+                        toast('System added', 'success');
+                    }
+                    fmCloseSystemModal();
+                } catch(e) { toast('Failed: ' + e.message, 'error'); }
+            }
+
+            function fmEditSystem() {
+                if (!fmSelectedSystemId) return;
+                fmOpenAddSystemModal(fmSelectedSystemId);
+            }
+
+            async function fmDeleteSystem() {
+                if (!fmSelectedSystemId) return;
+                const sys = fmSystems[fmSelectedSystemId];
+                if (!confirm(`Delete system "${sys?.name}"? This cannot be undone.`)) return;
+                try {
+                    await remove(ref(db, `worksync/file_systems/${fmSelectedSystemId}`));
+                    fmSelectedSystemId = null;
+                    fmSelectedDriveLabel = null;
+                    toast('System deleted', 'success');
+                } catch(e) { toast('Failed: ' + e.message, 'error'); }
+            }
+
+            function fmAddFolder() {
+                if (!fmSelectedSystemId || !fmSelectedDriveLabel) return;
+                const existingDrive = fmSystems[fmSelectedSystemId]?.drives?.[fmSelectedDriveLabel];
+                const html = `
+                <dialog id="fmFolderModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-md border-none overflow-hidden">
+                    <div class="bg-amber-500 px-6 py-4 flex items-center justify-between">
+                        <h3 class="text-sm font-black text-white">Add Folder / File Type</h3>
+                        <button onclick="fmCloseFolderModal()" class="text-white/70 hover:text-white"><iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="col-span-2">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Folder Name *</label>
+                                <input id="fm-folder-name" type="text" placeholder="e.g. NTT Files" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Size (GB) *</label>
+                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Drive Total (GB)</label>
+                                <input id="fm-drive-total" type="number" min="0" value="${existingDrive?.total || ''}" placeholder="500" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Notes</label>
+                                <input id="fm-folder-notes" type="text" placeholder="e.g. Client project files" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none">
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="fmCloseFolderModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-bold">Cancel</button>
+                            <button onclick="fmSaveFolder()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-2.5 text-sm font-bold">Add Folder</button>
+                        </div>
+                    </div>
+                </dialog>`;
+                document.body.insertAdjacentHTML('beforeend', html);
+                document.getElementById('fmFolderModal').showModal();
+            }
+
+            function fmCloseFolderModal() {
+                const m = document.getElementById('fmFolderModal');
+                if (m) { m.close(); m.remove(); }
+            }
+
+            async function fmSaveFolder() {
+                const name  = document.getElementById('fm-folder-name')?.value.trim();
+                const size  = Number(document.getElementById('fm-folder-size')?.value || 0);
+                const total = Number(document.getElementById('fm-drive-total')?.value || 0);
+                const notes = document.getElementById('fm-folder-notes')?.value.trim();
+                if (!name) return toast('Folder name required', 'error');
+                const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
+                const path = `worksync/file_systems/${sysId}/drives/${driveLabel}`;
+                const currentDrive = fmSystems[sysId]?.drives?.[driveLabel] || { total: 0, used: 0, folders: [] };
+                const folders = [...(currentDrive.folders || []), { name, size, notes }];
+                const newUsed = folders.reduce((s, f) => s + Number(f.size || 0), 0);
+                try {
+                    await update(ref(db, path), {
+                        total: total || currentDrive.total,
+                        used:  newUsed,
+                        folders
+                    });
+                    toast('Folder added', 'success');
+                    fmCloseFolderModal();
+                } catch(e) { toast('Failed: ' + e.message, 'error'); }
+            }
+
+            async function fmDeleteFolder(sysId, driveLabel, idx) {
+                if (!confirm('Delete this folder entry?')) return;
+                const drive = fmSystems[sysId]?.drives?.[driveLabel];
+                if (!drive) return;
+                const folders = [...(drive.folders || [])];
+                folders.splice(idx, 1);
+                const newUsed = folders.reduce((s, f) => s + Number(f.size || 0), 0);
+                try {
+                    await update(ref(db, `worksync/file_systems/${sysId}/drives/${driveLabel}`), { folders, used: newUsed });
+                    toast('Folder removed', 'success');
+                } catch(e) { toast('Failed: ' + e.message, 'error'); }
+            }
+
+            async function fmAddDrivePrompt(sysId) {
+                const label = window.prompt('Enter drive label (e.g. C Drive, D Drive):');
+                if (!label) return;
+                const totalGb = window.prompt('Enter total drive size in GB (e.g. 500):');
+                if (!totalGb || isNaN(Number(totalGb))) return toast('Invalid size', 'error');
+                try {
+                    await set(ref(db, `worksync/file_systems/${sysId}/drives/${label}`), {
+                        total: Number(totalGb), used: 0, folders: []
+                    });
+                    fmSelectedSystemId = sysId;
+                    toast('Drive added', 'success');
+                } catch(e) { toast('Failed: ' + e.message, 'error'); }
+            }
 
             function previewUpload(input, spanId) {
                 const span = document.getElementById(spanId);
@@ -25496,7 +26352,7 @@
         })();
     </script>
     <script>
-        (function() {
+        (function () {
             // ── Daily Vibe Popup ──
             var checkInterval = null;
 
@@ -25510,9 +26366,9 @@
                 let assigned = [];
                 let completed = [];
                 let pending = [];
-                
+
                 // Need to carefully check global tasks, ensure functions exist
-                const getAssignees = (t) => (t.assigneeEmail || t.userId || '').toLowerCase().split(',').map(s=>s.trim());
+                const getAssignees = (t) => (t.assigneeEmail || t.userId || '').toLowerCase().split(',').map(s => s.trim());
                 const isCompletedStatus = (st) => {
                     if (!st) return false;
                     const l = st.toLowerCase().trim();
@@ -25522,7 +26378,7 @@
                 window.tasks.forEach(t => {
                     const assignees = getAssignees(t);
                     if (!assignees.includes(email)) return;
-                    
+
                     const status = (t.status || '').toLowerCase().trim();
                     if (isCompletedStatus(status)) completed.push(t);
                     else pending.push(t);
@@ -25530,7 +26386,7 @@
                 });
 
                 const workedTaskIds = new Set();
-                
+
                 // Gather timelogs
                 try {
                     const { get, ref } = window; // from firebase
@@ -25540,7 +26396,7 @@
                         const logs = Object.values(snap.val() || {}).filter(l => l.userId === email && l.startTime >= startOfDay && l.startTime <= endOfDay);
                         logs.forEach(l => { if (l.taskId) workedTaskIds.add(l.taskId); });
                     }
-                } catch(e) { console.error('Vibe Popup Timelog Fetch Error', e); }
+                } catch (e) { console.error('Vibe Popup Timelog Fetch Error', e); }
 
                 // Gather Sneha specific logs
                 if (email === 'snehavilpower@gmail.com') {
@@ -25558,7 +26414,7 @@
                                 workedTaskIds.add(q.taskId);
                             }
                         });
-                    } catch(e) {}
+                    } catch (e) { }
                 } else if (email === 'anithavilpower@gmail.com') {
                     // Karthika daily plans
                     try {
@@ -25570,7 +26426,7 @@
                                 workedTaskIds.add(tid);
                             }
                         });
-                    } catch(e) {}
+                    } catch (e) { }
                 }
 
                 // Add explicitly completed/worked tasks if they aren't tracked via timelogs
@@ -25585,11 +26441,11 @@
 
                 const escapeHtml = (unsafe) => {
                     if (!unsafe) return '';
-                    return (unsafe+'').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+                    return (unsafe + '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
                 };
 
                 const firstName = window.currentUser.name ? window.currentUser.name.split(' ')[0] : 'there';
-                
+
                 const popupHtml = `
                     <div class="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-8 w-full relative overflow-hidden border border-white/20">
                         <div class="absolute -top-10 -right-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
@@ -25649,7 +26505,7 @@
                 modal.style.left = "50%";
                 modal.style.transform = "translate(-50%, -50%)";
                 modal.innerHTML = popupHtml;
-                
+
                 document.body.appendChild(modal);
                 // Tailwind custom scrollbar class injection via a style block inside the modal
                 const style = document.createElement('style');
@@ -25671,14 +26527,14 @@
                 const m = now.getMinutes();
                 const email = window.currentUser.email.toLowerCase();
                 const isSpecialUser = email === 'snehavilpower@gmail.com' || email === 'anithavilpower@gmail.com';
-                
+
                 const targetH = isSpecialUser ? 17 : 18;
                 const targetM = isSpecialUser ? 40 : 20;
 
                 const currentMins = h * 60 + m;
                 const targetMins = targetH * 60 + targetM;
 
-                if (currentMins >= targetMins && currentMins < targetMins + 15) { 
+                if (currentMins >= targetMins && currentMins < targetMins + 15) {
                     const todayStr = now.toISOString().slice(0, 10);
                     const seenKey = 'vibePopupSeen_' + todayStr;
                     if (!localStorage.getItem(seenKey)) {
@@ -25690,10 +26546,10 @@
 
             // Start checker
             checkInterval = setInterval(checkDailyVibePopup, 60000);
-            
+
             // Run once initially (with a small delay to ensure data load)
             setTimeout(checkDailyVibePopup, 5000);
-            
+
             window.showDailyVibePopup = showDailyVibePopup; // export for testing
         })();
     </script>
