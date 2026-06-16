@@ -2594,9 +2594,12 @@
                                     <table class="w-full text-xs">
                                         <thead class="bg-slate-50 border-b border-slate-100">
                                             <tr>
-                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Folder / File Type</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Client / Folder</th>
                                                 <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Size</th>
                                                 <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Usage %</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Files</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                                                <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Period</th>
                                                 <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Notes</th>
                                                 <th class="text-left px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
                                             </tr>
@@ -6315,6 +6318,9 @@
                 { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member', avatar: 'Sneha' },
                 { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
+                { email: 'ajithvilpower@gmail.com', name: 'Ajith Ramachandran', role: 'Social Media Executive', avatar: 'Ajith' },
+                { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
+                { email: 'alex@vilpower.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
                 { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
             ];
 
@@ -22140,10 +22146,16 @@
 
                         // Remove client name from task description if it already appears in the group header
                         let desc = task.desc || 'Untitled';
-                        // Strip " - ClientName" or "ClientName - " patterns (case-insensitive)
                         const clientEsc = client.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                        desc = desc.replace(new RegExp(`\\s*[-–]\\s*${clientEsc}\\s*$`, 'i'), '').trim();
-                        desc = desc.replace(new RegExp(`^${clientEsc}\\s*[-–]\\s*`, 'i'), '').trim();
+                        // Strip all dash variants: hyphen, en-dash, em-dash before/after client name
+                        desc = desc.replace(new RegExp(`\\s*[-\\u2013\\u2014]\\s*${clientEsc}\\s*$`, 'i'), '').trim();
+                        desc = desc.replace(new RegExp(`^${clientEsc}\\s*[-\\u2013\\u2014]\\s*`, 'i'), '').trim();
+                        // Also strip exact " - Ramachandran" style suffix (partial surname match)
+                        const clientWords = client.split(/\s+/).filter(w => w.length > 3);
+                        clientWords.forEach(word => {
+                            const wEsc = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                            desc = desc.replace(new RegExp(`\\s*[-\\u2013\\u2014]\\s*${wEsc}\\s*$`, 'i'), '').trim();
+                        });
 
                         report += `  ${index + 1}. ${desc}${flagSuffix}\n`;
                         report += `     Assignee: ${assignee} | Status: ${task.status}\n`;
@@ -24015,13 +24027,19 @@
                 }
 
                 filtered.sort((a, b) => {
+                    // Sort: overdue first, then by due date ascending
+                    const todayMs = new Date().setHours(0, 0, 0, 0);
+                    const aOverdue = a.duedate && new Date(a.duedate) < todayMs && !isDone(a.status);
+                    const bOverdue = b.duedate && new Date(b.duedate) < todayMs && !isDone(b.status);
+                    if (aOverdue && !bOverdue) return -1;
+                    if (!aOverdue && bOverdue) return 1;
                     if (!a.duedate && !b.duedate) return 0;
                     if (!a.duedate) return 1;
                     if (!b.duedate) return -1;
                     return new Date(a.duedate) - new Date(b.duedate);
                 });
 
-                filtered = filtered.slice(0, 50);
+                filtered = filtered.slice(0, 200);
 
                 if (!filtered.length) {
                     list.innerHTML = `<p class="p-4 text-center text-xs text-slate-400 italic">No tasks found.</p>`;
@@ -24031,13 +24049,22 @@
                 const todayStart = new Date();
                 todayStart.setHours(0, 0, 0, 0);
                 list.innerHTML = filtered.map(t => {
+                    const isOverdue = t.duedate && new Date(t.duedate) < todayStart && !isDone(t.status);
                     const dueClass = !t.duedate || isDone(t.status) ? 'text-slate-700'
-                        : (new Date(t.duedate) < todayStart ? 'text-rose-600' : 'text-slate-700');
+                        : (isOverdue ? 'text-rose-600 font-black' : 'text-slate-700');
+                    const overdueBadge = isOverdue
+                        ? `<span class="text-[8px] font-black bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">Overdue</span>`
+                        : '';
+                    const rowBg = isOverdue ? 'bg-rose-50/40 border-rose-100 hover:bg-rose-50 hover:border-rose-200' : 'border-transparent hover:bg-slate-100 hover:border-slate-200';
                     return `
-                <label class="flex items-center gap-3 p-3 hover:bg-slate-100 rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-200">
+                <label class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${rowBg}">
                     <input type="checkbox" name="ap_task_select" value="${t.id}" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 shrink-0">
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs font-bold text-slate-900 break-words leading-snug"><span class="text-indigo-600 font-mono mr-1">${t.id}</span>${escapeHtml(t.desc)}</p>
+                        <div class="flex items-start gap-1.5 flex-wrap">
+                            <span class="text-indigo-600 font-mono text-xs font-black flex-shrink-0">${t.id}</span>
+                            ${overdueBadge}
+                        </div>
+                        <p class="text-xs font-bold text-slate-900 break-words leading-snug mt-0.5">${escapeHtml(t.desc)}</p>
                         <p class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(t.status)}${t.client ? ' · ' + escapeHtml(t.client) : ''} · ${escapeHtml(assigneeName(t))}</p>
                     </div>
                     <div class="shrink-0 text-right min-w-[60px] ml-2">
@@ -24504,6 +24531,8 @@
             window.fmSaveFolder = fmSaveFolder;
             window.fmCloseFolderModal = fmCloseFolderModal;
             window.fmDeleteFolder = fmDeleteFolder;
+            window.fmAddDriveRow = fmAddDriveRow;
+            window.fmFolderClientChange = fmFolderClientChange;
             window.renderDiscussionsView = renderDiscussionsView;
             window.saveLiveDiscussionNotes = saveLiveDiscussionNotes;
             window.endCurrentDiscussionLive = endCurrentDiscussionLive;
@@ -24735,51 +24764,158 @@
             function fmOpenAddSystemModal(id) {
                 const existing = id ? fmSystems[id] : null;
                 const title = existing ? 'Edit System' : 'Add System';
+
+                // Build user dropdown from USERS list
+                const userOptions = (typeof USERS !== 'undefined' ? USERS : [])
+                    .filter(u => u.email !== '123')
+                    .map(u => `<option value="${escapeHtml(u.name)}" ${(existing?.owner === u.name) ? 'selected' : ''}>${escapeHtml(u.name)}</option>`)
+                    .join('');
+
+                // Build existing drives rows HTML
+                const existingDrives = Object.entries(existing?.drives || {});
+                const drivesRowsHtml = existingDrives.map(([label, d], i) => `
+                    <div class="fm-drive-row grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 items-center" data-idx="${i}">
+                        <input type="text" class="fm-dr-label bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" value="${escapeHtml(label)}" placeholder="C Drive">
+                        <input type="number" class="fm-dr-total bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.total||''}" placeholder="GB" min="0">
+                        <input type="number" class="fm-dr-used bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.used||''}" placeholder="GB" min="0">
+                        <input type="number" class="fm-dr-free bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none bg-slate-100" readonly placeholder="—">
+                        <button type="button" onclick="this.closest('.fm-drive-row').remove()" class="text-rose-400 hover:text-rose-600 text-lg leading-none font-bold">×</button>
+                    </div>`).join('');
+
                 const html = `
-                <dialog id="fmSystemModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
-                    <div class="bg-indigo-600 px-8 py-5 flex items-center justify-between">
-                        <h3 class="text-base font-black text-white">${title}</h3>
-                        <button onclick="fmCloseSystemModal()" class="p-1.5 text-white/60 hover:text-white"><iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon></button>
+                <dialog id="fmSystemModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden">
+                    <div class="bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <iconify-icon icon="solar:server-path-bold-duotone" class="text-white" width="22"></iconify-icon>
+                            <h3 class="text-base font-black text-white">${title}</h3>
+                        </div>
+                        <button onclick="fmCloseSystemModal()" class="p-1.5 text-white/60 hover:text-white transition-colors">
+                            <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
+                        </button>
                     </div>
-                    <div class="p-8 space-y-4">
+                    <div class="p-7 space-y-5 max-h-[80vh] overflow-y-auto">
                         <input type="hidden" id="fm-modal-id" value="${escapeHtml(id || '')}">
+
+                        <!-- System Name = User dropdown -->
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">System Name (User) *</label>
+                            <select id="fm-modal-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <option value="">— Select User —</option>
+                                ${userOptions}
+                                <option value="__custom__">Custom Name…</option>
+                            </select>
+                            <input id="fm-modal-name-custom" type="text" value="${escapeHtml(existing?.owner || '')}" placeholder="Enter custom name"
+                                class="hidden mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                        </div>
+
+                        <!-- System Details Row -->
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">System Name *</label>
-                                <input id="fm-modal-name" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="e.g. Palani" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            </div>
-                            <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">IP Address</label>
-                                <input id="fm-modal-ip" type="text" value="${escapeHtml(existing?.ip || '')}" placeholder="192.168.1.10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <input id="fm-modal-ip" type="text" value="${escapeHtml(existing?.ip || '')}" placeholder="192.168.1.10"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Storage Type</label>
-                                <select id="fm-modal-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                    <option value="Local Storage" ${(existing?.type||'Local Storage') === 'Local Storage' ? 'selected' : ''}>Local Storage</option>
-                                    <option value="NAS" ${existing?.type === 'NAS' ? 'selected' : ''}>NAS</option>
-                                    <option value="Cloud" ${existing?.type === 'Cloud' ? 'selected' : ''}>Cloud</option>
-                                    <option value="External HDD" ${existing?.type === 'External HDD' ? 'selected' : ''}>External HDD</option>
-                                    <option value="SSD" ${existing?.type === 'SSD' ? 'selected' : ''}>SSD</option>
+                                <select id="fm-modal-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                    <option value="Local Storage" ${(existing?.type||'Local Storage')==='Local Storage'?'selected':''}>Local Storage</option>
+                                    <option value="NAS"           ${existing?.type==='NAS'?'selected':''}>NAS</option>
+                                    <option value="Cloud"         ${existing?.type==='Cloud'?'selected':''}>Cloud</option>
+                                    <option value="External HDD"  ${existing?.type==='External HDD'?'selected':''}>External HDD</option>
+                                    <option value="SSD"           ${existing?.type==='SSD'?'selected':''}>SSD</option>
                                 </select>
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Location</label>
-                                <input id="fm-modal-location" type="text" value="${escapeHtml(existing?.location || '')}" placeholder="e.g. Office Floor 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            </div>
                             <div class="col-span-2">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Owner / Assigned To</label>
-                                <input id="fm-modal-owner" type="text" value="${escapeHtml(existing?.owner || '')}" placeholder="e.g. Palani" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Notes</label>
+                                <input id="fm-modal-notes" type="text" value="${escapeHtml(existing?.notes || '')}" placeholder="Optional notes"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
                             </div>
                         </div>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Drives (add after saving)</p>
-                        <div class="flex gap-3 pt-2">
+
+                        <!-- Drives Section -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Drives</label>
+                                <button type="button" onclick="fmAddDriveRow()" class="text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <iconify-icon icon="solar:add-circle-bold" width="12"></iconify-icon> Add Drive
+                                </button>
+                            </div>
+                            <!-- Column headers -->
+                            <div class="grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 mb-1 px-0.5">
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Drive Label</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total GB</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Used GB</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Free GB</span>
+                                <span></span>
+                            </div>
+                            <div id="fm-drives-input-list" class="space-y-2">
+                                ${drivesRowsHtml}
+                            </div>
+                            ${existingDrives.length === 0 ? `<p class="text-[10px] text-slate-400 italic mt-2">No drives yet. Click "Add Drive" to add one.</p>` : ''}
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex gap-3 pt-2 border-t border-slate-100">
                             <button onclick="fmCloseSystemModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-3 text-sm font-bold transition-all">Cancel</button>
-                            <button onclick="fmSaveSystem()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold transition-all">Save System</button>
+                            <button onclick="fmSaveSystem()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold transition-all shadow-lg shadow-indigo-100">
+                                <iconify-icon icon="solar:diskette-bold" width="16" class="mr-1"></iconify-icon>Save System
+                            </button>
                         </div>
                     </div>
                 </dialog>`;
                 document.body.insertAdjacentHTML('beforeend', html);
-                document.getElementById('fmSystemModal').showModal();
+                const modal = document.getElementById('fmSystemModal');
+                modal.showModal();
+
+                // Wire user dropdown → custom input toggle
+                document.getElementById('fm-modal-name')?.addEventListener('change', function() {
+                    const custom = document.getElementById('fm-modal-name-custom');
+                    if (!custom) return;
+                    if (this.value === '__custom__') custom.classList.remove('hidden');
+                    else custom.classList.add('hidden');
+                });
+
+                // Auto-calc free on input
+                modal.addEventListener('input', e => {
+                    const row = e.target.closest('.fm-drive-row');
+                    if (!row) return;
+                    const total = Number(row.querySelector('.fm-dr-total')?.value || 0);
+                    const used  = Number(row.querySelector('.fm-dr-used')?.value  || 0);
+                    const freeEl = row.querySelector('.fm-dr-free');
+                    if (freeEl) freeEl.value = total > 0 ? (total - used).toFixed(0) : '';
+                });
+
+                // Pre-fill free for existing drives
+                document.querySelectorAll('.fm-drive-row').forEach(row => {
+                    const total = Number(row.querySelector('.fm-dr-total')?.value || 0);
+                    const used  = Number(row.querySelector('.fm-dr-used')?.value  || 0);
+                    const freeEl = row.querySelector('.fm-dr-free');
+                    if (freeEl && total > 0) freeEl.value = (total - used).toFixed(0);
+                });
+
+                // Pre-select user name in dropdown if editing
+                if (existing?.owner) {
+                    const sel = document.getElementById('fm-modal-name');
+                    if (sel) {
+                        const found = [...sel.options].find(o => o.value === existing.owner);
+                        if (found) sel.value = existing.owner;
+                        else { sel.value = '__custom__'; document.getElementById('fm-modal-name-custom')?.classList.remove('hidden'); }
+                    }
+                }
+            }
+
+            function fmAddDriveRow() {
+                const list = document.getElementById('fm-drives-input-list');
+                if (!list) return;
+                const row = document.createElement('div');
+                row.className = 'fm-drive-row grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 items-center';
+                row.innerHTML = `
+                    <input type="text" class="fm-dr-label bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" placeholder="C Drive">
+                    <input type="number" class="fm-dr-total bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" placeholder="GB" min="0">
+                    <input type="number" class="fm-dr-used bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" placeholder="GB" min="0">
+                    <input type="number" class="fm-dr-free bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" readonly placeholder="—">
+                    <button type="button" onclick="this.closest('.fm-drive-row').remove()" class="text-rose-400 hover:text-rose-600 text-lg leading-none font-bold">×</button>`;
+                list.appendChild(row);
             }
 
             function fmCloseSystemModal() {
@@ -24789,22 +24925,43 @@
 
             async function fmSaveSystem() {
                 const id = document.getElementById('fm-modal-id')?.value;
-                const name = document.getElementById('fm-modal-name')?.value.trim();
-                if (!name) return toast('System name is required', 'error');
+                const nameSel = document.getElementById('fm-modal-name')?.value;
+                const name = nameSel === '__custom__'
+                    ? (document.getElementById('fm-modal-name-custom')?.value.trim() || '')
+                    : nameSel;
+                if (!name) return toast('Please select or enter a system name', 'error');
+
+                // Collect drives from input rows
+                const driveRows = document.querySelectorAll('#fm-drives-input-list .fm-drive-row');
+                const drives = {};
+                let driveError = false;
+                driveRows.forEach(row => {
+                    const label = row.querySelector('.fm-dr-label')?.value.trim();
+                    const total = Number(row.querySelector('.fm-dr-total')?.value || 0);
+                    const used  = Number(row.querySelector('.fm-dr-used')?.value  || 0);
+                    if (!label) { driveError = true; return; }
+                    const existing = fmSystems[id]?.drives?.[label] || {};
+                    drives[label] = { ...existing, total, used, folders: existing.folders || [] };
+                });
+                if (driveError) return toast('Each drive must have a label', 'error');
+
                 const payload = {
                     name,
-                    ip:       document.getElementById('fm-modal-ip')?.value.trim(),
-                    type:     document.getElementById('fm-modal-type')?.value,
-                    location: document.getElementById('fm-modal-location')?.value.trim(),
-                    owner:    document.getElementById('fm-modal-owner')?.value.trim(),
+                    owner:    name,
+                    ip:       document.getElementById('fm-modal-ip')?.value.trim()       || '',
+                    type:     document.getElementById('fm-modal-type')?.value             || 'Local Storage',
+                    location: document.getElementById('fm-modal-location')?.value.trim() || '',
+                    notes:    document.getElementById('fm-modal-notes')?.value.trim()    || '',
+                    drives,
                     updatedAt: Date.now()
                 };
+
                 try {
                     if (id) {
-                        await update(ref(db, `worksync/file_systems/${id}`), payload);
+                        await set(ref(db, `worksync/file_systems/${id}`), payload);
                         toast('System updated', 'success');
                     } else {
-                        const newRef = await push(ref(db, 'worksync/file_systems'), { ...payload, drives: {} });
+                        const newRef = await push(ref(db, 'worksync/file_systems'), payload);
                         fmSelectedSystemId = newRef.key;
                         toast('System added', 'success');
                     }
@@ -24831,40 +24988,92 @@
 
             function fmAddFolder() {
                 if (!fmSelectedSystemId || !fmSelectedDriveLabel) return;
-                const existingDrive = fmSystems[fmSelectedSystemId]?.drives?.[fmSelectedDriveLabel];
+                const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
+
+                // Build client dropdown from customClients / CLIENTS
+                const clientList = (typeof customClients !== 'undefined' && customClients.length)
+                    ? customClients
+                    : (typeof CLIENTS !== 'undefined' ? CLIENTS : []);
+                const clientOptions = clientList.map(c =>
+                    `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
                 const html = `
-                <dialog id="fmFolderModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-md border-none overflow-hidden">
-                    <div class="bg-amber-500 px-6 py-4 flex items-center justify-between">
-                        <h3 class="text-sm font-black text-white">Add Folder / File Type</h3>
-                        <button onclick="fmCloseFolderModal()" class="text-white/70 hover:text-white"><iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon></button>
+                <dialog id="fmFolderModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
+                    <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <iconify-icon icon="solar:folder-bold" class="text-white" width="20"></iconify-icon>
+                            <h3 class="text-sm font-black text-white">Add Folder to ${escapeHtml(driveLabel)}</h3>
+                        </div>
+                        <button onclick="fmCloseFolderModal()" class="text-white/70 hover:text-white">
+                            <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                        </button>
                     </div>
                     <div class="p-6 space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="col-span-2">
-                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Folder Name *</label>
-                                <input id="fm-folder-name" type="text" placeholder="e.g. NTT Files" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                        <!-- Client -->
+                        <div>
+                            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Client *</label>
+                            <select id="fm-folder-client" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400/30" onchange="fmFolderClientChange(this)">
+                                <option value="">— Select Client —</option>
+                                ${clientOptions}
+                                <option value="__other__">Other / Custom…</option>
+                            </select>
+                            <input id="fm-folder-client-custom" type="text" placeholder="Custom folder name"
+                                class="hidden mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                        </div>
+
+                        <!-- Folder details -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Size (GB) *</label>
+                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="0"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div>
-                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Size (GB) *</label>
-                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Count</label>
+                                <input id="fm-folder-count" type="number" min="0" placeholder="0"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div>
-                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Drive Total (GB)</label>
-                                <input id="fm-drive-total" type="number" min="0" value="${existingDrive?.total || ''}" placeholder="500" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Type</label>
+                                <select id="fm-folder-filetype" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400/30">
+                                    <option value="">Mixed</option>
+                                    <option value="Videos">Videos (.mp4, .mov)</option>
+                                    <option value="Images">Images (.jpg, .png, .psd)</option>
+                                    <option value="Documents">Documents (.pdf, .docx)</option>
+                                    <option value="Projects">Project Files (.prproj, .aep)</option>
+                                    <option value="Audio">Audio (.wav, .mp3)</option>
+                                    <option value="Backups">Backups (.zip, .rar)</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date Range</label>
+                                <input id="fm-folder-daterange" type="text" placeholder="e.g. Jan–Jun 2026"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div class="col-span-2">
-                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Notes</label>
-                                <input id="fm-folder-notes" type="text" placeholder="e.g. Client project files" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Notes / Description</label>
+                                <input id="fm-folder-notes" type="text" placeholder="e.g. NTT client campaign files 2026"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none">
                             </div>
                         </div>
-                        <div class="flex gap-3">
-                            <button onclick="fmCloseFolderModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-bold">Cancel</button>
-                            <button onclick="fmSaveFolder()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-2.5 text-sm font-bold">Add Folder</button>
+
+                        <div class="flex gap-3 pt-2 border-t border-slate-100">
+                            <button onclick="fmCloseFolderModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-3 text-sm font-bold">Cancel</button>
+                            <button onclick="fmSaveFolder()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-amber-100">
+                                <iconify-icon icon="solar:folder-add-bold" width="15" class="mr-1"></iconify-icon>Add Folder
+                            </button>
                         </div>
                     </div>
                 </dialog>`;
                 document.body.insertAdjacentHTML('beforeend', html);
                 document.getElementById('fmFolderModal').showModal();
+            }
+
+            function fmFolderClientChange(sel) {
+                const custom = document.getElementById('fm-folder-client-custom');
+                if (sel.value === '__other__') custom.classList.remove('hidden');
+                else custom.classList.add('hidden');
             }
 
             function fmCloseFolderModal() {
@@ -24873,23 +25082,29 @@
             }
 
             async function fmSaveFolder() {
-                const name  = document.getElementById('fm-folder-name')?.value.trim();
-                const size  = Number(document.getElementById('fm-folder-size')?.value || 0);
-                const total = Number(document.getElementById('fm-drive-total')?.value || 0);
-                const notes = document.getElementById('fm-folder-notes')?.value.trim();
-                if (!name) return toast('Folder name required', 'error');
+                const clientSel = document.getElementById('fm-folder-client')?.value;
+                const name = clientSel === '__other__'
+                    ? (document.getElementById('fm-folder-client-custom')?.value.trim() || '')
+                    : clientSel;
+                if (!name) return toast('Please select a client', 'error');
+                const size     = Number(document.getElementById('fm-folder-size')?.value  || 0);
+                const count    = Number(document.getElementById('fm-folder-count')?.value || 0);
+                const fileType = document.getElementById('fm-folder-filetype')?.value     || '';
+                const dateRange= document.getElementById('fm-folder-daterange')?.value.trim() || '';
+                const notes    = document.getElementById('fm-folder-notes')?.value.trim() || '';
+
                 const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
-                const path = `worksync/file_systems/${sysId}/drives/${driveLabel}`;
                 const currentDrive = fmSystems[sysId]?.drives?.[driveLabel] || { total: 0, used: 0, folders: [] };
-                const folders = [...(currentDrive.folders || []), { name, size, notes }];
+                const folders = [...(currentDrive.folders || []), { name, size, count, fileType, dateRange, notes, client: name }];
                 const newUsed = folders.reduce((s, f) => s + Number(f.size || 0), 0);
+
                 try {
-                    await update(ref(db, path), {
-                        total: total || currentDrive.total,
+                    await update(ref(db, `worksync/file_systems/${sysId}/drives/${driveLabel}`), {
+                        total: currentDrive.total,
                         used:  newUsed,
                         folders
                     });
-                    toast('Folder added', 'success');
+                    toast(`Folder "${name}" added`, 'success');
                     fmCloseFolderModal();
                 } catch(e) { toast('Failed: ' + e.message, 'error'); }
             }
