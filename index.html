@@ -2474,14 +2474,16 @@
                         <div class="flex items-center gap-2">
                             <div class="relative">
                                 <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
-                                <input id="fm-search" type="text" placeholder="Search system..." oninput="fmSearchSystem()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-48">
+                                <input id="fm-search" type="text" placeholder="Search files, folders, systems..." oninput="fmSearchSystem()"
+                                    class="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-64">
                             </div>
                             <button onclick="fmOpenAddSystemModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-100">
                                 <iconify-icon icon="solar:add-circle-bold" width="14"></iconify-icon> Add System
                             </button>
                         </div>
                     </div>
+
+                    <div id="fm-search-results" class="hidden"></div>
 
                     <!-- Stat Cards -->
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -7875,7 +7877,7 @@
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
-            document.getElementById('nav-files-manager')?.classList.toggle('hidden', !isAdmin());
+                document.getElementById('nav-files-manager')?.classList.remove('hidden');
                 document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
                 if (hasClientWideAccess() && !isAdmin() && !isManager()) {
                     // Client-wide only access
@@ -8702,7 +8704,6 @@
                 if (view === 'clients-admin' && !isAdmin()) view = 'dashboard';
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) view = 'dashboard';
                 if (view === 'plan-tracking' && !canViewPlanTracking()) view = 'dashboard';
-            if (view === 'files-manager' && !isAdmin()) view = 'dashboard';
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
@@ -24526,6 +24527,7 @@
             window.fmEditSystem = fmEditSystem;
             window.fmDeleteSystem = fmDeleteSystem;
             window.fmAddFolder = fmAddFolder;
+            window.fmEditFolder = fmEditFolder;
             window.fmSaveSystem = fmSaveSystem;
             window.fmCloseSystemModal = fmCloseSystemModal;
             window.fmSaveFolder = fmSaveFolder;
@@ -24548,11 +24550,17 @@
             let fmUnsub = null;
             let fmSelectedSystemId = null;
             let fmSelectedDriveLabel = null;
+            let fmEditingFolder = null;
 
             function fmFmtBytes(gb) {
                 if (!gb && gb !== 0) return '—';
                 if (gb >= 1024) return (gb / 1024).toFixed(1) + ' TB';
                 return gb + ' GB';
+            }
+
+            function fmDecodeArg(value) {
+                try { return decodeURIComponent(value); }
+                catch { return value; }
             }
 
             function fmPctColor(pct) {
@@ -24572,7 +24580,9 @@
 
             function renderFilesManager() {
                 fmUpdateStats();
-                fmRenderSystemsList();
+                const term = document.getElementById('fm-search')?.value || '';
+                fmRenderSearchResults(term);
+                fmRenderSystemsList(term);
                 if (fmSelectedSystemId && fmSystems[fmSelectedSystemId]) {
                     fmShowSystemDetail(fmSelectedSystemId);
                 } else {
@@ -24591,6 +24601,10 @@
                         const t = Number(d.total || 0), u = Number(d.used || 0);
                         totalGb += t; freeGb += (t - u);
                         if (u / Math.max(t, 1) >= 0.8) critical++;
+                        (d.folders || []).forEach(f => {
+                            const folderClient = f.client || f.name;
+                            if (folderClient) clientSet.add(folderClient);
+                        });
                     });
                     if ((sys.totalGb || 0) > largestGb) { largestGb = sys.totalGb || 0; largestName = sys.name || ''; }
                     (sys.clients || []).forEach(c => clientSet.add(c));
@@ -24610,7 +24624,7 @@
                 const el = document.getElementById('fm-systems-list');
                 if (!el) return;
                 let entries = Object.entries(fmSystems);
-                if (filter) entries = entries.filter(([, s]) => (s.name || '').toLowerCase().includes(filter.toLowerCase()));
+                if (filter) entries = entries.filter(([id, s]) => fmSystemMatchesSearch(id, s, filter));
                 if (!entries.length) {
                     el.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-8 px-4">No systems found.</p>`;
                     return;
@@ -24635,7 +24649,109 @@
             }
 
             function fmSearchSystem() {
-                fmRenderSystemsList(document.getElementById('fm-search')?.value || '');
+                const term = document.getElementById('fm-search')?.value || '';
+                fmRenderSearchResults(term);
+                fmRenderSystemsList(term);
+            }
+
+            function fmSearchHaystack(parts) {
+                return parts
+                    .filter(v => v !== undefined && v !== null)
+                    .map(v => String(v).toLowerCase())
+                    .join(' ');
+            }
+
+            function fmSystemMatchesSearch(id, sys, term) {
+                const q = (term || '').trim().toLowerCase();
+                if (!q) return true;
+                const systemText = fmSearchHaystack([id, sys.name, sys.owner, sys.ip, sys.type, sys.location, sys.notes]);
+                if (systemText.includes(q)) return true;
+                return Object.entries(sys.drives || {}).some(([driveLabel, drive]) =>
+                    driveLabel.toLowerCase().includes(q) ||
+                    (drive.folders || []).some(folder => fmFolderMatchesSearch(sys, driveLabel, folder, q))
+                );
+            }
+
+            function fmFolderMatchesSearch(sys, driveLabel, folder, q) {
+                return fmSearchHaystack([
+                    sys.name,
+                    sys.owner,
+                    sys.ip,
+                    driveLabel,
+                    folder.name,
+                    folder.client,
+                    folder.fileType,
+                    folder.dateRange,
+                    folder.notes,
+                    folder.count,
+                    folder.size
+                ]).includes(q);
+            }
+
+            function fmGetFolderSearchResults(term) {
+                const q = (term || '').trim().toLowerCase();
+                if (!q) return [];
+                const results = [];
+                Object.entries(fmSystems).forEach(([systemId, sys]) => {
+                    Object.entries(sys.drives || {}).forEach(([driveLabel, drive]) => {
+                        (drive.folders || []).forEach((folder, idx) => {
+                            if (fmFolderMatchesSearch(sys, driveLabel, folder, q)) {
+                                results.push({ systemId, sys, driveLabel, drive, folder, idx });
+                            }
+                        });
+                    });
+                });
+                return results;
+            }
+
+            function fmRenderSearchResults(term) {
+                const wrap = document.getElementById('fm-search-results');
+                if (!wrap) return;
+                const q = (term || '').trim();
+                if (!q) {
+                    wrap.classList.add('hidden');
+                    wrap.innerHTML = '';
+                    return;
+                }
+                const results = fmGetFolderSearchResults(q);
+                wrap.classList.remove('hidden');
+                if (!results.length) {
+                    wrap.innerHTML = `
+                        <div class="bg-white rounded-2xl shadow border border-slate-100 p-4 text-xs text-slate-400 font-bold">
+                            No folder or file records found for "${escapeHtml(q)}".
+                        </div>`;
+                    return;
+                }
+                wrap.innerHTML = `
+                    <div class="bg-white rounded-2xl shadow border border-slate-100 overflow-hidden">
+                        <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <p class="text-xs font-black text-slate-900">File Search Results</p>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${results.length} match${results.length !== 1 ? 'es' : ''}</p>
+                        </div>
+                        <div class="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+                            ${results.map(r => `
+                                <button onclick="fmSelectSearchResult('${encodeURIComponent(r.systemId)}','${encodeURIComponent(r.driveLabel)}')"
+                                    class="w-full text-left px-5 py-3 hover:bg-slate-50 transition-all flex items-center gap-3">
+                                    <iconify-icon icon="solar:folder-with-files-bold-duotone" class="text-amber-400 flex-shrink-0" width="20"></iconify-icon>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-xs font-black text-slate-800 truncate">${escapeHtml(r.folder.name || r.folder.client || 'Unnamed Folder')}</p>
+                                        <p class="text-[10px] text-slate-400 font-bold truncate">${escapeHtml(r.sys.name || r.systemId)} / ${escapeHtml(r.driveLabel)} / ${escapeHtml(r.folder.fileType || 'Mixed files')}</p>
+                                        ${r.folder.notes ? `<p class="text-[10px] text-slate-500 truncate mt-0.5">${escapeHtml(r.folder.notes)}</p>` : ''}
+                                    </div>
+                                    <div class="text-right flex-shrink-0">
+                                        <p class="text-[10px] font-black text-slate-700">${fmFmtBytes(Number(r.folder.size || 0))}</p>
+                                        <p class="text-[9px] text-slate-400 font-bold">${Number(r.folder.count || 0)} files</p>
+                                    </div>
+                                </button>`).join('')}
+                        </div>
+                    </div>`;
+            }
+
+            function fmSelectSearchResult(systemId, driveLabel) {
+                systemId = fmDecodeArg(systemId);
+                driveLabel = fmDecodeArg(driveLabel);
+                fmSelectSystem(systemId);
+                fmSelectDrive(systemId, driveLabel);
             }
 
             function fmSelectSystem(id) {
@@ -24673,7 +24789,7 @@
                         const pct = total > 0 ? Math.round(used / total * 100) : 0;
                         const barColor = fmPctColor(pct);
                         return `
-                        <div class="cursor-pointer hover:bg-slate-50 -mx-2 px-2 py-2 rounded-xl transition-all" onclick="fmSelectDrive('${id}','${label}')">
+                        <div class="cursor-pointer hover:bg-slate-50 -mx-2 px-2 py-2 rounded-xl transition-all" onclick="fmSelectDrive('${encodeURIComponent(id)}','${encodeURIComponent(label)}')">
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs font-black text-slate-800">${escapeHtml(label)}</span>
                                 <div class="flex items-center gap-3 text-[10px] font-bold text-slate-500">
@@ -24694,6 +24810,8 @@
             }
 
             function fmSelectDrive(systemId, driveLabel) {
+                systemId = fmDecodeArg(systemId);
+                driveLabel = fmDecodeArg(driveLabel);
                 fmSelectedSystemId = systemId;
                 fmSelectedDriveLabel = driveLabel;
                 const sys = fmSystems[systemId];
@@ -24727,7 +24845,7 @@
                 const tbody = document.getElementById('fm-folder-tbody');
                 const folders = drive.folders || [];
                 if (!folders.length) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-xs text-slate-400 italic">No folders added. Click "Add Folder" to track storage usage.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-xs text-slate-400 italic">No folders added. Click "Add Folder" to track storage usage.</td></tr>`;
                 } else {
                     tbody.innerHTML = folders.map((f, idx) => {
                         const fpct = total > 0 ? Math.round(Number(f.size || 0) / total * 100) : 0;
@@ -24749,12 +24867,21 @@
                                     <span class="text-[10px] font-black text-slate-600 w-8">${fpct}%</span>
                                 </div>
                             </td>
+                            <td class="px-4 py-3 text-xs font-bold text-slate-700">${Number(f.count || 0)}</td>
+                            <td class="px-4 py-3 text-[10px] font-bold text-slate-500">${escapeHtml(f.fileType || 'Mixed')}</td>
+                            <td class="px-4 py-3 text-[10px] text-slate-500">${escapeHtml(f.dateRange || '—')}</td>
                             <td class="px-4 py-3 text-[10px] text-slate-500">${escapeHtml(f.notes || '—')}</td>
                             <td class="px-4 py-3">
-                                <button onclick="fmDeleteFolder('${systemId}','${driveLabel}',${idx})"
-                                    class="text-[9px] font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-all">
-                                    Delete
-                                </button>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="fmEditFolder('${encodeURIComponent(systemId)}','${encodeURIComponent(driveLabel)}',${idx})"
+                                        class="text-[9px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all">
+                                        Edit
+                                    </button>
+                                    <button onclick="fmDeleteFolder('${encodeURIComponent(systemId)}','${encodeURIComponent(driveLabel)}',${idx})"
+                                        class="text-[9px] font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-all">
+                                        Delete
+                                    </button>
+                                </div>
                             </td>
                         </tr>`;
                     }).join('');
@@ -24986,23 +25113,31 @@
                 } catch(e) { toast('Failed: ' + e.message, 'error'); }
             }
 
-            function fmAddFolder() {
+            function fmAddFolder(editIdx = null) {
                 if (!fmSelectedSystemId || !fmSelectedDriveLabel) return;
                 const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
+                const currentDrive = fmSystems[sysId]?.drives?.[driveLabel] || { folders: [] };
+                const existing = editIdx !== null ? (currentDrive.folders || [])[editIdx] : null;
+                fmEditingFolder = existing ? { sysId, driveLabel, idx: editIdx } : null;
+                const modalTitle = existing ? `Edit Folder in ${escapeHtml(driveLabel)}` : `Add Folder to ${escapeHtml(driveLabel)}`;
+                const actionLabel = existing ? 'Save Folder' : 'Add Folder';
+                const actionIcon = existing ? 'solar:diskette-bold' : 'solar:folder-add-bold';
 
                 // Build client dropdown from customClients / CLIENTS
                 const clientList = (typeof customClients !== 'undefined' && customClients.length)
                     ? customClients
                     : (typeof CLIENTS !== 'undefined' ? CLIENTS : []);
+                const selectedClient = existing?.client || existing?.name || '';
+                const clientInList = clientList.includes(selectedClient);
                 const clientOptions = clientList.map(c =>
-                    `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                    `<option value="${escapeHtml(c)}" ${selectedClient === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
 
                 const html = `
                 <dialog id="fmFolderModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
                     <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <iconify-icon icon="solar:folder-bold" class="text-white" width="20"></iconify-icon>
-                            <h3 class="text-sm font-black text-white">Add Folder to ${escapeHtml(driveLabel)}</h3>
+                            <h3 class="text-sm font-black text-white">${modalTitle}</h3>
                         </div>
                         <button onclick="fmCloseFolderModal()" class="text-white/70 hover:text-white">
                             <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
@@ -25015,45 +25150,45 @@
                             <select id="fm-folder-client" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400/30" onchange="fmFolderClientChange(this)">
                                 <option value="">— Select Client —</option>
                                 ${clientOptions}
-                                <option value="__other__">Other / Custom…</option>
+                                <option value="__other__" ${selectedClient && !clientInList ? 'selected' : ''}>Other / Custom…</option>
                             </select>
-                            <input id="fm-folder-client-custom" type="text" placeholder="Custom folder name"
-                                class="hidden mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                            <input id="fm-folder-client-custom" type="text" placeholder="Custom folder name" value="${selectedClient && !clientInList ? escapeHtml(selectedClient) : ''}"
+                                class="${selectedClient && !clientInList ? '' : 'hidden'} mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                         </div>
 
                         <!-- Folder details -->
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Size (GB) *</label>
-                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="0"
+                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="0" value="${existing?.size ?? ''}"
                                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div>
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Count</label>
-                                <input id="fm-folder-count" type="number" min="0" placeholder="0"
+                                <input id="fm-folder-count" type="number" min="0" placeholder="0" value="${existing?.count ?? ''}"
                                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div>
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Type</label>
                                 <select id="fm-folder-filetype" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400/30">
-                                    <option value="">Mixed</option>
-                                    <option value="Videos">Videos (.mp4, .mov)</option>
-                                    <option value="Images">Images (.jpg, .png, .psd)</option>
-                                    <option value="Documents">Documents (.pdf, .docx)</option>
-                                    <option value="Projects">Project Files (.prproj, .aep)</option>
-                                    <option value="Audio">Audio (.wav, .mp3)</option>
-                                    <option value="Backups">Backups (.zip, .rar)</option>
-                                    <option value="Other">Other</option>
+                                    <option value="" ${!existing?.fileType ? 'selected' : ''}>Mixed</option>
+                                    <option value="Videos" ${existing?.fileType === 'Videos' ? 'selected' : ''}>Videos (.mp4, .mov)</option>
+                                    <option value="Images" ${existing?.fileType === 'Images' ? 'selected' : ''}>Images (.jpg, .png, .psd)</option>
+                                    <option value="Documents" ${existing?.fileType === 'Documents' ? 'selected' : ''}>Documents (.pdf, .docx)</option>
+                                    <option value="Projects" ${existing?.fileType === 'Projects' ? 'selected' : ''}>Project Files (.prproj, .aep)</option>
+                                    <option value="Audio" ${existing?.fileType === 'Audio' ? 'selected' : ''}>Audio (.wav, .mp3)</option>
+                                    <option value="Backups" ${existing?.fileType === 'Backups' ? 'selected' : ''}>Backups (.zip, .rar)</option>
+                                    <option value="Other" ${existing?.fileType === 'Other' ? 'selected' : ''}>Other</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date Range</label>
-                                <input id="fm-folder-daterange" type="text" placeholder="e.g. Jan–Jun 2026"
+                                <input id="fm-folder-daterange" type="text" placeholder="e.g. Jan–Jun 2026" value="${escapeHtml(existing?.dateRange || '')}"
                                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Notes / Description</label>
-                                <input id="fm-folder-notes" type="text" placeholder="e.g. NTT client campaign files 2026"
+                                <input id="fm-folder-notes" type="text" placeholder="e.g. NTT client campaign files 2026" value="${escapeHtml(existing?.notes || '')}"
                                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none">
                             </div>
                         </div>
@@ -25061,13 +25196,21 @@
                         <div class="flex gap-3 pt-2 border-t border-slate-100">
                             <button onclick="fmCloseFolderModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl py-3 text-sm font-bold">Cancel</button>
                             <button onclick="fmSaveFolder()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-amber-100">
-                                <iconify-icon icon="solar:folder-add-bold" width="15" class="mr-1"></iconify-icon>Add Folder
+                                <iconify-icon icon="${actionIcon}" width="15" class="mr-1"></iconify-icon>${actionLabel}
                             </button>
                         </div>
                     </div>
                 </dialog>`;
                 document.body.insertAdjacentHTML('beforeend', html);
                 document.getElementById('fmFolderModal').showModal();
+            }
+
+            function fmEditFolder(sysId, driveLabel, idx) {
+                sysId = fmDecodeArg(sysId);
+                driveLabel = fmDecodeArg(driveLabel);
+                fmSelectedSystemId = sysId;
+                fmSelectedDriveLabel = driveLabel;
+                fmAddFolder(idx);
             }
 
             function fmFolderClientChange(sel) {
@@ -25079,6 +25222,7 @@
             function fmCloseFolderModal() {
                 const m = document.getElementById('fmFolderModal');
                 if (m) { m.close(); m.remove(); }
+                fmEditingFolder = null;
             }
 
             async function fmSaveFolder() {
@@ -25095,7 +25239,14 @@
 
                 const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
                 const currentDrive = fmSystems[sysId]?.drives?.[driveLabel] || { total: 0, used: 0, folders: [] };
-                const folders = [...(currentDrive.folders || []), { name, size, count, fileType, dateRange, notes, client: name }];
+                const folderPayload = { name, size, count, fileType, dateRange, notes, client: name };
+                const folders = [...(currentDrive.folders || [])];
+                const editCtx = fmEditingFolder;
+                if (editCtx && editCtx.sysId === sysId && editCtx.driveLabel === driveLabel && folders[editCtx.idx]) {
+                    folders[editCtx.idx] = { ...folders[editCtx.idx], ...folderPayload };
+                } else {
+                    folders.push(folderPayload);
+                }
                 const newUsed = folders.reduce((s, f) => s + Number(f.size || 0), 0);
 
                 try {
@@ -25104,12 +25255,14 @@
                         used:  newUsed,
                         folders
                     });
-                    toast(`Folder "${name}" added`, 'success');
+                    toast(`Folder "${name}" ${editCtx ? 'updated' : 'added'}`, 'success');
                     fmCloseFolderModal();
                 } catch(e) { toast('Failed: ' + e.message, 'error'); }
             }
 
             async function fmDeleteFolder(sysId, driveLabel, idx) {
+                sysId = fmDecodeArg(sysId);
+                driveLabel = fmDecodeArg(driveLabel);
                 if (!confirm('Delete this folder entry?')) return;
                 const drive = fmSystems[sysId]?.drives?.[driveLabel];
                 if (!drive) return;

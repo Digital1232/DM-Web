@@ -709,3 +709,46 @@ Five parallel idea/log collections each tied to a rotating monthly organiser:
   }
 }
 ```
+
+---
+
+## 21. `storage_nodes` (New)
+
+**Path:** `worksync/storage_nodes/{nodeId}`  
+**Key:** `nodeId` (Firebase push ID or static IP slug)  
+**Access:** All authenticated users read. Admins write/manage.
+
+```jsonc
+{
+  "nodeId": "192_168_1_50",
+  "userId": "nanjil@vilpower.com",
+  "systemName": "Nanjil-Desktop",
+  "staticIp": "192.168.1.50",
+  "status": "online",                 // "online" | "offline"
+  "totalCapacityBytes": 1000000000000,
+  "usedCapacityBytes": 250000000000,
+  "createdAt": 1717900000000,
+  "lastHeartbeat": 1717900000000
+}
+```
+
+---
+
+## 22. `file_registry` (New)
+
+**Path:** `worksync/file_registry/{pushId}`  
+**Key:** Firebase push ID  
+**Access:** All authenticated users read. Users write when uploading.
+
+```jsonc
+{
+  "fileId": "FILE-1717900000000",
+  "clientId": "NTT",                  // Matches CLIENTS list
+  "nodeId": "192_168_1_50",           // FK to storage_nodes
+  "filename": "Q3_Campaign_Assets.zip",
+  "relativePath": "/storage/NTT/Q3_Campaign_Assets.zip",
+  "fileSizeBytes": 50000000,
+  "uploadedBy": "nanjil@vilpower.com",
+  "uploadTimestamp": 1717900000000
+}
+```
