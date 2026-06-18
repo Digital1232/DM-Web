@@ -2585,6 +2585,10 @@
                                     class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-slate-600">
                                     <option value="">All Users</option>
                                 </select>
+                                <select id="fm-cr-client-filter" onchange="fmRenderClientReport()"
+                                    class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500/20 text-slate-600">
+                                    <option value="">All Clients</option>
+                                </select>
                                 <button onclick="fmExportClientReport()"
                                     class="bg-slate-900 hover:bg-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 transition-all">
                                     <iconify-icon icon="solar:download-square-bold" width="14"></iconify-icon> Export CSV
@@ -16052,123 +16056,117 @@
 
             async function submitDprKarthika() {
                 if (!currentUser) return;
-                const editIdPoster = document.getElementById('dpr-id-edit-poster')?.value || '';
-                const editIdThumbnail = document.getElementById('dpr-id-edit-thumbnail')?.value || '';
 
-                const date = document.getElementById('dpr-date').value;
-                const status = document.getElementById('dpr-status').value;
+                const dateEl = document.getElementById('dpr-date');
+                const statusEl = document.getElementById('dpr-status');
+                const countPosterEl = document.getElementById('dpr-count-poster');
+                const notesPosterEl = document.getElementById('dpr-notes-poster');
+                const countThumbnailEl = document.getElementById('dpr-count-thumbnail');
+                const notesThumbnailEl = document.getElementById('dpr-notes-thumbnail');
 
-                const posterCount = Number(document.getElementById('dpr-count-poster').value || 0);
-                const posterNotes = document.getElementById('dpr-notes-poster').value.trim();
+                // Guard: form may not be rendered yet
+                if (!dateEl || !statusEl) {
+                    renderDprForm();
+                    return toast('Form not ready — please try again', 'error');
+                }
 
-                const thumbnailCount = Number(document.getElementById('dpr-count-thumbnail').value || 0);
-                const thumbnailNotes = document.getElementById('dpr-notes-thumbnail').value.trim();
+                const editIdPoster = document.getElementById('dpr-id-edit-poster')?.value?.trim() || '';
+                const editIdThumbnail = document.getElementById('dpr-id-edit-thumbnail')?.value?.trim() || '';
+                const date = dateEl.value?.trim() || '';
+                const status = statusEl.value || 'worked';
+                const posterCount = Number(countPosterEl?.value || 0);
+                const posterNotes = notesPosterEl?.value?.trim() || '';
+                const thumbnailCount = Number(countThumbnailEl?.value || 0);
+                const thumbnailNotes = notesThumbnailEl?.value?.trim() || '';
 
-                if (!date) return toast('Select DPR date', 'error');
-
+                if (!date) return toast('Please select a date', 'error');
                 if (status === 'worked' && posterCount <= 0 && thumbnailCount <= 0) {
                     return toast('Enter completed count for Posters or Thumbnails', 'error');
                 }
 
-                if (status === 'leave' || status === 'weekoff') {
-                    const payload = {
-                        date,
-                        month: monthKey(date),
-                        category: 'Posters',
-                        count: 0,
-                        status,
-                        notes: posterNotes || thumbnailNotes || '',
-                        userId: currentUser.email,
-                        userName: currentUser.name,
-                        userRole: currentUser.role,
-                        updatedAt: Date.now()
-                    };
-                    if (editIdPoster) {
-                        await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), payload);
-                    } else {
-                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
-                        if (existing) {
-                            await update(ref(db, `worksync/dpr_entries/${existing.id}`), payload);
-                        } else {
-                            payload.createdAt = Date.now();
-                            await push(ref(db, 'worksync/dpr_entries'), payload);
-                        }
-                    }
+                const month = monthKey(date);
+                if (!month) return toast('Invalid date — please select again', 'error');
 
-                    const existingThumbnail = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
-                    if (existingThumbnail) {
-                        await remove(ref(db, `worksync/dpr_entries/${existingThumbnail.id}`));
-                    }
-                } else {
-                    // Worked: handle posters
-                    if (posterCount > 0 || posterNotes || editIdPoster) {
-                        const posterPayload = {
-                            date,
-                            month: monthKey(date),
-                            category: 'Posters',
-                            count: posterCount,
-                            status: 'worked',
-                            notes: posterNotes,
-                            userId: currentUser.email,
-                            userName: currentUser.name,
-                            userRole: currentUser.role,
-                            updatedAt: Date.now()
-                        };
+                const saveBtn = document.getElementById('dpr-save-btn');
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
+                const basePayload = () => ({
+                    date, month,
+                    userId: currentUser.email,
+                    userName: currentUser.name || currentUser.email,
+                    userRole: currentUser.role || '',
+                    updatedAt: Date.now()
+                });
+
+                try {
+                    if (status === 'leave' || status === 'weekoff') {
+                        // Save one leave/weekoff record under Posters
+                        const payload = { ...basePayload(), category: 'Posters', count: 0, status, notes: posterNotes || thumbnailNotes || '' };
                         if (editIdPoster) {
-                            await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), posterPayload);
+                            await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), payload);
                         } else {
                             const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
                             if (existing) {
-                                await update(ref(db, `worksync/dpr_entries/${existing.id}`), posterPayload);
+                                await update(ref(db, `worksync/dpr_entries/${existing.id}`), payload);
                             } else {
-                                posterPayload.createdAt = Date.now();
-                                await push(ref(db, 'worksync/dpr_entries'), posterPayload);
+                                payload.createdAt = Date.now();
+                                await push(ref(db, 'worksync/dpr_entries'), payload);
                             }
                         }
-                    } else {
-                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
-                        if (existing) {
-                            await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
+                        // Remove any separate thumbnail entry for this date
+                        const existingThumbnail = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
+                        if (existingThumbnail) {
+                            await remove(ref(db, `worksync/dpr_entries/${existingThumbnail.id}`));
                         }
-                    }
+                    } else {
+                        // Worked — handle Posters
+                        if (posterCount > 0 || posterNotes || editIdPoster) {
+                            const posterPayload = { ...basePayload(), category: 'Posters', count: posterCount, status: 'worked', notes: posterNotes };
+                            if (editIdPoster) {
+                                await update(ref(db, `worksync/dpr_entries/${editIdPoster}`), posterPayload);
+                            } else {
+                                const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
+                                if (existing) {
+                                    await update(ref(db, `worksync/dpr_entries/${existing.id}`), posterPayload);
+                                } else {
+                                    posterPayload.createdAt = Date.now();
+                                    await push(ref(db, 'worksync/dpr_entries'), posterPayload);
+                                }
+                            }
+                        } else {
+                            // Count is 0 and no notes — remove existing if any
+                            const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Posters');
+                            if (existing) await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
+                        }
 
-                    // Worked: handle thumbnails
-                    if (thumbnailCount > 0 || thumbnailNotes || editIdThumbnail) {
-                        const thumbnailPayload = {
-                            date,
-                            month: monthKey(date),
-                            category: 'Thumbnails',
-                            count: thumbnailCount,
-                            status: 'worked',
-                            notes: thumbnailNotes,
-                            userId: currentUser.email,
-                            userName: currentUser.name,
-                            userRole: currentUser.role,
-                            updatedAt: Date.now()
-                        };
-
-                        if (editIdThumbnail) {
-                            await update(ref(db, `worksync/dpr_entries/${editIdThumbnail}`), thumbnailPayload);
+                        // Worked — handle Thumbnails
+                        if (thumbnailCount > 0 || thumbnailNotes || editIdThumbnail) {
+                            const thumbnailPayload = { ...basePayload(), category: 'Thumbnails', count: thumbnailCount, status: 'worked', notes: thumbnailNotes };
+                            if (editIdThumbnail) {
+                                await update(ref(db, `worksync/dpr_entries/${editIdThumbnail}`), thumbnailPayload);
+                            } else {
+                                const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
+                                if (existing) {
+                                    await update(ref(db, `worksync/dpr_entries/${existing.id}`), thumbnailPayload);
+                                } else {
+                                    thumbnailPayload.createdAt = Date.now();
+                                    await push(ref(db, 'worksync/dpr_entries'), thumbnailPayload);
+                                }
+                            }
                         } else {
                             const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
-                            if (existing) {
-                                await update(ref(db, `worksync/dpr_entries/${existing.id}`), thumbnailPayload);
-                            } else {
-                                thumbnailPayload.createdAt = Date.now();
-                                await push(ref(db, 'worksync/dpr_entries'), thumbnailPayload);
-                            }
-                        }
-                    } else {
-                        const existing = dprEntries.find(e => e.userId === currentUser.email && e.date === date && e.category === 'Thumbnails');
-                        if (existing) {
-                            await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
+                            if (existing) await remove(ref(db, `worksync/dpr_entries/${existing.id}`));
                         }
                     }
-                }
 
-                toast('DPR saved successfully', 'success');
-                cancelDprEditKarthika();
+                    toast('DPR saved successfully', 'success');
+                    cancelDprEditKarthika();
+                } catch (err) {
+                    console.error('DPR Karthika save failed:', err);
+                    toast('Failed to save DPR: ' + (err.message || 'Unknown error'), 'error');
+                } finally {
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save DPR'; }
+                }
             }
 
             function cancelDprEditKarthika() {
@@ -16227,41 +16225,82 @@
 
             async function submitDpr() {
                 if (!currentUser) return;
-                const editId = document.getElementById('dpr-id-edit')?.value || '';
-                const date = document.getElementById('dpr-date').value;
-                const category = document.getElementById('dpr-category').value;
-                const count = Number(document.getElementById('dpr-count').value || 0);
-                const status = document.getElementById('dpr-status').value;
-                const notes = document.getElementById('dpr-notes').value.trim();
-                if (!date) return toast('Select DPR date', 'error');
-                if (status === 'worked' && count <= 0) return toast('Enter completed count', 'error');
+
+                // Karthika uses a separate form — redirect if she somehow calls this
+                if (currentUser.email.toLowerCase() === 'anithavilpower@gmail.com') {
+                    return submitDprKarthika();
+                }
+
+                const editIdEl = document.getElementById('dpr-id-edit');
+                const dateEl = document.getElementById('dpr-date');
+                const categoryEl = document.getElementById('dpr-category');
+                const countEl = document.getElementById('dpr-count');
+                const statusEl = document.getElementById('dpr-status');
+                const notesEl = document.getElementById('dpr-notes');
+
+                // Guard: form elements may not exist if renderDprForm() hasn't run yet
+                if (!dateEl || !statusEl) {
+                    renderDprForm();
+                    return toast('Form not ready — please try again', 'error');
+                }
+
+                const editId = editIdEl?.value?.trim() || '';
+                const date = dateEl.value?.trim() || '';
+                const category = categoryEl?.value || 'Other';
+                const count = Number(countEl?.value || 0);
+                const status = statusEl.value || 'worked';
+                const notes = notesEl?.value?.trim() || '';
+
+                if (!date) return toast('Please select a date', 'error');
+                if (status === 'worked' && count <= 0) return toast('Enter a completed count greater than 0', 'error');
+
+                const month = monthKey(date);
+                if (!month) return toast('Invalid date — please select again', 'error');
 
                 const payload = {
                     date,
-                    month: monthKey(date),
+                    month,
                     category,
                     count: status === 'worked' ? count : 0,
                     status,
                     notes,
                     userId: currentUser.email,
-                    userName: currentUser.name,
-                    userRole: currentUser.role,
+                    userName: currentUser.name || currentUser.email,
+                    userRole: currentUser.role || '',
                     updatedAt: Date.now()
                 };
 
-                if (editId) {
-                    // Update existing entry
-                    await update(ref(db, `worksync/dpr_entries/${editId}`), payload);
-                    toast('DPR updated', 'success');
-                } else {
-                    // New entry
-                    payload.createdAt = Date.now();
-                    await push(ref(db, 'worksync/dpr_entries'), payload);
-                    toast('DPR saved', 'success');
-                }
+                const saveBtn = document.getElementById('dpr-save-btn');
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
-                // Reset form
-                cancelDprEdit();
+                try {
+                    if (editId) {
+                        await update(ref(db, `worksync/dpr_entries/${editId}`), payload);
+                        toast('DPR updated', 'success');
+                    } else {
+                        // Prevent duplicate: check if entry already exists for this user+date+category
+                        const existing = dprEntries.find(e =>
+                            e.userId === currentUser.email &&
+                            e.date === date &&
+                            e.category === category
+                        );
+                        if (existing && !editId) {
+                            // Update existing instead of creating duplicate
+                            await update(ref(db, `worksync/dpr_entries/${existing.id}`), payload);
+                            toast('DPR entry updated (existing record)', 'success');
+                        } else {
+                            payload.createdAt = Date.now();
+                            await push(ref(db, 'worksync/dpr_entries'), payload);
+                            toast('DPR saved', 'success');
+                        }
+                    }
+                    cancelDprEdit();
+                } catch (err) {
+                    console.error('DPR save failed:', err);
+                    toast('Failed to save DPR: ' + (err.message || 'Unknown error'), 'error');
+                } finally {
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = editId ? 'Update DPR' : 'Save DPR'; }
+                }
             }
 
             function editDprEntry(id) {
@@ -25018,9 +25057,18 @@
             let fmEditingFolder = null;
 
             function fmFmtBytes(gb) {
-                if (!gb && gb !== 0) return '—';
-                if (gb >= 1024) return (gb / 1024).toFixed(1) + ' TB';
-                return gb + ' GB';
+                if (gb === null || gb === undefined || (gb !== 0 && !gb)) return '—';
+                const n = Number(gb);
+                if (isNaN(n)) return '—';
+                if (n === 0) return '0 GB';
+                if (n >= 1024) {
+                    const tb = n / 1024;
+                    // Show 1 decimal only if needed (e.g. 1.5 TB, not 2.0 TB)
+                    return (tb % 1 === 0 ? tb.toFixed(0) : tb.toFixed(1)) + ' TB';
+                }
+                // GB — show up to 1 decimal, strip trailing .0
+                const rounded = Math.round(n * 10) / 10;
+                return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + ' GB';
             }
 
             function fmDecodeArg(value) {
@@ -25213,16 +25261,36 @@
 
                 const searchTerm = (document.getElementById('fm-cr-search')?.value || '').toLowerCase().trim();
                 const userFilter = document.getElementById('fm-cr-user-filter')?.value || '';
+                const clientFilter = document.getElementById('fm-cr-client-filter')?.value || '';
 
                 const { clientData, userSet } = fmBuildClientReport();
 
-                // Populate user filter dropdown (first call)
+                // Collect all client names for filter
+                const clientSet = new Set(Object.keys(clientData));
+
+                // Populate user filter dropdown (first call or after data refresh)
                 const userSel = document.getElementById('fm-cr-user-filter');
-                if (userSel && userSel.options.length <= 1) {
+                if (userSel) {
+                    const currentUserVal = userSel.value;
+                    userSel.innerHTML = '<option value="">All Users</option>';
                     [...userSet].sort().forEach(u => {
                         const opt = document.createElement('option');
                         opt.value = u; opt.textContent = u;
+                        if (u === currentUserVal) opt.selected = true;
                         userSel.appendChild(opt);
+                    });
+                }
+
+                // Populate client filter dropdown
+                const clientSel = document.getElementById('fm-cr-client-filter');
+                if (clientSel) {
+                    const currentClientVal = clientSel.value;
+                    clientSel.innerHTML = '<option value="">All Clients</option>';
+                    [...clientSet].sort().forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c; opt.textContent = c;
+                        if (c === currentClientVal) opt.selected = true;
+                        clientSel.appendChild(opt);
                     });
                 }
 
@@ -25249,6 +25317,9 @@
                 }
                 if (userFilter) {
                     rows = rows.filter(r => r.user === userFilter);
+                }
+                if (clientFilter) {
+                    rows = rows.filter(r => r.client === clientFilter);
                 }
 
                 // Sort: by client name, then user name
@@ -25350,6 +25421,7 @@
             function fmExportClientReport() {
                 const { clientData } = fmBuildClientReport();
                 const userFilter = document.getElementById('fm-cr-user-filter')?.value || '';
+                const clientFilter = document.getElementById('fm-cr-client-filter')?.value || '';
                 const searchTerm = (document.getElementById('fm-cr-search')?.value || '').toLowerCase().trim();
 
                 let rows = [];
@@ -25367,6 +25439,7 @@
 
                 if (searchTerm) rows = rows.filter(r => r.client.toLowerCase().includes(searchTerm) || r.user.toLowerCase().includes(searchTerm));
                 if (userFilter) rows = rows.filter(r => r.user === userFilter);
+                if (clientFilter) rows = rows.filter(r => r.client === clientFilter);
                 rows.sort((a, b) => a.client.localeCompare(b.client) || a.user.localeCompare(b.user));
 
                 if (!rows.length) return toast('No data to export', 'error');
@@ -25673,14 +25746,19 @@
 
                 // Build existing drives rows HTML
                 const existingDrives = Object.entries(existing?.drives || {});
-                const drivesRowsHtml = existingDrives.map(([label, d], i) => `
+                const drivesRowsHtml = existingDrives.map(([label, d], i) => {
+                    const folderSum = (d.folders || []).reduce((s, f) => s + Number(f.size || 0), 0);
+                    const hasFolders = (d.folders || []).length > 0;
+                    const displayUsed = hasFolders ? folderSum : (d.used || '');
+                    return `
                     <div class="fm-drive-row grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 items-center" data-idx="${i}">
                         <input type="text" class="fm-dr-label bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" value="${escapeHtml(label)}" placeholder="C Drive">
                         <input type="number" class="fm-dr-total bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.total||''}" placeholder="GB" min="0">
-                        <input type="number" class="fm-dr-used bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.used||''}" placeholder="GB" min="0">
+                        <input type="number" class="fm-dr-used ${hasFolders ? 'bg-slate-100 text-slate-400' : 'bg-slate-50'} border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${displayUsed}" placeholder="GB" min="0" ${hasFolders ? 'readonly title="Auto-calculated from folder sizes"' : ''}>
                         <input type="number" class="fm-dr-free bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none bg-slate-100" readonly placeholder="—">
                         <button type="button" onclick="this.closest('.fm-drive-row').remove()" class="text-rose-400 hover:text-rose-600 text-lg leading-none font-bold">×</button>
-                    </div>`).join('');
+                    </div>`;
+                }).join('');
 
                 const html = `
                 <dialog id="fmSystemModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden">
@@ -25744,7 +25822,7 @@
                             <div class="grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 mb-1 px-0.5">
                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Drive Label</span>
                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total GB</span>
-                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Used GB</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Used GB <span class="text-indigo-400 normal-case">(auto)</span></span>
                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Free GB</span>
                                 <span></span>
                             </div>
@@ -25838,10 +25916,15 @@
                 driveRows.forEach(row => {
                     const label = row.querySelector('.fm-dr-label')?.value.trim();
                     const total = Number(row.querySelector('.fm-dr-total')?.value || 0);
-                    const used  = Number(row.querySelector('.fm-dr-used')?.value  || 0);
                     if (!label) { driveError = true; return; }
                     const existing = fmSystems[id]?.drives?.[label] || {};
-                    drives[label] = { ...existing, total, used, folders: existing.folders || [] };
+                    const existingFolders = existing.folders || [];
+                    // Always recalculate used from folder sizes — never trust manually-entered used value
+                    const usedFromFolders = existingFolders.reduce((s, f) => s + Number(f.size || 0), 0);
+                    // If no folders yet, fall back to manually-entered used value
+                    const manualUsed = Number(row.querySelector('.fm-dr-used')?.value || 0);
+                    const used = existingFolders.length > 0 ? usedFromFolders : manualUsed;
+                    drives[label] = { ...existing, total, used, folders: existingFolders };
                 });
                 if (driveError) return toast('Each drive must have a label', 'error');
 
