@@ -19228,6 +19228,28 @@
                         const assigned = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t)
                         );
+                        // For daily-plan users, also include timelog-matched tasks in assigned
+                        // so assigned >= completed is always maintained
+                        if (isDailyPlanUser) {
+                            const periodLogIds = new Set(
+                                allTimeLogs
+                                    .filter(l =>
+                                        l.userId === usrEmail &&
+                                        (l.endTime || l.startTime || 0) >= start &&
+                                        (l.endTime || l.startTime || 0) <= end
+                                    )
+                                    .map(l => l.taskId)
+                                    .filter(Boolean)
+                            );
+                            const assignedIds = new Set(assigned.map(t => t.id));
+                            filteredTasks
+                                .filter(t =>
+                                    periodLogIds.has(t.id) &&
+                                    !assignedIds.has(t.id) &&
+                                    !isExcludedTask(t)
+                                )
+                                .forEach(t => assigned.push(t));
+                        }
                         const hold = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t) &&
                             ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
@@ -19780,6 +19802,33 @@
                                 </div>
                                 <p class="text-xl font-black text-slate-900">${userCompleted}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevUserCompleted} prev period</p>
+                                ${(() => {
+                                    const videoEditors = ['thanushvilpower@gmail.com','barathvilpower@gmail.com','immanuelvilpower@gmail.com'];
+                                    if (!videoEditors.includes(email)) return '';
+                                    const completedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                                    const jiraCount     = completedTasks.filter(t => !t.manual && !isInternalTask(t)).length;
+                                    const internalCount = completedTasks.filter(t => t.manual || isInternalTask(t)).length;
+                                    const videoCount    = completedTasks.filter(t =>
+                                        (t.issueType || '').toLowerCase().includes('video') ||
+                                        (t.desc || '').toLowerCase().includes('video edit') ||
+                                        (t.desc || '').toLowerCase().includes('video production') ||
+                                        (t.desc || '').toLowerCase().startsWith('video')
+                                    ).length;
+                                    const shootCount = email === 'immanuelvilpower@gmail.com'
+                                        ? completedTasks.filter(t =>
+                                            (t.issueType || '').toLowerCase().includes('shoot') ||
+                                            (t.desc || '').toLowerCase().includes('shoot') ||
+                                            (t.client || '').toLowerCase().includes('shoot')
+                                          ).length
+                                        : 0;
+                                    const pills = [
+                                        { label: 'Jira', val: jiraCount,    color: 'bg-indigo-100 text-indigo-700'  },
+                                        { label: 'Internal', val: internalCount, color: 'bg-violet-100 text-violet-700' },
+                                        ...(videoCount  > 0 ? [{ label: 'Video',  val: videoCount,  color: 'bg-blue-100 text-blue-700'   }] : []),
+                                        ...(shootCount  > 0 ? [{ label: 'Shoot',  val: shootCount,  color: 'bg-amber-100 text-amber-700' }] : []),
+                                    ];
+                                    return `<div class="flex flex-wrap gap-1 mt-2">${pills.map(p => `<span class="text-[8px] font-black ${p.color} px-1.5 py-0.5 rounded-full">${p.label}: ${p.val}</span>`).join('')}</div>`;
+                                })()}
                             </div>
                             
                             ${email === 'snehavilpower@gmail.com' ? `
@@ -19811,6 +19860,15 @@
                                 </div>
                                 <p class="text-xl font-black text-slate-900">${currStats.assigned.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.assigned.length} prev period</p>
+                            </div>
+                            <!-- In Progress Tasks -->
+                            <div class="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 shadow-sm">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">In Progress</p>
+                                    <iconify-icon icon="solar:play-circle-bold" class="text-amber-400" width="12"></iconify-icon>
+                                </div>
+                                <p class="text-xl font-black text-slate-900">${currStats.assigned.filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))).length}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">currently active</p>
                             </div>
                             <!-- Hold Tasks (Clickable) -->
                             <div class="bg-rose-50/30 border border-rose-100 hover:border-rose-300 hover:bg-rose-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
