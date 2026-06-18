@@ -14788,7 +14788,6 @@
                     fileAttachments.forEach(a => {
                         const isDoc = a.isDoc || a.url?.startsWith('data:');
                         const meta = docFileIcon(a.type, a.name);
-                        const iconColor = isMe ? 'text-white/80' : meta.color;
                         const bgClass = isMe
                             ? 'bg-white/10 hover:bg-white/20 border-white/20'
                             : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
@@ -14796,18 +14795,12 @@
                         const subClass = isMe ? 'text-white/60' : 'text-slate-400';
                         const sizeTxt = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
 
-                        // For base64 docs: open in new tab (browsers can render PDFs natively)
-                        // For Cloudinary URLs: also open in new tab for reliability
-                        const clickAction = isDoc
-                            ? `(function(){var w=window.open('','_blank');var html='<html><body style="margin:0"><iframe src="'+encodeURIComponent('${a.url}')+'"></iframe></body></html>';w.document.write('<html><body style="margin:0;padding:0"><iframe src="${a.url}" style="width:100vw;height:100vh;border:none"></iframe></body></html>');w.document.close();})()`
-                            : `window.open('${a.url}','_blank')`;
-
                         // Simpler open: just use an <a> with the base64 or URL
                         attachmentHtml += `
                         <div class="${text ? 'mb-2' : ''} mt-1">
                             <a href="${a.url}" target="_blank" rel="noopener noreferrer"
-                               class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl transition-colors border cursor-pointer no-underline"
-                               style="text-decoration:none" title="Open ${escapeHtml(a.name || 'file')}">
+                               class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl transition-colors border cursor-pointer"
+                               style="text-decoration:none">
                                 <iconify-icon icon="${meta.icon}" width="22" style="color:${meta.color};flex-shrink:0"></iconify-icon>
                                 <div class="min-w-0">
                                     <p class="text-xs font-bold ${textClass} truncate max-w-[160px]">${escapeHtml(a.name || 'File')}</p>
@@ -25750,12 +25743,14 @@
                     const folderSum = (d.folders || []).reduce((s, f) => s + Number(f.size || 0), 0);
                     const hasFolders = (d.folders || []).length > 0;
                     const displayUsed = hasFolders ? folderSum : (d.used || '');
+                    const usedClass = hasFolders ? 'bg-slate-100 text-slate-400' : 'bg-slate-50';
+                    const usedReadonly = hasFolders ? 'readonly' : '';
                     return `
                     <div class="fm-drive-row grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 items-center" data-idx="${i}">
                         <input type="text" class="fm-dr-label bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none" value="${escapeHtml(label)}" placeholder="C Drive">
-                        <input type="number" class="fm-dr-total bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.total||''}" placeholder="GB" min="0">
-                        <input type="number" class="fm-dr-used ${hasFolders ? 'bg-slate-100 text-slate-400' : 'bg-slate-50'} border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${displayUsed}" placeholder="GB" min="0" ${hasFolders ? 'readonly title="Auto-calculated from folder sizes"' : ''}>
-                        <input type="number" class="fm-dr-free bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none bg-slate-100" readonly placeholder="—">
+                        <input type="number" class="fm-dr-total bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${d.total || ''}" placeholder="GB" min="0">
+                        <input type="number" class="fm-dr-used ${usedClass} border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" value="${displayUsed}" placeholder="GB" min="0" ${usedReadonly}>
+                        <input type="number" class="fm-dr-free bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" readonly placeholder="—">
                         <button type="button" onclick="this.closest('.fm-drive-row').remove()" class="text-rose-400 hover:text-rose-600 text-lg leading-none font-bold">×</button>
                     </div>`;
                 }).join('');
