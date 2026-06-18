@@ -8141,7 +8141,43 @@
             const CLOUDINARY_CLOUD = 'dhmcegvco';
             const CLOUDINARY_PRESET = 'One Desk';
 
+            // File types Cloudinary accepts (images + videos only)
+            function isCloudinarySupported(file) {
+                const t = (file.type || '').toLowerCase();
+                return t.startsWith('image/') || t.startsWith('video/');
+            }
+
+            // Icon and label for document file types
+            function docFileIcon(type, name) {
+                const t = (type || '').toLowerCase();
+                const n = (name || '').toLowerCase();
+                if (t === 'application/pdf' || n.endsWith('.pdf')) return { icon: 'solar:file-text-bold', color: '#ef4444', label: 'PDF' };
+                if (t.includes('word') || n.endsWith('.docx') || n.endsWith('.doc')) return { icon: 'solar:file-bold', color: '#3b82f6', label: 'Word' };
+                if (t.includes('excel') || t.includes('spreadsheet') || n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv')) return { icon: 'solar:file-bold', color: '#22c55e', label: 'Excel' };
+                if (t.includes('powerpoint') || t.includes('presentation') || n.endsWith('.pptx') || n.endsWith('.ppt')) return { icon: 'solar:file-bold', color: '#f59e0b', label: 'PPT' };
+                if (t.includes('zip') || t.includes('rar') || t.includes('compressed')) return { icon: 'solar:file-bold', color: '#8b5cf6', label: 'Archive' };
+                return { icon: 'solar:file-download-bold', color: '#6366f1', label: 'File' };
+            }
+
             async function uploadToCloudinary(file) {
+                // Non-media files (PDFs, docs, etc.) — store as base64 in Firebase directly
+                // Cloudinary only supports images and videos
+                if (!isCloudinarySupported(file)) {
+                    const MAX_DOC_SIZE = 3 * 1024 * 1024; // 3 MB limit for documents
+                    if (file.size > MAX_DOC_SIZE) {
+                        throw new Error(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Documents must be under 3 MB.`);
+                    }
+                    const base64 = await fileToBase64(file);
+                    return {
+                        url: base64,
+                        type: file.type || 'application/octet-stream',
+                        name: file.name,
+                        size: file.size,
+                        cloudinary: false,
+                        isDoc: true
+                    };
+                }
+
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('upload_preset', CLOUDINARY_PRESET);
@@ -14746,9 +14782,36 @@
                     }
 
                     fileAttachments.forEach(a => {
-                        const iconColor = isMe ? 'text-indigo-100' : 'text-slate-400';
-                        const bgClass = isMe ? 'bg-indigo-500/50 hover:bg-indigo-500/70 border-indigo-400/50' : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
-                        attachmentHtml += `<div class="${text ? 'mb-2' : ''} mt-1"><a href="${a.url}" download="${escapeHtml(a.name || 'file')}" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(a.name || 'Download File')}</span></a></div>`;
+                        const isDoc = a.isDoc || a.url?.startsWith('data:');
+                        const meta = docFileIcon(a.type, a.name);
+                        const iconColor = isMe ? 'text-white/80' : meta.color;
+                        const bgClass = isMe
+                            ? 'bg-white/10 hover:bg-white/20 border-white/20'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
+                        const textClass = isMe ? 'text-white' : 'text-slate-800';
+                        const subClass = isMe ? 'text-white/60' : 'text-slate-400';
+                        const sizeTxt = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
+
+                        // For base64 docs: open in new tab (browsers can render PDFs natively)
+                        // For Cloudinary URLs: also open in new tab for reliability
+                        const clickAction = isDoc
+                            ? `(function(){var w=window.open('','_blank');var html='<html><body style="margin:0"><iframe src="'+encodeURIComponent('${a.url}')+'"></iframe></body></html>';w.document.write('<html><body style="margin:0;padding:0"><iframe src="${a.url}" style="width:100vw;height:100vh;border:none"></iframe></body></html>');w.document.close();})()`
+                            : `window.open('${a.url}','_blank')`;
+
+                        // Simpler open: just use an <a> with the base64 or URL
+                        attachmentHtml += `
+                        <div class="${text ? 'mb-2' : ''} mt-1">
+                            <a href="${a.url}" target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl transition-colors border cursor-pointer no-underline"
+                               style="text-decoration:none" title="Open ${escapeHtml(a.name || 'file')}">
+                                <iconify-icon icon="${meta.icon}" width="22" style="color:${meta.color};flex-shrink:0"></iconify-icon>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold ${textClass} truncate max-w-[160px]">${escapeHtml(a.name || 'File')}</p>
+                                    <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''} · Click to open</p>
+                                </div>
+                                <iconify-icon icon="solar:square-arrow-right-up-bold" width="14" class="${isMe ? 'text-white/50' : 'text-slate-300'} flex-shrink-0"></iconify-icon>
+                            </a>
+                        </div>`;
                     });
                 }
 
@@ -15040,6 +15103,11 @@
                     toast(`${file.name} skipped — must be less than 10MB`, 'error');
                     return;
                 }
+                // Documents go via base64 — cap at 3MB to keep Firebase storage manageable
+                if (!isCloudinarySupported(file) && file.size > 3 * 1024 * 1024) {
+                    toast(`${file.name} skipped — documents must be under 3MB`, 'error');
+                    return;
+                }
                 stagedAttachments.push(file);
                 if (!deferPreview) renderStagedAttachmentsPreview();
                 document.getElementById('msg-input')?.focus();
@@ -15057,15 +15125,26 @@
                 box.classList.remove('hidden');
                 list.innerHTML = stagedAttachments.map((file, i) => {
                     const isImage = file.type?.startsWith('image/');
+                    const meta = docFileIcon(file.type, file.name);
                     const preview = isImage
                         ? `<img src="${URL.createObjectURL(file)}" class="w-12 h-12 rounded-lg object-cover border border-slate-200" alt="">`
-                        : `<div class="w-12 h-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><iconify-icon icon="solar:file-bold" class="text-indigo-500" width="20"></iconify-icon></div>`;
+                        : `<div class="w-12 h-12 rounded-lg bg-slate-50 border border-slate-200 flex flex-col items-center justify-center gap-0.5">
+                               <iconify-icon icon="${meta.icon}" style="color:${meta.color}" width="20"></iconify-icon>
+                               <span class="text-[8px] font-black uppercase" style="color:${meta.color}">${meta.label}</span>
+                           </div>`;
+                    const sizeLabel = file.size > 1024 * 1024
+                        ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
+                        : `${(file.size / 1024).toFixed(0)} KB`;
+                    const docWarning = !isCloudinarySupported(file) && file.size > 3 * 1024 * 1024
+                        ? `<p class="text-[8px] text-rose-500 font-bold">Too large (max 3MB)</p>`
+                        : '';
                     return `
                     <div class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1.5 pr-7">
                         ${preview}
                         <div class="min-w-0 max-w-[120px]">
                             <p class="text-[10px] font-bold text-slate-700 truncate">${escapeHtml(file.name)}</p>
-                            <p class="text-[9px] text-slate-400">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p class="text-[9px] text-slate-400">${sizeLabel}</p>
+                            ${docWarning}
                         </div>
                         <button type="button" onclick="removeStagedAttachment(${i})" class="absolute -top-1.5 -right-1.5 p-0.5 text-slate-400 hover:text-rose-500 bg-white rounded-full shadow">
                             <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon>
@@ -19090,6 +19169,30 @@
                         const comp = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
                         );
+
+                        // For daily-plan users, also capture completed tasks found via timelogs
+                        // that weren't planned but were still worked (keeps count in sync with the log)
+                        if (isDailyPlanUser) {
+                            const periodLogIds = new Set(
+                                allTimeLogs
+                                    .filter(l =>
+                                        l.userId === usrEmail &&
+                                        (l.endTime || l.startTime || 0) >= start &&
+                                        (l.endTime || l.startTime || 0) <= end
+                                    )
+                                    .map(l => l.taskId)
+                                    .filter(Boolean)
+                            );
+                            const compIds = new Set(comp.map(t => t.id));
+                            filteredTasks
+                                .filter(t =>
+                                    periodLogIds.has(t.id) &&
+                                    !compIds.has(t.id) &&
+                                    isTaskCompletedStatus(t.status) &&
+                                    !isExcludedTask(t)
+                                )
+                                .forEach(t => comp.push(t));
+                        }
                         const assigned = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t)
                         );
@@ -19435,6 +19538,18 @@
                                 workedTasks.push(t);
                             }
                         });
+
+                        // ── Sync dashboard "Completed Tasks" count to match the log ──
+                        // The log includes completed tasks found via timelogs that may not be
+                        // in the daily plan (isDailyPlanUser uses plan-date matching in getStatsFor,
+                        // which misses tasks logged directly). Count all completed tasks in workedTasks.
+                        const logCompletedCount = workedTasks.filter(t => isTaskCompletedStatus(t.status)).length;
+                        if (logCompletedCount > currStats.completed.length) {
+                            userCompleted = logCompletedCount;
+                        }
+
+                        // Also update the drill-down list so the modal matches the count
+                        window.indivPerfTaskStats[email].completed = workedTasks.filter(t => isTaskCompletedStatus(t.status));
                     }
 
                     const getStatusBadgeClass = (status) => {
@@ -26594,7 +26709,27 @@
                     if ((a.type || '').startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)/i.test(a.url || '')) {
                         return '<img src="' + a.url + '" style="max-width:180px;border-radius:8px;border:1px solid ' + attBorder + ';display:block;margin-top:4px;cursor:pointer;" onclick="typeof openImagePreview===\'function\'&&openImagePreview(\'' + a.url + '\',\'' + _fcpEH(a.name || 'Image') + '\')">';
                     }
-                    return '<a href="' + a.url + '" target="_blank" style="font-size:10px;color:#818cf8;text-decoration:underline;display:block;margin-top:4px;">📎 ' + _fcpEH(a.name || 'File') + '</a>';
+                    // Document / PDF pill
+                    var dType = (a.type || '').toLowerCase();
+                    var dName = (a.name || '').toLowerCase();
+                    var dColor = '#ef4444';
+                    var dLabel = 'File';
+                    if (dType === 'application/pdf' || dName.endsWith('.pdf')) { dColor = '#ef4444'; dLabel = 'PDF'; }
+                    else if (dType.includes('word') || dName.endsWith('.docx') || dName.endsWith('.doc')) { dColor = '#3b82f6'; dLabel = 'Word'; }
+                    else if (dType.includes('excel') || dType.includes('spreadsheet') || dName.endsWith('.xlsx') || dName.endsWith('.csv')) { dColor = '#22c55e'; dLabel = 'Sheet'; }
+                    else if (dType.includes('powerpoint') || dType.includes('presentation') || dName.endsWith('.pptx')) { dColor = '#f59e0b'; dLabel = 'PPT'; }
+                    else { dColor = '#6366f1'; dLabel = 'File'; }
+                    var pillBg = isMe ? 'rgba(255,255,255,0.12)' : (isDark ? '#1e2a3a' : '#f8fafc');
+                    var pillBorder = isMe ? 'rgba(255,255,255,0.2)' : attBorder;
+                    var pillText = isMe ? '#fff' : (isDark ? '#e2e8f0' : '#1e293b');
+                    var pillSub = isMe ? 'rgba(255,255,255,0.5)' : '#94a3b8';
+                    return '<a href="' + a.url + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:7px 10px;margin-top:5px;background:' + pillBg + ';border:1px solid ' + pillBorder + ';border-radius:10px;text-decoration:none;max-width:200px;">'
+                        + '<span style="font-size:16px;flex-shrink:0;color:' + dColor + ';">📄</span>'
+                        + '<span style="min-width:0;">'
+                        + '<span style="display:block;font-size:10px;font-weight:700;color:' + pillText + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;">' + _fcpEH(a.name || 'File') + '</span>'
+                        + '<span style="font-size:9px;color:' + pillSub + ';">' + dLabel + ' · Click to open</span>'
+                        + '</span>'
+                        + '</a>';
                 }).join('');
 
                 var bubbleBg, bubbleColor, bubbleBorder;
