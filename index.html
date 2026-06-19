@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -488,6 +488,34 @@
 
         html.dark #messages-area .chat-dropdown button.text-slate-600 {
             color: #94a3b8 !important;
+        }
+
+        /* ── DARK MODE: Seen By indicator ── */
+        html.dark .msg-seen-by {
+            color: #64748b !important;
+        }
+
+        html.dark .msg-seen-by img {
+            border-color: #253347 !important;
+        }
+
+        /* ── Seen By pill base styles ── */
+        .msg-seen-by {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            margin-top: 2px;
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 700;
+        }
+
+        .msg-seen-by img {
+            width: 14px;
+            height: 14px;
+            border-radius: 9999px;
+            object-fit: cover;
+            border: 1.5px solid #e2e8f0;
         }
 
         .fade-in {
@@ -6655,6 +6683,8 @@
             let unreadCounts = {};
             let convListeners = {};
             let msgListener = null;
+            let readReceiptsListener = null;
+            let activeConvReadReceipts = {};
             let chatNotificationsMuted = localStorage.getItem('worksync_chat_muted') === 'true';
             let selectedSaturday = null;
             let pendingApprovalReq = null;
@@ -13998,6 +14028,7 @@
                 const displayName = name || email;
                 let typeLabel = 'Tasks';
                 if (type === 'completed') typeLabel = 'Completed Tasks';
+                else if (type === 'completedVideos') typeLabel = '🎬 Completed Videos';
                 else if (type === 'assigned') typeLabel = 'Assigned Tasks';
                 else if (type === 'hold') typeLabel = 'Hold Tasks';
                 else if (type === 'rework') typeLabel = 'Reworked Tasks';
@@ -14574,6 +14605,11 @@
                     } catch (e) { }
                     msgListener = null;
                 }
+                if (readReceiptsListener) {
+                    try { readReceiptsListener(); } catch (e) { }
+                    readReceiptsListener = null;
+                }
+                activeConvReadReceipts = {};
 
                 if (chatPanel) {
                     chatPanel.classList.add('no-active-chat');
@@ -14645,6 +14681,9 @@
                 }
 
                 if (msgListener) msgListener();
+                if (readReceiptsListener) { readReceiptsListener(); readReceiptsListener = null; }
+                activeConvReadReceipts = {};
+
                 const area = document.getElementById('messages-area');
                 area.innerHTML = '';
                 const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(15));
@@ -14652,6 +14691,23 @@
                     currentConvMessages = snap.val() || {};
                     renderMessages(currentConvMessages);
                     scrollChatToBottom();
+                });
+
+                // Write this user's read receipt (marks conversation as "seen")
+                set(ref(db, `worksync/read_receipts/${convId}/${eKey(currentUser.email)}`), {
+                    email: currentUser.email,
+                    name: currentUser.name || currentUser.email,
+                    seenAt: Date.now()
+                }).catch(e => console.warn('Failed to write read receipt:', e));
+
+                // Listen to read receipts for this conversation so Seen By stays live
+                readReceiptsListener = onValue(ref(db, `worksync/read_receipts/${convId}`), snap => {
+                    activeConvReadReceipts = snap.val() || {};
+                    // Re-render messages to update Seen By indicators without scrolling
+                    const msgs = currentConvMessages;
+                    if (msgs && Object.keys(msgs).length > 0) {
+                        renderMessages(msgs);
+                    }
                 });
             }
 
@@ -14873,6 +14929,25 @@
                     </div>
                     ${reactionHtml}
                     <p class="text-[8px] text-slate-400 mt-1 font-bold ${isMe ? 'text-right mr-1' : 'ml-1'}">${time}${edited}</p>
+                    ${isMe && !msg.unsent ? (() => {
+                        // Build seen-by list: users who opened the conv AFTER this message was sent
+                        const seenByUsers = Object.values(activeConvReadReceipts).filter(r =>
+                            r.email !== currentUser.email && (r.seenAt || 0) >= (msg.timestamp || 0)
+                        );
+                        if (!seenByUsers.length) return '';
+                        const maxAvatars = 3;
+                        const shown = seenByUsers.slice(0, maxAvatars);
+                        const extra = seenByUsers.length - shown.length;
+                        const avatarHtml = shown.map(r => {
+                            const u = allUsersMap.get(r.email.toLowerCase()) || {};
+                            const src = u.profilePicture || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}`;
+                            return `<img src="${src}" title="${escapeHtml(r.name || r.email)}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}'">`;
+                        }).join('');
+                        const label = seenByUsers.length === 1
+                            ? `Seen by ${escapeHtml(seenByUsers[0].name || seenByUsers[0].email.split('@')[0])}`
+                            : `Seen by ${seenByUsers.length}`;
+                        return `<div class="msg-seen-by justify-end mr-1">${avatarHtml}${extra > 0 ? `<span>+${extra}</span>` : ''}<span>${label}</span></div>`;
+                    })() : ''}
                 </div>`;
                 area.appendChild(div);
             }
@@ -14884,7 +14959,7 @@
             function isTaskCompletedStatus(status) {
                 if (!status) return false;
                 const s = status.trim().toLowerCase();
-                return ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done', 'completed'].includes(s);
+                return ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done', 'completed', 'resolved', 'closed', 'shoot completed', 'shoot cancelled'].includes(s);
             }
 
             function linkify(text, isMe) {
@@ -16057,10 +16132,12 @@
                 const countThumbnailEl = document.getElementById('dpr-count-thumbnail');
                 const notesThumbnailEl = document.getElementById('dpr-notes-thumbnail');
 
-                // Guard: form may not be rendered yet
+                // Guard: form may not be rendered yet — render it and auto-retry
                 if (!dateEl || !statusEl) {
                     renderDprForm();
-                    return toast('Form not ready — please try again', 'error');
+                    // Retry after DOM updates (avoids double-click requirement)
+                    requestAnimationFrame(() => submitDprKarthika());
+                    return;
                 }
 
                 const editIdPoster = document.getElementById('dpr-id-edit-poster')?.value?.trim() || '';
@@ -16231,10 +16308,12 @@
                 const statusEl = document.getElementById('dpr-status');
                 const notesEl = document.getElementById('dpr-notes');
 
-                // Guard: form elements may not exist if renderDprForm() hasn't run yet
+                // Guard: form elements may not exist if renderDprForm() hasn't run yet — auto-retry
                 if (!dateEl || !statusEl) {
                     renderDprForm();
-                    return toast('Form not ready — please try again', 'error');
+                    // Retry after DOM updates (avoids double-click requirement)
+                    requestAnimationFrame(() => submitDpr());
+                    return;
                 }
 
                 const editId = editIdEl?.value?.trim() || '';
@@ -16858,8 +16937,11 @@
                             };
                         }
 
-                        userTaskStats[email].assigned.push(t);
-                        if (isTaskCompletedStatus(t.status)) userTaskStats[email].completed.push(t);
+                        if (isTaskCompletedStatus(t.status)) {
+                            userTaskStats[email].completed.push(t);
+                        } else {
+                            userTaskStats[email].assigned.push(t);
+                        }
 
                         const type = (t.issueType || t.type || '').toLowerCase();
                         const desc = (t.desc || t.summary || t.name || t.id || '').toLowerCase();
@@ -16901,7 +16983,7 @@
                     // Build taskId → assignee email map from our task list
                     const taskIdToEmail = {};
                     Object.entries(userTaskStats).forEach(([email, u]) => {
-                        u.assigned.forEach(t => { if (t.id) taskIdToEmail[t.id] = email; });
+                        [...u.assigned, ...u.completed].forEach(t => { if (t.id) taskIdToEmail[t.id] = email; });
                     });
 
                     // Use ALL qc reports so scores always show (not period-filtered)
@@ -19117,6 +19199,14 @@
                             id.startsWith('learn-') || id.startsWith('disc-');
                     };
 
+                    const isAssignedToUser = (t, usrEmail) => {
+                        if (!t) return false;
+                        if (assigneeMatches(t, usrEmail)) return true;
+                        const userPlans = dailyPlans[eKey(usrEmail)];
+                        if (userPlans && userPlans[t.id]) return true;
+                        return false;
+                    };
+
                     const nameToEmail = {};
                     Array.from(allUsersMap.values()).forEach(u => {
                         if (u.name && u.email) nameToEmail[u.name.toLowerCase()] = u.email.toLowerCase();
@@ -19225,11 +19315,33 @@
                                 )
                                 .forEach(t => comp.push(t));
                         }
-                        const assigned = filteredTasks.filter(t =>
-                            matchesUserAndPeriod(t)
+
+                        // Build hold and rework BEFORE assigned so we can exclude them
+                        const hold = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) &&
+                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
                         );
+                        const rework = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) &&
+                            ((t.status || '').trim().toLowerCase().includes('rework') ||
+                             ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()))
+                        );
+
+                        // Assigned = all tasks in period MINUS completed/hold/rework
+                        // (mutually exclusive — no double counting)
+                        const compIds   = new Set(comp.map(t => t.id));
+                        const holdIds   = new Set(hold.map(t => t.id));
+                        const reworkIds = new Set(rework.map(t => t.id));
+
+                        const assigned = filteredTasks.filter(t =>
+                            matchesUserAndPeriod(t) &&
+                            !compIds.has(t.id) &&
+                            !holdIds.has(t.id) &&
+                            !reworkIds.has(t.id)
+                        );
+
                         // For daily-plan users, also include timelog-matched tasks in assigned
-                        // so assigned >= completed is always maintained
+                        // so assigned covers all worked tasks not already in other buckets
                         if (isDailyPlanUser) {
                             const periodLogIds = new Set(
                                 allTimeLogs
@@ -19246,18 +19358,13 @@
                                 .filter(t =>
                                     periodLogIds.has(t.id) &&
                                     !assignedIds.has(t.id) &&
+                                    !compIds.has(t.id) &&
+                                    !holdIds.has(t.id) &&
+                                    !reworkIds.has(t.id) &&
                                     !isExcludedTask(t)
                                 )
                                 .forEach(t => assigned.push(t));
                         }
-                        const hold = filteredTasks.filter(t =>
-                            matchesUserAndPeriod(t) &&
-                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
-                        );
-                        const rework = filteredTasks.filter(t =>
-                            matchesUserAndPeriod(t) &&
-                            ((t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()))
-                        );
                         const pend = filteredTasks.filter(t => {
                             if (isDailyPlanUser) {
                                 return matchesUserAndPeriod(t) && !isDone(t.status);
@@ -19320,12 +19427,7 @@
 
                     const currStats = getStatsFor(email, fromTs, toTs);
                     window.indivPerfTaskStats = window.indivPerfTaskStats || {};
-                    window.indivPerfTaskStats[email] = {
-                        completed: currStats.completed,
-                        assigned: currStats.assigned,
-                        hold: currStats.hold,
-                        rework: currStats.rework
-                    };
+                    // NOTE: indivPerfTaskStats[email] is updated below after workedTasks is finalised
                     const prevStats = getStatsFor(email, prevStartTs, prevEndTs);
 
                     const teamEmails = getLearningEmployees().map(u => u.email.toLowerCase());
@@ -19541,6 +19643,13 @@
                                 workedTasks.push(t);
                             }
                         });
+                        // Sneha: indivPerfTaskStats uses workedTasks as source of truth
+                        window.indivPerfTaskStats[email] = {
+                            completed: workedTasks.filter(t => isTaskCompletedStatus(t.status)),
+                            assigned:  workedTasks.filter(t => isAssignedToUser(t, email) && !isTaskCompletedStatus(t.status) && !['hold','design hold','on hold'].includes((t.status||'').trim().toLowerCase()) && !(t.status||'').trim().toLowerCase().includes('rework')),
+                            hold:      currStats.hold,
+                            rework:    currStats.rework
+                        };
                     } else if (email === 'anithavilpower@gmail.com') {
                         // Karthika: Tasks Worked Log = her daily plan tasks in this period
                         const karthikaPlans = dailyPlans[eKey(email)] || {};
@@ -19563,13 +19672,34 @@
                                 workedTasks.push(t);
                             }
                         });
-                        // Also include completed + hold + rework for completeness
-                        [...currStats.completed, ...currStats.hold, ...currStats.rework].forEach(t => {
+                        // Also include completed + assigned + hold + rework for completeness
+                        [...currStats.completed, ...currStats.assigned, ...currStats.hold, ...currStats.rework].forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
                                 workedTaskIds.add(t.id);
                                 workedTasks.push(t);
                             }
                         });
+                        // ── Sync userCompleted and modal list to workedTasks (single source of truth) ──
+                        // getStatsFor uses both daily-plan date matching AND timelog discovery which can
+                        // produce a count that diverges from the workedTasks log view. Use workedTasks
+                        // as the definitive list so the tile count and drill-down modal always agree.
+                        const karthikaCompletedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                        const karthikaHoldTasks      = workedTasks.filter(t => ['hold','design hold','on hold'].includes((t.status||'').trim().toLowerCase()));
+                        const karthikaReworkTasks    = workedTasks.filter(t => (t.status||'').trim().toLowerCase().includes('rework') || ['rework designs','rework','rework design'].includes((t.status||'').trim().toLowerCase()));
+                        const karthikaAssignedTasks  = workedTasks.filter(t => {
+                            const id = t.id;
+                            return isAssignedToUser(t, email) &&
+                                   !karthikaCompletedTasks.some(x => x.id === id) &&
+                                   !karthikaHoldTasks.some(x => x.id === id) &&
+                                   !karthikaReworkTasks.some(x => x.id === id);
+                        });
+                        userCompleted = karthikaCompletedTasks.length;
+                        window.indivPerfTaskStats[email] = {
+                            completed: karthikaCompletedTasks,
+                            assigned:  karthikaAssignedTasks,
+                            hold:      karthikaHoldTasks,
+                            rework:    karthikaReworkTasks
+                        };
                     } else {
                         currStats.completed.forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
@@ -19602,8 +19732,24 @@
                             userCompleted = logCompletedCount;
                         }
 
-                        // Also update the drill-down list so the modal matches the count
-                        window.indivPerfTaskStats[email].completed = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                        // Set indivPerfTaskStats with mutually exclusive counts from workedTasks
+                        const elseCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                        const elseHold      = workedTasks.filter(t => ['hold','design hold','on hold'].includes((t.status||'').trim().toLowerCase()));
+                        const elseRework    = workedTasks.filter(t => (t.status||'').trim().toLowerCase().includes('rework') || ['rework designs','rework','rework design'].includes((t.status||'').trim().toLowerCase()));
+                        const elseCompIds   = new Set(elseCompleted.map(t => t.id));
+                        const elseHoldIds   = new Set(elseHold.map(t => t.id));
+                        const elseReworkIds = new Set(elseRework.map(t => t.id));
+                        const elseAssigned  = workedTasks.filter(t =>
+                            isAssignedToUser(t, email) &&
+                            !elseCompIds.has(t.id) && !elseHoldIds.has(t.id) && !elseReworkIds.has(t.id)
+                        );
+                        userCompleted = elseCompleted.length;
+                        window.indivPerfTaskStats[email] = {
+                            completed: elseCompleted,
+                            assigned:  elseAssigned,
+                            hold:      elseHold,
+                            rework:    elseRework
+                        };
                     }
 
                     const getStatusBadgeClass = (status) => {
@@ -19769,6 +19915,23 @@
                         `;
                     }
 
+                    // ── Completed Video Count for video editors (Immanuel, Thanush, Barath) ──
+                    const VIDEO_EDITOR_EMAILS = ['thanushvilpower@gmail.com', 'barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'];
+                    const isVideoEditor = VIDEO_EDITOR_EMAILS.includes(email.toLowerCase());
+
+                    // For video editors, Jira tasks = video production work. Internal tasks are admin/recurring.
+                    // completedVideoTasks = all completed Jira tasks (non-manual, non-internal) in workedTasks
+                    const completedVideoTasks = isVideoEditor
+                        ? workedTasks.filter(t => isTaskCompletedStatus(t.status) && !t.manual && !isInternalTask(t))
+                        : [];
+                    const completedVideoCount = completedVideoTasks.length;
+
+                    // Store for the drill-down modal
+                    if (isVideoEditor) {
+                        window.indivPerfTaskStats[email] = window.indivPerfTaskStats[email] || {};
+                        window.indivPerfTaskStats[email].completedVideos = completedVideoTasks;
+                    }
+
                     let html = `
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
                     <!-- Left: Performance Score & Core Metrics -->
@@ -19803,7 +19966,7 @@
                                 <p class="text-xl font-black text-slate-900">${userCompleted}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevUserCompleted} prev period</p>
                                 ${(() => {
-                                    const videoEditors = ['thanushvilpower@gmail.com','barathvilpower@gmail.com','immanuelvilpower@gmail.com'];
+                                    const videoEditors = ['thanushvilpower@gmail.com','barathvilpower@gmail.com','immanuelvilpower@gmail.com','anithavilpower@gmail.com'];
                                     if (!videoEditors.includes(email)) return '';
                                     const completedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
                                     const jiraCount     = completedTasks.filter(t => !t.manual && !isInternalTask(t)).length;
@@ -19858,7 +20021,7 @@
                                     <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-slate-900">${currStats.assigned.length}</p>
+                                <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.assigned || currStats.assigned).length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.assigned.length} prev period</p>
                             </div>
                             <!-- In Progress Tasks -->
@@ -19867,7 +20030,7 @@
                                     <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">In Progress</p>
                                     <iconify-icon icon="solar:play-circle-bold" class="text-amber-400" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-slate-900">${currStats.assigned.filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))).length}</p>
+                                <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.assigned || currStats.assigned).filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))).length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">currently active</p>
                             </div>
                             <!-- Hold Tasks (Clickable) -->
@@ -19877,7 +20040,7 @@
                                     <p class="text-[9px] font-black text-rose-600 uppercase tracking-wider mb-1">Hold Tasks</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-rose-400 group-hover:text-rose-600 transition-colors" width="12"></iconify-icon>
                                 </div>
-                                <p class="text-xl font-black text-rose-600">${currStats.hold.length}</p>
+                                <p class="text-xl font-black text-rose-600">${(window.indivPerfTaskStats[email]?.hold || currStats.hold).length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.hold.length} prev period</p>
                             </div>
                             <!-- Reworked Tasks (Clickable) -->
@@ -19890,6 +20053,18 @@
                                 <p class="text-xl font-black text-amber-600">${currStats.rework.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.rework.length} prev period</p>
                             </div>
+                            ${isVideoEditor ? `
+                            <!-- Completed Videos tile for Immanuel / Thanush / Barath -->
+                            <div class="bg-blue-50/30 border border-blue-100 hover:border-blue-300 hover:bg-blue-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
+                                 onclick="showIndivPerfTasks('${email}', 'completedVideos', '${escapeHtml(user.name)}')">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-[9px] font-black text-blue-600 uppercase tracking-wider mb-1">Completed Videos</p>
+                                    <iconify-icon icon="solar:eye-bold" class="text-blue-400 group-hover:text-blue-600 transition-colors" width="12"></iconify-icon>
+                                </div>
+                                <p class="text-xl font-black text-slate-900">${completedVideoCount}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">completed video tasks</p>
+                            </div>
+                            ` : ''}
                             `}
 
                             <!-- QC Score -->
