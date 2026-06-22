@@ -19,8 +19,10 @@ export function toast(msg, type = 'info') {
     clearTimeout(toastTimeout);
     clearTimeout(toastHideTimeout);
 
-    if (t.showPopover && !t.matches(':popover-open')) {
-        t.showPopover();
+    try {
+        if (t.showPopover) t.showPopover();
+    } catch (e) {
+        // Ignore if already open or not supported
     }
     
     requestAnimationFrame(() => t.classList.add('show'));
@@ -28,7 +30,13 @@ export function toast(msg, type = 'info') {
     toastTimeout = setTimeout(() => { 
         t.classList.remove('show');
         toastHideTimeout = setTimeout(() => {
-            if (!t.classList.contains('show') && t.hidePopover && t.matches(':popover-open')) t.hidePopover();
+            if (!t.classList.contains('show')) {
+                try {
+                    if (t.hidePopover) t.hidePopover();
+                } catch (e) {
+                    // Ignore already hidden popover error
+                }
+            }
         }, 300);
     }, 3000);
 }

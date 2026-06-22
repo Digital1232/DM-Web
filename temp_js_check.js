@@ -1,4 +1,4 @@
-﻿
+
         let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get;
         let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
         let getStorage, sRef, uploadBytes, getDownloadURL;
@@ -1489,7 +1489,12 @@
                 grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/50"></div>`;
             }
 
-            const shootTasks = tasks.filter(t => t.status === 'Shoot Needed' && t.duedate);
+            const shootTasks = tasks.filter(t => {
+                if (!t.duedate) return false;
+                const isShootNeeded = t.status === 'Shoot Needed';
+                const hasShootStorage = !!t.shootStorage;
+                return isShootNeeded || hasShootStorage;
+            });
             const tasksByDate = shootTasks.reduce((acc, task) => {
                 const date = task.duedate.slice(0, 10);
                 if (!acc[date]) acc[date] = [];
@@ -1506,7 +1511,15 @@
                 const isToday = dateStr === todayStr;
 
                 let dayHtml = `<div onclick="openShootPlanModal('${dateStr}')" class="relative p-3 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/50' : ''} hover:bg-slate-100/50 transition-colors cursor-pointer"><time datetime="${dateStr}" class="font-black text-sm ${isToday ? 'text-indigo-600' : 'text-slate-700'}">${day}</time><div class="mt-2 space-y-1 overflow-y-auto flex-1">`;
-                dayTasks.forEach(task => { dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" class="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow hover:border-indigo-300"><p class="text-[10px] font-bold text-slate-800 truncate">${escapeHtml(task.desc)}</p><p class="text-[9px] text-slate-500 font-medium">${escapeHtml(task.client || 'No Client')}</p></div>`; });
+                dayTasks.forEach(task => { 
+                    const isCompleted = !!task.shootStorage;
+                    const bgClass = isCompleted ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200';
+                    const textClass = isCompleted ? 'text-emerald-800' : 'text-slate-800';
+                    const hoverClass = isCompleted ? 'hover:border-emerald-400' : 'hover:border-indigo-300';
+                    const storageHtml = isCompleted ? `<div class="mt-1 pt-1 border-t border-emerald-100"><p class="text-[9px] font-bold text-emerald-600 truncate">💽 ${escapeHtml(task.shootStorage.nodeName || 'Unknown')}</p></div>` : '';
+                    
+                    dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" class="${bgClass} p-1.5 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${hoverClass} cursor-pointer"><p class="text-[10px] font-bold ${textClass} truncate">${escapeHtml(task.desc)}</p><p class="text-[9px] text-slate-500 font-medium">${escapeHtml(task.client || 'No Client')}</p>${storageHtml}</div>`; 
+                });
                 dayHtml += `</div></div>`;
                 grid.innerHTML += dayHtml;
             }

@@ -7713,9 +7713,13 @@ async function sendAnnouncement() {
         let toastTimeout, toastHideTimeout;
         function toast(msg, type = 'info', onClick = null) {
             const t = document.getElementById('toast'), ti = document.getElementById('toast-icon'), tt = document.getElementById('toast-title'), tm = document.getElementById('toast-msg');
-            tt.textContent = type.toUpperCase(); tm.textContent = msg;
-            ti.className = `w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === 'success' ? 'bg-emerald-100 text-emerald-600' : (type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600')}`;
-            ti.innerHTML = `<iconify-icon icon="${type === 'success' ? 'solar:check-circle-bold' : (type === 'error' ? 'solar:danger-circle-bold' : 'solar:info-circle-bold')}" width="20"></iconify-icon>`;
+            if (!t) return;
+            if (tt) tt.textContent = type.toUpperCase();
+            if (tm) tm.textContent = msg;
+            if (ti) {
+                ti.className = `w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === 'success' ? 'bg-emerald-100 text-emerald-600' : (type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600')}`;
+                ti.innerHTML = `<iconify-icon icon="${type === 'success' ? 'solar:check-circle-bold' : (type === 'error' ? 'solar:danger-circle-bold' : 'solar:info-circle-bold')}" width="20"></iconify-icon>`;
+            }
             
             t.onclick = onClick;
             t.style.cursor = onClick ? 'pointer' : 'default';
@@ -7723,8 +7727,10 @@ async function sendAnnouncement() {
             clearTimeout(toastTimeout);
             clearTimeout(toastHideTimeout);
 
-            if (t.showPopover && !t.matches(':popover-open')) {
-                t.showPopover();
+            try {
+                if (t.showPopover) t.showPopover();
+            } catch (e) {
+                // Ignore if already open or not supported
             }
             
             requestAnimationFrame(() => t.classList.add('show'));
@@ -7732,7 +7738,13 @@ async function sendAnnouncement() {
             toastTimeout = setTimeout(() => { 
                 t.classList.remove('show');
                 toastHideTimeout = setTimeout(() => {
-                    if (!t.classList.contains('show') && t.hidePopover && t.matches(':popover-open')) t.hidePopover();
+                    if (!t.classList.contains('show')) {
+                        try {
+                            if (t.hidePopover) t.hidePopover();
+                        } catch (e) {
+                            // Ignore already hidden popover error
+                        }
+                    }
                 }, 300);
             }, 3000);
         }
