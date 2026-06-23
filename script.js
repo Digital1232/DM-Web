@@ -199,6 +199,7 @@
         let checkInTime = null;
         let breakStartTime = null;
         let totalBreakDuration = 0;
+        let lastBreakAlertTime = 0;
         let syncIntervalRef = null;
         let currentTaskViewMode = 'list';
         let statusChangeStats = {};
@@ -961,6 +962,7 @@
                     renderDailySummary();
                 }
                 setInterval(checkAutoCheckout, 60000);
+                setInterval(checkBreakLimit, 60000);
                 setInterval(checkBirthdays, 60000); // Check for birthdays every minute
                 // Removed auto-update mechanism to stop page reloads
                 setTimeout(checkBirthdays, 5000); // Check shortly after login
@@ -1494,6 +1496,109 @@
             }
         }
 
+        function sendBreakExceededWebNotification(breakDuration) {
+            if (!('Notification' in window)) return;
+            const breakMinutes = Math.floor(breakDuration / 60000);
+            const title = 'Break Limit Exceeded! ⏳';
+            const options = {
+                body: `You have been on break for ${breakMinutes} minutes. Tap to resume your work session.`,
+                tag: 'break-exceeded-alert',
+                requireInteraction: true
+            };
+            
+            const showNotif = () => {
+                const notification = new Notification(title, options);
+                notification.onclick = () => {
+                    window.focus();
+                    const modal = document.getElementById('breakExceededModal');
+                    if (modal) {
+                        modal.close();
+                        modal.remove();
+                    }
+                    doResume();
+                };
+            };
+
+            if (Notification.permission === 'granted') {
+                showNotif();
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showNotif();
+                    }
+                });
+            }
+        }
+
+        function showBreakExceededPopup(breakDuration) {
+            if (document.getElementById('breakExceededModal')) return;
+
+            const breakMinutes = Math.floor(breakDuration / 60000);
+            const popupHtml = `
+                <div class="relative bg-gradient-to-br from-amber-500 to-rose-600 p-8 text-white text-center rounded-3xl shadow-2xl border border-white/20 flex flex-col items-center max-w-sm mx-auto">
+                    <div class="absolute -top-10 bg-white text-rose-600 w-20 h-20 rounded-full flex items-center justify-center shadow-lg border-4 border-rose-500/20">
+                        <iconify-icon icon="solar:clock-circle-bold-duotone" width="44"></iconify-icon>
+                    </div>
+                    <h3 class="text-xl font-black mt-8 mb-2 tracking-tight">Break Limit Exceeded!</h3>
+                    <p class="text-xs text-white/90 leading-relaxed mb-6">
+                        You have been on break for <span class="font-black text-white underline underline-offset-4">${breakMinutes} minutes</span>, which exceeds the 30-minute break limit. Please resume your work session.
+                    </p>
+                    <button onclick="handleBreakExceededResume(this)" class="w-full bg-white hover:bg-slate-50 text-rose-600 font-black py-3.5 rounded-xl transition-all shadow-xl active:scale-[0.98] cursor-pointer text-sm">
+                        Resume Work Now
+                    </button>
+                </div>
+            `;
+
+            const modal = document.createElement('dialog');
+            modal.id = 'breakExceededModal';
+            modal.className = "modal bg-transparent p-4 outline-none border-none backdrop:bg-black/75 max-w-md w-full m-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[99999]";
+            modal.style.margin = "0";
+            modal.style.top = "50%";
+            modal.style.left = "50%";
+            modal.style.transform = "translate(-50%, -50%)";
+            modal.innerHTML = popupHtml;
+
+            document.body.appendChild(modal);
+
+            const style = document.createElement('style');
+            style.textContent = `
+                #breakExceededModal::backdrop { background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); }
+            `;
+            modal.appendChild(style);
+
+            modal.showModal();
+        }
+
+        async function handleBreakExceededResume(btn) {
+            const dialog = btn.closest('dialog');
+            if (dialog) {
+                dialog.close();
+                dialog.remove();
+            }
+            await doResume();
+        }
+
+        function checkBreakLimit() {
+            if (!isCheckedIn || !breakStartTime) return;
+            const breakDuration = Date.now() - breakStartTime;
+            if (breakDuration > 30 * 60 * 1000) { // 30 minutes
+                if (!document.getElementById('breakExceededModal')) {
+                    showBreakExceededPopup(breakDuration);
+                }
+
+                if (Date.now() - lastBreakAlertTime > 5 * 60 * 1000) {
+                    lastBreakAlertTime = Date.now();
+
+                    const sound = document.getElementById('announcement-notification-sound') || document.getElementById('chat-notification-sound');
+                    if (sound) {
+                        sound.play().catch(e => console.warn('Audio play failed:', e));
+                    }
+
+                    sendBreakExceededWebNotification(breakDuration);
+                }
+            }
+        }
+
         function tickTimer() {
             if (!checkInTime) return;
             const elapsedMs = Date.now() - checkInTime;
@@ -1941,6 +2046,22 @@
             }).join('');
         }
 
+        function selectStrategyFormat(format) {
+            const posterBtn = document.getElementById('strategy-format-poster');
+            const videoBtn = document.getElementById('strategy-format-video');
+            const input = document.getElementById('strategy-format');
+            if (!posterBtn || !videoBtn || !input) return;
+
+            input.value = format;
+            if (format === 'Poster') {
+                posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
+                videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+            } else {
+                posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+                videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
+            }
+        }
+
         function openAddStrategyEventModal(dateStr) {
             if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
             
@@ -1950,6 +2071,15 @@
             document.getElementById('strategy-date').value = dateStr || '';
             document.getElementById('strategy-owner').value = '';
             document.getElementById('strategy-desc').value = '';
+
+            // Reset format to Poster and enable buttons
+            const posterBtn = document.getElementById('strategy-format-poster');
+            const videoBtn = document.getElementById('strategy-format-video');
+            if (posterBtn && videoBtn) {
+                posterBtn.removeAttribute('disabled');
+                videoBtn.removeAttribute('disabled');
+            }
+            selectStrategyFormat('Poster');
 
             document.getElementById('strategy-delete-btn').classList.add('hidden');
             document.getElementById('strategyEventModal').showModal();
@@ -1969,6 +2099,9 @@
             document.getElementById('strategy-owner').value = ev.owner || '';
             document.getElementById('strategy-desc').value = ev.desc || '';
 
+            // Restore format value
+            selectStrategyFormat(ev.format || 'Poster');
+
             // Toggle readonly/disabled state depending on permissions
             const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc'];
             fields.forEach(f => {
@@ -1986,6 +2119,19 @@
                     }
                 }
             });
+
+            // Toggle format button disabled states
+            const posterBtn = document.getElementById('strategy-format-poster');
+            const videoBtn = document.getElementById('strategy-format-video');
+            if (posterBtn && videoBtn) {
+                if (canWrite) {
+                    posterBtn.removeAttribute('disabled');
+                    videoBtn.removeAttribute('disabled');
+                } else {
+                    posterBtn.setAttribute('disabled', 'true');
+                    videoBtn.setAttribute('disabled', 'true');
+                }
+            }
 
             const delBtn = document.getElementById('strategy-delete-btn');
             if (delBtn) {
@@ -2005,11 +2151,19 @@
             const id = document.getElementById('strategy-event-id').value;
             const title = document.getElementById('strategy-title').value.trim();
             const date = document.getElementById('strategy-date').value;
-            const owner = document.getElementById('strategy-owner').value;
+            let owner = document.getElementById('strategy-owner').value;
             const desc = document.getElementById('strategy-desc').value.trim();
+            const format = document.getElementById('strategy-format').value;
 
             if (!title || !date) {
                 return toast('Please fill in title and date.', 'error');
+            }
+
+            // If format is Poster, auto assign to Karthika
+            if (format === 'Poster') {
+                owner = 'anithavilpower@gmail.com';
+                const ownerEl = document.getElementById('strategy-owner');
+                if (ownerEl) ownerEl.value = owner;
             }
 
             try {
@@ -2021,6 +2175,7 @@
                     category: '',
                     owner,
                     desc,
+                    format, // Save the content format
                     updatedBy: userEmail,
                     updatedAt: Date.now()
                 };
@@ -2087,7 +2242,43 @@
                     try {
                         const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
                         if (res.success && (res.data?.key || res.key)) {
-                            toast(`Jira task ${res.data?.key || res.key} created!`, 'success');
+                            const parentKey = res.data?.key || res.key;
+                            toast(`Jira task ${parentKey} created!`, 'success');
+                            
+                            // Auto create a subtask thumbnail for video tasks and assign to Karthika
+                            if (format === 'Video') {
+                                const subtaskTitle = `${title} + Thumbnail`;
+                                const subtaskPayload = {
+                                    fields: {
+                                        project: { key: projectKey },
+                                        parent: { key: parentKey },
+                                        summary: subtaskTitle,
+                                        issuetype: { name: 'Sub-task' }
+                                    }
+                                };
+                                
+                                const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get('anithavilpower@gmail.com') : { email: 'anithavilpower@gmail.com', name: 'Karthika K' };
+                                if (typeof findJiraAccountId === 'function') {
+                                    const karthikaAccountId = await findJiraAccountId(karthikaUser);
+                                    if (karthikaAccountId) {
+                                        subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                                    }
+                                }
+                                
+                                try {
+                                    const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                                    if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                        toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
+                                    } else {
+                                        console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
+                                        toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
+                                    }
+                                } catch (subErr) {
+                                    console.error('Error auto-creating subtask:', subErr);
+                                    toast(`Failed to create subtask: ${subErr.message}`, 'warning');
+                                }
+                            }
+
                             if (typeof syncTasks === 'function') {
                                 await syncTasks(true);
                             }
@@ -9575,6 +9766,8 @@ async function sendAnnouncement() {
         window.openAddStrategyEventModal = openAddStrategyEventModal;
         window.openEditStrategyEventModal = openEditStrategyEventModal;
         window.closeStrategyEventModal = closeStrategyEventModal;
+        window.selectStrategyFormat = selectStrategyFormat;
+        window.handleBreakExceededResume = handleBreakExceededResume;
         window.saveStrategyEvent = saveStrategyEvent;
         window.deleteStrategyEvent = deleteStrategyEvent;
         }
