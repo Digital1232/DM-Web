@@ -91,7 +91,7 @@
 
         const JIRA = {
             domain: 'vilpowerdigitalmarketing.atlassian.net',
-            projectKey: 'JUN',
+            projectKey: 'JULY',
             apiUrl: '/api/jira',
             gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
             useLocalApi: false
@@ -2199,7 +2199,8 @@
                     };
                     const taskDueDate = addDays(date, -4);
                     const isJuly = date && date.split('-')[1] === '07';
-                    const projectKey = isJuly ? 'JULY' : JIRA.projectKey;
+                    const isJune = date && date.split('-')[1] === '06';
+                    const projectKey = isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey);
                     const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                     const jiraPayload = {
                         fields: {
