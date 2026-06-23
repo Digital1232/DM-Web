@@ -6292,49 +6292,19 @@
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
-                    <input id="strategy-date" type="date"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                </div>
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Platform</label>
-                    <select id="strategy-platform"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                        <option value="Instagram">Instagram</option>
-                        <option value="YouTube">YouTube</option>
-                        <option value="LinkedIn">LinkedIn</option>
-                        <option value="Facebook">Facebook</option>
-                        <option value="Client Pitch">Client Pitch</option>
-                        <option value="General Brand">General Brand</option>
-                    </select>
-                </div>
+            <div>
+                <label
+                    class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
+                <input id="strategy-date" type="date"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Category</label>
-                    <select id="strategy-category"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                        <option value="Educational">Educational</option>
-                        <option value="Promotional">Promotional</option>
-                        <option value="Brand Awareness">Brand Awareness</option>
-                        <option value="Lead Generation">Lead Generation</option>
-                        <option value="Client Update">Client Update</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Owner /
-                        In-Charge</label>
-                    <select id="strategy-owner"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                        <!-- User options will be dynamically loaded -->
-                    </select>
-                </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Assignee</label>
+                <select id="strategy-owner"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
+                    <!-- User options will be dynamically loaded -->
+                </select>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -9380,7 +9350,7 @@
                 if (ownerSelect) {
                     if (!allUsersMap.size) allUsersMap = await getAllUsers();
                     const users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    ownerSelect.innerHTML = '<option value="">-- Select Owner --</option>' + users.map(u => `
+                    ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u => `
                     <option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} (${escapeHtml(u.email)})</option>
                 `).join('');
                 }
@@ -9642,7 +9612,7 @@
                     let eventsHtml = '';
                     dayEvents.forEach(ev => {
                         const matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
-                        const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'Planned'));
+                        const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
                         const statusBadge = finalStatus ? `<span class="bg-white/20 text-white rounded px-1 ml-1 text-[8px] uppercase font-bold tracking-wider">${escapeHtml(finalStatus)}</span>` : '';
 
                         const badgeClass = getStrategyStatusColor(finalStatus, 'solid');
@@ -9720,7 +9690,7 @@
                     const ownerName = allUsersMap.get(ev.owner?.toLowerCase())?.name || ev.owner || 'Unassigned';
 
                     const matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
-                    const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'Planned'));
+                    const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
 
                     const pillColor = getStrategyStatusColor(finalStatus, 'pill');
 
@@ -9739,8 +9709,7 @@
                         <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(ev.title)}</h5>
                         <p class="text-[10px] text-slate-500 line-clamp-2">${escapeHtml(ev.desc || 'No goal described.')}</p>
                         <div class="flex items-center justify-between pt-1 border-t border-slate-100/50 text-[9px] text-slate-400 font-bold uppercase">
-                            <span>Category: ${escapeHtml(ev.category)}</span>
-                            <span class="text-slate-600">By: ${escapeHtml(ownerName)}</span>
+                            <span class="text-slate-600">Assignee: ${escapeHtml(ownerName)}</span>
                         </div>
                     </div>
                 `;
@@ -9754,11 +9723,9 @@
                 document.getElementById('strategy-event-id').value = '';
                 document.getElementById('strategy-title').value = '';
                 document.getElementById('strategy-date').value = dateStr || '';
-                document.getElementById('strategy-platform').value = 'Instagram';
-                document.getElementById('strategy-category').value = 'Educational';
-                document.getElementById('strategy-owner').value = currentUser.email;
+                document.getElementById('strategy-owner').value = '';
                 document.getElementById('strategy-client').value = '';
-                document.getElementById('strategy-status').value = 'Planned';
+                document.getElementById('strategy-status').value = 'To Do';
                 document.getElementById('strategy-desc').value = '';
 
                 document.getElementById('strategy-delete-btn').classList.add('hidden');
@@ -9776,16 +9743,14 @@
                 document.getElementById('strategy-event-id').value = eventId;
                 document.getElementById('strategy-title').value = ev.title || '';
                 document.getElementById('strategy-date').value = ev.date || '';
-                document.getElementById('strategy-platform').value = ev.platform || 'Instagram';
-                document.getElementById('strategy-category').value = ev.category || 'Educational';
                 document.getElementById('strategy-owner').value = ev.owner || '';
                 document.getElementById('strategy-client').value = ev.client || '';
                 const matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
-                document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'Planned'));
+                document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
                 document.getElementById('strategy-desc').value = ev.desc || '';
 
                 // Toggle readonly/disabled state depending on permissions
-                const fields = ['strategy-title', 'strategy-date', 'strategy-platform', 'strategy-category', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status'];
+                const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status'];
                 fields.forEach(f => {
                     const el = document.getElementById(f);
                     if (el) {
@@ -9820,23 +9785,21 @@
                 const id = document.getElementById('strategy-event-id').value;
                 const title = document.getElementById('strategy-title').value.trim();
                 const date = document.getElementById('strategy-date').value;
-                const platform = document.getElementById('strategy-platform').value;
-                const category = document.getElementById('strategy-category').value;
                 const owner = document.getElementById('strategy-owner').value;
                 const client = document.getElementById('strategy-client').value;
                 const status = document.getElementById('strategy-status').value;
                 const desc = document.getElementById('strategy-desc').value.trim();
 
-                if (!title || !date || !owner) {
-                    return toast('Please fill in title, date and owner.', 'error');
+                if (!title || !date) {
+                    return toast('Please fill in title and date.', 'error');
                 }
 
                 try {
                     const evPayload = {
                         title,
                         date,
-                        platform,
-                        category,
+                        platform: '',
+                        category: '',
                         owner,
                         client,
                         status,
@@ -9855,6 +9818,63 @@
                         evPayload.createdBy = currentUser.email;
                         await push(ref(db, 'worksync/strategy_events'), evPayload);
                         toast('Strategy event scheduled!', 'success');
+
+                        // Auto-create a task with details in Jira
+                        const taskDueDate = ptAddDays(date, -4);
+                        const isJuly = date && date.split('-')[1] === '07';
+                        const projectKey = isJuly ? 'JULY' : JIRA.projectKey;
+                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
+                        const jiraPayload = {
+                            fields: {
+                                project: { key: projectKey },
+                                summary: title,
+                                issuetype: { name: 'Task' },
+                                labels: client ? [client.replace(/\s+/g, '_')] : [],
+                                duedate: taskDueDate
+                            }
+                        };
+
+                        if (desc) {
+                            jiraPayload.fields.description = {
+                                type: 'doc',
+                                version: 1,
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: desc
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                        }
+
+                        if (owner) {
+                            const assigneeUser = allUsersMap.get(owner.toLowerCase()) || { email: owner, name: owner };
+                            const accountId = await findJiraAccountId(assigneeUser);
+                            if (accountId) {
+                                jiraPayload.fields.assignee = { id: accountId };
+                            }
+                        }
+
+                        try {
+                            const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
+                            if (res.success && (res.data?.key || res.key)) {
+                                toast(`Jira task ${res.data?.key || res.key} created!`, 'success');
+                                if (typeof syncTasks === 'function') {
+                                    await syncTasks(true);
+                                }
+                            } else {
+                                console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
+                                toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
+                            }
+                        } catch (jiraErr) {
+                            console.error('Error auto-creating Jira task:', jiraErr);
+                            toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
+                        }
                     }
 
                     // Sync status to matched task if exists
@@ -21895,10 +21915,12 @@
 
                 try {
                     if (platform === 'jira') {
+                        const curMonth = new Date().getMonth(); // 6 is July
+                        const projectKey = curMonth === 6 ? 'JULY' : JIRA.projectKey;
                         const url = `https://${JIRA.domain}/rest/api/3/issue`;
                         const payload = {
                             fields: {
-                                project: { key: JIRA.projectKey },
+                                project: { key: projectKey },
                                 summary: title,
                                 issuetype: { name: 'Task' },
                                 labels: client ? [client.replace(/\s+/g, '_')] : []

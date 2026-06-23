@@ -1780,7 +1780,7 @@
             if (ownerSelect) {
                 if (!allUsersMap.size) allUsersMap = await getAllUsers();
                 const users = Array.from(allUsersMap.values()).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
-                ownerSelect.innerHTML = '<option value="">-- Select Owner --</option>' + users.map(u => `
+                ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u => `
                     <option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} (${escapeHtml(u.email)})</option>
                 `).join('');
             }
@@ -1930,13 +1930,11 @@
                          class="p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${new Date(ev.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
-                            <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${pillColor}">${escapeHtml(ev.platform)}</span>
                         </div>
                         <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(ev.title)}</h5>
                         <p class="text-[10px] text-slate-500 line-clamp-2">${escapeHtml(ev.desc || 'No goal described.')}</p>
                         <div class="flex items-center justify-between pt-1 border-t border-slate-100/50 text-[9px] text-slate-400 font-bold uppercase">
-                            <span>Category: ${escapeHtml(ev.category)}</span>
-                            <span class="text-slate-600">By: ${escapeHtml(ownerName)}</span>
+                            <span class="text-slate-600">Assignee: ${escapeHtml(ownerName)}</span>
                         </div>
                     </div>
                 `;
@@ -1950,9 +1948,7 @@
             document.getElementById('strategy-event-id').value = '';
             document.getElementById('strategy-title').value = '';
             document.getElementById('strategy-date').value = dateStr || '';
-            document.getElementById('strategy-platform').value = 'Instagram';
-            document.getElementById('strategy-category').value = 'Educational';
-            document.getElementById('strategy-owner').value = currentUser.email;
+            document.getElementById('strategy-owner').value = '';
             document.getElementById('strategy-desc').value = '';
 
             document.getElementById('strategy-delete-btn').classList.add('hidden');
@@ -1970,13 +1966,11 @@
             document.getElementById('strategy-event-id').value = eventId;
             document.getElementById('strategy-title').value = ev.title || '';
             document.getElementById('strategy-date').value = ev.date || '';
-            document.getElementById('strategy-platform').value = ev.platform || 'Instagram';
-            document.getElementById('strategy-category').value = ev.category || 'Educational';
             document.getElementById('strategy-owner').value = ev.owner || '';
             document.getElementById('strategy-desc').value = ev.desc || '';
 
             // Toggle readonly/disabled state depending on permissions
-            const fields = ['strategy-title', 'strategy-date', 'strategy-platform', 'strategy-category', 'strategy-owner', 'strategy-desc'];
+            const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc'];
             fields.forEach(f => {
                 const el = document.getElementById(f);
                 if (el) {
@@ -2011,24 +2005,23 @@
             const id = document.getElementById('strategy-event-id').value;
             const title = document.getElementById('strategy-title').value.trim();
             const date = document.getElementById('strategy-date').value;
-            const platform = document.getElementById('strategy-platform').value;
-            const category = document.getElementById('strategy-category').value;
             const owner = document.getElementById('strategy-owner').value;
             const desc = document.getElementById('strategy-desc').value.trim();
 
-            if (!title || !date || !owner) {
-                return toast('Please fill in title, date and owner.', 'error');
+            if (!title || !date) {
+                return toast('Please fill in title and date.', 'error');
             }
 
             try {
+                const userEmail = (typeof currentUser !== 'undefined') ? currentUser.email : 'system';
                 const evPayload = {
                     title,
                     date,
-                    platform,
-                    category,
+                    platform: '',
+                    category: '',
                     owner,
                     desc,
-                    updatedBy: currentUser.email,
+                    updatedBy: userEmail,
                     updatedAt: Date.now()
                 };
 
@@ -2039,9 +2032,73 @@
                 } else {
                     // Create
                     evPayload.createdAt = Date.now();
-                    evPayload.createdBy = currentUser.email;
+                    evPayload.createdBy = userEmail;
                     await push(ref(db, 'worksync/strategy_events'), evPayload);
                     toast('Strategy event scheduled!', 'success');
+
+                    // Auto-create a task with details in Jira
+                    const addDays = (dateStr, days) => {
+                        const d = new Date(dateStr + 'T00:00:00');
+                        d.setDate(d.getDate() + days);
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    };
+                    const taskDueDate = addDays(date, -4);
+                    const isJuly = date && date.split('-')[1] === '07';
+                    const projectKey = isJuly ? 'JULY' : JIRA.projectKey;
+                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
+                    const jiraPayload = {
+                        fields: {
+                            project: { key: projectKey },
+                            summary: title,
+                            issuetype: { name: 'Task' },
+                            labels: [],
+                            duedate: taskDueDate
+                        }
+                    };
+
+                    if (desc) {
+                        jiraPayload.fields.description = {
+                            type: 'doc',
+                            version: 1,
+                            content: [
+                                {
+                                    type: 'paragraph',
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: desc
+                                        }
+                                    ]
+                                }
+                            ]
+                        };
+                    }
+
+                    if (owner) {
+                        const assigneeUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get(owner.toLowerCase()) : { email: owner, name: owner };
+                        if (typeof findJiraAccountId === 'function') {
+                            const accountId = await findJiraAccountId(assigneeUser);
+                            if (accountId) {
+                                jiraPayload.fields.assignee = { id: accountId };
+                            }
+                        }
+                    }
+
+                    try {
+                        const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
+                        if (res.success && (res.data?.key || res.key)) {
+                            toast(`Jira task ${res.data?.key || res.key} created!`, 'success');
+                            if (typeof syncTasks === 'function') {
+                                await syncTasks(true);
+                            }
+                        } else {
+                            console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
+                            toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
+                        }
+                    } catch (jiraErr) {
+                        console.error('Error auto-creating Jira task:', jiraErr);
+                        toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
+                    }
                 }
 
                 closeStrategyEventModal();
