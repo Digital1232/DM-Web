@@ -811,6 +811,8 @@
                         <iconify-icon icon="solar:clipboard-list-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Tasks Hub
+                        <span id="task-badge"
+                            class="hidden ml-auto bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                     </button>
                     <!-- Internal Tasks merged into Tasks Hub -->
                     <button onclick="switchView('internal-tasks')" id="nav-internal-tasks" class="hidden"></button>
@@ -819,14 +821,6 @@
                         <iconify-icon icon="solar:calendar-add-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Daily Plan
-                    </button>
-                    <button onclick="switchView('projects')" id="nav-projects"
-                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:folder-with-files-linear" width="20"
-                            class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        Projects
-                        <span id="task-badge"
-                            class="hidden ml-auto bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                     </button>
                     <button onclick="switchView('shoots')" id="nav-shoots"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
@@ -1509,6 +1503,7 @@
                                         <option value="overdue">Overdue</option>
                                         <option value="today">Due Today</option>
                                         <option value="this_week">Due this Week</option>
+                                        <option value="this_month">Due this Month</option>
                                     </select>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
@@ -1692,6 +1687,7 @@
                                         <option value="overdue">Overdue</option>
                                         <option value="today">Due Today</option>
                                         <option value="this_week">Due this Week</option>
+                                        <option value="this_month">Due this Month</option>
                                     </select>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
@@ -2079,44 +2075,6 @@
                                 Load More
                             </button>
                         </div>
-                    </div>
-                </div>
-
-                <!-- ════ PROJECTS VIEW (NEW) ════ -->
-                <div id="view-projects-panel" class="hidden space-y-8 fade-in">
-                    <div
-                        class="bg-white rounded-3xl p-5 shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Project
-                                Overview</p>
-                            <p id="projects-period-label" class="text-sm font-black text-slate-900">This Month</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <select id="project-period-mode" onchange="onProjectPeriodModeChange()"
-                                class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                <option value="month" selected>This Month</option>
-                                <option value="week">This Week</option>
-                                <option value="calendar">Calendar Month</option>
-                            </select>
-                            <div id="project-calendar-nav" class="hidden items-center gap-2">
-                                <button type="button" onclick="navigateProjectCalendar(-1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                                    aria-label="Previous month">
-                                    <iconify-icon icon="solar:alt-arrow-left-linear" width="18"></iconify-icon>
-                                </button>
-                                <span id="project-calendar-title"
-                                    class="text-xs font-black text-slate-700 min-w-[110px] text-center"></span>
-                                <button type="button" onclick="navigateProjectCalendar(1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Next month">
-                                    <iconify-icon icon="solar:alt-arrow-right-linear" width="18"></iconify-icon>
-                                </button>
-                                <button type="button" onclick="navigateProjectCalendar(0)"
-                                    class="text-[10px] font-bold text-indigo-600 hover:underline px-2">Today</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        <!-- Project cards will be injected here by renderProjects() -->
                     </div>
                 </div>
 
@@ -6637,7 +6595,7 @@
             function canViewReports() { return isAdmin() || isManager() || hasClientWideAccess(); }
             function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
-            function canViewProjects() { return isAdmin() || isManager(); }
+            function canViewProjects() { return false; }
             function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
             function canViewQcPortal() {
                 if (!currentUser) return false;
@@ -8100,7 +8058,6 @@
                     currentReportTab = teamAccess[0];
                 }
 
-                document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
                 document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
                 document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
@@ -11537,6 +11494,14 @@
                             const dueDate = new Date(t.duedate);
                             return dueDate >= startOfWeek && dueDate <= endOfWeek;
                         });
+                    } else if (currentDueDateFilter === 'this_month') {
+                        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate) return false;
+                            const dueDate = new Date(t.duedate);
+                            return dueDate >= startOfMonth && dueDate <= endOfMonth;
+                        });
                     }
                 }
                 if (currentSearchTerm) filtered = filtered.filter(t => {
@@ -11751,6 +11716,10 @@
                         endOfWeek.setDate(startOfWeek.getDate() + 6);
                         endOfWeek.setHours(23, 59, 59, 999);
                         filtered = filtered.filter(t => t.duedate && new Date(t.duedate) >= startOfWeek && new Date(t.duedate) <= endOfWeek);
+                    } else if (currentInternalDueDateFilter === 'this_month') {
+                        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+                        filtered = filtered.filter(t => t.duedate && new Date(t.duedate) >= startOfMonth && new Date(t.duedate) <= endOfMonth);
                     }
                 }
                 if (currentInternalSearchTerm) {
@@ -11797,6 +11766,10 @@
                                     const sow = new Date(todayF); sow.setDate(todayF.getDate() - todayF.getDay() + (todayF.getDay() === 0 ? -6 : 1));
                                     const eow = new Date(sow); eow.setDate(sow.getDate() + 6); eow.setHours(23, 59, 59, 999);
                                     if (!t.duedate || new Date(t.duedate) < sow || new Date(t.duedate) > eow) return false;
+                                } else if (currentInternalDueDateFilter === 'this_month') {
+                                    const som = new Date(todayF.getFullYear(), todayF.getMonth(), 1);
+                                    const eom = new Date(todayF.getFullYear(), todayF.getMonth() + 1, 0, 23, 59, 59, 999);
+                                    if (!t.duedate || new Date(t.duedate) < som || new Date(t.duedate) > eom) return false;
                                 }
                             }
                             // Search
@@ -18697,6 +18670,27 @@
 
                     const snehaSnap = await get(ref(db, 'worksync/sneha_work_selections'));
                     const snehaSelections = Object.values(snehaSnap.val() || {}).filter(s => s.timestamp >= start && s.timestamp < end);
+
+                    // Fetch leave requests to exclude users on approved leave today
+                    const requestsSnap = await get(ref(db, 'worksync/requests'));
+                    const todayKey = todayIso();
+                    const approvedLeaves = [];
+                    if (requestsSnap.exists()) {
+                        Object.values(requestsSnap.val()).forEach(r => {
+                            if (r.type === 'leave') {
+                                const fullyApproved = r.status === 'approved' ||
+                                    (Array.isArray(r.approvals) && r.approvals.length > 0 &&
+                                        r.approvals.every(a => a.status === 'approved'));
+                                if (fullyApproved) {
+                                    const from = r.fromDate || r.date || '';
+                                    const to = r.toDate || r.date || from;
+                                    if (from <= todayKey && todayKey <= to) {
+                                        approvedLeaves.push((r.userId || r.userEmail || '').toLowerCase());
+                                    }
+                                }
+                            }
+                        });
+                    }
                     const usersMap = new Map();
                     Array.from(allUsersMap.values()).forEach(u => {
                         if (u.email && u.email !== '123') usersMap.set(u.email.toLowerCase(), { ...u });
@@ -18728,6 +18722,10 @@
                     let contentAdded = false;
 
                     sortedUsers.forEach(user => {
+                        if (approvedLeaves.includes((user.email || '').toLowerCase())) {
+                            return; // Skip user completely because they are on approved leave today
+                        }
+
                         const userLogs = todayTimeLogs.filter(log => log.userId === user.email); //
                         const current = user.currentTask;
 
@@ -18929,50 +18927,234 @@
                 }
 
                 try {
-                    const summaryRows = buildDailySummaryRows();
+                    // Fetch leave requests to exclude users on approved leave today
+                    const requestsSnap = await get(ref(db, 'worksync/requests'));
+                    const todayKey = todayIso();
+                    const approvedLeaves = [];
+                    if (requestsSnap.exists()) {
+                        Object.values(requestsSnap.val()).forEach(r => {
+                            if (r.type === 'leave') {
+                                const fullyApproved = r.status === 'approved' ||
+                                    (Array.isArray(r.approvals) && r.approvals.length > 0 &&
+                                        r.approvals.every(a => a.status === 'approved'));
+                                if (fullyApproved) {
+                                    const from = r.fromDate || r.date || '';
+                                    const to = r.toDate || r.date || from;
+                                    if (from <= todayKey && todayKey <= to) {
+                                        approvedLeaves.push((r.userId || r.userEmail || '').toLowerCase());
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    let summaryRows = buildDailySummaryRows();
+                    summaryRows = summaryRows.filter(row => !approvedLeaves.includes((row.email || '').toLowerCase()));
+
                     if (!summaryRows.length) {
+                        toast('No data for today to generate a report.', 'info');
+                        return;
+                    }
+
+                    const start = todayStartTs();
+                    const end = start + 86400000;
+                    const logsSnap = await get(ref(db, 'worksync/timelogs'));
+                    const emailTimeLogs = Object.values(logsSnap.val() || {})
+                        .filter(log => (log.endTime || log.startTime || 0) >= start && (log.endTime || log.startTime || 0) < end)
+                        .sort((a, b) => (b.endTime || 0) - (a.endTime || 0));
+
+                    const snehaSnap = await get(ref(db, 'worksync/sneha_work_selections'));
+                    const snehaSelections = Object.values(snehaSnap.val() || {}).filter(s => s.timestamp >= start && s.timestamp < end);
+
+                    const usersMap = new Map();
+                    Array.from(allUsersMap.values()).forEach(u => {
+                        if (u.email && u.email !== '123') usersMap.set(u.email.toLowerCase(), { ...u });
+                    });
+                    currentWorkUsers.forEach(u => {
+                        if (u.email && u.email !== '123') usersMap.set(u.email.toLowerCase(), { ...(usersMap.get(u.email.toLowerCase()) || {}), ...u });
+                    });
+
+                    const usersSnap = await get(ref(db, 'worksync/users'));
+                    const usersData = usersSnap.val() || {};
+                    Object.values(usersData).forEach(u => {
+                        if (u.email && u.email !== '123') usersMap.set(u.email.toLowerCase(), { ...(usersMap.get(u.email.toLowerCase()) || {}), ...u });
+                    });
+
+                    let usersToProcess = Array.from(usersMap.values());
+                    const sortedUsers = usersToProcess.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+                    const activeUsers = sortedUsers.filter(user => !approvedLeaves.includes((user.email || '').toLowerCase()));
+
+                    let detailedListHtml = '';
+                    let contentAdded = false;
+                    let loggedTasksCount = 0;
+                    let totalSeconds = 0;
+
+                    activeUsers.forEach(user => {
+                        const userLogs = emailTimeLogs.filter(log => log.userId === user.email);
+                        const current = user.currentTask;
+
+                        if (userLogs.length === 0 && !current) return;
+
+                        const clientGroups = {};
+                        const processedTaskIds = new Set();
+
+                        userLogs.forEach(log => {
+                            if (processedTaskIds.has(log.taskId)) return;
+                            const task = tasks.find(t => t.id === log.taskId);
+                            const taskStatus = task?.status || '';
+                            const isLearningLog = isMorningLearningTask(task || { id: log.taskId })
+                                || String(log.taskId || '').startsWith('LEARN-')
+                                || String(log.taskDesc || '').toLowerCase().includes('morning learning')
+                                || String(log.taskDesc || '').toLowerCase().startsWith('learning')
+                                || (task && (task.status === 'Learnings' || task.status === 'Learning'))
+                                || String(taskStatus).toLowerCase() === 'design to do';
+                            if (isLearningLog) return;
+                            if (taskStatus.toLowerCase() === 'to do') return;
+                            processedTaskIds.add(log.taskId);
+                            loggedTasksCount++;
+                            totalSeconds += Number(log.durationSeconds || 0);
+
+                            let client = log.client || 'Additional Tasks';
+                            if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                                if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
+                                else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
+                                else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
+                            }
+                            if (!clientGroups[client]) clientGroups[client] = [];
+
+                            let itemDesc = log.taskDesc || log.taskId;
+                            if (itemDesc && client) {
+                                const escapedClient = client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const suffixRegex = new RegExp(`\\s*-\\s*${escapedClient}\\s*$`, 'i');
+                                const prefixRegex = new RegExp(`^${escapedClient}\\s*-\\s*`, 'i');
+                                itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
+                                const task2 = tasks.find(t => t.id === log.taskId);
+                                if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false)) {
+                                    itemDesc = itemDesc.replace(suffixRegex, '').trim();
+                                }
+                            }
+
+                            const snehaSel = snehaSelections.find(s => s.taskId === log.taskId && s.userId === user.email);
+                            if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
+                                itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
+                            } else {
+                                const statusLabel = taskStatus || 'Completed';
+                                itemDesc += ` - ${statusLabel}`;
+                            }
+                            clientGroups[client].push(itemDesc);
+                        });
+
+                        if (current && !processedTaskIds.has(current.taskId)) {
+                            const task = tasks.find(t => t.id === current.taskId);
+                            const taskStatus = task?.status || '';
+                            const isLearningCurrent = isMorningLearningTask(task || { id: current.taskId })
+                                || String(current.taskId || '').startsWith('LEARN-')
+                                || String(current.taskDesc || '').toLowerCase().includes('morning learning')
+                                || String(current.taskDesc || '').toLowerCase().startsWith('learning')
+                                || (task && (task.status === 'Learnings' || task.status === 'Learning'))
+                                || String(taskStatus).toLowerCase() === 'design to do';
+                            const isTodoTask = taskStatus.toLowerCase() === 'to do';
+                            if (!isLearningCurrent && !isTodoTask) {
+                                let client = current.client || 'Additional Tasks';
+                                if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                                    if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
+                                    else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
+                                    else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
+                                }
+                                if (!clientGroups[client]) clientGroups[client] = [];
+
+                                let itemDesc = current.taskDesc || current.taskId;
+                                if (itemDesc && client) {
+                                    const escapedClient = client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                    const suffixRegex = new RegExp(`\\s*-\\s*${escapedClient}\\s*$`, 'i');
+                                    const prefixRegex = new RegExp(`^${escapedClient}\\s*-\\s*`, 'i');
+                                    itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
+                                }
+
+                                const snehaSel = snehaSelections.find(s => s.taskId === current.taskId && s.userId === user.email);
+                                if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
+                                    itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
+                                } else {
+                                    const stateLabel = current.state === 'on_hold' ? 'On Hold' : 'In Progress';
+                                    itemDesc += ` - ${stateLabel}`;
+                                }
+                                clientGroups[client].push(itemDesc);
+                            }
+                        }
+
+                        if (current) {
+                            const activeSeconds = Math.max(Math.floor((Date.now() - (current.startedAt || Date.now())) / 1000), 0);
+                            totalSeconds += activeSeconds;
+                        }
+
+                        const clientEntries = Object.entries(clientGroups);
+                        if (!clientEntries.length) return;
+
+                        contentAdded = true;
+                        detailedListHtml += `
+                            <div style="margin-bottom: 25px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+                                <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">${escapeHtml(user.name || user.email)}</h3>
+                        `;
+
+                        clientEntries.forEach(([client, items]) => {
+                            detailedListHtml += `
+                                <div style="margin-top: 10px;">
+                                    <h4 style="margin: 0 0 5px 0; font-size: 12px; color: #4f46e5; font-weight: 800; text-transform: uppercase;">${escapeHtml(client)}</h4>
+                                    <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #334155;">
+                            `;
+                            items.forEach(item => {
+                                detailedListHtml += `<li style="margin-bottom: 4px;">${escapeHtml(item)}</li>`;
+                            });
+                            detailedListHtml += `
+                                    </ol>
+                                </div>
+                            `;
+                        });
+
+                        detailedListHtml += `</div>`;
+                    });
+
+                    if (!contentAdded) {
                         toast('No data for today to generate a report.', 'info');
                         return;
                     }
 
                     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                     const subject = `One Desk Daily Report - ${today}`;
-                    const totalSeconds = summaryRows.reduce((sum, row) => sum + row.loggedSeconds + row.activeSeconds, 0);
-                    const loggedTasks = todayTimeLogs.length;
-                    const activeCount = summaryRows.filter(row => row.activeTask).length;
-
-                    const tableRows = summaryRows.map(row => `
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 10px;">${escapeHtml(row.name)}</td>
-                    <td style="padding: 10px;">${formatTime(row.loggedSeconds + row.activeSeconds)}</td>
-                    <td style="padding: 10px;">${row.completedTasks}</td>
-                    <td style="padding: 10px;">${row.activeTask ? `Working: ${escapeHtml(row.activeTask.taskId)}` : 'Idle'}</td>
-                </tr>
-            `).join('');
+                    const activeCount = activeUsers.filter(row => row.currentTask).length;
+                    const totalEmployees = activeUsers.filter(user => {
+                        const logs = emailTimeLogs.filter(log => log.userId === user.email);
+                        return logs.length > 0 || user.currentTask;
+                    }).length;
 
                     const htmlBody = `
-                <div style="font-family: sans-serif; color: #333;">
-                    <h1 style="color: #1e293b; font-size: 24px;">One Desk Daily Summary</h1>
-                    <p style="font-size: 14px; color: #64748b;">${today}</p>
-                    <div style="display: flex; gap: 20px; margin: 20px 0;">
-                        <div style="flex: 1; padding: 15px; background: #f1f5f9; border-radius: 8px;">
-                            <h3 style="margin: 0 0 5px 0; font-size: 12px; color: #475569;">TOTAL TIME</h3>
-                            <p style="margin: 0; font-size: 22px; font-weight: bold;">${formatTime(totalSeconds)}</p>
+                <div style="font-family: sans-serif; color: #333; background: #f8fafc; padding: 20px;">
+                    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <h1 style="color: #1e293b; font-size: 22px; margin: 0 0 5px 0; font-weight: 800;">One Desk Daily Summary</h1>
+                        <p style="font-size: 14px; color: #64748b; margin: 0 0 20px 0;">${today}</p>
+                        
+                        <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+                            <div style="flex: 1; padding: 12px; background: #f1f5f9; border-radius: 10px; text-align: center;">
+                                <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em;">TOTAL TIME</h3>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a;">${formatTime(totalSeconds)}</p>
+                            </div>
+                            <div style="flex: 1; padding: 12px; background: #f1f5f9; border-radius: 10px; text-align: center;">
+                                <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em;">TASKS LOGGED</h3>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a;">${loggedTasksCount}</p>
+                            </div>
+                            <div style="flex: 1; padding: 12px; background: #f1f5f9; border-radius: 10px; text-align: center;">
+                                <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em;">ACTIVE EMPLOYEES</h3>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a;">${activeCount} / ${totalEmployees}</p>
+                            </div>
                         </div>
-                        <div style="flex: 1; padding: 15px; background: #f1f5f9; border-radius: 8px;">
-                            <h3 style="margin: 0 0 5px 0; font-size: 12px; color: #475569;">TASKS LOGGED</h3>
-                            <p style="margin: 0; font-size: 22px; font-weight: bold;">${loggedTasks}</p>
-                        </div>
-                        <div style="flex: 1; padding: 15px; background: #f1f5f9; border-radius: 8px;">
-                            <h3 style="margin: 0 0 5px 0; font-size: 12px; color: #475569;">ACTIVE EMPLOYEES</h3>
-                            <p style="margin: 0; font-size: 22px; font-weight: bold;">${activeCount} / ${summaryRows.length}</p>
+                        
+                        <h2 style="font-size: 16px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin: 0 0 20px 0; font-weight: 800; text-transform: uppercase;">Employee Tasks & Updates</h2>
+                        
+                        <div>
+                            ${detailedListHtml}
                         </div>
                     </div>
-                    <h2 style="font-size: 18px; color: #1e293b; border-bottom: 1px solid #eee; padding-bottom: 10px;">Employee Breakdown</h2>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: left;">
-                        <thead><tr style="color: #64748b;"><th style="padding: 10px;">Employee</th><th style="padding: 10px;">Total Time</th><th style="padding: 10px;">Tasks Logged</th><th style="padding: 10px;">Status</th></tr></thead>
-                        <tbody>${tableRows}</tbody>
-                    </table>
                 </div>
             `;
 
