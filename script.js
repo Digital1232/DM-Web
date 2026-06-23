@@ -92,6 +92,7 @@
         const JIRA = {
             domain: 'vilpowerdigitalmarketing.atlassian.net',
             projectKey: 'JULY',
+            projectKeys: ['MAY', 'JUN', 'JULY'],
             apiUrl: '/api/jira',
             gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
             useLocalApi: false
@@ -2486,7 +2487,8 @@
                 if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
             }
             try {
-                const { projectKey } = JIRA;
+                const projectKeys = JIRA.projectKeys || ['JUN', 'JULY'];
+                const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                 const manualTasks = tasks.filter(t => t.manual);
                 
                 // TEST 1: Verify token works with a simple endpoint
@@ -2508,7 +2510,7 @@
                 
                 // Fetch all issues using REST API v3 JQL search
                 const lastSync = localStorage.getItem('worksync_lastSync');
-                let jql = `project=${projectKey} AND (issuetype in standardIssueTypes() OR issuetype in subTaskIssueTypes())`;
+                let jql = `project in (${projectKeysQuery}) AND (issuetype in standardIssueTypes() OR issuetype in subTaskIssueTypes())`;
                 if (isAuto) { // For background syncs, get very recent changes.
                     jql += ` AND updated >= -5m ORDER BY updated DESC`;
                 } else { // For a full sync, fetch every issue in the project.
@@ -7706,10 +7708,12 @@ async function sendAnnouncement() {
 
             try {
                 if (platform === 'jira') {
+                    const curMonth = new Date().getMonth(); // 6 is July, 5 is June
+                    const projectKey = curMonth === 6 ? 'JULY' : (curMonth === 5 ? 'JUN' : JIRA.projectKey);
                     const url = `https://${JIRA.domain}/rest/api/3/issue`;
                     const payload = {
                         fields: {
-                            project: { key: JIRA.projectKey },
+                            project: { key: projectKey },
                             summary: title,
                             issuetype: { name: 'Task' },
                             labels: client ? [client.replace(/\s+/g, '_')] : []
@@ -7894,7 +7898,8 @@ async function sendAnnouncement() {
         async function diagnoseJira() {
             toast('Running Jira Diagnostics...', 'info');
             console.log('--- JIRA DIAGNOSTICS ---');
-            const { domain, projectKey } = JIRA;
+            const { domain } = JIRA;
+            const projectKeys = JIRA.projectKeys || [JIRA.projectKey];
             let results = [];
 
             try {
@@ -7904,12 +7909,14 @@ async function sendAnnouncement() {
                 else results.push('✗ Jira Auth: FAILED (' + (jd.errorMessages?.join('; ') || JSON.stringify(jd).slice(0, 120)) + ')');
             } catch (e) { results.push('✗ Jira Auth: ERROR (' + e.message + ')'); }
 
-            try {
-                const d = await jiraRequest(`https://${domain}/rest/api/3/project/${projectKey}`);
-                const pd = d.data || d;
-                if (pd.key || pd.name) results.push('✓ Project "' + projectKey + '": Found (' + pd.name + ')');
-                else results.push('✗ Project "' + projectKey + '": NOT FOUND');
-            } catch (e) { results.push('✗ Project Check: ERROR (' + e.message + ')'); }
+            for (const key of projectKeys) {
+                try {
+                    const d = await jiraRequest(`https://${domain}/rest/api/3/project/${key}`);
+                    const pd = d.data || d;
+                    if (pd.key || pd.name) results.push('✓ Project "' + key + '": Found (' + pd.name + ')');
+                    else results.push('✗ Project "' + key + '": NOT FOUND');
+                } catch (e) { results.push('✗ Project Check (' + key + '): ERROR (' + e.message + ')'); }
+            }
 
             alert('DIAGNOSTIC RESULTS:\n\n' + results.join('\n') + '\n\nCheck console for full JSON responses.');
         }
