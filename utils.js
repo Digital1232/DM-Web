@@ -9,36 +9,50 @@ export function dmId(e1, e2) {
 }
 
 let toastTimeout, toastHideTimeout;
-export function toast(msg, type = 'info') {
-    const t = document.getElementById('toast'), ti = document.getElementById('toast-icon'), tt = document.getElementById('toast-title'), tm = document.getElementById('toast-msg');
+/**
+ * Show a toast notification.
+ * @param {string} msg - Message to display.
+ * @param {string} [type='info'] - One of 'info', 'success', 'error'. Determines icon & colors.
+ * @param {number} [duration=3000] - How long (ms) the toast stays visible before auto‑hiding.
+ */
+export function toast(msg, type = 'info', duration = 3000) {
+    const t = document.getElementById('toast'),
+          ti = document.getElementById('toast-icon'),
+          tt = document.getElementById('toast-title'),
+          tm = document.getElementById('toast-msg');
     if (!t || !ti || !tt || !tm) return;
-    tt.textContent = type.toUpperCase(); tm.textContent = msg;
-    ti.className = `w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === 'success' ? 'bg-emerald-100 text-emerald-600' : (type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600')}`;
-    ti.innerHTML = `<iconify-icon icon="${type === 'success' ? 'solar:check-circle-bold' : (type === 'error' ? 'solar:danger-circle-bold' : 'solar:info-circle-bold')}" width="20"></iconify-icon>`;
-    
+
+    tt.textContent = type.toUpperCase();
+    tm.textContent = msg;
+    ti.className = `w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+        type === 'success' ? 'bg-emerald-100 text-emerald-600' :
+        type === 'error'   ? 'bg-rose-100 text-rose-600' :
+        'bg-indigo-100 text-indigo-600'
+    }`;
+    ti.innerHTML = `<iconify-icon icon="${
+        type === 'success' ? 'solar:check-circle-bold' :
+        type === 'error'   ? 'solar:danger-circle-bold' :
+        'solar:info-circle-bold'
+    }" width="20"></iconify-icon>`;
+
+    // Reset any existing timers so multiple rapid toasts don’t interfere.
     clearTimeout(toastTimeout);
     clearTimeout(toastHideTimeout);
 
-    try {
-        if (t.showPopover) t.showPopover();
-    } catch (e) {
-        // Ignore if already open or not supported
-    }
-    
+    try { if (t.showPopover) t.showPopover(); } catch (e) { /* ignore */ }
+
     requestAnimationFrame(() => t.classList.add('show'));
-    
-    toastTimeout = setTimeout(() => { 
+
+    // Auto‑hide after the specified duration.
+    toastTimeout = setTimeout(() => {
         t.classList.remove('show');
+        // Small delay to ensure CSS transition finishes before hiding popover.
         toastHideTimeout = setTimeout(() => {
             if (!t.classList.contains('show')) {
-                try {
-                    if (t.hidePopover) t.hidePopover();
-                } catch (e) {
-                    // Ignore already hidden popover error
-                }
+                try { if (t.hidePopover) t.hidePopover(); } catch (e) { /* ignore */ }
             }
         }, 300);
-    }, 3000);
+    }, duration);
 }
 
 export function formatTime(s) { 
