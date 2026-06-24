@@ -21366,9 +21366,9 @@
 
                 leaveCalRequestsUnsub = onValue(ref(db, 'worksync/requests'), snap => {
                     const data = snap.val() || {};
-                    const allRequests = Object.values(data).filter(r => r.type === 'leave' || r.type === 'saturday');
+                    const allRequests = Object.entries(data).map(([key, val]) => ({ key, ...val })).filter(r => r.type === 'leave' || r.type === 'saturday');
 
-                    // Build a map: dateStr → [{userName, email, leaveType, status}]
+                    // Build a map: dateStr → [{key, userName, email, leaveType, status}]
                     const dateMap = {};
                     const firstDay = new Date(leaveCalYear, leaveCalMonth, 1);
                     const lastDay = new Date(leaveCalYear, leaveCalMonth + 1, 0);
@@ -21381,6 +21381,7 @@
                             const ds = r.date;
                             if (!dateMap[ds]) dateMap[ds] = [];
                             dateMap[ds].push({
+                                key: r.key,
                                 userName: r.userName || r.userId,
                                 email: r.userId,
                                 leaveType: 'Saturday Off',
@@ -21394,6 +21395,7 @@
                                 const ds = cur.toISOString().slice(0, 10);
                                 if (!dateMap[ds]) dateMap[ds] = [];
                                 dateMap[ds].push({
+                                    key: r.key,
                                     userName: r.userName || r.userId,
                                     email: r.userId,
                                     leaveType: r.leaveType || 'Leave',
@@ -21428,6 +21430,17 @@
                             const isApproved = l.status === 'approved';
                             const bgClass = isApproved ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200';
                             const displayName = l.userName.split(' ')[0]; // Show first name
+
+                            if (isAdmin()) {
+                                return `<span class="relative group/chip block w-full">
+                                <button onclick="openEditLeaveOrgModal('${l.key}')" class="block w-full text-[9px] font-bold px-1.5 py-0.5 rounded border ${bgClass} truncate cursor-pointer text-center hover:opacity-85 hover:border-slate-400 active:scale-95 transition-all" title="Click to Edit: ${escapeHtml(l.userName)} — ${escapeHtml(l.leaveType)} (${l.status})">
+                                    ${escapeHtml(displayName)} ✏️
+                                </button>
+                                <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-max max-w-[120px] rounded-lg bg-slate-900 text-white text-[9px] font-bold px-2 py-1 opacity-0 group-hover/chip:opacity-100 transition-opacity z-10 text-center leading-tight">
+                                    ${escapeHtml(l.userName)}<br><span class="text-slate-300 font-normal">${escapeHtml(l.leaveType)}</span>
+                                </span>
+                            </span>`;
+                            }
 
                             return `<span class="relative group/chip block w-full">
                             <span class="block text-[9px] font-bold px-1.5 py-0.5 rounded border ${bgClass} truncate cursor-default select-none text-center" title="${escapeHtml(l.userName)} — ${escapeHtml(l.leaveType)} (${l.status})">
@@ -22534,6 +22547,20 @@
                 if (isAdmin()) {
                     // Admins load all manual tasks from all users
                     onValue(ref(db, `worksync/manual_tasks`), snap => {
+                        // Cleanup target tasks requested by user
+                        const targetIds = ['M-1779279416802', 'M-1777551877624'];
+                        snap.forEach(userTasksSnap => {
+                            const userKey = userTasksSnap.key;
+                            const tasksMap = userTasksSnap.val() || {};
+                            Object.keys(tasksMap).forEach(taskId => {
+                                if (targetIds.includes(taskId)) {
+                                    remove(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`))
+                                        .then(() => console.log(`Successfully auto-deleted target task ${taskId}`))
+                                        .catch(err => console.error(`Failed to delete target task ${taskId}:`, err));
+                                }
+                            });
+                        });
+
                         const allManualTasks = [];
                         snap.forEach(userTasksSnap => { // Iterate through each user's manual tasks
                             allManualTasks.push(...Object.values(userTasksSnap.val() || {}));
@@ -22552,6 +22579,17 @@
                 } else {
                     // Regular users load only their own tasks
                     onValue(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}`), snap => {
+                        // Cleanup target tasks if owned by this user
+                        const targetIds = ['M-1779279416802', 'M-1777551877624'];
+                        const userTasksMap = snap.val() || {};
+                        Object.keys(userTasksMap).forEach(taskId => {
+                            if (targetIds.includes(taskId)) {
+                                remove(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}/${taskId}`))
+                                    .then(() => console.log(`Successfully auto-deleted target task ${taskId}`))
+                                    .catch(err => console.error(`Failed to delete target task ${taskId}:`, err));
+                            }
+                        });
+
                         const manual = Object.values(snap.val() || {});
                         tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...manual]);
                         populateAssigneeFilter();
