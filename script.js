@@ -280,11 +280,11 @@
         const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
         let qcReportDateFrom = null; // New state variable for QC reports filter
         let qcReportDateTo = null;   // New state variable for QC reports filter
-        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Design Hold', 'Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
+        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
         const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
-        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Hold', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
-        const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail', 'Rework Designs'];
-        const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed'];
+        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
+        const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs'];
+        const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed'];
         const DAILY_REPORT_TIMES = [
             { hour: 12, minute: 55, label: 'Afternoon (1 PM)' },
             { hour: 15, minute: 55, label: 'Evening (4 PM)' },
@@ -2401,12 +2401,15 @@
         async function fetchAllJiraIssues(jql, fields = 'summary,status,priority,labels,assignee,duedate') {
             const issues = [];
             const maxResults = 100;
-            let startAt = 0;
-            let total = null;
+            let nextPageToken = null;
+            let isLast = false;
 
-            while (total === null || startAt < total) {
-                const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}&fields=${fields}`;
-                console.log(`📡 Fetching Jira issues: startAt=${startAt}, maxResults=${maxResults}`);
+            while (!isLast) {
+                let url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=${fields}`;
+                if (nextPageToken) {
+                    url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+                }
+                console.log(`📡 Fetching Jira issues: nextPageToken=${nextPageToken}`);
                 const res = await jiraRequest(url);
                 if (!res.success || res.data?.errorMessages || res.data?.message) {
                     throw new Error(jiraErrorMessage(res));
@@ -2414,10 +2417,10 @@
 
                 const pageIssues = res.data?.issues || [];
                 issues.push(...pageIssues);
-                total = Number(res.data?.total ?? pageIssues.length);
-                startAt += Number(res.data?.maxResults ?? maxResults);
+                nextPageToken = res.data?.nextPageToken;
+                isLast = res.data?.isLast ?? (pageIssues.length < maxResults);
 
-                if (pageIssues.length === 0) break;
+                if (pageIssues.length === 0 || !nextPageToken) break;
             }
 
             return issues;
