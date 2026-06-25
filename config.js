@@ -9,15 +9,14 @@ export const FB_CONFIG = {
 };
 
 export const ADMIN_ROLES = ['System Admin', 'Administrator', 'Head of Operations', 'MD & Core Team'];
-export const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
+export const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
 
 export const USERS = [
     { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
     { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
     { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
-    { email: 'thanushvilpower@gmail.com', name: 'Thanush V', role: 'Manager - Digital Content Productions', avatar: 'Thanush' },
     { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
-    { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
+    { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
     { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
     { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
 ];
@@ -45,11 +44,7 @@ export const LEAVE_APPROVAL_CHAINS = {
         'digitalmarketing@vilpower.com',
         'nanjil@vilpower.com'
     ],
-    'anithavilpower@gmail.com': [
-        'digitalmarketing@vilpower.com',
-        'nanjil@vilpower.com'
-    ],
-    'thanushvilpower@gmail.com': [
+    'karthikavilpower@gmail.com': [
         'digitalmarketing@vilpower.com',
         'nanjil@vilpower.com'
     ],

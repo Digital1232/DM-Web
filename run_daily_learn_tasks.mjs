@@ -20,9 +20,8 @@ const USERS = [
   { email: 'nanjil@vilpower.com',            name: 'Nanjil Manohar S' },
   { email: 'digitalmarketing@vilpower.com',  name: 'Palanirajan R' },
   { email: 'murugeshvilpower@gmail.com',     name: 'Murugesh Kumar A' },
-  { email: 'thanushvilpower@gmail.com',      name: 'Thanush V' },
   { email: 'barathvilpower@gmail.com',       name: 'Barath Magesh M' },
-  { email: 'anithavilpower@gmail.com',       name: 'Karthika K' },
+  { email: 'karthikavilpower@gmail.com',       name: 'Karthika K' },
   { email: 'immanuelvilpower@gmail.com',     name: 'Immanuel Raja S' },
 ];
 

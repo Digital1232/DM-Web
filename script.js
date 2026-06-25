@@ -34,7 +34,7 @@
         const storage = getStorage(app);
 
         const ADMIN_ROLES = ['System Admin', 'Administrator'];
-        const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
+        const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
         const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
         const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'murugeshvilpower@gmail.com'];
 
@@ -42,10 +42,9 @@
             { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
             { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
             { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
-            { email: 'thanushvilpower@gmail.com', name: 'Thanush V', role: 'Manager - Digital Content Productions', avatar: 'Thanush' },
             { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
             { email: 'snehavilpower@gmail.com', name: 'Sneha V', role: 'Team Member', avatar: 'Sneha' },
-            { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
+            { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
             { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
             { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
         ];
@@ -102,22 +101,17 @@
         
         // Leave Approval Chains - Different employees have different approval hierarchies
         const LEAVE_APPROVAL_CHAINS = {
-            // Immanuel: Thanush → Palani → Nanjil (final)
+            // Immanuel: Palani → Nanjil (final)
             'immanuelvilpower@gmail.com': [
-                'thanushvilpower@gmail.com',      // 1st approval: Thanush
-                'digitalmarketing@vilpower.com',  // 2nd approval: Palani
+                'digitalmarketing@vilpower.com',  // 1st approval: Palani
                 'nanjil@vilpower.com'             // Final approval: Nanjil
             ],
-            // Barath, Karthika, Thanush, Alex: Palani → Nanjil (final)
+            // Barath, Karthika, Alex: Palani → Nanjil (final)
             'barathvilpower@gmail.com': [
                 'digitalmarketing@vilpower.com',  // 1st approval: Palani
                 'nanjil@vilpower.com'             // Final approval: Nanjil
             ],
-            'anithavilpower@gmail.com': [        // Karthika
-                'digitalmarketing@vilpower.com',  // 1st approval: Palani
-                'nanjil@vilpower.com'             // Final approval: Nanjil
-            ],
-            'thanushvilpower@gmail.com': [
+            'karthikavilpower@gmail.com': [        // Karthika
                 'digitalmarketing@vilpower.com',  // 1st approval: Palani
                 'nanjil@vilpower.com'             // Final approval: Nanjil
             ],
@@ -221,7 +215,6 @@
         function isVideoEditor(email) {
             const editors = [
                 'barathvilpower@gmail.com',
-                'thanushvilpower@gmail.com',
                 'immanuelvilpower@gmail.com'
             ];
             return editors.includes(email?.toLowerCase());
@@ -231,7 +224,7 @@
             if (!assigneeEmail) return;
             const stats = ensureStats(assigneeEmail);
             // Karthika counters
-            if (assigneeEmail.toLowerCase() === 'anithavilpower@gmail.com') {
+            if (assigneeEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
                 if (newStatus === 'Done') {
                     stats.thumbnailCount++;
                 }
@@ -1170,29 +1163,29 @@
             if (isAdmin()) {
                 document.getElementById('hr-tab-approvals')?.classList.remove('hidden');
                 document.getElementById('admin-nav').classList.remove('hidden');
-                document.getElementById('admin-current-work-card')?.classList.remove('hidden');
-                document.getElementById('admin-workload-card')?.classList.remove('hidden');
-                document.getElementById('admin-report-card')?.classList.remove('hidden');
                 document.getElementById('group-create-btn')?.classList.remove('hidden');
                 document.getElementById('announcement-compose-card')?.classList.remove('hidden');
                 document.getElementById('dpr-tab-team')?.classList.remove('hidden');
-                loadEmployeeCurrentTasks();
                 document.getElementById('report-tab-performance')?.classList.remove('hidden');
-                loadTodayWorkSummary();
             } else { // Non-admin users
                 document.getElementById('hr-tab-approvals')?.classList.add('hidden');
                 document.getElementById('admin-nav')?.classList.add('hidden');
-                document.getElementById('admin-current-work-card')?.classList.add('hidden');
-                document.getElementById('admin-workload-card')?.classList.add('hidden');
-                document.getElementById('admin-report-card')?.classList.add('hidden');
                 document.getElementById('group-create-btn')?.classList.add('hidden');
                 document.getElementById('announcement-compose-card')?.classList.add('hidden');
                 document.getElementById('dpr-tab-team')?.classList.add('hidden');
                 document.getElementById('report-tab-performance')?.classList.add('hidden');
-                if (canViewDailySummary()) {
-                    loadEmployeeCurrentTasks();
-                    loadTodayWorkSummary();
-                }
+            }
+            // Daily summary cards and data loading - available to admins AND managers
+            if (canViewDailySummary()) {
+                document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                document.getElementById('admin-workload-card')?.classList.remove('hidden');
+                document.getElementById('admin-report-card')?.classList.remove('hidden');
+                loadEmployeeCurrentTasks();
+                loadTodayWorkSummary();
+            } else {
+                document.getElementById('admin-current-work-card')?.classList.add('hidden');
+                document.getElementById('admin-workload-card')?.classList.add('hidden');
+                document.getElementById('admin-report-card')?.classList.add('hidden');
             }
         }
 
@@ -2162,7 +2155,7 @@
 
             // If format is Poster, auto assign to Karthika
             if (format === 'Poster') {
-                owner = 'anithavilpower@gmail.com';
+                owner = 'karthikavilpower@gmail.com';
                 const ownerEl = document.getElementById('strategy-owner');
                 if (ownerEl) ownerEl.value = owner;
             }
@@ -2259,7 +2252,7 @@
                                     }
                                 };
                                 
-                                const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get('anithavilpower@gmail.com') : { email: 'anithavilpower@gmail.com', name: 'Karthika K' };
+                                const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get('karthikavilpower@gmail.com') : { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
                                 if (typeof findJiraAccountId === 'function') {
                                     const karthikaAccountId = await findJiraAccountId(karthikaUser);
                                     if (karthikaAccountId) {
@@ -3671,7 +3664,7 @@ if (!filtered.length) {
         function renderAdminReportChart(stats = null) {
             const card = document.getElementById('admin-report-card');
             const canvas = document.getElementById('task-report-chart');
-            if (!card || !canvas || !isAdmin()) return;
+            if (!card || !canvas || !canViewDailySummary()) return;
 
             const total = stats?.total ?? tasks.length;
             const todo = stats?.todo ?? tasks.filter(t => isTodo(t.status)).length;
@@ -3772,7 +3765,7 @@ if (!filtered.length) {
             if (activeView !== 'dashboard') return;
             const list = document.getElementById('admin-current-work-list');
             const countEl = document.getElementById('admin-current-work-count');
-            if (!list || !countEl || !isAdmin()) return;
+            if (!list || !countEl || !canViewDailySummary()) return;
             const activeCount = currentWorkUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
             countEl.textContent = `${activeCount} Active`;
             if (!currentWorkUsers.length) {
@@ -4166,7 +4159,7 @@ if (!filtered.length) {
 
             // Hide export button for non-admins
             if (exportBtn) {
-                exportBtn.classList.toggle('hidden', !isAdmin());
+                exportBtn.classList.toggle('hidden', !canViewDailySummary());
             }
 
             if (!rows.length) {
@@ -4252,7 +4245,7 @@ if (!filtered.length) {
         function renderWorkloadChart() {
             const chart = document.getElementById('workload-chart');
             const totalEl = document.getElementById('workload-total');
-            if (!chart || !totalEl || !isAdmin()) return;
+            if (!chart || !totalEl || !canViewDailySummary()) return;
             
             // Group by email to avoid duplicate names, then display normalized names
             const emailToData = new Map(); // Map: email -> { name, count }
@@ -4306,7 +4299,7 @@ if (!filtered.length) {
         }
 
         function exportDailyReport() {
-            if (!isAdmin()) return;
+            if (!canViewDailySummary()) return;
             const rows = buildDailySummaryRows();
             const today = new Date().toISOString().slice(0, 10);
             const lines = [
@@ -8807,7 +8800,7 @@ async function sendAnnouncement() {
         }
 
         async function sendThumbnailNotification(task, changedBy) {
-            const THUMBNAIL_NOTIFY_EMAILS = ['anithavilpower@gmail.com', 'digitalmarketing@vilpower.com'];
+            const THUMBNAIL_NOTIFY_EMAILS = ['karthikavilpower@gmail.com', 'digitalmarketing@vilpower.com'];
             const notifData = {
                 taskId: task.id,
                 taskDesc: task.desc || '',

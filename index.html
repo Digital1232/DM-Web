@@ -2384,9 +2384,8 @@
                                         class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none">
                                         <option value="all">All Team</option>
                                         <option value="barathvilpower@gmail.com">Barath (Design 50%)</option>
-                                        <option value="thanushvilpower@gmail.com">Thanush (Content 40%)</option>
                                         <option value="immanuelvilpower@gmail.com">Immanuel (Video 10%)</option>
-                                        <option value="anithavilpower@gmail.com">Karthika (Thumbnails)</option>
+                                        <option value="karthikavilpower@gmail.com">Karthika (Thumbnails)</option>
                                     </select>
                                 </div>
                             </div>
@@ -6490,7 +6489,7 @@
             const storage = getStorage(app);
 
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
-            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
+            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
             const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
             const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'murugeshvilpower@gmail.com'];
 
@@ -6498,13 +6497,12 @@
                 { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
                 { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
                 { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
-                { email: 'thanushvilpower@gmail.com', name: 'Thanush V', role: 'Manager - Digital Content Productions', avatar: 'Thanush' },
                 { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
                 { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member', avatar: 'Sneha' },
-                { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
+                { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
                 { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
-                { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
+                { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' }
             ];
 
             function isAdmin() {
@@ -6614,7 +6612,7 @@
 
             function canViewStrategyCalendar() {
                 if (!currentUser) return false;
-                if (isAdmin()) return true;
+                if (isAdmin() || isManager()) return true;
                 const allowedStrategyEmails = [
                     'snehavilpower@gmail.com',
                     'murugeshvilpower@gmail.com'
@@ -6642,7 +6640,6 @@
             // Leave Approval Chains - Different employees have different approval hierarchies
             const LEAVE_APPROVAL_CHAINS = {
                 'immanuelvilpower@gmail.com': [
-                    'thanushvilpower@gmail.com',
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
@@ -6650,7 +6647,7 @@
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
-                'anithavilpower@gmail.com': [
+                'karthikavilpower@gmail.com': [
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
@@ -6659,10 +6656,6 @@
                     'nanjil@vilpower.com'
                 ],
                 'alexvilpower@gmail.com': [
-                    'digitalmarketing@vilpower.com',
-                    'nanjil@vilpower.com'
-                ],
-                'thanushvilpower@gmail.com': [
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
@@ -6808,7 +6801,7 @@
 
             // Per-user overrides: email → { slot, title }
             const MORNING_LEARNING_USER_OVERRIDES = {
-                'anithavilpower@gmail.com': { slot: '08:30-09:30', title: 'Morning Learning (8:30 AM – 9:30 AM)' },  // Karthika
+                'karthikavilpower@gmail.com': { slot: '08:30-09:30', title: 'Morning Learning (8:30 AM – 9:30 AM)' },  // Karthika
                 'snehavilpower@gmail.com': { slot: '08:30-09:30', title: 'Morning Learning (8:30 AM – 9:30 AM)' }   // Sneha
             };
 
@@ -7700,7 +7693,7 @@
 
                     // Apply Karthika's local status override if set (she updates locally, not via Jira)
                     const effectiveTask = { ...task };
-                    if (planData.localStatus && userEmail.toLowerCase() === 'anithavilpower@gmail.com') {
+                    if (planData.localStatus && userEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
                         effectiveTask.status = planData.localStatus;
                     }
 
@@ -7830,6 +7823,8 @@
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
                     if (isAdmin()) validViews.push('users', 'clients-admin');
+                    if (canViewStrategyCalendar()) validViews.push('strategy-calendar');
+                    if (canViewPlanTracking()) validViews.push('plan-tracking');
                     switchView(validViews.includes(lastView) ? lastView : 'dashboard');
 
                     initClientSettings();
@@ -8102,28 +8097,28 @@
                 }
                 if (isAdmin()) {
                     document.getElementById('admin-nav').classList.remove('hidden');
-                    document.getElementById('admin-current-work-card')?.classList.remove('hidden');
-                    document.getElementById('admin-workload-card')?.classList.remove('hidden');
-                    document.getElementById('admin-report-card')?.classList.remove('hidden');
                     document.getElementById('group-create-btn')?.classList.remove('hidden');
                     document.getElementById('announcement-compose-card')?.classList.remove('hidden');
                     document.getElementById('dpr-tab-team')?.classList.remove('hidden');
-                    loadEmployeeCurrentTasks();
                     document.getElementById('report-tab-performance')?.classList.remove('hidden');
-                    loadTodayWorkSummary();
                 } else { // Non-admin users
                     document.getElementById('admin-nav')?.classList.add('hidden');
-                    document.getElementById('admin-current-work-card')?.classList.add('hidden');
-                    document.getElementById('admin-workload-card')?.classList.add('hidden');
-                    document.getElementById('admin-report-card')?.classList.add('hidden');
                     document.getElementById('group-create-btn')?.classList.add('hidden');
                     document.getElementById('announcement-compose-card')?.classList.add('hidden');
                     document.getElementById('dpr-tab-team')?.classList.add('hidden');
                     document.getElementById('report-tab-performance')?.classList.add('hidden');
-                    if (canViewDailySummary()) {
-                        loadEmployeeCurrentTasks();
-                        loadTodayWorkSummary();
-                    }
+                }
+                // Daily summary cards and data loading - available to admins AND managers
+                if (canViewDailySummary()) {
+                    document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                    document.getElementById('admin-workload-card')?.classList.remove('hidden');
+                    document.getElementById('admin-report-card')?.classList.remove('hidden');
+                    loadEmployeeCurrentTasks();
+                    loadTodayWorkSummary();
+                } else {
+                    document.getElementById('admin-current-work-card')?.classList.add('hidden');
+                    document.getElementById('admin-workload-card')?.classList.add('hidden');
+                    document.getElementById('admin-report-card')?.classList.add('hidden');
                 }
             }
 
@@ -9924,7 +9919,7 @@
 
                 // If format is Poster, auto assign to Karthika
                 if (format === 'Poster') {
-                    owner = 'anithavilpower@gmail.com';
+                    owner = 'karthikavilpower@gmail.com';
                     const ownerEl = document.getElementById('strategy-owner');
                     if (ownerEl) ownerEl.value = owner;
                 }
@@ -10015,7 +10010,7 @@
                                         }
                                     };
                                     
-                                    const karthikaUser = allUsersMap.get('anithavilpower@gmail.com') || { email: 'anithavilpower@gmail.com', name: 'Karthika K' };
+                                    const karthikaUser = allUsersMap.get('karthikavilpower@gmail.com') || { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
                                     const karthikaAccountId = await findJiraAccountId(karthikaUser);
                                     if (karthikaAccountId) {
                                         subtaskPayload.fields.assignee = { id: karthikaAccountId };
@@ -10088,9 +10083,8 @@
 
             const PT_TEAM = [
                 { email: 'barathvilpower@gmail.com', name: 'Barath', label: 'Design', pct: 50, color: 'violet', taskTypes: ['Design To Do', 'Design In Progress', 'Rework Designs', 'Design Hold', 'Quality Check', 'Thumbnail Waiting'] },
-                { email: 'thanushvilpower@gmail.com', name: 'Thanush', label: 'Content', pct: 40, color: 'blue', taskTypes: ['Content In Progress', 'Client Content Approval', 'To Do'] },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel', label: 'Video', pct: 10, color: 'amber', taskTypes: ['In Progress', 'To Do', 'Design In Progress'] },
-                { email: 'anithavilpower@gmail.com', name: 'Karthika', label: 'Thumbnails', pct: null, color: 'pink', taskTypes: ['Thumbnail Waiting'] }
+                { email: 'karthikavilpower@gmail.com', name: 'Karthika', label: 'Thumbnails', pct: null, color: 'pink', taskTypes: ['Thumbnail Waiting'] }
             ];
 
             function canViewPlanTracking() {
@@ -16348,7 +16342,7 @@
                 const container = document.getElementById('dpr-form-container');
                 if (!container || !currentUser) return;
 
-                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                const isKarthika = currentUser.email.toLowerCase() === 'karthikavilpower@gmail.com';
 
                 if (isKarthika) {
                     container.innerHTML = `
@@ -16617,7 +16611,7 @@
                 if (!currentUser) return;
 
                 // Karthika uses a separate form — redirect if she somehow calls this
-                if (currentUser.email.toLowerCase() === 'anithavilpower@gmail.com') {
+                if (currentUser.email.toLowerCase() === 'karthikavilpower@gmail.com') {
                     return submitDprKarthika();
                 }
 
@@ -16699,7 +16693,7 @@
                 const entry = dprEntries.find(e => e.id === id);
                 if (!entry || (!dprUserMatch(entry.userId, currentUser.email) && !isAdmin())) return;
 
-                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                const isKarthika = currentUser.email.toLowerCase() === 'karthikavilpower@gmail.com';
                 if (isKarthika) {
                     cancelDprEditKarthika();
                     document.getElementById('dpr-date').value = entry.date || todayIso();
@@ -16749,7 +16743,7 @@
             }
 
             function cancelDprEdit() {
-                const isKarthika = currentUser && currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                const isKarthika = currentUser && currentUser.email.toLowerCase() === 'karthikavilpower@gmail.com';
                 if (isKarthika) {
                     cancelDprEditKarthika();
                     return;
@@ -16782,7 +16776,7 @@
                 const totalEl = document.getElementById('my-dpr-total');
                 if (!list || !currentUser) return;
 
-                const isKarthika = currentUser.email.toLowerCase() === 'anithavilpower@gmail.com';
+                const isKarthika = currentUser.email.toLowerCase() === 'karthikavilpower@gmail.com';
 
                 if (isKarthika) {
                     const allKarthikaRows = dprEntries.filter(e => dprUserMatch(e.userId, currentUser.email));
@@ -19333,17 +19327,16 @@
                             };
 
                             const isDailyPlanUser = [
-                                'barathvilpower@gmail.com',
-                                'thanushvilpower@gmail.com',
-                                'immanuelvilpower@gmail.com'
-                            ].includes(email.toLowerCase());
+                                 'barathvilpower@gmail.com',
+                                 'immanuelvilpower@gmail.com',
+                                 'karthikavilpower@gmail.com'
+                             ].includes(email.toLowerCase());
 
-                            const isInternalOnlyUser = [
-                                'anithavilpower@gmail.com',
-                                'alexvilpower@gmail.com',
-                                'alex@vilpower.com',
-                                'snehavilpower@gmail.com'
-                            ].includes(email.toLowerCase());
+                             const isInternalOnlyUser = [
+                                 'alexvilpower@gmail.com',
+                                 'alex@vilpower.com',
+                                 'snehavilpower@gmail.com'
+                             ].includes(email.toLowerCase());
 
                             const filteredTasks = tasks.filter(t => {
                                 if (isExcludedTask(t)) return false;
@@ -19371,8 +19364,30 @@
                             };
 
                             const completed = filteredTasks.filter(t =>
-                                matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
-                            );
+                                 matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
+                             );
+
+                             // Fallback: also capture completed tasks found via timelogs
+                             // that weren't planned/due in this period but were still worked/completed
+                             const periodLogIds = new Set(
+                                 allTimeLogs
+                                     .filter(l =>
+                                         l.userId.toLowerCase() === email.toLowerCase() &&
+                                         (l.endTime || l.startTime || 0) >= fromTs &&
+                                         (l.endTime || l.startTime || 0) <= toTs
+                                     )
+                                     .map(l => l.taskId)
+                                     .filter(Boolean)
+                             );
+                             const logCompIds = new Set(completed.map(t => t.id));
+                             filteredTasks
+                                 .filter(t =>
+                                     periodLogIds.has(t.id) &&
+                                     !logCompIds.has(t.id) &&
+                                     isTaskCompletedStatus(t.status) &&
+                                     !isExcludedTask(t)
+                                 )
+                                 .forEach(t => completed.push(t));
 
                             const pending = filteredTasks.filter(t => {
                                 if (isDailyPlanUser) {
@@ -19827,9 +19842,8 @@
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
-                            'thanushvilpower@gmail.com',
                             'immanuelvilpower@gmail.com',
-                            'anithavilpower@gmail.com'   // Karthika: assigned from daily plan
+                            'karthikavilpower@gmail.com'   // Karthika: assigned from daily plan
                         ].includes(usrEmail.toLowerCase());
 
                         const isInternalOnlyUser = [
@@ -19860,7 +19874,7 @@
                         const filteredTasks = tasks.filter(t => {
                             if (isExcludedTask(t)) return false;
                             if (isAjithRecurringTask(t)) return false;
-                            if (usrEmail.toLowerCase() === 'anithavilpower@gmail.com') {
+                            if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
                                 // Karthika: include all tasks (Jira + internal) — filtered via daily plan
                                 return true;
                             }
@@ -19899,29 +19913,27 @@
                             matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
                         );
 
-                        // For daily-plan users, also capture completed tasks found via timelogs
+                        // For all users, also capture completed tasks found via timelogs
                         // that weren't planned but were still worked (keeps count in sync with the log)
-                        if (isDailyPlanUser) {
-                            const periodLogIds = new Set(
-                                allTimeLogs
-                                    .filter(l =>
-                                        l.userId === usrEmail &&
-                                        (l.endTime || l.startTime || 0) >= start &&
-                                        (l.endTime || l.startTime || 0) <= end
-                                    )
-                                    .map(l => l.taskId)
-                                    .filter(Boolean)
-                            );
-                            const compIds = new Set(comp.map(t => t.id));
-                            filteredTasks
-                                .filter(t =>
-                                    periodLogIds.has(t.id) &&
-                                    !compIds.has(t.id) &&
-                                    isTaskCompletedStatus(t.status) &&
-                                    !isExcludedTask(t)
+                        const periodLogIds = new Set(
+                            allTimeLogs
+                                .filter(l =>
+                                    l.userId.toLowerCase() === usrEmail.toLowerCase() &&
+                                    (l.endTime || l.startTime || 0) >= start &&
+                                    (l.endTime || l.startTime || 0) <= end
                                 )
-                                .forEach(t => comp.push(t));
-                        }
+                                .map(l => l.taskId)
+                                .filter(Boolean)
+                        );
+                        const logCompIds = new Set(comp.map(t => t.id));
+                        filteredTasks
+                            .filter(t =>
+                                periodLogIds.has(t.id) &&
+                                !logCompIds.has(t.id) &&
+                                isTaskCompletedStatus(t.status) &&
+                                !isExcludedTask(t)
+                            )
+                            .forEach(t => comp.push(t));
 
                         // Build hold and rework BEFORE assigned so we can exclude them
                         const hold = filteredTasks.filter(t =>
@@ -20272,7 +20284,7 @@
                             hold: snehaHold,
                             rework: snehaRework
                         };
-                    } else if (email === 'anithavilpower@gmail.com') {
+                    } else if (email === 'karthikavilpower@gmail.com') {
                         // Karthika: Tasks Worked Log = her daily plan tasks in this period
                         const karthikaPlans = dailyPlans[eKey(email)] || {};
                         const localIsExcludedTask = (t) => {
@@ -20508,9 +20520,9 @@
 
                     // ── Karthika: thumbnail & poster counts from DPR ──
                     let karthikaBreakdownHtml = '';
-                    if (email === 'anithavilpower@gmail.com') {
+                    if (email === 'karthikavilpower@gmail.com') {
                         const karthikaDprRows = dprEntries.filter(e =>
-                            e.userId === 'anithavilpower@gmail.com' &&
+                            e.userId === 'karthikavilpower@gmail.com' &&
                             e.date >= fromDateStr &&
                             e.date <= toDateStr
                         );
@@ -20558,8 +20570,8 @@
                         `;
                     }
 
-                    // ── Completed Video Count for video editors (Immanuel, Thanush, Barath) ──
-                    const VIDEO_EDITOR_EMAILS = ['thanushvilpower@gmail.com', 'barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'];
+                    // ── Completed Video Count for video editors (Immanuel, Barath) ──
+                    const VIDEO_EDITOR_EMAILS = ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'];
                     const isVideoEditor = VIDEO_EDITOR_EMAILS.includes(email.toLowerCase());
 
                     // For video editors, Jira tasks = video production work. Internal tasks are admin/recurring.
@@ -20609,7 +20621,7 @@
                                 <p class="text-xl font-black text-slate-900">${userCompleted}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevUserCompleted} prev period</p>
                                 ${(() => {
-                            const videoEditors = ['thanushvilpower@gmail.com', 'barathvilpower@gmail.com', 'immanuelvilpower@gmail.com', 'anithavilpower@gmail.com'];
+                            const videoEditors = ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com', 'karthikavilpower@gmail.com'];
                             if (!videoEditors.includes(email)) return '';
                             const completedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
                             const jiraCount = completedTasks.filter(t => !t.manual && !isInternalTask(t)).length;
@@ -20661,7 +20673,7 @@
                             <div class="bg-sky-50/30 border border-sky-100 hover:border-sky-300 hover:bg-sky-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
                                  onclick="showIndivPerfTasks('${email}', 'allAssigned', '${escapeHtml(user.name)}')">
                                 <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
+                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
                                 <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.allAssigned || [...currStats.completed, ...currStats.assigned, ...currStats.hold]).length}</p>
@@ -20841,8 +20853,8 @@
                     <div class="xl:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
                         <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
                             <div>
-                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'anithavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
-                                <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : email === 'anithavilpower@gmail.com' ? 'Tasks from Karthika\'s daily plan in this period' : 'Tasks worked, logged, or assigned in period'}</p>
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
+                                <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : email === 'karthikavilpower@gmail.com' ? 'Tasks from Karthika\'s daily plan in this period' : 'Tasks worked, logged, or assigned in period'}</p>
                             </div>
                             <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">${workedTasks.length} ${email === 'snehavilpower@gmail.com' ? 'worked' : 'tasks'}</span>
                         </div>
@@ -23817,7 +23829,7 @@
             }
 
             async function sendThumbnailNotification(task, changedBy) {
-                const THUMBNAIL_NOTIFY_EMAILS = ['anithavilpower@gmail.com', 'digitalmarketing@vilpower.com'];
+                const THUMBNAIL_NOTIFY_EMAILS = ['karthikavilpower@gmail.com', 'digitalmarketing@vilpower.com'];
                 const notifData = {
                     taskId: task.id,
                     taskDesc: task.desc || '',
@@ -25293,7 +25305,7 @@
 
                 // Karthika (anithavilpower) should only update her local daily-plan status,
                 // never sync to Jira — the main task belongs to the video editor, not her.
-                const isKarthikaUser = currentUser?.email?.toLowerCase() === 'anithavilpower@gmail.com';
+                const isKarthikaUser = currentUser?.email?.toLowerCase() === 'karthikavilpower@gmail.com';
 
                 if (task.manual || isKarthikaUser) {
                     try {
@@ -25351,7 +25363,6 @@
             async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail) {
                 if (!task || !newAssigneeEmail) return;
                 const videoEditors = [
-                    'thanushvilpower@gmail.com',
                     'barathvilpower@gmail.com',
                     'ajithvilpower@gmail.com',
                     'princevilpower@gmail.com',
@@ -25365,7 +25376,7 @@
                 const descLower = (task.desc || '').toLowerCase();
                 if (descLower.includes('thumbnail')) return;
 
-                const targetKarthikaEmail = 'anithavilpower@gmail.com';
+                const targetKarthikaEmail = 'karthikavilpower@gmail.com';
                 const karthikaUser = allUsersMap.get(targetKarthikaEmail) || knownUserByEmail(targetKarthikaEmail);
                 const karthikaName = karthikaUser?.name || 'Karthika';
 
@@ -28587,7 +28598,7 @@
                             }
                         });
                     } catch (e) { }
-                } else if (email === 'anithavilpower@gmail.com') {
+                } else if (email === 'karthikavilpower@gmail.com') {
                     // Karthika daily plans
                     try {
                         const escapeKey = email.replace(/[.#$\\[\\]]/g, '_');
@@ -28698,7 +28709,7 @@
                 const h = now.getHours();
                 const m = now.getMinutes();
                 const email = window.currentUser.email.toLowerCase();
-                const isSpecialUser = email === 'snehavilpower@gmail.com' || email === 'anithavilpower@gmail.com';
+                const isSpecialUser = email === 'snehavilpower@gmail.com' || email === 'karthikavilpower@gmail.com';
 
                 const targetH = isSpecialUser ? 17 : 18;
                 const targetM = isSpecialUser ? 40 : 20;
