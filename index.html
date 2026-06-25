@@ -6123,10 +6123,17 @@
                 <div class="flex items-center gap-3 text-white">
                     <iconify-icon icon="solar:chat-round-call-bold" width="28"></iconify-icon>
                     <div>
-                        <h3 class="text-xl font-bold">Schedule Discussion</h3>
-                        <p class="text-xs opacity-90">Notify team members and manage meeting</p>
+                        <h3 class="text-xl font-bold">Discussion Room</h3>
+                        <p class="text-xs opacity-90">Schedule, start live, or log past discussions</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Mode Selector Tabs -->
+            <div class="px-8 pt-4 border-b border-slate-100 flex gap-4 bg-slate-50/50">
+                <button id="disc-tab-schedule" onclick="setDiscussionMode('schedule')" class="pb-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600 transition-all cursor-pointer">Schedule Future</button>
+                <button id="disc-tab-live" onclick="setDiscussionMode('live')" class="pb-3 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all cursor-pointer">Start Live Now</button>
+                <button id="disc-tab-past" onclick="setDiscussionMode('past')" class="pb-3 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all cursor-pointer">Log Past Meeting</button>
             </div>
 
             <!-- Form Content -->
@@ -6151,15 +6158,15 @@
                 </div>
 
                 <!-- Date -->
-                <div>
+                <div id="disc-field-date">
                     <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Date <span
                             class="text-rose-500">*</span></label>
                     <input id="disc-date" type="date"
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm transition-all">
                 </div>
 
-                <!-- Time -->
-                <div class="grid grid-cols-2 gap-3">
+                <!-- Time & Duration for Schedule -->
+                <div id="disc-field-time-schedule" class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Time <span
                                 class="text-rose-500">*</span></label>
@@ -6170,6 +6177,22 @@
                         <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Duration
                             (min)</label>
                         <input id="disc-duration" type="number" min="5" max="480" value="30"
+                            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm transition-all">
+                    </div>
+                </div>
+
+                <!-- Start & End Time for Past -->
+                <div id="disc-field-time-past" class="grid grid-cols-2 gap-3 hidden">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Start Time <span
+                                class="text-rose-500">*</span></label>
+                        <input id="disc-start-time" type="time"
+                            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">End Time <span
+                                class="text-rose-500">*</span></label>
+                        <input id="disc-end-time" type="time"
                             class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm transition-all">
                     </div>
                 </div>
@@ -6185,7 +6208,7 @@
 
                 <!-- Description (Optional) -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Description
+                    <label id="disc-desc-label" class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Description
                         (Optional)</label>
                     <textarea id="disc-description" placeholder="Add discussion notes or agenda..." rows="3"
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm transition-all resize-none"></textarea>
@@ -13481,6 +13504,10 @@
             let discussionJoinCountdown = null;
 
             function openScheduleDiscussionModal() {
+                // Clear input fields
+                document.getElementById('disc-title').value = '';
+                document.getElementById('disc-description').value = '';
+                
                 // Populate client select
                 const clientSelect = document.getElementById('disc-client');
                 populateClientSelect(clientSelect, '', 'Select client/department...');
@@ -13501,7 +13528,19 @@
                 // Set default time to now + 1 hour
                 const now = new Date();
                 now.setHours(now.getHours() + 1);
-                document.getElementById('disc-time').value = now.toTimeString().slice(0, 5);
+                const timeStr = now.toTimeString().slice(0, 5);
+                document.getElementById('disc-time').value = timeStr;
+                
+                // Set default start/end times for past logging
+                const pastStart = new Date();
+                pastStart.setHours(pastStart.getHours() - 1);
+                document.getElementById('disc-start-time').value = pastStart.toTimeString().slice(0, 5);
+                document.getElementById('disc-end-time').value = timeStr;
+                
+                document.getElementById('disc-duration').value = '30';
+
+                // Default to schedule mode
+                setDiscussionMode('schedule');
 
                 document.getElementById('scheduleDiscussionModal').showModal();
             }
@@ -13573,6 +13612,265 @@
                 } catch (err) {
                     console.error('Failed to schedule discussion:', err);
                     toast('Failed to schedule discussion: ' + err.message, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }
+
+            let currentDiscussionMode = 'schedule';
+            function setDiscussionMode(mode) {
+                currentDiscussionMode = mode;
+                
+                // Update tabs styling
+                const tabs = {
+                    schedule: document.getElementById('disc-tab-schedule'),
+                    live: document.getElementById('disc-tab-live'),
+                    past: document.getElementById('disc-tab-past')
+                };
+                
+                Object.keys(tabs).forEach(k => {
+                    if (!tabs[k]) return;
+                    if (k === mode) {
+                        tabs[k].className = "pb-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600 transition-all cursor-pointer";
+                    } else {
+                        tabs[k].className = "pb-3 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all cursor-pointer";
+                    }
+                });
+
+                // Show/hide fields
+                const fieldDate = document.getElementById('disc-field-date');
+                const fieldTimeSchedule = document.getElementById('disc-field-time-schedule');
+                const fieldTimePast = document.getElementById('disc-field-time-past');
+                const descLabel = document.getElementById('disc-desc-label');
+                const descTextarea = document.getElementById('disc-description');
+                const submitBtn = document.getElementById('disc-submit-btn');
+
+                if (mode === 'schedule') {
+                    if (fieldDate) fieldDate.classList.remove('hidden');
+                    if (fieldTimeSchedule) fieldTimeSchedule.classList.remove('hidden');
+                    if (fieldTimePast) fieldTimePast.classList.add('hidden');
+                    if (descLabel) descLabel.textContent = "Description (Optional)";
+                    if (descTextarea) descTextarea.placeholder = "Add discussion notes or agenda...";
+                    if (submitBtn) {
+                        submitBtn.textContent = "Schedule Discussion";
+                        submitBtn.onclick = submitScheduleDiscussion;
+                    }
+                } else if (mode === 'live') {
+                    if (fieldDate) fieldDate.classList.add('hidden');
+                    if (fieldTimeSchedule) fieldTimeSchedule.classList.add('hidden');
+                    if (fieldTimePast) fieldTimePast.classList.add('hidden');
+                    if (descLabel) descLabel.textContent = "Agenda / Description (Optional)";
+                    if (descTextarea) descTextarea.placeholder = "Add discussion notes or agenda...";
+                    if (submitBtn) {
+                        submitBtn.textContent = "Start Discussion Live";
+                        submitBtn.onclick = submitStartLiveDiscussion;
+                    }
+                } else if (mode === 'past') {
+                    if (fieldDate) fieldDate.classList.remove('hidden');
+                    if (fieldTimeSchedule) fieldTimeSchedule.classList.add('hidden');
+                    if (fieldTimePast) fieldTimePast.classList.remove('hidden');
+                    if (descLabel) descLabel.textContent = "Minutes of Meeting / Notes";
+                    if (descTextarea) descTextarea.placeholder = "Write summary, key decisions, or notes here...";
+                    if (submitBtn) {
+                        submitBtn.textContent = "Log Past Meeting";
+                        submitBtn.onclick = submitLogPastDiscussion;
+                    }
+                }
+            }
+
+            async function submitStartLiveDiscussion() {
+                const title = document.getElementById('disc-title').value.trim();
+                const client = document.getElementById('disc-client').value;
+                const description = document.getElementById('disc-description').value.trim();
+
+                const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
+                const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+
+                // Auto include the creator as participant
+                if (!participants.includes(currentUser.email)) {
+                    participants.push(currentUser.email);
+                }
+
+                // Validation
+                if (!title) return toast('Enter discussion title', 'error');
+                if (!client) return toast('Select a client/department', 'error');
+
+                const btn = document.getElementById('disc-submit-btn');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Starting...`;
+
+                try {
+                    const discussionId = 'DISC-' + Date.now();
+                    const discussion = {
+                        id: discussionId,
+                        title,
+                        client,
+                        scheduledTime: Date.now(),
+                        duration: 30 * 60 * 1000, // Default 30 mins
+                        participants,
+                        description,
+                        createdBy: currentUser.email,
+                        createdAt: Date.now(),
+                        status: 'in-progress' // Starts live instantly!
+                    };
+
+                    await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
+
+                    // Notify other participants that this meeting is happening now
+                    const otherParticipants = participants.filter(e => e !== currentUser.email);
+                    if (otherParticipants.length > 0) {
+                        await push(ref(db, 'worksync/task_notifications'), {
+                            title: 'Live Discussion Started',
+                            body: `An ad-hoc discussion has started: "${title}". Please join immediately.`,
+                            timestamp: Date.now(),
+                            readBy: {},
+                            notifyEmails: otherParticipants
+                        });
+                    }
+
+                    document.getElementById('scheduleDiscussionModal').close();
+                    discussions.push(discussion);
+                    
+                    // Auto join the discussion for the creator
+                    currentDiscussion = discussion;
+                    await joinDiscussion();
+                    
+                    startDiscussionListener();
+                } catch (err) {
+                    console.error('Failed to start live discussion:', err);
+                    toast('Failed to start live: ' + err.message, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }
+
+            async function submitLogPastDiscussion() {
+                const title = document.getElementById('disc-title').value.trim();
+                const client = document.getElementById('disc-client').value;
+                const date = document.getElementById('disc-date').value;
+                const startTimeStr = document.getElementById('disc-start-time').value;
+                const endTimeStr = document.getElementById('disc-end-time').value;
+                const notes = document.getElementById('disc-description').value.trim();
+
+                const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
+                const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+
+                // Auto include the creator as participant
+                if (!participants.includes(currentUser.email)) {
+                    participants.push(currentUser.email);
+                }
+
+                // Validation
+                if (!title) return toast('Enter discussion title', 'error');
+                if (!client) return toast('Select a client/department', 'error');
+                if (!date) return toast('Select date of discussion', 'error');
+                if (!startTimeStr) return toast('Select start time', 'error');
+                if (!endTimeStr) return toast('Select end time', 'error');
+                if (participants.length === 0) return toast('Select at least one participant', 'error');
+
+                // Parse times
+                const startDateTime = new Date(`${date}T${startTimeStr}:00`);
+                const endDateTime = new Date(`${date}T${endTimeStr}:00`);
+                const startTs = startDateTime.getTime();
+                let endTs = endDateTime.getTime();
+
+                // If end time is earlier than start time, assume it ended the next day
+                if (endTs <= startTs) {
+                    endTs += 24 * 60 * 60 * 1000;
+                }
+
+                const durationMs = endTs - startTs;
+                const durationSec = Math.floor(durationMs / 1000);
+
+                if (durationSec <= 0) {
+                    return toast('End time must be after start time', 'error');
+                }
+
+                const btn = document.getElementById('disc-submit-btn');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Logging...`;
+
+                try {
+                    const discussionId = 'DISC-' + Date.now();
+                    const discussion = {
+                        id: discussionId,
+                        title,
+                        client,
+                        scheduledTime: startTs,
+                        duration: durationMs,
+                        participants,
+                        description: notes,
+                        notes: notes,
+                        createdBy: currentUser.email,
+                        createdAt: Date.now(),
+                        status: 'completed', // Created as completed
+                        joinedBy: participants, // Everyone joined since it already happened
+                        joinedAt: startTs
+                    };
+
+                    // 1. Create Discussion Record
+                    await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
+
+                    // 2. Log Tasks and Timelogs for each participant
+                    const promises = [];
+                    for (const email of participants) {
+                        const userObj = knownUserByEmail(email);
+                        const name = userObj?.name || email.split('@')[0];
+
+                        // Create completed manual task
+                        const taskId = 'DISC-TASK-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+                        const discussionTask = {
+                            id: taskId,
+                            desc: `Discussion: ${title}`,
+                            client,
+                            status: 'Completed',
+                            priority: 'High',
+                            assignee: name,
+                            assigneeEmail: email,
+                            manual: true,
+                            taskType: 'internal',
+                            userId: email,
+                            createdAt: Date.now(),
+                            completedAt: Date.now(),
+                            discussionId: discussionId,
+                            isDiscussionTask: true
+                        };
+
+                        // Create time log
+                        const timeLog = {
+                            taskId: taskId,
+                            taskDesc: `Discussion: ${title}`,
+                            client,
+                            userId: email,
+                            userName: name,
+                            startTime: startTs,
+                            endTime: endTs,
+                            durationSeconds: durationSec,
+                            durationFormatted: formatTime(durationSec)
+                        };
+
+                        // Save task & log
+                        promises.push(set(ref(db, `worksync/manual_tasks/${eKey(email)}/${taskId}`), discussionTask));
+                        promises.push(push(ref(db, 'worksync/timelogs'), timeLog));
+                    }
+
+                    await Promise.all(promises);
+
+                    document.getElementById('scheduleDiscussionModal').close();
+                    discussions.push(discussion);
+                    toast(`Past discussion logged successfully for ${participants.length} team members!`, 'success');
+                    
+                    // Reload local view/tasks if the current user is a participant
+                    if (participants.includes(currentUser.email)) {
+                        syncTasks(true);
+                    }
+                } catch (err) {
+                    console.error('Failed to log past discussion:', err);
+                    toast('Failed to log past discussion: ' + err.message, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.textContent = originalText;
