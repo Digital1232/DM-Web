@@ -816,12 +816,6 @@
                     </button>
                     <!-- Internal Tasks merged into Tasks Hub -->
                     <button onclick="switchView('internal-tasks')" id="nav-internal-tasks" class="hidden"></button>
-                    <button onclick="showFiveThirtyTaskPopup()" id="nav-completed-tasks"
-                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:check-circle-linear" width="20"
-                            class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        Completed Tasks
-                    </button>
                     <button onclick="switchView('shoots')" id="nav-shoots"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:camera-bold-duotone" width="20"
@@ -832,6 +826,12 @@
                         <iconify-icon icon="solar:calendar-add-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Daily Plan
+                    </button>
+                    <button onclick="switchView('projects')" id="nav-projects"
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:folder-with-files-linear" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Projects
                     </button>
 
                     <button onclick="switchView('qc')" id="nav-qc"
@@ -1366,6 +1366,9 @@
                         <button onclick="switchTasksTab('dailyplan')" id="tab-btn-dailyplan"
                             class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100">Daily
                             Plan</button>
+                        <button onclick="showFiveThirtyTaskPopup()" id="tab-btn-completed"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100">Completed
+                            Tasks</button>
                     </div>
 
                     <!-- ── Jira Tasks Tab ── -->
@@ -1801,13 +1804,21 @@
                         <div
                             class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div class="flex items-center gap-4">
-                                <input type="date" id="dp-date" onchange="renderDailyPlan()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                <div id="dp-user-filter-container" class="hidden">
-                                    <select id="dp-user-filter" onchange="renderDailyPlan()"
-                                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                        <!-- Populated by JS -->
-                                    </select>
+                                <input type="date" id="dp-date" onchange="renderDailyPlan()" onclick="this.showPicker()"
+                                    class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+                                <div id="dp-user-filter-container" class="hidden relative">
+                                    <button type="button" id="dp-user-filter-btn" onclick="toggleDpUserDropdown()"
+                                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 flex items-center gap-2">
+                                        <span>All Users</span>
+                                        <iconify-icon icon="solar:alt-arrow-down-linear" width="16"
+                                            class="transition-transform" id="dp-user-filter-arrow"></iconify-icon>
+                                    </button>
+                                    <div id="dp-user-dropdown"
+                                        class="hidden absolute left-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-3">
+                                        <div id="dp-user-checkboxes" class="max-h-60 overflow-y-auto space-y-1">
+                                            <!-- Populated dynamically -->
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
@@ -5365,8 +5376,32 @@
                             <option value="">All Statuses</option>
                         </select>
                     </div>
+                    <!-- Due Date Range Filter -->
+                    <div class="flex items-end gap-2 mb-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl">
+                        <iconify-icon icon="solar:calendar-date-bold" class="text-indigo-400 shrink-0 mb-0.5"
+                            width="16"></iconify-icon>
+                        <div class="flex-1">
+                            <label class="block text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Due
+                                Date — From</label>
+                            <input id="ap-due-from" type="date" onchange="filterAssignPlanTasks()"
+                                class="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
+                        </div>
+                        <span class="text-slate-300 font-bold pb-1.5 shrink-0">→</span>
+                        <div class="flex-1">
+                            <label
+                                class="block text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">To</label>
+                            <input id="ap-due-to" type="date" onchange="filterAssignPlanTasks()"
+                                class="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
+                        </div>
+                        <button type="button"
+                            onclick="document.getElementById('ap-due-from').value='';document.getElementById('ap-due-to').value='';filterAssignPlanTasks();"
+                            title="Clear date range"
+                            class="shrink-0 p-1.5 rounded-lg text-indigo-300 hover:text-rose-500 hover:bg-rose-50 transition-all mb-0.5">
+                            <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon>
+                        </button>
+                    </div>
                     <div id="ap-task-list"
-                        class="bg-white border border-slate-200 rounded-xl max-h-80 overflow-y-auto space-y-1 p-2">
+                        class="bg-white border border-slate-200 rounded-xl max-h-72 overflow-y-auto space-y-1 p-2">
                         <!-- Populated JS -->
                     </div>
                 </div>
@@ -6379,13 +6414,13 @@
          SCRIPTS
     ══════════════════════════════════════════ -->
     <script type="module">
-        let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get;
+        let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get;
         let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
         let getStorage, sRef, uploadBytes, getDownloadURL;
 
         try {
             ({ initializeApp } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"));
-            ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"));
+            ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"));
             ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"));
             ({ getStorage, ref: sRef, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js"));
         } catch (err) {
@@ -6631,7 +6666,7 @@
             function canViewReports() { return isAdmin() || isManager() || hasClientWideAccess(); }
             function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
-            function canViewProjects() { return false; }
+            function canViewProjects() { return isAdmin() || isManager(); }
             function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
             function canViewQcPortal() {
                 if (!currentUser) return false;
@@ -6740,11 +6775,17 @@
             let internalTaskSortDir = 'asc';
             let currentInternalTaskViewMode = 'list';
             let internalBoardColumnOrder = null;
-            let activeTasksTab = 'jira'; // tracks which tab is active inside Tasks Hub
+            let activeTasksTab = localStorage.getItem('worksync_activeTasksTab') || 'jira'; // tracks which tab is active inside Tasks Hub
             let activeTaskId = null;
             let shootCalendarDate = new Date();
             let activeConvId = null;
+            let activeConvMessageLimit = 30;
             let currentConvMessages = {};
+            let activeConvOldestTimestamp = null;
+            let activeConvOldestMessageKey = null;
+            let activeConvHasMore = false;
+            let activeConvLoadingMore = false;
+            let activeConvHistoryDepleted = false;
             let chatGalleryImages = [];
             let activeMissedLearningNotifId = null;
             let chatGalleryIndex = 0;
@@ -7888,12 +7929,12 @@
                         loadEmployeeCurrentTasks();
                         renderDailySummary();
                     }
+                    if (typeof initWaterWidget === 'function') initWaterWidget();
                     initAdminCheckoutReasonNotifications();
                     setInterval(checkAutoCheckout, 60000);
                     setInterval(checkBreakLimit, 60000);
                     // Show the floating chat bubble now that everything is ready
                     if (typeof showFloatBtn === 'function') showFloatBtn();
-                    if (typeof initWaterWidget === 'function') initWaterWidget();
                     setInterval(checkBirthdays, 60000); // Check for birthdays every minute
                     setInterval(checkDailyPlanProgressNotification, 60000);
                     // Removed auto-update mechanism to stop page reloads
@@ -8091,6 +8132,7 @@
                     currentReportTab = teamAccess[0];
                 }
 
+                document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
                 document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
                 document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
@@ -9324,6 +9366,14 @@
                         const idx = tasks.findIndex(t => t.id === task.id);
                         if (idx !== -1) tasks[idx].status = newStatus;
                     }
+
+                    if (newStatus === 'Shoot In Progress' && currentUser?.email) {
+                        const myTask = groupTasks.find(task => (task.userId || task.assigneeEmail || '').toLowerCase() === currentUser.email.toLowerCase());
+                        if (myTask) {
+                            await doStartTask(myTask.id, { internalStatus: newStatus });
+                        }
+                    }
+
                     renderShootCalendar();
                     renderTasks();
                     if (isInternalTabActive()) renderInternalTasks();
@@ -13288,7 +13338,8 @@
                 await doStartTask(id);
             }
 
-            async function doStartTask(id) {
+            async function doStartTask(id, options = {}) {
+                const startStatus = options.internalStatus || 'In Progress';
                 // If another task is active, log its time and put it on hold before switching.
                 if (activeTaskId && activeTaskId !== id) {
                     stopTaskTimer();
@@ -13357,7 +13408,7 @@
 
                 // For internal task, update status to 'In Progress' (except recurring morning learning)
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
-                    await updateInternalTaskStatus(id, 'In Progress');
+                    await updateInternalTaskStatus(id, startStatus);
                 }
 
                 startTaskTimer();
@@ -14120,15 +14171,15 @@
                     }).join('');
 
                     liveSection.innerHTML = `
-                    <div class="bg-gradient-to-br from-indigo-900 to-slate-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden mb-6">
+                    <div class="bg-white text-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 relative overflow-hidden mb-6 dark:bg-gradient-to-br dark:from-indigo-900 dark:to-slate-950 dark:text-white dark:border-transparent">
                         <div class="relative z-10 space-y-6">
-                            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 dark:border-white/10">
                                 <div class="flex items-center gap-3">
                                     <span class="flex h-3 w-3 relative">
                                       <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                                       <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
                                     </span>
-                                    <h4 class="text-base font-black uppercase tracking-wider text-rose-400">Live Meeting Happening Now</h4>
+                                    <h4 class="text-base font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Live Meeting Happening Now</h4>
                                 </div>
                                 <div class="flex gap-2">
                                     <button onclick="endCurrentDiscussionLive('${activeDisc.id}')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-rose-900/30 flex items-center gap-2">
@@ -14140,32 +14191,32 @@
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div class="space-y-4">
                                     <div>
-                                        <h3 class="text-2xl font-black text-white tracking-tight">${escapeHtml(activeDisc.title)}</h3>
-                                        <p class="text-xs text-indigo-200 mt-1 font-bold">Client: <span class="text-white">${escapeHtml(activeDisc.client)}</span></p>
+                                        <h3 class="text-2xl font-black text-slate-900 tracking-tight dark:text-white">${escapeHtml(activeDisc.title)}</h3>
+                                        <p class="text-xs text-slate-500 mt-1 font-bold dark:text-indigo-200">Client: <span class="text-slate-900 dark:text-white">${escapeHtml(activeDisc.client)}</span></p>
                                     </div>
-                                    <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                        <h5 class="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1.5">Agenda / Description</h5>
-                                        <p class="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">${escapeHtml(activeDisc.description || 'No agenda provided.')}</p>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 dark:bg-white/5 dark:border-white/10">
+                                        <h5 class="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1.5 dark:text-indigo-300">Agenda / Description</h5>
+                                        <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap dark:text-slate-200">${escapeHtml(activeDisc.description || 'No agenda provided.')}</p>
                                     </div>
                                     <div>
-                                        <h5 class="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-2">Participants</h5>
+                                        <h5 class="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-2 dark:text-indigo-300">Participants</h5>
                                         <div class="flex flex-wrap gap-2">
                                             ${participantsHtml}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="bg-white/5 border border-white/10 rounded-3xl p-6 flex flex-col gap-4">
+                                <div class="bg-slate-50 border border-slate-200 rounded-3xl p-6 flex flex-col gap-4 dark:bg-white/5 dark:border-white/10">
                                     <div class="flex items-center justify-between">
-                                        <h5 class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Meeting Notes / Minutes</h5>
-                                        <span class="text-[10px] text-slate-400 italic">Auto-saves on typing</span>
+                                        <h5 class="text-xs font-bold text-indigo-600 uppercase tracking-widest dark:text-indigo-300">Meeting Notes / Minutes</h5>
+                                        <span class="text-[10px] text-slate-500 italic dark:text-slate-400">Auto-saves on typing</span>
                                     </div>
-                                    <textarea id="live-disc-notes" oninput="saveLiveDiscussionNotes('${activeDisc.id}', this.value)" placeholder="Write summary, action items, decision logs, or key notes here..." class="flex-1 bg-slate-950/40 border border-white/10 rounded-2xl p-4 text-xs text-slate-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none min-h-[180px] leading-relaxed custom-scrollbar">${escapeHtml(activeDisc.notes || '')}</textarea>
+                                    <textarea id="live-disc-notes" oninput="saveLiveDiscussionNotes('${activeDisc.id}', this.value)" placeholder="Write summary, action items, decision logs, or key notes here..." class="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xs text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none min-h-[180px] leading-relaxed custom-scrollbar dark:bg-slate-950/40 dark:border-white/10 dark:text-slate-100">${escapeHtml(activeDisc.notes || '')}</textarea>
                                 </div>
                             </div>
                         </div>
-                        <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl"></div>
-                        <div class="absolute -left-16 -bottom-16 w-64 h-64 bg-rose-500/5 rounded-full blur-3xl"></div>
+                        <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl dark:bg-indigo-600/10"></div>
+                        <div class="absolute -left-16 -bottom-16 w-64 h-64 bg-rose-500/5 rounded-full blur-3xl dark:bg-rose-500/5"></div>
                     </div>
                 `;
                 } else {
@@ -15242,6 +15293,12 @@
                 if (messagesArea) messagesArea.innerHTML = '';
 
                 activeConvId = null;
+                currentConvMessages = {};
+                activeConvOldestTimestamp = null;
+                activeConvOldestMessageKey = null;
+                activeConvHasMore = false;
+                activeConvLoadingMore = false;
+                activeConvHistoryDepleted = false;
                 if (msgListener) {
                     try {
                         msgListener();
@@ -15326,12 +15383,23 @@
                 if (msgListener) msgListener();
                 if (readReceiptsListener) { readReceiptsListener(); readReceiptsListener = null; }
                 activeConvReadReceipts = {};
+                currentConvMessages = {};
+                activeConvOldestTimestamp = null;
+                activeConvOldestMessageKey = null;
+                activeConvHasMore = false;
+                activeConvLoadingMore = false;
+                activeConvHistoryDepleted = false;
 
                 const area = document.getElementById('messages-area');
                 area.innerHTML = '';
-                const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(15));
+                const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(activeConvMessageLimit));
                 msgListener = onValue(q, snap => {
-                    currentConvMessages = snap.val() || {};
+                    const incoming = snap.val() || {};
+                    mergeChatMessages(incoming);
+                    refreshChatOldestTimestamp();
+                    if (!activeConvHistoryDepleted) {
+                        activeConvHasMore = Object.keys(incoming).length >= activeConvMessageLimit;
+                    }
                     renderMessages(currentConvMessages);
                     scrollChatToBottom();
                 });
@@ -15449,13 +15517,89 @@
                 const area = document.getElementById('messages-area');
                 const rows = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
                 if (!rows.length) {
-                    area.innerHTML = `<p class="text-center text-xs text-slate-400 italic py-6">No messages yet.</p>`;
+                    area.innerHTML = `
+                        ${activeConvHasMore ? `
+                            <div class="sticky top-0 z-10 flex justify-center py-2 bg-gradient-to-b from-slate-50/95 via-slate-50/80 to-transparent backdrop-blur-sm">
+                                <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
+                                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
+                                    ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Message'}
+                                </button>
+                            </div>` : ''}
+                        <p class="text-center text-xs text-slate-400 italic py-6">No messages yet.</p>`;
                     return;
                 }
-                area.innerHTML = '';
+                area.innerHTML = activeConvHasMore ? `
+                    <div class="sticky top-0 z-10 flex justify-center py-2 bg-gradient-to-b from-slate-50/95 via-slate-50/80 to-transparent backdrop-blur-sm">
+                        <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
+                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
+                            <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
+                            ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Message'}
+                        </button>
+                    </div>` : '';
                 const frag = document.createDocumentFragment();
                 rows.forEach(([id, msg]) => appendMessage(id, msg, frag));
                 area.appendChild(frag);
+            }
+
+            function mergeChatMessages(nextMessages) {
+                if (!nextMessages) return;
+                currentConvMessages = { ...(currentConvMessages || {}), ...nextMessages };
+            }
+
+            function refreshChatOldestTimestamp() {
+                const entries = Object.entries(currentConvMessages || {});
+                const sorted = entries.sort((a, b) => a[0].localeCompare(b[0]));
+                activeConvOldestMessageKey = sorted.length ? sorted[0][0] : null;
+                activeConvOldestTimestamp = sorted.length ? Number(sorted[0][1]?.timestamp || 0) : null;
+            }
+
+            async function loadMoreChatMessages() {
+                if (!activeConvId || activeConvLoadingMore || !activeConvHasMore || !activeConvOldestMessageKey) return;
+                activeConvLoadingMore = true;
+                renderMessages(currentConvMessages);
+
+                const area = document.getElementById('messages-area');
+                const prevScrollHeight = area?.scrollHeight || 0;
+                const prevScrollTop = area?.scrollTop || 0;
+
+                try {
+                    const q = query(
+                        ref(db, `worksync/messages/${activeConvId}`),
+                        orderByKey(),
+                        endBefore(activeConvOldestMessageKey),
+                        limitToLast(activeConvMessageLimit)
+                    );
+                    const snap = await get(q);
+                    const olderMessages = snap.val() || {};
+                    const olderCount = Object.keys(olderMessages).length;
+
+                    if (olderCount > 0) {
+                        mergeChatMessages(olderMessages);
+                        refreshChatOldestTimestamp();
+                    }
+
+                    if (olderCount < activeConvMessageLimit) {
+                        activeConvHistoryDepleted = true;
+                        activeConvHasMore = false;
+                    } else {
+                        activeConvHasMore = true;
+                    }
+
+                    renderMessages(currentConvMessages);
+
+                    requestAnimationFrame(() => {
+                        if (!area) return;
+                        const newScrollHeight = area.scrollHeight || 0;
+                        area.scrollTop = Math.max(0, newScrollHeight - prevScrollHeight + prevScrollTop);
+                    });
+                } catch (err) {
+                    console.error('Failed to load older chat messages:', err);
+                    toast('Failed to load older messages', 'error');
+                } finally {
+                    activeConvLoadingMore = false;
+                    renderMessages(currentConvMessages);
+                }
             }
 
             function appendMessage(id, msg, container) {
@@ -23794,10 +23938,16 @@
             }
 
             function populateDpUserFilter() {
-                const sel = document.getElementById('dp-user-filter');
-                if (!sel) return;
-                const current = sel.value;
-                sel.innerHTML = `<option value="all">All Users</option>`;
+                const container = document.getElementById('dp-user-checkboxes');
+                if (!container) return;
+
+                // Save current check state of existing checkboxes to preserve selection
+                const checkedStates = {};
+                const existingInputs = container.querySelectorAll('input[name="dp_user_select"]');
+                const hasExisting = existingInputs.length > 0;
+                existingInputs.forEach(input => {
+                    checkedStates[input.value.toLowerCase()] = input.checked;
+                });
 
                 const merged = new Map();
                 USERS.forEach(u => merged.set(u.email.toLowerCase(), { ...u }));
@@ -23807,10 +23957,73 @@
                 });
                 const usersList = [...merged.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-                usersList.forEach(u => {
-                    sel.innerHTML += `<option value="${u.email}">${u.name}</option>`;
-                });
-                if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
+                container.innerHTML = usersList.map(u => {
+                    const email = u.email.toLowerCase();
+                    const isChecked = hasExisting ? (checkedStates[email] !== false) : true;
+                    return `
+                        <label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-all">
+                            <input type="checkbox" name="dp_user_select" value="${email}" ${isChecked ? 'checked' : ''}
+                                onchange="updateDpUserLabel(); renderDailyPlan();"
+                                class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-sm font-bold text-slate-700">${escapeHtml(u.name || email)}</span>
+                        </label>`;
+                }).join('');
+
+                updateDpUserLabel();
+            }
+
+            function getDpSelectedUsers() {
+                return Array.from(document.querySelectorAll('input[name="dp_user_select"]:checked')).map(cb => cb.value.toLowerCase());
+            }
+
+            function updateDpUserLabel() {
+                const btn = document.getElementById('dp-user-filter-btn');
+                const labelEl = btn?.querySelector('span');
+                if (!labelEl) return;
+                const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
+                const checked = Array.from(checkboxes).filter(cb => cb.checked);
+
+                if (checked.length === 0) {
+                    labelEl.textContent = 'No Users';
+                } else if (checked.length === checkboxes.length) {
+                    labelEl.textContent = 'All Users';
+                } else if (checked.length === 1) {
+                    const labelSpan = checked[0].closest('label')?.querySelector('span');
+                    labelEl.textContent = labelSpan?.textContent || checked[0].value;
+                } else {
+                    labelEl.textContent = `${checked.length} Users`;
+                }
+            }
+
+            function toggleDpUserDropdown() {
+                if (canViewDailyPlanTeamAccess()) {
+                    populateDpUserFilter();
+                }
+                const dropdown = document.getElementById('dp-user-dropdown');
+                const arrow = document.getElementById('dp-user-filter-arrow');
+                if (!dropdown) return;
+                const isOpen = !dropdown.classList.contains('hidden');
+                dropdown.classList.toggle('hidden', isOpen);
+                if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+                if (!isOpen) {
+                    // Close on outside click
+                    setTimeout(() => {
+                        const closeHandler = (e) => {
+                            if (!document.getElementById('dp-user-filter-container')?.contains(e.target)) {
+                                dropdown.classList.add('hidden');
+                                if (arrow) arrow.style.transform = '';
+                                document.removeEventListener('click', closeHandler);
+                            }
+                        };
+                        document.addEventListener('click', closeHandler);
+                    }, 0);
+                }
+            }
+
+            function selectAllDpUsers(selectAll) {
+                document.querySelectorAll('input[name="dp_user_select"]').forEach(cb => cb.checked = selectAll);
+                updateDpUserLabel();
+                renderDailyPlan();
             }
 
             function filterDailyPlan(type) {
@@ -23830,9 +24043,8 @@
             function getDailyPlanTargetUserEmails() {
                 const mergedUsers = Array.from(allUsersMap.values()).filter(u => u.email && u.email !== '123');
                 if (canViewDailyPlanTeamAccess()) {
-                    const filterVal = document.getElementById('dp-user-filter')?.value || 'all';
-                    if (filterVal !== 'all') return [filterVal];
-                    return mergedUsers.map(u => u.email).sort((a, b) => {
+                    const selected = getDpSelectedUsers();
+                    return selected.sort((a, b) => {
                         const nameA = (allUsersMap.get(a.toLowerCase())?.name || a).toLowerCase();
                         const nameB = (allUsersMap.get(b.toLowerCase())?.name || b).toLowerCase();
                         return nameA.localeCompare(nameB);
@@ -23843,10 +24055,15 @@
 
             function getDailyPlanScopeLabel() {
                 if (!canViewDailyPlanTeamAccess()) return currentUser?.name || 'My Plan';
-                const filterVal = document.getElementById('dp-user-filter')?.value || 'all';
-                if (filterVal === 'all') return 'All Team Members';
-                const opt = document.getElementById('dp-user-filter')?.selectedOptions?.[0];
-                return opt?.textContent?.trim() || filterVal;
+                const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
+                const checked = Array.from(checkboxes).filter(cb => cb.checked);
+                if (checked.length === 0) return 'No Users';
+                if (checked.length === checkboxes.length) return 'All Team Members';
+                if (checked.length === 1) {
+                    const labelSpan = checked[0].closest('label')?.querySelector('span');
+                    return labelSpan?.textContent || checked[0].value;
+                }
+                return `${checked.length} Users`;
             }
 
             function collectDailyPlanRowsForView() {
@@ -24065,6 +24282,13 @@
                 const tbody = document.getElementById('dp-tasks-tbody');
                 const countEl = document.getElementById('dp-task-count');
                 if (!tbody || !countEl) return;
+
+                if (canViewDailyPlanTeamAccess()) {
+                    const filterContainer = document.getElementById('dp-user-filter-container');
+                    if (filterContainer && !filterContainer.classList.contains('hidden')) {
+                        populateDpUserFilter();
+                    }
+                }
 
                 const uniquePlans = collectDailyPlanRowsForView();
                 renderDailyPlanStats(uniquePlans);
@@ -25750,6 +25974,11 @@
             function openAssignPlanModal() {
                 document.getElementById('ap-task-search').value = '';
                 document.getElementById('ap-date').value = document.getElementById('dp-date').value || todayIso();
+                // Reset due date range
+                const apDueFrom = document.getElementById('ap-due-from');
+                const apDueTo = document.getElementById('ap-due-to');
+                if (apDueFrom) apDueFrom.value = '';
+                if (apDueTo) apDueTo.value = '';
 
                 const sel = document.getElementById('ap-user');
                 if (isAdmin()) {
@@ -25781,15 +26010,28 @@
                 const searchLower = (term || '').toLowerCase();
                 const clientFilter = document.getElementById('ap-client-filter')?.value || '';
                 const statusFilter = document.getElementById('ap-status-filter')?.value || '';
+                const dueDateFrom = document.getElementById('ap-due-from')?.value || '';
+                const dueDateTo = document.getElementById('ap-due-to')?.value || '';
 
                 let filtered = tasks.filter(taskEligibleForDailyPlanAllocation);
 
                 if (clientFilter) filtered = filtered.filter(t => t.client === clientFilter);
                 if (statusFilter) filtered = filtered.filter(t => t.status === statusFilter);
 
+                // Due date range filter
+                if (dueDateFrom || dueDateTo) {
+                    filtered = filtered.filter(t => {
+                        if (!t.duedate) return false;
+                        const due = t.duedate.slice(0, 10);
+                        if (dueDateFrom && due < dueDateFrom) return false;
+                        if (dueDateTo && due > dueDateTo) return false;
+                        return true;
+                    });
+                }
+
                 // By default (when no filters/search are set), show tasks assigned to the target user or unassigned.
                 // If any filter/search is active, lift the assignee restriction to let user search/find any matching task.
-                if (!term && !clientFilter && !statusFilter) {
+                if (!term && !clientFilter && !statusFilter && !dueDateFrom && !dueDateTo) {
                     filtered = filtered.filter(t => (assigneeMatches(t, userEmail) || !t.assignee || t.assignee === 'Unassigned'));
                 }
 
@@ -26138,7 +26380,7 @@
                 }
             }
 
-            window.openDm = openDm; window.openConversation = openConversation; window.sendMessage = sendMessage; window.uploadChatAttachment = uploadChatAttachment; window.clearStagedAttachment = clearStagedAttachment; window.handleMsgInput = handleMsgInput; window.handleMsgKeyDown = handleMsgKeyDown; window.selectMention = selectMention; window.handleMsgPaste = handleMsgPaste;
+            window.openDm = openDm; window.openConversation = openConversation; window.loadMoreChatMessages = loadMoreChatMessages; window.sendMessage = sendMessage; window.uploadChatAttachment = uploadChatAttachment; window.clearStagedAttachment = clearStagedAttachment; window.handleMsgInput = handleMsgInput; window.handleMsgKeyDown = handleMsgKeyDown; window.selectMention = selectMention; window.handleMsgPaste = handleMsgPaste;
             window.toggleNotificationDropdown = toggleNotificationDropdown; window.clickNotificationItem = clickNotificationItem; window.markAllNotificationsAsRead = markAllNotificationsAsRead; window.scrollChatToBottom = scrollChatToBottom;
             window.handleChatDragOver = handleChatDragOver; window.handleChatDragEnter = handleChatDragEnter; window.handleChatDragLeave = handleChatDragLeave; window.handleChatDrop = handleChatDrop;
             window.dragTaskEnd = dragTaskEnd; window.dragTaskEnter = dragTaskEnter; window.dragTaskLeave = dragTaskLeave; window.dragTask = dragTask; window.dropTask = dropTask;
@@ -26178,6 +26420,7 @@
             window.renderQcChecklist = renderQcChecklist; window.addQcCustomItem = addQcCustomItem;
             window.filterQcReportsList = filterQcReportsList; window.renderQcReportsList = renderQcReportsList; window.loadMoreQcReports = loadMoreQcReports;
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
+            window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
