@@ -34,6 +34,10 @@ export const JIRA = {
 
 export const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'AshmithaSree'];
 
+export const META_ADS = {
+    accessToken: "EAAZBjdDlKPisBR5B2oxcEr7LKIh2hiZAkSyA990xiJ3lTfO93ZAL69WeXWz7V889cFADqB42DciNcOy9UZBIHXENjXVBk5lBbYcXso6MRQF0XZBVKFVu5zAKSxrYXqwcIFTPWnfPJZAeISI4T1LrsckxO0NysnZBzrlaURPMK0BK5jHAkfz8IJSxycUHG2iIdHzJP8ooZADR"
+};
+
 // Leave Approval Chains - Different employees have different approval hierarchies
 export const LEAVE_APPROVAL_CHAINS = {
     'immanuelvilpower@gmail.com': [

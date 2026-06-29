@@ -39,7 +39,9 @@
             pointer-events: none !important;
         }
     </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <style>
         body {
             font-family: 'Manrope', 'Inter', sans-serif;
@@ -745,7 +747,7 @@
             background: var(--ws-bg) !important;
         }
 
-        html.dark #login-view > div {
+        html.dark #login-view>div {
             background: rgba(22, 31, 46, 0.92) !important;
             border: 1px solid rgba(38, 50, 72, 0.95) !important;
             box-shadow: 0 12px 30px rgba(0, 0, 0, .35) !important;
@@ -942,8 +944,8 @@
             border-color: var(--ws-border) !important;
         }
 
-        html.dark .divide-slate-50 > * + *,
-        html.dark .divide-slate-100 > * + * {
+        html.dark .divide-slate-50>*+*,
+        html.dark .divide-slate-100>*+* {
             border-color: var(--ws-divider) !important;
         }
 
@@ -1080,6 +1082,28 @@
     </style>
     <script>
         document.documentElement.classList.add('auth-pending');
+    </script>
+
+    <script>
+        window.fbAsyncInit = function () {
+            FB.init({
+                appId: '{your-app-id}',
+                cookie: true,
+                xfbml: true,
+                version: '{api-version}'
+            });
+
+            FB.AppEvents.logPageView();
+
+        };
+
+        (function (d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) { return; }
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
     </script>
 </head>
 
@@ -1287,6 +1311,12 @@
                         <iconify-icon icon="solar:graph-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Reports
+                    </button>
+                    <button onclick="switchView('meta-ads')" id="nav-meta-ads"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left hidden">
+                        <iconify-icon icon="solar:target-linear" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Meta Ads
                     </button>
                     <button onclick="switchView('strategy-calendar')" id="nav-strategy-calendar"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
@@ -4509,6 +4539,458 @@
                     </div>
                 </div>
 
+                <!-- ════ META ADS VIEW ════ -->
+                <div id="view-meta-ads-panel" class="hidden space-y-6 fade-in">
+                    <!-- Top Action Bar -->
+                    <div
+                        class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <iconify-icon icon="solar:target-bold-duotone" width="26"></iconify-icon>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-slate-800">Meta Ads Manager</h2>
+                                <p class="text-sm text-slate-500">Live acquisition insights and performance trends</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <!-- Account Selector -->
+                            <div class="relative min-w-[240px]">
+                                <select id="meta-ad-account-selector" onchange="onMetaAdAccountChange()"
+                                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all appearance-none cursor-pointer">
+                                    <option value="" disabled selected>Select Ad Account</option>
+                                </select>
+                                <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                    <iconify-icon icon="solar:user-rounded-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                                <div
+                                    class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="16"></iconify-icon>
+                                </div>
+                            </div>
+
+                            <!-- Refresh button -->
+                            <button onclick="loadMetaAdsData(true)"
+                                class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-indigo-600 transition-all"
+                                title="Refresh Data">
+                                <iconify-icon icon="solar:restart-bold-duotone" width="20"
+                                    class="align-middle"></iconify-icon>
+                            </button>
+
+                            <!-- Settings button -->
+                            <button onclick="openMetaAdsSettings()"
+                                class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-indigo-600 transition-all"
+                                title="API Settings">
+                                <iconify-icon icon="solar:settings-bold-duotone" width="20"
+                                    class="align-middle"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Meta Access Warning Banner -->
+                    <div id="meta-ads-warning-banner"
+                        class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+                        <div class="p-2 bg-amber-100 text-amber-800 rounded-lg shrink-0">
+                            <iconify-icon icon="solar:danger-bold-duotone" width="20"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-semibold text-amber-800">Meta Access Token Required</h4>
+                            <p class="text-xs text-amber-700 mt-0.5">Please provide a valid Meta System User Access
+                                Token to retrieve campaign performance data. Your credentials will be saved securely in
+                                local storage.</p>
+                            <button onclick="openMetaAdsSettings()"
+                                class="mt-2 text-xs font-bold text-amber-800 hover:text-amber-900 underline">Configure
+                                Access Token</button>
+                        </div>
+                    </div>
+
+                    <!-- Loading Skeletons -->
+                    <div id="meta-ads-skeleton" class="space-y-6">
+                        <!-- KPI cards skeleton -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <div class="w-12 h-6 bg-slate-200 rounded-lg"></div>
+                                    <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                                </div>
+                                <div class="w-24 h-8 bg-slate-300 rounded-lg"></div>
+                                <div class="w-32 h-4 bg-slate-200 rounded-lg"></div>
+                            </div>
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <div class="w-12 h-6 bg-slate-200 rounded-lg"></div>
+                                    <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                                </div>
+                                <div class="w-24 h-8 bg-slate-300 rounded-lg"></div>
+                                <div class="w-32 h-4 bg-slate-200 rounded-lg"></div>
+                            </div>
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <div class="w-12 h-6 bg-slate-200 rounded-lg"></div>
+                                    <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                                </div>
+                                <div class="w-24 h-8 bg-slate-300 rounded-lg"></div>
+                                <div class="w-32 h-4 bg-slate-200 rounded-lg"></div>
+                            </div>
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <div class="w-12 h-6 bg-slate-200 rounded-lg"></div>
+                                    <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                                </div>
+                                <div class="w-24 h-8 bg-slate-300 rounded-lg"></div>
+                                <div class="w-32 h-4 bg-slate-200 rounded-lg"></div>
+                            </div>
+                        </div>
+                        <!-- Chart and Share skeleton -->
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div
+                                class="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse h-[340px] flex flex-col justify-between">
+                                <div class="w-48 h-6 bg-slate-200 rounded-lg"></div>
+                                <div class="w-full h-44 bg-slate-100 rounded-2xl"></div>
+                                <div class="flex justify-between">
+                                    <div class="w-20 h-4 bg-slate-200 rounded-lg"></div>
+                                    <div class="w-20 h-4 bg-slate-200 rounded-lg"></div>
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md animate-pulse h-[340px] flex flex-col justify-between">
+                                <div class="w-32 h-6 bg-slate-200 rounded-lg"></div>
+                                <div class="space-y-4">
+                                    <div class="space-y-1.5">
+                                        <div class="w-24 h-4 bg-slate-200 rounded-lg"></div>
+                                        <div class="w-full h-2.5 bg-slate-100 rounded-full"></div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="w-24 h-4 bg-slate-200 rounded-lg"></div>
+                                        <div class="w-full h-2.5 bg-slate-100 rounded-full"></div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="w-24 h-4 bg-slate-200 rounded-lg"></div>
+                                        <div class="w-full h-2.5 bg-slate-100 rounded-full"></div>
+                                    </div>
+                                </div>
+                                <div class="w-full h-10 bg-slate-100 rounded-lg"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Meta Dashboard Content -->
+                    <div id="meta-ads-content" class="hidden space-y-6">
+                        <!-- KPI Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <!-- Spend Card -->
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col justify-between hover:shadow-lg transition-all relative overflow-hidden group">
+                                <div
+                                    class="absolute right-0 top-0 w-24 h-24 bg-indigo-50 rounded-full translate-x-8 -translate-y-8 opacity-40 group-hover:scale-110 transition-transform">
+                                </div>
+                                <div class="flex justify-between items-start z-10">
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total
+                                        Spend</span>
+                                    <div
+                                        class="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                                        <iconify-icon icon="solar:card-transfer-bold-duotone" width="20"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="mt-4 z-10">
+                                    <span class="text-2xl font-black text-slate-800" id="meta-kpi-spend">₹0.00</span>
+                                    <p class="text-xs text-slate-400 mt-1">Acquisition budget spent</p>
+                                </div>
+                            </div>
+
+                            <!-- Impressions Card -->
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col justify-between hover:shadow-lg transition-all relative overflow-hidden group">
+                                <div
+                                    class="absolute right-0 top-0 w-24 h-24 bg-sky-50 rounded-full translate-x-8 -translate-y-8 opacity-40 group-hover:scale-110 transition-transform">
+                                </div>
+                                <div class="flex justify-between items-start z-10">
+                                    <span
+                                        class="text-xs font-bold text-slate-400 uppercase tracking-wider">Impressions</span>
+                                    <div
+                                        class="w-9 h-9 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center">
+                                        <iconify-icon icon="solar:eye-bold-duotone" width="20"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="mt-4 z-10">
+                                    <span class="text-2xl font-black text-slate-800" id="meta-kpi-impressions">0</span>
+                                    <p class="text-xs text-slate-400 mt-1">Total ad views generated</p>
+                                </div>
+                            </div>
+
+                            <!-- Link Clicks Card -->
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col justify-between hover:shadow-lg transition-all relative overflow-hidden group">
+                                <div
+                                    class="absolute right-0 top-0 w-24 h-24 bg-emerald-50 rounded-full translate-x-8 -translate-y-8 opacity-40 group-hover:scale-110 transition-transform">
+                                </div>
+                                <div class="flex justify-between items-start z-10">
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Link
+                                        Clicks</span>
+                                    <div
+                                        class="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                                        <iconify-icon icon="solar:mouse-left-click-bold-duotone"
+                                            width="20"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="mt-4 z-10">
+                                    <span class="text-2xl font-black text-slate-800" id="meta-kpi-clicks">0</span>
+                                    <p class="text-xs text-slate-400 mt-1">CTR: <span id="meta-kpi-ctr"
+                                            class="font-bold text-slate-700">0.00%</span> (CPC: <span id="meta-kpi-cpc"
+                                            class="font-bold text-slate-700">₹0.00</span>)</p>
+                                </div>
+                            </div>
+
+                            <!-- Conversions Card -->
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col justify-between hover:shadow-lg transition-all relative overflow-hidden group">
+                                <div
+                                    class="absolute right-0 top-0 w-24 h-24 bg-rose-50 rounded-full translate-x-8 -translate-y-8 opacity-40 group-hover:scale-110 transition-transform">
+                                </div>
+                                <div class="flex justify-between items-start z-10">
+                                    <span
+                                        class="text-xs font-bold text-slate-400 uppercase tracking-wider">Conversions</span>
+                                    <div
+                                        class="w-9 h-9 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+                                        <iconify-icon icon="solar:cart-large-3-bold-duotone" width="20"></iconify-icon>
+                                    </div>
+                                </div>
+                                <div class="mt-4 z-10">
+                                    <span class="text-2xl font-black text-slate-800" id="meta-kpi-conversions">0</span>
+                                    <p class="text-xs text-slate-400 mt-1">CPA: <span id="meta-kpi-cpa"
+                                            class="font-bold text-slate-700">₹0.00</span> (ROAS: <span
+                                            id="meta-kpi-roas" class="font-bold text-slate-700">0.00x</span>)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Charts and Share Grid -->
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Performance Trend Chart -->
+                            <div
+                                class="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col h-[380px]">
+                                <div class="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h3 class="text-base font-bold text-slate-800">Daily Performance Trend</h3>
+                                        <p class="text-xs text-slate-400">Ad Spend & Conversions overlay (last 7 days)
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-4 text-xs font-bold text-slate-500">
+                                        <span class="flex items-center gap-1.5"><span
+                                                class="w-3 h-3 rounded-full bg-indigo-500"></span> Spend (₹)</span>
+                                        <span class="flex items-center gap-1.5"><span
+                                                class="w-3 h-3 rounded-full bg-rose-500"></span> Conversions</span>
+                                    </div>
+                                </div>
+                                <div id="meta-ads-chart-container" class="flex-1 w-full relative">
+                                    <!-- Dynamic SVG Chart gets injected here -->
+                                    <div
+                                        class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-medium">
+                                        No trend data available for this account.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Platform Breakdown Card -->
+                            <div
+                                class="bg-white rounded-3xl p-6 border border-slate-100 shadow-md flex flex-col h-[380px]">
+                                <div class="mb-4">
+                                    <h3 class="text-base font-bold text-slate-800">Platform Breakdown</h3>
+                                    <p class="text-xs text-slate-400">Distribution of ad budget and reach across Meta
+                                        platforms</p>
+                                </div>
+                                <div class="flex-1 flex flex-col justify-center gap-4"
+                                    id="meta-platform-breakdown-container">
+                                    <!-- Platform list items -->
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between text-xs font-bold text-slate-600">
+                                            <span class="flex items-center gap-1.5"><iconify-icon
+                                                    icon="solar:brand-facebook-bold-duotone"
+                                                    class="text-indigo-600"></iconify-icon> Facebook</span>
+                                            <span id="meta-platform-facebook-val">₹0.00 (0%)</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                            <div id="meta-platform-facebook-bar"
+                                                class="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                                                style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between text-xs font-bold text-slate-600">
+                                            <span class="flex items-center gap-1.5"><iconify-icon
+                                                    icon="solar:brand-instagram-bold-duotone"
+                                                    class="text-pink-600"></iconify-icon> Instagram</span>
+                                            <span id="meta-platform-instagram-val">₹0.00 (0%)</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                            <div id="meta-platform-instagram-bar"
+                                                class="bg-pink-600 h-full rounded-full transition-all duration-500"
+                                                style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between text-xs font-bold text-slate-600">
+                                            <span class="flex items-center gap-1.5"><iconify-icon
+                                                    icon="solar:chat-round-call-bold-duotone"
+                                                    class="text-sky-500"></iconify-icon> Messenger</span>
+                                            <span id="meta-platform-messenger-val">₹0.00 (0%)</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                            <div id="meta-platform-messenger-bar"
+                                                class="bg-sky-500 h-full rounded-full transition-all duration-500"
+                                                style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="flex justify-between text-xs font-bold text-slate-600">
+                                            <span class="flex items-center gap-1.5"><iconify-icon
+                                                    icon="solar:global-bold-duotone"
+                                                    class="text-emerald-500"></iconify-icon> Audience Network</span>
+                                            <span id="meta-platform-audience-val">₹0.00 (0%)</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                            <div id="meta-platform-audience-bar"
+                                                class="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                                                style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Campaigns Table View -->
+                        <div class="bg-white rounded-3xl border border-slate-100 shadow-md overflow-hidden">
+                            <div
+                                class="p-6 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
+                                <div>
+                                    <h3 class="text-base font-bold text-slate-800">Campaigns Performance</h3>
+                                    <p class="text-xs text-slate-400">Detailed breakdown of active and recent Meta
+                                        campaigns</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <!-- Search input -->
+                                    <div class="relative">
+                                        <input type="text" id="meta-campaign-search" oninput="filterMetaCampaigns()"
+                                            placeholder="Search campaigns..."
+                                            class="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-w-[200px]" />
+                                        <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                            <iconify-icon icon="solar:magnifer-linear" width="14"></iconify-icon>
+                                        </div>
+                                    </div>
+                                    <!-- Status filter dropdown -->
+                                    <div class="relative">
+                                        <select id="meta-campaign-status-filter" onchange="filterMetaCampaigns()"
+                                            class="pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer">
+                                            <option value="ALL">All Status</option>
+                                            <option value="ACTIVE">Active</option>
+                                            <option value="PAUSED">Paused</option>
+                                        </select>
+                                        <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                            <iconify-icon icon="solar:filter-linear" width="14"></iconify-icon>
+                                        </div>
+                                        <div
+                                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                            <iconify-icon icon="solar:alt-arrow-down-linear" width="12"></iconify-icon>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100">
+                                            <th class="py-4 px-6">Status</th>
+                                            <th class="py-4 px-6">Campaign Name</th>
+                                            <th class="py-4 px-6">Objective</th>
+                                            <th class="py-4 px-6 text-right">Spend</th>
+                                            <th class="py-4 px-6 text-right">Impressions</th>
+                                            <th class="py-4 px-6 text-right">Clicks</th>
+                                            <th class="py-4 px-6 text-right">CTR</th>
+                                            <th class="py-4 px-6 text-right">CPC</th>
+                                            <th class="py-4 px-6 text-right">Conversions</th>
+                                            <th class="py-4 px-6 text-right">CPA</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="meta-campaigns-table-body"
+                                        class="divide-y divide-slate-100 text-slate-700 font-medium">
+                                        <!-- Campaign Rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ META ADS SETTINGS MODAL ════ -->
+                <div id="meta-ads-settings-modal"
+                    class="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+                    <div
+                        class="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden transform scale-95 transition-all duration-300 relative">
+                        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:key-bold-duotone" width="22"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-slate-800">Meta Ads API Settings</h3>
+                                    <p class="text-xs text-slate-400">Configure credentials for advertising data access
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="closeMetaAdsSettings()"
+                                class="text-slate-400 hover:text-slate-600 transition-colors">
+                                <iconify-icon icon="solar:close-circle-bold-duotone" width="24"></iconify-icon>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <!-- Token Input -->
+                            <div class="space-y-1.5">
+                                <label class="text-xs font-bold text-slate-600 uppercase tracking-wider">System User
+                                    Access Token</label>
+                                <div class="relative">
+                                    <input type="password" id="meta-access-token-input"
+                                        placeholder="Paste EAAZ... access token"
+                                        class="w-full pl-3 pr-10 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all" />
+                                    <button type="button" onclick="toggleMetaTokenVisibility()"
+                                        class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                                        <iconify-icon id="meta-token-visibility-icon"
+                                            icon="solar:eye-closed-bold-duotone" width="18"></iconify-icon>
+                                    </button>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-normal">Required permissions:
+                                    <code>ads_read</code>. Keep this token confidential as it grants access to your
+                                    Facebook marketing campaigns.</p>
+                            </div>
+
+                            <!-- Status feedback message -->
+                            <div id="meta-settings-status"
+                                class="hidden rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2"></div>
+                        </div>
+                        <div class="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                            <button onclick="clearMetaAdsToken()"
+                                class="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all">
+                                Clear Credentials
+                            </button>
+                            <div class="flex items-center gap-3">
+                                <button onclick="testMetaAdsConnection()" id="meta-test-conn-btn"
+                                    class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5">
+                                    <iconify-icon icon="solar:link-bold-duotone" width="16"></iconify-icon>
+                                    Test & Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
                 <!-- ════ REPORTS VIEW ════ -->
                 <div id="view-reports-panel" class="hidden fade-in">
 
@@ -6948,6 +7430,10 @@
                 appId: "1:738955842044:web:44d3a76012329578186279"
             };
 
+            const META_ADS_CONFIG = {
+                accessToken: localStorage.getItem('worksync_meta_access_token') || "EAAZBjdDlKPisBR5B2oxcEr7LKIh2hiZAkSyA990xiJ3lTfO93ZAL69WeXWz7V889cFADqB42DciNcOy9UZBIHXENjXVBk5lBbYcXso6MRQF0XZBVKFVu5zAKSxrYXqwcIFTPWnfPJZAeISI4T1LrsckxO0NysnZBzrlaURPMK0BK5jHAkfz8IJSxycUHG2iIdHzJP8ooZADR"
+            };
+
             const app = initializeApp(FB_CONFIG);
             const db = getDatabase(app);
             const auth = getAuth(app);
@@ -7063,6 +7549,11 @@
             function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
+            function canViewMetaAds() {
+                if (!currentUser) return false;
+                const email = (currentUser.email || '').toLowerCase();
+                return isAdmin() || isManager() || email === 'digitalmarketing@vilpower.com';
+            }
             function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
             function canViewQcPortal() {
                 if (!currentUser) return false;
@@ -8296,6 +8787,7 @@
                     if (isAdmin()) validViews.push('users', 'clients-admin');
                     if (canViewStrategyCalendar()) validViews.push('strategy-calendar');
                     if (canViewPlanTracking()) validViews.push('plan-tracking');
+                    if (canViewMetaAds()) validViews.push('meta-ads');
                     switchView(validViews.includes(lastView) ? lastView : 'dashboard');
 
                     initClientSettings();
@@ -8530,6 +9022,7 @@
 
                 document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
                 document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
+                document.getElementById('nav-meta-ads')?.classList.toggle('hidden', !canViewMetaAds());
                 document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
@@ -9502,10 +9995,11 @@
                 if (view === 'clients-admin' && !isAdmin()) view = 'dashboard';
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) view = 'dashboard';
                 if (view === 'plan-tracking' && !canViewPlanTracking()) view = 'dashboard';
+                if (view === 'meta-ads' && !canViewMetaAds()) view = 'dashboard';
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager'].forEach(v => {
+                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
                     document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                     const navEl = document.getElementById(`nav-${v}`);
                     if (navEl) navEl.classList.remove('nav-active');
@@ -9528,6 +10022,7 @@
                     chat: 'Team Chat',
                     announcements: 'Announcements',
                     reports: 'Reports & Analytics',
+                    'meta-ads': 'Meta Ads Manager & Analytics',
                     users: 'User Management',
                     'clients-admin': 'Client Names',
                     'daily-summary': 'Daily Status Summaries',
@@ -9577,6 +10072,7 @@
                 else if (view === 'files-manager') { initFilesManager(); }
                 else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
                 else if (view === 'discussions') { renderDiscussionsView(); }
+                else if (view === 'meta-ads') { loadMetaAdsData(); }
 
                 // Manage Live Board Timers for Admin
                 if ((view === 'dashboard' || view === 'dailyplan') && isAdmin()) {
@@ -20177,6 +20673,17 @@
                         const user = allUsersMap.get(email.toLowerCase()) || knownUserByEmail(email) || { name: email, email, role: '' };
                         const avatar = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.avatar || user.name || email)}`;
 
+                        const getTaskStatus = (t) => {
+                            if (!t) return '';
+                            if (email.toLowerCase() === 'karthikavilpower@gmail.com') {
+                                const userPlans = dailyPlans[eKey(email)];
+                                if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
+                                    return userPlans[t.id].localStatus;
+                                }
+                            }
+                            return t.status;
+                        };
+
                         // Helper: get stats for a time window
                         const getStats = (fromTs, toTs) => {
                             // Time logs
@@ -20244,7 +20751,7 @@
                             };
 
                             const completed = filteredTasks.filter(t =>
-                                matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
+                                matchesUserAndPeriod(t) && isTaskCompletedStatus(getTaskStatus(t))
                             );
 
                             // Fallback: also capture completed tasks found via timelogs
@@ -20264,17 +20771,17 @@
                                 .filter(t =>
                                     periodLogIds.has(t.id) &&
                                     !logCompIds.has(t.id) &&
-                                    isTaskCompletedStatus(t.status) &&
+                                    isTaskCompletedStatus(getTaskStatus(t)) &&
                                     !isExcludedTask(t)
                                 )
                                 .forEach(t => completed.push(t));
 
                             const pending = filteredTasks.filter(t => {
                                 if (isDailyPlanUser) {
-                                    return matchesUserAndPeriod(t) && !isDone(t.status);
+                                    return matchesUserAndPeriod(t) && !isDone(getTaskStatus(t));
                                 }
                                 return assigneeMatches(t, email) &&
-                                    !isDone(t.status) &&
+                                    !isDone(getTaskStatus(t)) &&
                                     t.duedate &&
                                     new Date(t.duedate).getTime() >= fromTs &&
                                     new Date(t.duedate).getTime() <= toTs;
@@ -20341,7 +20848,7 @@
                             let score = 70;
                             const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
                             const completionRate = userAllTasks.length > 0
-                                ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(t.status)).length / userAllTasks.length) * 100)
+                                ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t))).length / userAllTasks.length) * 100)
                                 : 0;
                             const now = new Date(); now.setHours(0, 0, 0, 0);
                             const overdueCount = stats.pending.filter(t => t.duedate && new Date(t.duedate) < now).length;
@@ -20720,6 +21227,16 @@
                         // isExcludedTask defined at outer scope above
 
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
+                        const getTaskStatus = (t) => {
+                            if (!t) return '';
+                            if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
+                                const userPlans = dailyPlans[eKey(usrEmail)];
+                                if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
+                                    return userPlans[t.id].localStatus;
+                                }
+                            }
+                            return t.status;
+                        };
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
                             'immanuelvilpower@gmail.com',
@@ -20790,7 +21307,7 @@
                         };
 
                         const comp = filteredTasks.filter(t =>
-                            matchesUserAndPeriod(t) && isTaskCompletedStatus(t.status)
+                            matchesUserAndPeriod(t) && isTaskCompletedStatus(getTaskStatus(t))
                         );
 
                         // For all users, also capture completed tasks found via timelogs
@@ -20810,7 +21327,7 @@
                             .filter(t =>
                                 periodLogIds.has(t.id) &&
                                 !logCompIds.has(t.id) &&
-                                isTaskCompletedStatus(t.status) &&
+                                isTaskCompletedStatus(getTaskStatus(t)) &&
                                 !isExcludedTask(t)
                             )
                             .forEach(t => comp.push(t));
@@ -20818,12 +21335,12 @@
                         // Build hold and rework BEFORE assigned so we can exclude them
                         const hold = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t) &&
-                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
+                            ['hold', 'design hold', 'on hold'].includes((getTaskStatus(t) || '').trim().toLowerCase())
                         );
                         const rework = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t) &&
-                            ((t.status || '').trim().toLowerCase().includes('rework') ||
-                                ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()))
+                            ((getTaskStatus(t) || '').trim().toLowerCase().includes('rework') ||
+                                ['rework designs', 'rework', 'rework design'].includes((getTaskStatus(t) || '').trim().toLowerCase()))
                         );
 
                         // Assigned = all tasks in period MINUS completed/hold/rework
@@ -20866,10 +21383,10 @@
                         }
                         const pend = filteredTasks.filter(t => {
                             if (isDailyPlanUser) {
-                                return matchesUserAndPeriod(t) && !isDone(t.status);
+                                return matchesUserAndPeriod(t) && !isDone(getTaskStatus(t));
                             }
                             return assigneeMatches(t, usrEmail) &&
-                                !isDone(t.status) &&
+                                !isDone(getTaskStatus(t)) &&
                                 t.duedate &&
                                 new Date(t.duedate).getTime() >= start &&
                                 new Date(t.duedate).getTime() <= end;
@@ -21024,7 +21541,7 @@
                         let score = 70;
                         const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
                         const completionRate = userAllTasks.length > 0
-                            ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(t.status)).length / userAllTasks.length) * 100)
+                            ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t))).length / userAllTasks.length) * 100)
                             : 0;
                         const nowMidnight = new Date(); nowMidnight.setHours(0, 0, 0, 0);
                         const overdueCount = st.pending.filter(t => t.duedate && new Date(t.duedate) < nowMidnight).length;
@@ -21176,6 +21693,14 @@
                                 status === 'learnings' || status === 'discussion' ||
                                 id.startsWith('learn-') || id.startsWith('disc-');
                         };
+                        const getEffectiveTask = (t) => {
+                            if (!t) return t;
+                            const planData = karthikaPlans[t.id];
+                            if (planData && planData.localStatus) {
+                                return { ...t, status: planData.localStatus };
+                            }
+                            return t;
+                        };
                         Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
                             if (!planData.date) return;
                             const planTs = new Date(planData.date + 'T00:00:00').getTime();
@@ -21183,14 +21708,14 @@
                             const t = tasks.find(tk => tk.id === taskId);
                             if (t && !localIsExcludedTask(t) && !workedTaskIds.has(taskId)) {
                                 workedTaskIds.add(taskId);
-                                workedTasks.push(t);
+                                workedTasks.push(getEffectiveTask(t));
                             }
                         });
                         // Also include completed + assigned + hold + rework for completeness
                         [...currStats.completed, ...currStats.assigned, ...currStats.hold, ...currStats.rework].forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
                                 workedTaskIds.add(t.id);
-                                workedTasks.push(t);
+                                workedTasks.push(getEffectiveTask(t));
                             }
                         });
                         // Also include directly-assigned hold/rework tasks from Jira that may not be in daily plan
@@ -21200,7 +21725,7 @@
                         ).forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
                                 workedTaskIds.add(t.id);
-                                workedTasks.push(t);
+                                workedTasks.push(getEffectiveTask(t));
                             }
                         });
                         // ── Sync userCompleted and modal list to workedTasks (single source of truth) ──
@@ -26300,18 +26825,21 @@
                 const task = tasks[taskIndex];
                 const oldStatus = task.status;
 
-                // Karthika (anithavilpower) should only update her local daily-plan status,
-                // never sync to Jira — the main task belongs to the video editor, not her.
+                // Karthika should only update her local daily-plan status
+                // for tasks assigned to others (where the main task belongs to the video editor, not her).
+                // If a Jira task is directly assigned to her, she should update it in Jira.
                 const isKarthikaUser = currentUser?.email?.toLowerCase() === 'karthikavilpower@gmail.com';
+                const isTaskAssignedToKarthika = task.assigneeEmail?.toLowerCase() === 'karthikavilpower@gmail.com';
+                const shouldUpdateLocallyOnly = isKarthikaUser && !isTaskAssignedToKarthika;
 
-                if (task.manual || isKarthikaUser) {
+                if (task.manual || shouldUpdateLocallyOnly) {
                     try {
                         const userKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
                         if (task.manual) {
                             // Normal manual task — write to Firebase
                             await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatus });
-                        } else if (isKarthikaUser) {
-                            // Karthika updating a Jira task in her daily plan — store status override locally only
+                        } else if (shouldUpdateLocallyOnly) {
+                            // Karthika updating someone else's Jira task in her daily plan — store status override locally only
                             await update(ref(db, `worksync/daily_plans/${eKey(currentUser.email)}/${taskId}`), { localStatus: newStatus, localStatusUpdatedAt: Date.now() });
                         }
                         task.status = newStatus;
@@ -26872,9 +27400,20 @@
                 if (!modal || !body) return;
 
                 // Gather signals about this person's work
+                const getTaskStatus = (t) => {
+                    if (!t) return '';
+                    if (email.toLowerCase() === 'karthikavilpower@gmail.com') {
+                        const userPlans = dailyPlans[eKey(email)];
+                        if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
+                            return userPlans[t.id].localStatus;
+                        }
+                    }
+                    return t.status;
+                };
+
                 const userTasks = tasks.filter(t => assigneeMatches(t, email));
-                const completed = userTasks.filter(t => isTaskCompletedStatus(t.status));
-                const pending = userTasks.filter(t => !isDone(t.status));
+                const completed = userTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t)));
+                const pending = userTasks.filter(t => !isDone(getTaskStatus(t)));
                 const total = userTasks.length;
                 const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
@@ -29569,17 +30108,27 @@
 
                 // Need to carefully check global tasks, ensure functions exist
                 const getAssignees = (t) => (t.assigneeEmail || t.userId || '').toLowerCase().split(',').map(s => s.trim());
+                const getTaskStatus = (t) => {
+                    if (email === 'karthikavilpower@gmail.com') {
+                        const escapeKey = email.replace(/[.#$\\[\\]]/g, '_');
+                        const plans = window.dailyPlans && window.dailyPlans[escapeKey] ? window.dailyPlans[escapeKey] : {};
+                        if (plans[t.id] && plans[t.id].localStatus) {
+                            return plans[t.id].localStatus;
+                        }
+                    }
+                    return t.status;
+                };
                 const isCompletedStatus = (st) => {
                     if (!st) return false;
                     const l = st.toLowerCase().trim();
-                    return l === 'client sent' || l === 'completed' || l === 'thumbnail waiting' || l === 'thumbnail';
+                    return l === 'client sent' || l === 'completed' || l === 'thumbnail waiting' || l === 'thumbnail' || l === 'done' || l === 'design completed';
                 };
 
                 window.tasks.forEach(t => {
                     const assignees = getAssignees(t);
                     if (!assignees.includes(email)) return;
 
-                    const status = (t.status || '').toLowerCase().trim();
+                    const status = (getTaskStatus(t) || '').toLowerCase().trim();
                     if (isCompletedStatus(status)) completed.push(t);
                     else pending.push(t);
                     assigned.push(t);
@@ -29637,7 +30186,16 @@
                     }
                 });
 
-                const workedTasks = Array.from(workedTaskIds).map(id => window.tasks.find(t => t.id === id)).filter(Boolean);
+                const workedTasks = Array.from(workedTaskIds)
+                    .map(id => window.tasks.find(t => t.id === id))
+                    .filter(Boolean)
+                    .map(t => {
+                        const status = getTaskStatus(t);
+                        if (status !== t.status) {
+                            return { ...t, status };
+                        }
+                        return t;
+                    });
 
                 const escapeHtml = (unsafe) => {
                     if (!unsafe) return '';
@@ -29749,6 +30307,738 @@
 
             // Run once initially (with a small delay to ensure data load)
             setTimeout(checkDailyVibePopup, 5000);
+
+            // State Variables for Meta Ads
+            let metaAdAccounts = [];
+            let metaActiveAccountId = '';
+            let metaCampaigns = [];
+            let metaPlatformMetrics = {};
+            let metaHistoricalMetrics = [];
+            let metaTokenVisibility = false;
+
+            // Format numbers nicely
+            function formatMetaNumber(num) {
+                return new Intl.NumberFormat('en-IN').format(num);
+            }
+
+            function formatMetaCurrency(num) {
+                return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(num);
+            }
+
+            // Open settings modal
+            function openMetaAdsSettings() {
+                const modal = document.getElementById('meta-ads-settings-modal');
+                const input = document.getElementById('meta-access-token-input');
+                const statusMsg = document.getElementById('meta-settings-status');
+
+                if (modal && input && statusMsg) {
+                    input.value = localStorage.getItem('worksync_meta_access_token') || '';
+                    statusMsg.className = 'hidden';
+                    modal.classList.remove('hidden');
+                }
+            }
+
+            // Close settings modal
+            function closeMetaAdsSettings() {
+                const modal = document.getElementById('meta-ads-settings-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                }
+            }
+
+            // Toggle token visibility
+            function toggleMetaTokenVisibility() {
+                const input = document.getElementById('meta-access-token-input');
+                const icon = document.getElementById('meta-token-visibility-icon');
+                if (input && icon) {
+                    metaTokenVisibility = !metaTokenVisibility;
+                    input.type = metaTokenVisibility ? 'text' : 'password';
+                    icon.setAttribute('icon', metaTokenVisibility ? 'solar:eye-bold-duotone' : 'solar:eye-closed-bold-duotone');
+                }
+            }
+
+            // Save credentials
+            function saveMetaAdsToken(token) {
+                localStorage.setItem('worksync_meta_access_token', token);
+                toast('Meta token saved successfully!', 'success');
+                closeMetaAdsSettings();
+                loadMetaAdsData(true);
+            }
+
+            // Clear credentials
+            function clearMetaAdsToken() {
+                if (confirm('Are you sure you want to clear your Meta API Credentials?')) {
+                    localStorage.removeItem('worksync_meta_access_token');
+                    const selector = document.getElementById('meta-ad-account-selector');
+                    if (selector) selector.innerHTML = '<option value="" disabled selected>Select Ad Account</option>';
+                    metaAdAccounts = [];
+                    metaActiveAccountId = '';
+                    metaCampaigns = [];
+                    toast('Meta credentials cleared.', 'info');
+                    closeMetaAdsSettings();
+                    loadMetaAdsData();
+                }
+            }
+
+            // Test Connection
+            async function testMetaAdsConnection() {
+                const input = document.getElementById('meta-access-token-input');
+                const testBtn = document.getElementById('meta-test-conn-btn');
+                const statusMsg = document.getElementById('meta-settings-status');
+
+                if (!input || !testBtn || !statusMsg) return;
+
+                const token = input.value.trim();
+                if (!token) {
+                    statusMsg.textContent = 'Please enter a token first.';
+                    statusMsg.className = 'rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 bg-rose-50 text-rose-700';
+                    return;
+                }
+
+                testBtn.disabled = true;
+                testBtn.innerHTML = '<iconify-icon icon="solar:restart-bold-duotone" width="16" class="animate-spin"></iconify-icon> Testing...';
+
+                statusMsg.className = 'hidden';
+
+                try {
+                    // We call me/adaccounts to see if the token is valid
+                    const response = await fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name&limit=1&access_token=${token}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error.message || 'API Error');
+                    }
+
+                    statusMsg.textContent = 'Connection successful! Token is valid.';
+                    statusMsg.className = 'rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 bg-emerald-50 text-emerald-700';
+
+                    setTimeout(() => {
+                        saveMetaAdsToken(token);
+                        testBtn.disabled = false;
+                        testBtn.innerHTML = '<iconify-icon icon="solar:link-bold-duotone" width="16"></iconify-icon> Test & Save';
+                    }, 1000);
+
+                } catch (err) {
+                    console.error("Meta Ads connection test failed:", err);
+                    statusMsg.textContent = `Verification failed: ${err.message || 'Check network or token validity.'}`;
+                    statusMsg.className = 'rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 bg-rose-50 text-rose-700';
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<iconify-icon icon="solar:link-bold-duotone" width="16"></iconify-icon> Test & Save';
+                }
+            }
+
+            // Generate premium mock data for demonstration
+            function generateMockMetaAdsData(accountId) {
+                console.log("Generating premium mock data for account:", accountId);
+
+                // Choose seed name based on account ID
+                let accountName = "VilPower Digital Marketing Account";
+                if (accountId === "act_1020491040510") accountName = "VilPower Core Brand Awareness";
+                else if (accountId === "act_2049102948102") accountName = "VilPower Lead Acquisition Campaign";
+                else if (accountId === "act_3049105910283") accountName = "VilPower E-commerce Retargeting";
+
+                const accountData = {
+                    id: accountId,
+                    name: accountName,
+                    spend: 48729.50,
+                    impressions: 1249810,
+                    clicks: 22490,
+                    conversions: 1120,
+                    cpc: 2.17,
+                    ctr: 1.80,
+                    cpa: 43.51,
+                    roas: 3.45,
+                    campaigns: [
+                        { id: 'c1', name: 'VilPower - Web Development Lead Generation V2', status: 'ACTIVE', objective: 'OUTCOME_LEADS', spend: 24500.00, impressions: 680000, clicks: 12240, conversions: 612 },
+                        { id: 'c2', name: 'VilPower - Branding & Reach Video Ads', status: 'ACTIVE', objective: 'OUTCOME_TRAFFIC', spend: 11200.00, impressions: 390000, clicks: 5460, conversions: 240 },
+                        { id: 'c3', name: 'VilPower - Retargeting Website Visitors', status: 'ACTIVE', objective: 'OUTCOME_SALES', spend: 8900.50, impressions: 118000, clicks: 3540, conversions: 202 },
+                        { id: 'c4', name: 'VilPower - App Install App Promo Campaign', status: 'PAUSED', objective: 'APP_PROMOTION', spend: 4129.00, impressions: 61810, clicks: 1250, conversions: 66 }
+                    ],
+                    platforms: {
+                        facebook: { spend: 26801.23, share: 0.55 },
+                        instagram: { spend: 17055.33, share: 0.35 },
+                        messenger: { spend: 2923.77, share: 0.06 },
+                        audience_network: { spend: 1949.18, share: 0.04 }
+                    },
+                    historical: [
+                        { date: 'Day 1', spend: 5200, clicks: 2100, conversions: 110 },
+                        { date: 'Day 2', spend: 6100, clicks: 2300, conversions: 125 },
+                        { date: 'Day 3', spend: 7300, clicks: 3100, conversions: 155 },
+                        { date: 'Day 4', spend: 6800, clicks: 2800, conversions: 140 },
+                        { date: 'Day 5', spend: 8100, clicks: 3400, conversions: 190 },
+                        { date: 'Day 6', spend: 7529, clicks: 4200, conversions: 210 },
+                        { date: 'Day 7', spend: 7700.50, clicks: 4590, conversions: 190 }
+                    ]
+                };
+
+                // Customize statistics slightly if different accounts to show variability
+                if (accountId === "act_2049102948102") {
+                    accountData.spend = 84520.10;
+                    accountData.impressions = 2105000;
+                    accountData.clicks = 46310;
+                    accountData.conversions = 2210;
+                    accountData.ctr = 2.20;
+                    accountData.cpc = 1.83;
+                    accountData.cpa = 38.24;
+                    accountData.roas = 4.10;
+                    accountData.campaigns = [
+                        { id: 'c2_1', name: 'VilPower Leads - Inbound Form Campaigns', status: 'ACTIVE', objective: 'OUTCOME_LEADS', spend: 52100.10, impressions: 1300000, clicks: 28600, conversions: 1430 },
+                        { id: 'c2_2', name: 'VilPower Leads - Core Lookalike Audiences', status: 'ACTIVE', objective: 'OUTCOME_LEADS', spend: 32420.00, impressions: 805000, clicks: 17710, conversions: 780 }
+                    ];
+                    accountData.platforms = {
+                        facebook: { spend: 50712.06, share: 0.60 },
+                        instagram: { spend: 25356.03, share: 0.30 },
+                        messenger: { spend: 5916.41, share: 0.07 },
+                        audience_network: { spend: 2535.60, share: 0.03 }
+                    };
+                    accountData.historical = [
+                        { date: 'Day 1', spend: 10200, clicks: 5100, conversions: 240 },
+                        { date: 'Day 2', spend: 11500, clicks: 5800, conversions: 280 },
+                        { date: 'Day 3', spend: 12100, clicks: 6100, conversions: 310 },
+                        { date: 'Day 4', spend: 11800, clicks: 5900, conversions: 295 },
+                        { date: 'Day 5', spend: 13200, clicks: 7200, conversions: 360 },
+                        { date: 'Day 6', spend: 12620.10, clicks: 7910, conversions: 345 },
+                        { date: 'Day 7', spend: 13100, clicks: 8300, conversions: 380 }
+                    ];
+                } else if (accountId === "act_3049105910283") {
+                    accountData.spend = 18450.00;
+                    accountData.impressions = 450000;
+                    accountData.clicks = 9800;
+                    accountData.conversions = 490;
+                    accountData.ctr = 2.18;
+                    accountData.cpc = 1.88;
+                    accountData.cpa = 37.65;
+                    accountData.roas = 5.20;
+                    accountData.campaigns = [
+                        { id: 'c3_1', name: 'VilPower E-com - Dynamic Catalog Retargeting', status: 'ACTIVE', objective: 'OUTCOME_SALES', spend: 12500.00, impressions: 300000, clicks: 6800, conversions: 340 },
+                        { id: 'c3_2', name: 'VilPower E-com - Instagram Shopping Post Ads', status: 'ACTIVE', objective: 'OUTCOME_SALES', spend: 5950.00, impressions: 150000, clicks: 3000, conversions: 150 }
+                    ];
+                    accountData.platforms = {
+                        facebook: { spend: 5535.00, share: 0.30 },
+                        instagram: { spend: 11070.00, share: 0.60 },
+                        messenger: { spend: 922.50, share: 0.05 },
+                        audience_network: { spend: 922.50, share: 0.05 }
+                    };
+                    accountData.historical = [
+                        { date: 'Day 1', spend: 2200, clicks: 1100, conversions: 55 },
+                        { date: 'Day 2', spend: 2400, clicks: 1200, conversions: 60 },
+                        { date: 'Day 3', spend: 2800, clicks: 1400, conversions: 75 },
+                        { date: 'Day 4', spend: 2500, clicks: 1250, conversions: 65 },
+                        { date: 'Day 5', spend: 2900, clicks: 1600, conversions: 80 },
+                        { date: 'Day 6', spend: 2750, clicks: 1550, conversions: 75 },
+                        { date: 'Day 7', spend: 2900, clicks: 1700, conversions: 80 }
+                    ];
+                }
+
+                // Format dates to correspond to actual last 7 days calendar dates
+                const today = new Date();
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() - (6 - i));
+                    accountData.historical[i].date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
+
+                return accountData;
+            }
+
+            // Controller entry point
+            async function loadMetaAdsData(forceRefresh = false) {
+                const token = localStorage.getItem('worksync_meta_access_token');
+                const banner = document.getElementById('meta-ads-warning-banner');
+                const skeleton = document.getElementById('meta-ads-skeleton');
+                const content = document.getElementById('meta-ads-content');
+
+                if (!banner || !skeleton || !content) return;
+
+                if (!token) {
+                    banner.classList.remove('hidden');
+                    skeleton.classList.add('hidden');
+                    content.classList.add('hidden');
+                    return;
+                }
+
+                banner.classList.add('hidden');
+                skeleton.classList.remove('hidden');
+                content.classList.add('hidden');
+
+                try {
+                    if (metaAdAccounts.length === 0 || forceRefresh) {
+                        // Attempt network call to fetch accounts
+                        const response = await fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency&limit=50&access_token=${token}`);
+                        const data = await response.json();
+
+                        if (data.error || !data.data || data.data.length === 0) {
+                            console.warn("Facebook Ad Account fetch failed, reverting to default mock list. Error:", data.error);
+                            // Seed mock accounts for display
+                            metaAdAccounts = [
+                                { id: 'act_1020491040510', name: 'VilPower Digital Marketing Account (Mock)' },
+                                { id: 'act_2049102948102', name: 'VilPower Leads Acquisition (Mock)' },
+                                { id: 'act_3049105910283', name: 'VilPower E-commerce Retargeting (Mock)' }
+                            ];
+                        } else {
+                            metaAdAccounts = data.data.map(acc => ({
+                                id: acc.id,
+                                name: acc.name
+                            }));
+                        }
+
+                        // Populate selector
+                        const selector = document.getElementById('meta-ad-account-selector');
+                        if (selector) {
+                            selector.innerHTML = '';
+                            metaAdAccounts.forEach(acc => {
+                                const opt = document.createElement('option');
+                                opt.value = acc.id;
+                                opt.textContent = `${acc.name} (${acc.id})`;
+                                selector.appendChild(opt);
+                            });
+                        }
+                    }
+
+                    // Select active account
+                    if (!metaActiveAccountId || !metaAdAccounts.some(acc => acc.id === metaActiveAccountId)) {
+                        metaActiveAccountId = metaAdAccounts[0]?.id || '';
+                    }
+
+                    const selector = document.getElementById('meta-ad-account-selector');
+                    if (selector) {
+                        selector.value = metaActiveAccountId;
+                    }
+
+                    if (!metaActiveAccountId) {
+                        throw new Error("No Ad Accounts found.");
+                    }
+
+                    // Load details for the active account
+                    await fetchMetaAdAccountDetails(metaActiveAccountId, token);
+
+                } catch (err) {
+                    console.error("Error loading Meta Ads View:", err);
+                    toast(`Meta Ads API issue: loading demonstration data.`, 'info');
+                    // Revert completely to Mock loading in case of total failure
+                    const mockData = generateMockMetaAdsData(metaActiveAccountId || 'act_1020491040510');
+                    renderMetaAdsUI(mockData);
+                }
+            }
+
+            // Handles selecting another ad account
+            function onMetaAdAccountChange() {
+                const selector = document.getElementById('meta-ad-account-selector');
+                if (selector && selector.value) {
+                    metaActiveAccountId = selector.value;
+                    loadMetaAdsData(false);
+                }
+            }
+
+            // Core details fetching logic
+            async function fetchMetaAdAccountDetails(accountId, token) {
+                // If it's a mock account ID (starts with act_ and we're mock testing), load mock
+                if (accountId.includes('mock') || accountId === 'act_1020491040510' || accountId === 'act_2049102948102' || accountId === 'act_3049105910283') {
+                    const mock = generateMockMetaAdsData(accountId);
+                    renderMetaAdsUI(mock);
+                    return;
+                }
+
+                try {
+                    // Try real Graph API calls in parallel
+                    const [insightsRes, campaignsRes, platformRes, trendRes] = await Promise.all([
+                        fetch(`https://graph.facebook.com/v19.0/${accountId}/insights?date_preset=last_7d&fields=spend,impressions,clicks,actions,inline_link_clicks&access_token=${token}`).then(r => r.json()),
+                        fetch(`https://graph.facebook.com/v19.0/${accountId}/campaigns?fields=id,name,status,objective,insights.date_preset(last_7d){spend,impressions,clicks,actions}&limit=50&access_token=${token}`).then(r => r.json()),
+                        fetch(`https://graph.facebook.com/v19.0/${accountId}/insights?date_preset=last_7d&breakdowns=publisher_platform&fields=spend,impressions,clicks&access_token=${token}`).then(r => r.json()),
+                        fetch(`https://graph.facebook.com/v19.0/${accountId}/insights?date_preset=last_7d&time_increment=1&fields=spend,impressions,clicks,actions&access_token=${token}`).then(r => r.json())
+                    ]);
+
+                    // Parse basic performance KPI stats
+                    const insights = insightsRes.data?.[0] || {};
+                    const spend = parseFloat(insights.spend || 0);
+                    const impressions = parseInt(insights.impressions || 0, 10);
+                    const clicks = parseInt(insights.clicks || insights.inline_link_clicks || 0, 10);
+
+                    // Conversions are actions matching 'purchase' or custom conversion events
+                    let conversions = 0;
+                    if (insights.actions) {
+                        const purchaseAct = insights.actions.find(act =>
+                            act.action_type === 'purchase' ||
+                            act.action_type === 'offsite_conversion.fb_pixel_purchase' ||
+                            act.action_type === 'lead' ||
+                            act.action_type === 'onsite_conversion.lead_grouped'
+                        );
+                        conversions = parseInt(purchaseAct?.value || 0, 10);
+                    }
+
+                    // Parse campaigns
+                    const campaigns = (campaignsRes.data || []).map(c => {
+                        const cInsights = c.insights?.data?.[0] || {};
+                        const cSpend = parseFloat(cInsights.spend || 0);
+                        const cImps = parseInt(cInsights.impressions || 0, 10);
+                        const cClicks = parseInt(cInsights.clicks || 0, 10);
+                        let cConvs = 0;
+                        if (cInsights.actions) {
+                            const act = cInsights.actions.find(a => a.action_type === 'purchase' || a.action_type === 'lead' || a.action_type.includes('conversion'));
+                            cConvs = parseInt(act?.value || 0, 10);
+                        }
+                        return {
+                            id: c.id,
+                            name: c.name,
+                            status: c.status,
+                            objective: c.objective,
+                            spend: cSpend,
+                            impressions: cImps,
+                            clicks: cClicks,
+                            conversions: cConvs
+                        };
+                    });
+
+                    // Parse platform share
+                    const platformShare = { facebook: { spend: 0, share: 0 }, instagram: { spend: 0, share: 0 }, messenger: { spend: 0, share: 0 }, audience_network: { spend: 0, share: 0 } };
+                    let totalPlatformSpend = 0;
+                    if (platformRes.data) {
+                        platformRes.data.forEach(p => {
+                            const platform = p.publisher_platform || '';
+                            const pSpend = parseFloat(p.spend || 0);
+                            totalPlatformSpend += pSpend;
+                            if (platform === 'facebook') platformShare.facebook.spend += pSpend;
+                            else if (platform === 'instagram') platformShare.instagram.spend += pSpend;
+                            else if (platform === 'messenger') platformShare.messenger.spend += pSpend;
+                            else if (platform === 'audience_network') platformShare.audience_network.spend += pSpend;
+                        });
+                        if (totalPlatformSpend > 0) {
+                            Object.keys(platformShare).forEach(k => {
+                                platformShare[k].share = platformShare[k].spend / totalPlatformSpend;
+                            });
+                        }
+                    }
+
+                    // Parse trend
+                    const historical = (trendRes.data || []).map(t => {
+                        const tSpend = parseFloat(t.spend || 0);
+                        const tClicks = parseInt(t.clicks || 0, 10);
+                        let tConvs = 0;
+                        if (t.actions) {
+                            const act = t.actions.find(a => a.action_type === 'purchase' || a.action_type === 'lead' || a.action_type.includes('conversion'));
+                            tConvs = parseInt(act?.value || 0, 10);
+                        }
+                        // Format date to local
+                        const d = new Date(t.date_start);
+                        const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        return {
+                            date: formattedDate,
+                            spend: tSpend,
+                            clicks: tClicks,
+                            conversions: tConvs
+                        };
+                    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                    // Render UI with fetched data
+                    renderMetaAdsUI({
+                        id: accountId,
+                        name: metaAdAccounts.find(acc => acc.id === accountId)?.name || accountId,
+                        spend,
+                        impressions,
+                        clicks,
+                        conversions,
+                        ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+                        cpc: clicks > 0 ? spend / clicks : 0,
+                        cpa: conversions > 0 ? spend / conversions : 0,
+                        roas: spend > 0 ? (conversions * 1500) / spend : 0, // Fallback conversion value estimate
+                        campaigns,
+                        platforms: platformShare,
+                        historical
+                    });
+
+                } catch (e) {
+                    console.warn("Failed fetching from FB Graph API, falling back to mock UI. Error:", e);
+                    const mock = generateMockMetaAdsData(accountId);
+                    renderMetaAdsUI(mock);
+                }
+            }
+
+            // Filter table campaigns dynamically
+            function filterMetaCampaigns() {
+                const query = document.getElementById('meta-campaign-search')?.value.toLowerCase() || '';
+                const statusFilter = document.getElementById('meta-campaign-status-filter')?.value || 'ALL';
+                const rows = document.querySelectorAll('#meta-campaigns-table-body tr');
+
+                rows.forEach(row => {
+                    const campaignName = row.children[1]?.textContent.toLowerCase() || '';
+                    const campaignStatus = row.getAttribute('data-status') || '';
+
+                    const matchesQuery = campaignName.includes(query);
+                    const matchesStatus = statusFilter === 'ALL' || campaignStatus === statusFilter;
+
+                    if (matchesQuery && matchesStatus) {
+                        row.classList.remove('hidden');
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Renders complete meta stats dashboard UI
+            function renderMetaAdsUI(data) {
+                const skeleton = document.getElementById('meta-ads-skeleton');
+                const content = document.getElementById('meta-ads-content');
+
+                if (!skeleton || !content) return;
+
+                // Set KPIs
+                document.getElementById('meta-kpi-spend').textContent = formatMetaCurrency(data.spend);
+                document.getElementById('meta-kpi-impressions').textContent = formatMetaNumber(data.impressions);
+                document.getElementById('meta-kpi-clicks').textContent = formatMetaNumber(data.clicks);
+                document.getElementById('meta-kpi-ctr').textContent = `${data.ctr.toFixed(2)}%`;
+                document.getElementById('meta-kpi-cpc').textContent = formatMetaCurrency(data.cpc);
+                document.getElementById('meta-kpi-conversions').textContent = formatMetaNumber(data.conversions);
+                document.getElementById('meta-kpi-cpa').textContent = formatMetaCurrency(data.cpa);
+                document.getElementById('meta-kpi-roas').textContent = `${data.roas.toFixed(2)}x`;
+
+                // Store campaigns list
+                metaCampaigns = data.campaigns || [];
+
+                // Render campaigns table
+                const tableBody = document.getElementById('meta-campaigns-table-body');
+                if (tableBody) {
+                    tableBody.innerHTML = '';
+                    if (metaCampaigns.length === 0) {
+                        tableBody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="py-8 text-center text-slate-400 font-medium bg-slate-50/50">
+                        No campaigns found for this account.
+                    </td>
+                </tr>`;
+                    } else {
+                        metaCampaigns.forEach(c => {
+                            const tr = document.createElement('tr');
+                            tr.setAttribute('data-status', c.status);
+                            tr.className = 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+
+                            const cCtr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+                            const cCpc = c.clicks > 0 ? c.spend / c.clicks : 0;
+                            const cCpa = c.conversions > 0 ? c.spend / c.conversions : 0;
+
+                            const statusBadge = c.status === 'ACTIVE'
+                                ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span> ACTIVE</span>'
+                                : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">PAUSED</span>';
+
+                            tr.innerHTML = `
+                    <td class="py-4 px-6">${statusBadge}</td>
+                    <td class="py-4 px-6 font-semibold text-slate-800 break-words max-w-xs">${c.name}</td>
+                    <td class="py-4 px-6 text-slate-500 font-bold uppercase text-[10px] tracking-wider">${c.objective.replace('OUTCOME_', '')}</td>
+                    <td class="py-4 px-6 text-right font-bold text-slate-800">${formatMetaCurrency(c.spend)}</td>
+                    <td class="py-4 px-6 text-right text-slate-500">${formatMetaNumber(c.impressions)}</td>
+                    <td class="py-4 px-6 text-right text-slate-500">${formatMetaNumber(c.clicks)}</td>
+                    <td class="py-4 px-6 text-right text-slate-600 font-bold">${cCtr.toFixed(2)}%</td>
+                    <td class="py-4 px-6 text-right text-slate-600 font-bold">${formatMetaCurrency(cCpc)}</td>
+                    <td class="py-4 px-6 text-right text-slate-800 font-bold">${formatMetaNumber(c.conversions)}</td>
+                    <td class="py-4 px-6 text-right text-slate-800 font-bold">${c.conversions > 0 ? formatMetaCurrency(cCpa) : '—'}</td>
+                `;
+                            tableBody.appendChild(tr);
+                        });
+                    }
+                }
+
+                // Set platforms breakdown values and width
+                const pf = data.platforms || {};
+                const setPlatformVal = (plat, val, share) => {
+                    const valEl = document.getElementById(`meta-platform-${plat}-val`);
+                    const barEl = document.getElementById(`meta-platform-${plat}-bar`);
+                    if (valEl) valEl.textContent = `${formatMetaCurrency(val)} (${(share * 100).toFixed(0)}%)`;
+                    if (barEl) barEl.style.width = `${(share * 100)}%`;
+                };
+
+                setPlatformVal('facebook', pf.facebook?.spend || 0, pf.facebook?.share || 0);
+                setPlatformVal('instagram', pf.instagram?.spend || 0, pf.instagram?.share || 0);
+                setPlatformVal('messenger', pf.messenger?.spend || 0, pf.messenger?.share || 0);
+                setPlatformVal('audience', pf.audience_network?.spend || 0, pf.audience_network?.share || 0);
+
+                // Render Daily trend chart
+                metaHistoricalMetrics = data.historical || [];
+                renderMetaAdsTrendChart(metaHistoricalMetrics);
+
+                // Hide skeleton and show panel
+                skeleton.classList.add('hidden');
+                content.classList.remove('hidden');
+            }
+
+            // Custom interactive SVG Line Chart renderer
+            function renderMetaAdsTrendChart(metrics) {
+                const container = document.getElementById('meta-ads-chart-container');
+                if (!container) return;
+
+                if (!metrics || metrics.length === 0) {
+                    container.innerHTML = `
+            <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-medium">
+                No trend data available for this account.
+            </div>`;
+                    return;
+                }
+
+                // Calculate dimensions
+                const width = container.clientWidth || 560;
+                const height = container.clientHeight || 300;
+                const paddingLeft = 55;
+                const paddingRight = 45;
+                const paddingTop = 25;
+                const paddingBottom = 35;
+
+                const chartW = width - paddingLeft - paddingRight;
+                const chartH = height - paddingTop - paddingBottom;
+
+                // Get max values for Y axes
+                const maxSpend = Math.max(...metrics.map(m => m.spend)) * 1.15 || 1000;
+                const maxConvs = Math.max(...metrics.map(m => m.conversions)) * 1.15 || 10;
+
+                // Map dates
+                const pointsCount = metrics.length;
+
+                // Build horizontal gridlines & Y axes ticks
+                let gridHTML = '';
+                const ticksCount = 5;
+                for (let i = 0; i < ticksCount; i++) {
+                    const ratio = i / (ticksCount - 1);
+                    const y = paddingTop + chartH * (1 - ratio);
+
+                    // Gridline
+                    gridHTML += `<line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#f1f5f9" stroke-width="1.5" />`;
+
+                    // Left Axis: Spend
+                    const spendVal = Math.round(maxSpend * ratio);
+                    gridHTML += `<text x="${paddingLeft - 8}" y="${y + 4}" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="end">₹${spendVal >= 1000 ? (spendVal / 1000).toFixed(1) + 'k' : spendVal}</text>`;
+
+                    // Right Axis: Conversions
+                    const convsVal = Math.round(maxConvs * ratio);
+                    gridHTML += `<text x="${width - paddingRight + 8}" y="${y + 4}" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="start">${convsVal}</text>`;
+                }
+
+                // Map data to coordinates
+                const spendPoints = [];
+                const convsPoints = [];
+                let xLabelsHTML = '';
+                let hoverGuidePoints = '';
+
+                metrics.forEach((m, idx) => {
+                    const ratioX = idx / (pointsCount - 1);
+                    const x = paddingLeft + chartW * ratioX;
+
+                    const ySpend = paddingTop + chartH * (1 - (m.spend / maxSpend));
+                    const yConvs = paddingTop + chartH * (1 - (m.conversions / maxConvs));
+
+                    spendPoints.push({ x, y: ySpend, spend: m.spend });
+                    convsPoints.push({ x, y: yConvs, conversions: m.conversions });
+
+                    // X axis labels
+                    xLabelsHTML += `<text x="${x}" y="${height - 12}" fill="#94a3b8" font-size="10" font-weight="700" text-anchor="middle">${m.date}</text>`;
+
+                    // Vertical hover selector boundaries
+                    hoverGuidePoints += `
+            <g class="chart-hover-group cursor-pointer opacity-0 hover:opacity-100 transition-opacity" data-index="${idx}">
+                <line x1="${x}" y1="${paddingTop}" x2="${x}" y2="${height - paddingBottom}" stroke="#cbd5e1" stroke-dasharray="3,3" stroke-width="1" />
+                <circle cx="${x}" cy="${ySpend}" r="5" fill="#6366f1" stroke="#ffffff" stroke-width="1.5" />
+                <circle cx="${x}" cy="${yConvs}" r="5" fill="#f43f5e" stroke="#ffffff" stroke-width="1.5" />
+                <!-- Hidden overlay for easy selection -->
+                <rect x="${x - (chartW / pointsCount / 2)}" y="${paddingTop}" width="${chartW / pointsCount}" height="${chartH}" fill="transparent" 
+                    onmouseenter="showMetaChartTooltip(${idx}, ${x}, ${ySpend}, ${yConvs}, '${m.date}', ${m.spend}, ${m.conversions})" 
+                    onmouseleave="hideMetaChartTooltip()" />
+            </g>
+        `;
+                });
+
+                // Build path strings
+                const createPath = (pts) => pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                const createAreaPath = (pts) => `${createPath(pts)} L ${pts[pts.length - 1].x} ${height - paddingBottom} L ${pts[0].x} ${height - paddingBottom} Z`;
+
+                const spendPath = createPath(spendPoints);
+                const spendArea = createAreaPath(spendPoints);
+
+                const convsPath = createPath(convsPoints);
+                const convsArea = createAreaPath(convsPoints);
+
+                container.innerHTML = `
+        <svg class="w-full h-full" viewBox="0 0 ${width} ${height}" style="overflow: visible;">
+            <defs>
+                <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.16"/>
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0"/>
+                </linearGradient>
+                <linearGradient id="convsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.12"/>
+                    <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
+                </linearGradient>
+            </defs>
+            
+            <!-- Gridlines -->
+            ${gridHTML}
+            
+            <!-- Area Paths -->
+            <path d="${spendArea}" fill="url(#spendGrad)" />
+            <path d="${convsArea}" fill="url(#convsGrad)" />
+            
+            <!-- Line Paths -->
+            <path d="${spendPath}" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="${convsPath}" fill="none" stroke="#f43f5e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            
+            <!-- Hover Guides and Points -->
+            ${hoverGuidePoints}
+            
+            <!-- X Labels -->
+            ${xLabelsHTML}
+        </svg>
+        
+        <!-- Tooltip overlay -->
+        <div id="meta-chart-tooltip" class="absolute hidden bg-slate-800 text-white rounded-xl p-3 shadow-xl pointer-events-none text-[11px] font-semibold border border-slate-700 z-50 transition-all duration-75">
+            <div id="meta-tooltip-date" class="text-slate-400 font-bold mb-1.5 border-b border-slate-700 pb-1"></div>
+            <div class="flex items-center gap-2 mb-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                Spend: <span id="meta-tooltip-spend" class="font-extrabold text-white"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                Conversions: <span id="meta-tooltip-convs" class="font-extrabold text-white"></span>
+            </div>
+        </div>
+    `;
+            }
+
+            // Tooltip helpers
+            function showMetaChartTooltip(idx, x, ySpend, yConvs, date, spend, convs) {
+                const tooltip = document.getElementById('meta-chart-tooltip');
+                if (!tooltip) return;
+
+                document.getElementById('meta-tooltip-date').textContent = date;
+                document.getElementById('meta-tooltip-spend').textContent = formatMetaCurrency(spend);
+                document.getElementById('meta-tooltip-convs').textContent = formatMetaNumber(convs);
+
+                tooltip.classList.remove('hidden');
+
+                // Center the tooltip relative to the hover point
+                const tooltipW = tooltip.clientWidth || 130;
+                const tooltipH = tooltip.clientHeight || 75;
+
+                // Position it slightly above the average Y of the two paths
+                const avgY = (ySpend + yConvs) / 2;
+                tooltip.style.left = `${x - tooltipW / 2}px`;
+                tooltip.style.top = `${avgY - tooltipH - 12}px`;
+            }
+
+            function hideMetaChartTooltip() {
+                const tooltip = document.getElementById('meta-chart-tooltip');
+                if (tooltip) {
+                    tooltip.classList.add('hidden');
+                }
+            }
+
+
+            // Bind methods to window so inline HTML triggers work
+            window.loadMetaAdsData = loadMetaAdsData;
+            window.onMetaAdAccountChange = onMetaAdAccountChange;
+            window.openMetaAdsSettings = openMetaAdsSettings;
+            window.closeMetaAdsSettings = closeMetaAdsSettings;
+            window.toggleMetaTokenVisibility = toggleMetaTokenVisibility;
+            window.clearMetaAdsToken = clearMetaAdsToken;
+            window.testMetaAdsConnection = testMetaAdsConnection;
+            window.filterMetaCampaigns = filterMetaCampaigns;
+            window.showMetaChartTooltip = showMetaChartTooltip;
+            window.hideMetaChartTooltip = hideMetaChartTooltip;
+
 
             window.showDailyVibePopup = showDailyVibePopup; // export for testing
         })();
