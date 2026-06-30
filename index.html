@@ -1933,7 +1933,7 @@
                                         <option value="all">All Clients</option>
                                     </select>
                                     <button type="button"
-                                        onclick="document.getElementById('jira-date-range-picker').showPicker ? document.getElementById('jira-date-range-picker').showPicker() : document.getElementById('jira-date-range-picker').click()"
+                                        onclick="const jiaPicker = document.getElementById('jira-date-range-picker')?.litepicker; if(jiaPicker) jiaPicker.show();"
                                         class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center gap-2">
                                         <iconify-icon icon="solar:calendar-linear" width="16"></iconify-icon>
                                         <span id="jira-date-range-label">All Dates</span>
@@ -2124,14 +2124,22 @@
                                         class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
                                         <option value="all">All Clients</option>
                                     </select>
-                                    <select id="internal-duedate-filter" onchange="setInternalDueDateFilter(this.value)"
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
-                                        <option value="all">All Dates</option>
-                                        <option value="overdue">Overdue</option>
-                                        <option value="today">Due Today</option>
-                                        <option value="this_week">Due this Week</option>
-                                        <option value="this_month">Due this Month</option>
-                                    </select>
+                                    <button type="button"
+                                        onclick="const intPicker = document.getElementById('internal-date-range-picker')?.litepicker; if(intPicker) intPicker.show();"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center gap-2">
+                                        <iconify-icon icon="solar:calendar-linear" width="16"></iconify-icon>
+                                        <span id="internal-date-range-label">All Dates</span>
+                                    </button>
+                                    <button type="button" onclick="clearInternalDateRange()" id="internal-date-clear-btn" 
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-slate-500 hover:text-rose-600 hover:border-rose-200 hidden"
+                                        title="Clear date range">
+                                        <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
+                                    </button>
+                                    <div class="hidden">
+                                        <input id="internal-date-from" type="date" onchange="handleInternalDateRangeChange()">
+                                        <input id="internal-date-to" type="date" onchange="handleInternalDateRangeChange()">
+                                        <input id="internal-date-range-picker" type="text" style="display:none;">
+                                    </div>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
                                             class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
@@ -8341,6 +8349,8 @@
             let currentInternalAssigneeFilter = 'me';
             let currentInternalClientFilter = 'all';
             let currentInternalDueDateFilter = 'all';
+            let currentInternalDueDateFromRange = null;
+            let currentInternalDueDateToRange = null;
             let currentInternalSearchTerm = '';
             let internalTaskSortCol = null;
             let internalTaskSortDir = 'asc';
@@ -9495,6 +9505,7 @@
                     
                     // Initialize Jira date picker
                     initJiraDatePicker();
+                    initInternalDatePicker();
                     
                     // NOW switch to the last view after tasks are loaded
                     switchView(validViews.includes(lastView) ? lastView : 'dashboard');
@@ -14476,7 +14487,29 @@
                 }
                 if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => assigneeMatches(t, currentInternalAssigneeFilter));
                 if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => t.client === currentInternalClientFilter);
-                if (currentInternalDueDateFilter !== 'all') {
+                
+                if (currentInternalDueDateFromRange || currentInternalDueDateToRange) {
+                    // Custom date range filtering
+                    filtered = filtered.filter(t => {
+                        if (!t.duedate) return false;
+                        const dueDate = new Date(t.duedate);
+                        dueDate.setHours(0, 0, 0, 0);
+                        
+                        if (currentInternalDueDateFromRange) {
+                            const fromDate = new Date(currentInternalDueDateFromRange);
+                            fromDate.setHours(0, 0, 0, 0);
+                            if (dueDate < fromDate) return false;
+                        }
+                        
+                        if (currentInternalDueDateToRange) {
+                            const toDate = new Date(currentInternalDueDateToRange);
+                            toDate.setHours(23, 59, 59, 999);
+                            if (dueDate > toDate) return false;
+                        }
+                        
+                        return true;
+                    });
+                } else if (currentInternalDueDateFilter !== 'all') {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     if (currentInternalDueDateFilter === 'overdue') {
@@ -26672,22 +26705,23 @@
                     const fromInput = document.getElementById('jira-date-from');
                     const toInput = document.getElementById('jira-date-to');
                     
-                    new Litepicker({
+                    const picker = new Litepicker({
                         element: datePickerEl,
                         singleMode: false,
-                        startDate: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000),
-                        endDate: new Date(),
-                        format: 'YYYY-MM-DD',
-                        tooltipText: [' to '],
-                        onSelect: (date1, date2) => {
-                            if (date1) fromInput.value = date1.format('YYYY-MM-DD');
-                            if (date2) toInput.value = date2.format('YYYY-MM-DD');
-                            handleJiraDateRangeChange();
+                        format: 'DD MMM, YYYY',
+                        numberOfMonths: 2,
+                        plugins: ['mobilefriendly'],
+                        setup: (litepicker) => {
+                            litepicker.on('selected', (date1, date2) => {
+                                fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
+                                toInput.value = date2.dateInstance.toISOString().slice(0, 10);
+                                handleJiraDateRangeChange();
+                            });
                         }
                     });
                     
                     // Store reference for later access
-                    datePickerEl.litepicker = Litepicker;
+                    datePickerEl.litepicker = picker;
                 }
             }
 
@@ -26739,6 +26773,76 @@
             function setInternalDueDateFilter(v) {
                 currentInternalDueDateFilter = v;
                 renderInternalTasks();
+            }
+
+            function handleInternalDateRangeChange() {
+                const fromInput = document.getElementById('internal-date-from');
+                const toInput = document.getElementById('internal-date-to');
+                const labelEl = document.getElementById('internal-date-range-label');
+                const clearBtn = document.getElementById('internal-date-clear-btn');
+                
+                const fromDate = fromInput.value;
+                const toDate = toInput.value;
+                
+                currentInternalDueDateFromRange = fromDate || null;
+                currentInternalDueDateToRange = toDate || null;
+                
+                // Update label
+                if (fromDate && toDate) {
+                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `${from} - ${to}`;
+                    clearBtn.classList.remove('hidden');
+                } else if (fromDate) {
+                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `From ${from}`;
+                    clearBtn.classList.remove('hidden');
+                } else if (toDate) {
+                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `Until ${to}`;
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    labelEl.textContent = 'All Dates';
+                    clearBtn.classList.add('hidden');
+                }
+                
+                renderInternalTasks();
+            }
+
+            function clearInternalDateRange() {
+                document.getElementById('internal-date-from').value = '';
+                document.getElementById('internal-date-to').value = '';
+                document.getElementById('internal-date-clear-btn').classList.add('hidden');
+                currentInternalDueDateFromRange = null;
+                currentInternalDueDateToRange = null;
+                document.getElementById('internal-date-range-label').textContent = 'All Dates';
+                renderInternalTasks();
+            }
+
+            function initInternalDatePicker() {
+                const datePickerEl = document.getElementById('internal-date-range-picker');
+                if (datePickerEl && window.Litepicker) {
+                    const fromInput = document.getElementById('internal-date-from');
+                    const toInput = document.getElementById('internal-date-to');
+                    
+                    const picker = new Litepicker({
+                        element: datePickerEl,
+                        singleMode: false,
+                        format: 'DD MMM, YYYY',
+                        numberOfMonths: 2,
+                        plugins: ['mobilefriendly'],
+                        setup: (litepicker) => {
+                            litepicker.on('selected', (date1, date2) => {
+                                fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
+                                toInput.value = date2.dateInstance.toISOString().slice(0, 10);
+                                handleInternalDateRangeChange();
+                            });
+                        }
+                    });
+                    
+                    // Store reference for later access
+                    datePickerEl.litepicker = picker;
+                }
             }
 
             function populateClientFilter() {
@@ -29743,6 +29847,9 @@
             window.handleJiraDateRangeChange = handleJiraDateRangeChange;
             window.clearJiraDateRange = clearJiraDateRange;
             window.initJiraDatePicker = initJiraDatePicker;
+            window.handleInternalDateRangeChange = handleInternalDateRangeChange;
+            window.clearInternalDateRange = clearInternalDateRange;
+            window.initInternalDatePicker = initInternalDatePicker;
             window.setInternalDueDateFilter = setInternalDueDateFilter;
             window.searchTasks = searchTasks;
             window.searchInternalTasks = searchInternalTasks;
