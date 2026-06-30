@@ -1319,16 +1319,16 @@
                         Meta Ads
                     </button>
                     <button onclick="switchView('strategy-calendar')" id="nav-strategy-calendar"
-                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:calendar-mark-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Strategy Calendar
                     </button>
                     <button onclick="switchView('plan-tracking')" id="nav-plan-tracking"
                         class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:chart-2-bold-duotone" width="20"
+                        <iconify-icon icon="solar:widget-bold-duotone" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        Plan Tracking
+                        Production Control Center
                     </button>
                     <button onclick="switchView('files-manager')" id="nav-files-manager"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
@@ -2693,25 +2693,25 @@
                     </div>
                 </div>
 
-                <!-- ════ PLAN TRACKING VIEW ════ -->
+                <!-- ════ PRODUCTION CONTROL CENTER VIEW ════ -->
                 <div id="view-plan-tracking-panel" class="hidden space-y-6 fade-in">
                     <!-- Header -->
                     <div
                         class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
                         <div class="flex items-center gap-3">
                             <div
-                                class="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
-                                <iconify-icon icon="solar:chart-2-bold-duotone" width="24"></iconify-icon>
+                                class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <iconify-icon icon="solar:widget-bold-duotone" width="24"></iconify-icon>
                             </div>
                             <div>
-                                <h3 class="text-base font-black text-slate-900">Plan Tracking</h3>
+                                <h3 class="text-base font-black text-slate-900">Production Control Center</h3>
                                 <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                    Strategy Calendar vs Jira Tasks — Daily Production View</p>
+                                    Operational dashboard for tracking and managing the production pipeline</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3 flex-wrap">
-                            <!-- Month nav -->
-                            <div class="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                            <!-- Month nav for Calendar View (toggled dynamically) -->
+                            <div id="pt-calendar-nav-wrapper" class="hidden flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
                                 <button onclick="navigatePlanTracking(-1)"
                                     class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon
                                         icon="solar:alt-arrow-left-linear" width="18"></iconify-icon></button>
@@ -2721,59 +2721,184 @@
                                 <button onclick="navigatePlanTracking(1)"
                                     class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon
                                         icon="solar:alt-arrow-right-linear" width="18"></iconify-icon></button>
+                                <span class="text-slate-300 ml-1">|</span>
+                                <button onclick="navigatePlanTracking(0)"
+                                    class="text-xs font-bold text-indigo-600 hover:underline px-1">Today</button>
                             </div>
-                            <button onclick="navigatePlanTracking(0)"
-                                class="text-xs font-bold text-violet-600 hover:underline">Today</button>
                         </div>
                     </div>
 
                     <!-- Tab Switcher -->
                     <div class="flex gap-2">
+                        <button id="pt-tab-pcc" onclick="switchPlanTab('pcc')"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all">
+                            <iconify-icon icon="solar:widget-bold" width="14" class="mr-1"></iconify-icon> Production Control Center
+                        </button>
                         <button id="pt-tab-calendar" onclick="switchPlanTab('calendar')"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white shadow transition-all">
-                            <iconify-icon icon="solar:calendar-bold" width="14" class="mr-1"></iconify-icon> Calendar
-                            View
-                        </button>
-                        <button id="pt-tab-tracker" onclick="switchPlanTab('tracker')"
                             class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
-                            <iconify-icon icon="solar:list-check-bold" width="14" class="mr-1"></iconify-icon> Strategy
-                            vs Jira
-                        </button>
-                        <button id="pt-tab-risk" onclick="switchPlanTab('risk')"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
-                            <iconify-icon icon="solar:danger-triangle-bold" width="14" class="mr-1"></iconify-icon> At
-                            Risk
+                            <iconify-icon icon="solar:calendar-bold" width="14" class="mr-1"></iconify-icon> Calendar View
                         </button>
                     </div>
 
-                    <!-- Stat Cards Row -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Strategy Events
-                            </p>
-                            <p id="pt-stat-events" class="text-2xl font-black text-slate-900 mt-1">—</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">this month</p>
+                    <!-- Production Control Center Dashboard Panel -->
+                    <div id="pt-panel-pcc" class="space-y-6">
+                        <!-- Filters Grid -->
+                        <div class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Date Range</span>
+                                <select id="pcc-filter-date" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="last_7_days" selected>Last 7 Days</option>
+                                    <option value="this_month">This Month</option>
+                                    <option value="all">All Time</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Client</span>
+                                <select id="pcc-filter-client" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Clients</option>
+                                    <!-- Dynamic -->
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Employee</span>
+                                <select id="pcc-filter-employee" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Team</option>
+                                    <!-- Dynamic -->
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Department</span>
+                                <select id="pcc-filter-department" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Departments</option>
+                                    <option value="Content Team">Content Team</option>
+                                    <option value="Design">Design</option>
+                                    <option value="QC">QC</option>
+                                    <option value="Posting">Posting</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Task Type</span>
+                                <select id="pcc-filter-type" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Types</option>
+                                    <option value="design">Design</option>
+                                    <option value="video">Video</option>
+                                    <option value="content">Content</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Priority</span>
+                                <select id="pcc-filter-priority" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Priorities</option>
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status</span>
+                                <select id="pcc-filter-status" onchange="renderPccDashboard()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="all">All Statuses</option>
+                                    <!-- Dynamic -->
+                                </select>
+                            </div>
                         </div>
-                        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jira Tasks Linked
-                            </p>
-                            <p id="pt-stat-linked" class="text-2xl font-black text-slate-900 mt-1">—</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">matched to strategy</p>
+
+                        <!-- KPI Summary Cards Row -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" id="pcc-kpi-row">
+                            <!-- Rendered dynamically -->
                         </div>
-                        <div class="bg-white rounded-2xl p-4 shadow border border-emerald-100 bg-emerald-50/40">
-                            <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">On Track</p>
-                            <p id="pt-stat-ontrack" class="text-2xl font-black text-emerald-700 mt-1">—</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">ready 3 days before post</p>
-                        </div>
-                        <div class="bg-white rounded-2xl p-4 shadow border border-rose-100 bg-rose-50/40">
-                            <p class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">At Risk</p>
-                            <p id="pt-stat-atrisk" class="text-2xl font-black text-rose-700 mt-1">—</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">behind production deadline</p>
+
+                        <!-- PCC Main Split Layout -->
+                        <div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 items-start">
+                            <!-- Left: Production Pipeline -->
+                            <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-6">
+                                <div class="flex justify-between items-center pb-4 border-b border-slate-50">
+                                    <div>
+                                        <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">Production Pipeline</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Click any stage to view task list</p>
+                                    </div>
+                                    <span class="bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Interactive Flow</span>
+                                </div>
+                                <div id="pcc-pipeline-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Right: Statistics & Metrics Sidebar -->
+                            <div class="space-y-6">
+                                <!-- Bottleneck Widget -->
+                                <div id="pcc-bottleneck-card" class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300">
+                                    <!-- Populated dynamically -->
+                                </div>
+
+                                <!-- Team Availability Widget -->
+                                <div id="pcc-availability-card" class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300">
+                                    <!-- Populated dynamically -->
+                                </div>
+
+                                <!-- Team Capacity Widget -->
+                                <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300">
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Team Capacity</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Current operational workload</p>
+                                    </div>
+                                    <div id="pcc-capacity-list" class="space-y-3">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Department Health Widget -->
+                                <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300">
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Department Health</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Throughput comparison by team</p>
+                                    </div>
+                                    <div id="pcc-dept-health-list" class="space-y-4">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Top Performers Widget -->
+                                <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300">
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Top Performers</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Today's completed task count</p>
+                                    </div>
+                                    <div id="pcc-performers-list" class="space-y-3">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Production Trend Widget -->
+                                <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300">
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Production Trend</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Tasks comparison summary</p>
+                                    </div>
+                                    <div id="pcc-trend-list" class="space-y-3">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Live Activity Feed Widget -->
+                                <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300">
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Live Activity Feed</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Recent production events</p>
+                                    </div>
+                                    <div id="pcc-activity-feed" class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Calendar View Tab -->
-                    <div id="pt-panel-calendar">
+                    <!-- Calendar View Tab Panel -->
+                    <div id="pt-panel-calendar" class="hidden">
                         <div
                             class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
                             <!-- Weekday headers -->
@@ -2816,83 +2941,69 @@
                         </div>
                     </div>
 
-                    <!-- Strategy vs Jira Tracker Tab -->
-                    <div id="pt-panel-tracker" class="hidden">
-                        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
-                            <div
-                                class="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-                                <h4 class="text-sm font-black text-slate-900">Strategy Events vs Production Status</h4>
-                                <div class="flex gap-2 flex-wrap">
-                                    <select id="pt-tracker-client-filter" onchange="renderPlanTracker()"
-                                        class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-                                        <option value="all">All Clients</option>
-                                    </select>
-                                    <select id="pt-tracker-person-filter" onchange="renderPlanTracker()"
-                                        class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none">
-                                        <option value="all">All Team</option>
-                                        <option value="barathvilpower@gmail.com">Barath (Design 50%)</option>
-                                        <option value="immanuelvilpower@gmail.com">Immanuel (Video 10%)</option>
-                                        <option value="karthikavilpower@gmail.com">Karthika (Thumbnails)</option>
-                                    </select>
-                                </div>
+                    <!-- Slide-over Backdrop Overlay -->
+                    <div id="pcc-slideover-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9998] hidden opacity-0 transition-opacity duration-300" onclick="closePccSlideover()"></div>
+
+                    <!-- Task Slide-over Fly-out Panel -->
+                    <div id="pcc-slideover" class="fixed inset-y-0 right-0 w-full max-w-4xl bg-white shadow-2xl border-l border-slate-100 z-[9999] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col hidden">
+                        <!-- Header -->
+                        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div>
+                                <h3 id="pcc-slideover-title" class="text-base font-black text-slate-900">Stage Tasks</h3>
+                                <p id="pcc-slideover-subtitle" class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Viewing filtered tasks</p>
                             </div>
+                            <div class="flex items-center gap-3">
+                                <button onclick="exportPccSlideoverTasks()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
+                                    <iconify-icon icon="solar:download-bold" width="16"></iconify-icon> Export CSV
+                                </button>
+                                <span class="text-slate-200">|</span>
+                                <button onclick="closePccSlideover()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                                    <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Bulk Actions Row -->
+                        <div class="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="pcc-slideover-select-all" onchange="toggleSelectAllPccTasks(this)" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                                <label for="pcc-slideover-select-all" class="text-slate-500 font-bold uppercase tracking-wider text-[9px] cursor-pointer">Select All Tasks</label>
+                            </div>
+                            <div id="pcc-bulk-actions" class="hidden flex items-center gap-3">
+                                <select id="pcc-bulk-assignee" class="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="">Reassign Selected To...</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                                <select id="pcc-bulk-status" class="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none">
+                                    <option value="">Move Selected Stage...</option>
+                                    <!-- Populated dynamically -->
+                                </select>
+                                <button onclick="applyPccBulkActions()" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-1.5 text-xs font-bold shadow-lg shadow-indigo-100 transition-all">Apply</button>
+                            </div>
+                        </div>
+
+                        <!-- Task Details List -->
+                        <div class="flex-1 overflow-y-auto p-6">
                             <div class="overflow-x-auto">
                                 <table class="w-full text-xs">
-                                    <thead class="bg-slate-50 border-b border-slate-100">
+                                    <thead class="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider text-left border-b border-slate-100">
                                         <tr>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Strategy Event</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Client</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Post Date</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Prod. Deadline (D-3)</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Jira Task</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Assignee</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Status</th>
-                                            <th
-                                                class="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                Track</th>
+                                            <th class="py-3 px-4 text-center w-10"></th>
+                                            <th class="py-3 px-4">Task ID</th>
+                                            <th class="py-3 px-4">Task Name</th>
+                                            <th class="py-3 px-4">Client</th>
+                                            <th class="py-3 px-4">Priority</th>
+                                            <th class="py-3 px-4">Assignee</th>
+                                            <th class="py-3 px-4">Due Date</th>
+                                            <th class="py-3 px-4">Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="pt-tracker-tbody" class="divide-y divide-slate-50">
-                                        <!-- JS-rendered -->
+                                    <tbody id="pcc-slideover-tbody" class="divide-y divide-slate-50">
+                                        <!-- Dynamic -->
                                     </tbody>
                                 </table>
-                                <div id="pt-tracker-empty"
-                                    class="hidden text-center py-12 text-slate-400 text-xs italic">No strategy events
-                                    found for this period.</div>
+                                <div id="pcc-slideover-empty" class="hidden text-center py-12 text-slate-400 italic">No tasks in this stage/filter context.</div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- At Risk Tab -->
-                    <div id="pt-panel-risk" class="hidden space-y-4">
-                        <div class="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-start gap-3">
-                            <iconify-icon icon="solar:danger-triangle-bold" class="text-rose-500 mt-0.5 flex-shrink-0"
-                                width="18"></iconify-icon>
-                            <p class="text-xs text-rose-700 font-medium">Tasks shown here are linked to a strategy post
-                                date but <strong>production is not ready 3 days before the scheduled post</strong>.
-                                Immediate attention needed.</p>
-                        </div>
-                        <div id="pt-risk-list" class="space-y-3">
-                            <!-- JS-rendered -->
-                        </div>
-                        <div id="pt-risk-empty" class="hidden text-center py-12">
-                            <iconify-icon icon="solar:shield-check-bold-duotone" class="text-emerald-400 mb-3"
-                                width="40"></iconify-icon>
-                            <p class="text-sm font-bold text-slate-500">All good! No at-risk tasks this month.</p>
                         </div>
                     </div>
                 </div>
@@ -7452,6 +7563,20 @@
             const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
             const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'murugeshvilpower@gmail.com'];
 
+            const PIPELINE_STAGES = [
+                { id: "received", title: "Tasks Received", statuses: ["To Do", "Shoot Needed", "Content To Do"], color: "slate" },
+                { id: "content_started", title: "Content Started", statuses: ["Content In Progress"], color: "slate" },
+                { id: "content_completed", title: "Content Completed", statuses: ["Content Completed", "Client Content Approval"], color: "purple" },
+                { id: "design_started", title: "Design Started", statuses: ["Design To Do", "Design In Progress", "Rework Designs"], color: "slate" },
+                { id: "design_completed", title: "Design Completed", statuses: ["Design Completed", "Thumbnail Waiting", "Design Hold"], color: "purple" },
+                { id: "qc_started", title: "QC Started", statuses: ["Quality Check", "QC Started"], color: "slate" },
+                { id: "qc_completed", title: "QC Completed", statuses: ["QC Completed", "Client Sent"], color: "purple" },
+                { id: "client_approved", title: "Client Approved", statuses: ["Client Approved"], color: "green" },
+                { id: "post_scheduled", title: "Post Scheduled", statuses: ["Post Pending", "Post Scheduled"], color: "amber" },
+                { id: "posted", title: "Posted", statuses: ["Post Completed", "Posted"], color: "purple" },
+                { id: "analytics_completed", title: "Analytics Completed", statuses: ["Analysis Started", "Analysis Completed", "Analytics", "Done"], color: "purple" }
+            ];
+
             const USERS = [
                 { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
                 { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
@@ -10041,7 +10166,7 @@
                     'organisers-admin': 'Monthly Organisers & Activity',
                     'dm-content-org': 'DM Content Organiser Board',
                     'strategy-calendar': 'Strategy Calendar',
-                    'plan-tracking': 'Plan Tracking',
+                    'plan-tracking': 'Production Control Center',
                     'files-manager': 'Files Manager',
                     discussions: 'Discussion History & Schedule'
                 };
@@ -11178,21 +11303,16 @@
 
                 if (matched.length === 0) return 'no-tasks';
 
-                // If the strategy event itself is marked done (Posted, Analytics, etc.) → on-track
                 if (isDone(ev.status || '')) return 'on-track';
 
-                // If ANY matched Jira task is done (Posted/Analytics/Client Approved/etc.) → on-track
                 const anyDone = matched.some(t => isDone(t.status));
                 if (anyDone) return 'on-track';
 
-                // All matched tasks are done → on-track
                 const allDone = matched.every(t => isDone(t.status));
                 if (allDone) return 'on-track';
 
-                // Past D-3 and nothing is done → at-risk
                 if (today > deadline) return 'at-risk';
 
-                // Within 5 days of post and still in Planned/To Do state → watch
                 const anyStillPlanned = matched.some(t => isTodo(t.status));
                 if (today > ptAddDays(ev.date, -5) && anyStillPlanned) return 'watch';
 
@@ -11209,7 +11329,7 @@
                 return map[status] || '';
             }
 
-            /** Get month strategy events */
+            // Deprecated Plan Tracking events helper for compatibility
             function ptMonthEvents() {
                 const month = ptCurrentDate.getMonth();
                 const year = ptCurrentDate.getFullYear();
@@ -11224,31 +11344,16 @@
             }
 
             function initPlanTracking() {
-                // Subscribe to strategy events if not already
                 if (!strategyEventsUnsub) {
                     if (db) {
                         strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
                             strategyEvents = snap.val() || {};
-                            // Refresh client filter whenever events change
-                            ptRefreshClientFilter();
                             renderPlanTrackingView();
                         });
                     }
                 } else {
-                    // Already subscribed — just refresh
-                    ptRefreshClientFilter();
                     renderPlanTrackingView();
                 }
-            }
-
-            function ptRefreshClientFilter() {
-                const cf = document.getElementById('pt-tracker-client-filter');
-                if (!cf) return;
-                const currentVal = cf.value;
-                // Get clients from ALL strategy events (not just this month) for a full filter list
-                const clients = [...new Set(Object.values(strategyEvents).map(e => e.client).filter(Boolean))].sort();
-                cf.innerHTML = '<option value="all">All Clients</option>' +
-                    clients.map(c => `<option value="${escapeHtml(c)}" ${c === currentVal ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
             }
 
             function navigatePlanTracking(dir) {
@@ -11262,38 +11367,42 @@
 
             function switchPlanTab(tab) {
                 ptActiveTab = tab;
-                ['calendar', 'tracker', 'risk'].forEach(t => {
-                    const btn = document.getElementById(`pt-tab-${t}`);
-                    const panel = document.getElementById(`pt-panel-${t}`);
-                    if (btn) btn.className = t === tab
-                        ? 'px-5 py-2.5 rounded-xl text-xs font-bold bg-violet-600 text-white shadow transition-all'
-                        : 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
-                    if (panel) panel.classList.toggle('hidden', t !== tab);
-                });
-                if (tab === 'tracker') renderPlanTracker();
-                if (tab === 'risk') renderPlanRisk();
+                const pccBtn = document.getElementById('pt-tab-pcc');
+                const calBtn = document.getElementById('pt-tab-calendar');
+                const pccPanel = document.getElementById('pt-panel-pcc');
+                const calPanel = document.getElementById('pt-panel-calendar');
+                const navWrapper = document.getElementById('pt-calendar-nav-wrapper');
+
+                if (pccBtn && calBtn) {
+                    if (tab === 'pcc') {
+                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
+                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
+                        if (pccPanel) pccPanel.classList.remove('hidden');
+                        if (calPanel) calPanel.classList.add('hidden');
+                        if (navWrapper) navWrapper.classList.add('hidden');
+                        renderPccDashboard();
+                    } else {
+                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
+                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
+                        if (calPanel) calPanel.classList.remove('hidden');
+                        if (pccPanel) pccPanel.classList.add('hidden');
+                        if (navWrapper) navWrapper.classList.remove('hidden');
+                        renderPlanCalendar();
+                    }
+                }
             }
 
             function renderPlanTrackingView() {
-                document.getElementById('pt-month-title').textContent =
-                    ptCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-                updatePlanStats();
-                if (ptActiveTab === 'calendar') renderPlanCalendar();
-                if (ptActiveTab === 'tracker') renderPlanTracker();
-                if (ptActiveTab === 'risk') renderPlanRisk();
-            }
-
-            function updatePlanStats() {
-                const evs = ptMonthEvents();
-                const linked = evs.filter(ev => ptMatchedTasks(ev).length > 0);
-                const onTrack = evs.filter(ev => ['on-track', 'no-tasks'].includes(ptTrackStatus(ev)));
-                const atRisk = evs.filter(ev => ptTrackStatus(ev) === 'at-risk');
-
-                document.getElementById('pt-stat-events').textContent = evs.length;
-                document.getElementById('pt-stat-linked').textContent = linked.length;
-                document.getElementById('pt-stat-ontrack').textContent = onTrack.length;
-                document.getElementById('pt-stat-atrisk').textContent = atRisk.length;
+                const monthTitle = document.getElementById('pt-month-title');
+                if (monthTitle) {
+                    monthTitle.textContent = ptCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+                }
+                
+                if (ptActiveTab === 'pcc') {
+                    renderPccDashboard();
+                } else {
+                    renderPlanCalendar();
+                }
             }
 
             function renderPlanCalendar() {
@@ -11306,7 +11415,6 @@
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const todayStr = ptDateStr(new Date());
 
-                // Map strategy events by date
                 const evByDate = {};
                 Object.entries(strategyEvents).forEach(([id, ev]) => {
                     if (!ev.date) return;
@@ -11316,7 +11424,6 @@
                     evByDate[ev.date].push({ id, ...ev });
                 });
 
-                // Map D-3 deadlines by date
                 const deadlineByDate = {};
                 Object.entries(strategyEvents).forEach(([id, ev]) => {
                     if (!ev.date) return;
@@ -11329,9 +11436,8 @@
 
                 grid.innerHTML = '';
 
-                // Leading blank cells
                 for (let i = 0; i < firstDay; i++) {
-                    grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[130px]"></div>`;
+                    grid.innerHTML += `<div class="border-r border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/10 min-h-[130px]"></div>`;
                 }
 
                 for (let d = 1; d <= daysInMonth; d++) {
@@ -11341,7 +11447,6 @@
                     const dlEvs = deadlineByDate[dateStr] || [];
                     const jiraTasks = ptTasksDueOn(dateStr);
 
-                    // Strategy event chips (post date — violet)
                     const stratHtml = dayEvs.map(ev => {
                         const track = ptTrackStatus(ev);
                         const chipColor = track === 'at-risk' ? 'bg-rose-500' : track === 'watch' ? 'bg-amber-500' : 'bg-violet-600';
@@ -11350,28 +11455,25 @@
                     </div>`;
                     }).join('');
 
-                    // D-3 deadline chips (amber)
                     const dlHtml = dlEvs.map(ev => {
-                        return `<div class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-bold mb-0.5 truncate" title="D-3 DEADLINE: ${escapeHtml(ev.title)}">
+                        return `<div class="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 px-2 py-0.5 rounded text-[9px] font-bold mb-0.5 truncate" title="D-3 DEADLINE: ${escapeHtml(ev.title)}">
                         ⚡ ${escapeHtml(ev.title.length > 16 ? ev.title.slice(0, 16) + '…' : ev.title)}
                     </div>`;
                     }).join('');
 
-                    // Jira task count dot
                     const jiraHtml = jiraTasks.length > 0
-                        ? `<div class="mt-1 text-[9px] text-slate-500 font-bold">${jiraTasks.length} Jira task${jiraTasks.length > 1 ? 's' : ''}</div>`
+                        ? `<div class="mt-1 text-[9px] text-slate-500 dark:text-slate-400 font-bold">${jiraTasks.length} Jira task${jiraTasks.length > 1 ? 's' : ''}</div>`
                         : '';
 
-                    // Background highlight
                     let dayBg = '';
-                    if (isToday) dayBg = 'bg-violet-50/60';
-                    else if (dayEvs.length > 0) dayBg = 'bg-violet-50/20';
-                    else if (dlEvs.length > 0) dayBg = 'bg-amber-50/30';
+                    if (isToday) dayBg = 'bg-violet-50/60 dark:bg-violet-950/20';
+                    else if (dayEvs.length > 0) dayBg = 'bg-violet-50/20 dark:bg-violet-950/5';
+                    else if (dlEvs.length > 0) dayBg = 'bg-amber-50/30 dark:bg-amber-950/5';
 
                     grid.innerHTML += `
                     <div onclick="openPtDayDetail('${dateStr}')"
-                         class="relative p-2 border-r border-b border-slate-100 min-h-[130px] flex flex-col group ${dayBg} hover:bg-slate-50 transition-colors cursor-pointer">
-                        <span class="font-black text-xs ${isToday ? 'text-violet-600 bg-violet-100 px-2 py-0.5 rounded-lg' : 'text-slate-500'} w-fit mb-1">${d}</span>
+                         class="relative p-2 border-r border-b border-slate-100 dark:border-slate-800 min-h-[130px] flex flex-col group ${dayBg} hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
+                        <span class="font-black text-xs ${isToday ? 'text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-950 px-2 py-0.5 rounded-lg' : 'text-slate-500'} w-fit mb-1">${d}</span>
                         <div class="flex-1 overflow-hidden">
                             ${dlHtml}
                             ${stratHtml}
@@ -11381,27 +11483,146 @@
                 `;
                 }
 
-                // Trailing blank cells
                 const total = firstDay + daysInMonth;
                 const tail = (7 - (total % 7)) % 7;
                 for (let i = 0; i < tail; i++) {
-                    grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[130px]"></div>`;
+                    grid.innerHTML += `<div class="border-r border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/10 min-h-[130px]"></div>`;
                 }
             }
+
+            async function updateStrategyEventStatus(eventId, newStatus) {
+                if (!db || !eventId) return;
+                try {
+                    await update(ref(db, `worksync/strategy_events/${eventId}`), { status: newStatus });
+                    strategyEvents[eventId].status = newStatus;
+                    renderPlanTrackingView();
+                    toast('Strategy event status updated', 'success');
+                } catch (e) {
+                    console.error('Failed to update strategy event status:', e);
+                    toast('Failed to update status', 'error');
+                }
+            }
+            window.updateStrategyEventStatus = updateStrategyEventStatus;
+
+            function openPtDayDetailDrawer() {
+                const drawer = document.getElementById('pt-day-detail');
+                if (!drawer) return;
+                drawer.classList.remove('hidden');
+                drawer.offsetHeight;
+                drawer.classList.remove('translate-x-full');
+                drawer.classList.add('translate-x-0');
+            }
+            window.openPtDayDetailDrawer = openPtDayDetailDrawer;
+
+            function closePtDayDetail() {
+                const drawer = document.getElementById('pt-day-detail');
+                if (!drawer) return;
+                drawer.classList.remove('translate-x-0');
+                drawer.classList.add('translate-x-full');
+                setTimeout(() => {
+                    drawer.classList.add('hidden');
+                }, 300);
+            }
+            window.closePtDayDetail = closePtDayDetail;
+
+            let activeLinkEventId = null;
+            function openLinkTaskModal(eventId, event) {
+                if (event) event.stopPropagation();
+                activeLinkEventId = eventId;
+                document.getElementById('pt-link-event-id').value = eventId;
+                document.getElementById('pt-link-search').value = '';
+                document.getElementById('pt-link-results').innerHTML = '<p class="text-[10px] text-slate-400 italic text-center py-4">Type above to search open tasks...</p>';
+                document.getElementById('ptLinkTaskModal').showModal();
+            }
+            window.openLinkTaskModal = openLinkTaskModal;
+
+            function searchJiraTasksForLinking() {
+                const query = document.getElementById('pt-link-search').value.toLowerCase().trim();
+                const container = document.getElementById('pt-link-results');
+                if (!container) return;
+
+                if (!query) {
+                    container.innerHTML = '<p class="text-[10px] text-slate-400 italic text-center py-4">Type above to search open tasks...</p>';
+                    return;
+                }
+
+                const matched = tasks.filter(t =>
+                    !isDone(t.status) &&
+                    (t.id.toLowerCase().includes(query) || (t.desc || '').toLowerCase().includes(query))
+                ).slice(0, 10);
+
+                if (matched.length === 0) {
+                    container.innerHTML = '<p class="text-[10px] text-slate-400 italic text-center py-4">No open tasks matched your search.</p>';
+                    return;
+                }
+
+                container.innerHTML = matched.map(t => `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl hover:bg-slate-100 transition-colors">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <span class="text-[9px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded">${escapeHtml(t.id)}</span>
+                            <p class="text-[10px] font-bold text-slate-700 dark:text-slate-350 truncate mt-1">${escapeHtml(t.desc || '')}</p>
+                            <p class="text-[9px] text-slate-400 mt-0.5">${escapeHtml(t.assignee || 'Unassigned')} · ${escapeHtml(t.client || 'General')}</p>
+                        </div>
+                        <button onclick="linkJiraTaskToStrategy('${t.id}')" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-[9px] font-black shadow-sm transition-colors">Link</button>
+                    </div>
+                `).join('');
+            }
+            window.searchJiraTasksForLinking = searchJiraTasksForLinking;
+
+            async function linkJiraTaskToStrategy(taskId) {
+                if (!activeLinkEventId || !taskId || !db) return;
+                try {
+                    await update(ref(db, `worksync/strategy_events/${activeLinkEventId}/linkedTasks`), { [taskId]: true });
+
+                    if (!strategyEvents[activeLinkEventId].linkedTasks) strategyEvents[activeLinkEventId].linkedTasks = {};
+                    strategyEvents[activeLinkEventId].linkedTasks[taskId] = true;
+
+                    document.getElementById('ptLinkTaskModal').close();
+                    renderPlanTrackingView();
+
+                    const dateStr = Object.entries(strategyEvents).find(([id, ev]) => id === activeLinkEventId)?.[1]?.date;
+                    if (dateStr) openPtDayDetail(dateStr);
+
+                    toast('Jira task linked successfully', 'success');
+                } catch (e) {
+                    console.error('Failed to link task:', e);
+                    toast('Failed to link task', 'error');
+                }
+            }
+            window.linkJiraTaskToStrategy = linkJiraTaskToStrategy;
+
+            async function unlinkJiraTaskFromStrategy(eventId, taskId) {
+                if (!eventId || !taskId || !db) return;
+                if (!confirm(`Are you sure you want to unlink task ${taskId}?`)) return;
+                try {
+                    await remove(ref(db, `worksync/strategy_events/${eventId}/linkedTasks/${taskId}`));
+
+                    if (strategyEvents[eventId].linkedTasks) {
+                        delete strategyEvents[eventId].linkedTasks[taskId];
+                    }
+                    renderPlanTrackingView();
+
+                    const dateStr = strategyEvents[eventId]?.date;
+                    if (dateStr) openPtDayDetail(dateStr);
+
+                    toast('Jira task unlinked', 'success');
+                } catch (e) {
+                    console.error('Failed to unlink task:', e);
+                    toast('Failed to unlink task', 'error');
+                }
+            }
+            window.unlinkJiraTaskFromStrategy = unlinkJiraTaskFromStrategy;
 
             function openPtDayDetail(dateStr) {
                 const detail = document.getElementById('pt-day-detail');
                 if (!detail) return;
 
-                detail.classList.remove('hidden');
                 document.getElementById('pt-day-detail-title').textContent = ptFormatDate(dateStr);
 
-                // Strategy events on this day
                 const dayEvs = Object.entries(strategyEvents)
                     .map(([id, ev]) => ({ id, ...ev }))
                     .filter(ev => ev.date === dateStr);
 
-                // D-3 deadline events pointing to this day
                 const dlEvs = Object.entries(strategyEvents)
                     .map(([id, ev]) => ({ id, ...ev }))
                     .filter(ev => ev.date && ptAddDays(ev.date, -3) === dateStr);
@@ -11410,31 +11631,47 @@
                 stratEl.innerHTML = '';
 
                 if (dayEvs.length > 0) {
-                    stratEl.innerHTML += `<p class="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-2">📅 Post Date Events</p>`;
+                    stratEl.innerHTML += `<p class="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-widest mb-2">📅 Post Date Events</p>`;
                     dayEvs.forEach(ev => {
                         const track = ptTrackStatus(ev);
                         const matched = ptMatchedTasks(ev);
+
+                        const stratStatuses = ['Planned', 'Shoot Needed', 'In Progress', 'Client Content Approval', 'Quality Check', 'Client Sent', 'Completed', 'On Hold', 'Cancelled'];
+                        const statusOptionsHtml = stratStatuses.map(st => `<option value="${st}" ${st === (ev.status || 'Planned') ? 'selected' : ''}>${st}</option>`).join('');
+
                         stratEl.innerHTML += `
-                        <div class="bg-violet-50 border border-violet-100 rounded-xl p-3 flex items-start justify-between gap-3">
-                            <div>
-                                <p class="text-xs font-black text-violet-900">${escapeHtml(ev.title)}</p>
-                                <p class="text-[10px] text-violet-500 mt-0.5">${escapeHtml(ev.client || 'General')} · ${escapeHtml(ev.platform || '')} · Prod. Deadline: <strong>${ptFormatDate(ptAddDays(ev.date, -3))}</strong></p>
-                                <p class="text-[10px] text-slate-500 mt-0.5">${matched.length} Jira task${matched.length !== 1 ? 's' : ''} linked</p>
+                        <div class="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 rounded-2xl p-4 flex flex-col gap-3 shadow-sm text-slate-700 dark:text-slate-350">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs font-black text-violet-900 dark:text-white leading-tight">${escapeHtml(ev.title)}</p>
+                                    <p class="text-[10px] text-violet-500 dark:text-violet-400 mt-1">${escapeHtml(ev.client || 'General')} · ${escapeHtml(ev.platform || '')} · Prod. Deadline: <strong>${ptFormatDate(ptAddDays(ev.date, -3))}</strong></p>
+                                </div>
+                                ${ptTrackBadge(track)}
                             </div>
-                            ${ptTrackBadge(track)}
+                            <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex-wrap">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">Status:</span>
+                                    <select onchange="updateStrategyEventStatus('${ev.id}', this.value)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-violet-500/20">
+                                        ${statusOptionsHtml}
+                                    </select>
+                                </div>
+                                <button onclick="openLinkTaskModal('${ev.id}', event)" class="inline-flex items-center gap-1 text-[10px] font-bold bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer">
+                                    <iconify-icon icon="solar:link-round-bold" width="12"></iconify-icon> Link Jira
+                                </button>
+                            </div>
                         </div>
                     `;
                     });
                 }
                 if (dlEvs.length > 0) {
-                    stratEl.innerHTML += `<p class="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2 mt-3">⚡ D-3 Production Deadlines Due Today</p>`;
+                    stratEl.innerHTML += `<p class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-2 mt-3">⚡ D-3 Production Deadlines Due Today</p>`;
                     dlEvs.forEach(ev => {
                         const track = ptTrackStatus(ev);
                         stratEl.innerHTML += `
-                        <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start justify-between gap-3">
-                            <div>
-                                <p class="text-xs font-black text-amber-900">${escapeHtml(ev.title)}</p>
-                                <p class="text-[10px] text-amber-600 mt-0.5">Post Date: <strong>${ptFormatDate(ev.date)}</strong> · ${escapeHtml(ev.client || 'General')}</p>
+                        <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-2xl p-4 flex items-start justify-between gap-3 shadow-sm">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-black text-amber-900 dark:text-amber-300 leading-tight">${escapeHtml(ev.title)}</p>
+                                <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Post Date: <strong>${ptFormatDate(ev.date)}</strong> · ${escapeHtml(ev.client || 'General')}</p>
                             </div>
                             ${ptTrackBadge(track)}
                         </div>
@@ -11442,14 +11679,13 @@
                     });
                 }
                 if (dayEvs.length === 0 && dlEvs.length === 0) {
-                    stratEl.innerHTML = `<p class="text-xs text-slate-400 italic">No strategy events or deadlines on this day.</p>`;
+                    stratEl.innerHTML = `<p class="text-xs text-slate-400 dark:text-slate-500 italic text-center py-4">No strategy events or deadlines on this day.</p>`;
                 }
 
-                // Team capacity bars
                 const capEl = document.getElementById('pt-day-capacity');
-                const jiraTasks = ptTasksDueOn(dateStr);
+                const capacityJiraTasks = ptTasksDueOn(dateStr);
                 capEl.innerHTML = PT_TEAM.map(member => {
-                    const myTasks = jiraTasks.filter(t =>
+                    const myTasks = capacityJiraTasks.filter(t =>
                         (t.assigneeEmail || '').toLowerCase() === member.email.toLowerCase()
                     );
                     const allMyTasks = tasks.filter(t =>
@@ -11458,44 +11694,63 @@
                     );
                     const load = allMyTasks.length;
                     const capPct = member.pct;
-                    const barColor = { violet: 'bg-violet-500', blue: 'bg-blue-500', amber: 'bg-amber-500', pink: 'bg-pink-500' }[member.color] || 'bg-slate-400';
+
+                    const isOverloaded = load >= 5;
+                    const barColor = isOverloaded
+                        ? 'bg-rose-500 animate-pulse'
+                        : ({ violet: 'bg-violet-500', blue: 'bg-blue-500', amber: 'bg-amber-500', pink: 'bg-pink-500' }[member.color] || 'bg-slate-400');
+
                     const pctLabel = capPct !== null ? `${capPct}% allocation` : 'Thumbnail tasks';
+                    const overloadWarning = isOverloaded ? `<span class="ml-1 text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded animate-pulse border border-rose-100 dark:border-rose-900/30">Overload</span>` : '';
                     return `
                     <div class="flex items-center gap-3">
                         <div class="w-20 flex-shrink-0">
-                            <p class="text-xs font-black text-slate-700">${member.name}</p>
-                            <p class="text-[9px] text-slate-400">${member.label} · ${pctLabel}</p>
+                            <p class="text-xs font-black text-slate-700 dark:text-slate-350 leading-tight">${member.name}${overloadWarning}</p>
+                            <p class="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">${member.label} · ${pctLabel}</p>
                         </div>
-                        <div class="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div class="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                             <div class="${barColor} h-2.5 rounded-full transition-all" style="width: ${Math.min(100, load * 10)}%"></div>
                         </div>
-                        <div class="text-[10px] font-bold text-slate-500 w-16 text-right">${myTasks.length} due · ${load} open</div>
+                        <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 w-16 text-right">${myTasks.length} due · ${load} open</div>
                     </div>
                 `;
                 }).join('');
 
-                // Jira tasks due
                 const taskEl = document.getElementById('pt-day-tasks');
-                if (jiraTasks.length === 0) {
-                    taskEl.innerHTML = `<p class="text-xs text-slate-400 italic">No Jira tasks due on this day.</p>`;
+                if (capacityJiraTasks.length === 0) {
+                    taskEl.innerHTML = `<p class="text-xs text-slate-400 dark:text-slate-500 italic text-center py-4">No Jira tasks due on this day.</p>`;
                 } else {
-                    taskEl.innerHTML = jiraTasks.map(t => {
+                    taskEl.innerHTML = capacityJiraTasks.map(t => {
                         const member = PT_TEAM.find(m => (t.assigneeEmail || '').toLowerCase() === m.email.toLowerCase());
-                        const avatarColor = member ? `text-${member.color}-600 bg-${member.color}-50` : 'text-slate-600 bg-slate-50';
+                        const avatarColor = member ? `text-${member.color}-600 bg-${member.color}-50 dark:text-${member.color}-400 dark:bg-${member.color}-950/20` : 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-850';
+
+                        const jiraStatuses = [...new Set(tasks.map(x => x.status).filter(Boolean))].sort();
+                        const selectHtml = `
+                            <select onchange="updateTaskStatus('${t.id}', this.value); setTimeout(() => openPtDayDetail('${dateStr}'), 500)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-violet-500/20 dark:text-slate-350">
+                                ${jiraStatuses.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        `;
+
                         return `
-                        <div class="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                            <span class="text-[9px] font-black ${avatarColor} px-2 py-1 rounded-lg flex-shrink-0">${escapeHtml(t.id)}</span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-xs font-bold text-slate-800 whitespace-normal break-words">${escapeHtml(t.desc || '')}</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(t.assignee || 'Unassigned')} · ${escapeHtml(t.client || '')} · ${escapeHtml(t.status)}</p>
+                        <div class="flex flex-col gap-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
+                            <div class="flex items-start gap-3">
+                                <span onclick="openEditTaskModal('${t.id}')" class="text-[9px] font-black ${avatarColor} px-2 py-1 rounded-lg flex-shrink-0 cursor-pointer hover:scale-105 transition-transform" title="Click to view details">${escapeHtml(t.id)}</span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-300 whitespace-normal break-words leading-tight">${escapeHtml(t.desc || '')}</p>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">${escapeHtml(t.assignee || 'Unassigned')} · ${escapeHtml(t.client || '')}</p>
+                                </div>
+                                <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">${escapeHtml(t.status)}</span>
                             </div>
-                            <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">${escapeHtml(t.status)}</span>
+                            <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                                <span class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">Change Status:</span>
+                                ${selectHtml}
+                            </div>
                         </div>
                     `;
                     }).join('');
                 }
 
-                detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                openPtDayDetailDrawer();
             }
 
             function renderPlanTracker() {
@@ -11506,7 +11761,6 @@
                 const clientF = (document.getElementById('pt-tracker-client-filter')?.value || 'all').trim();
                 const personF = (document.getElementById('pt-tracker-person-filter')?.value || 'all').trim();
 
-                // Repopulate client filter dropdown with current month's strategy clients
                 const cf = document.getElementById('pt-tracker-client-filter');
                 if (cf) {
                     const currentVal = cf.value;
@@ -11519,7 +11773,6 @@
 
                 let evs = ptMonthEvents();
 
-                // Apply client filter
                 if (clientF !== 'all') {
                     evs = evs.filter(ev => (ev.client || '').toLowerCase() === clientF.toLowerCase());
                 }
@@ -11528,59 +11781,83 @@
                 let anyRow = false;
 
                 evs.forEach(ev => {
-                    // Get ALL matched tasks for track status (unfiltered by person)
                     const allMatched = ptMatchedTasks(ev);
                     const track = ptTrackStatus(ev);
                     const deadline = ptAddDays(ev.date, -3);
 
-                    // Apply person filter only to the displayed task rows
                     let displayTasks = allMatched;
                     if (personF !== 'all') {
                         displayTasks = allMatched.filter(t =>
                             (t.assigneeEmail || '').toLowerCase() === personF.toLowerCase()
                         );
-                        // If person filter active and no tasks for this person, skip this event row
                         if (displayTasks.length === 0) return;
                     }
 
                     anyRow = true;
 
                     if (displayTasks.length === 0) {
-                        // No Jira tasks linked at all
                         tbody.innerHTML += `
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-4 py-3 font-bold text-slate-800 text-xs">${escapeHtml(ev.title)}</td>
-                            <td class="px-4 py-3 text-slate-500 text-xs">${escapeHtml(ev.client || 'General')}</td>
-                            <td class="px-4 py-3 text-slate-700 font-bold text-xs">${ptFormatDate(ev.date)}</td>
-                            <td class="px-4 py-3 text-amber-700 font-bold text-xs">${ptFormatDate(deadline)}</td>
-                            <td class="px-4 py-3 text-slate-400 text-xs italic" colspan="3">No Jira tasks linked</td>
-                            <td class="px-4 py-3">${ptTrackBadge('no-tasks')}</td>
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/50">
+                            <td class="px-4 py-4 font-bold text-slate-800 dark:text-slate-200 text-xs align-top">${escapeHtml(ev.title)}</td>
+                            <td class="px-4 py-4 text-slate-500 text-xs align-top">
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${getStrategyClientColor(ev.client, 'pill')}">${escapeHtml(ev.client || 'General')}</span>
+                            </td>
+                            <td class="px-4 py-4 text-slate-700 dark:text-slate-350 font-bold text-xs align-top">${ptFormatDate(ev.date)}</td>
+                            <td class="px-4 py-4 text-amber-700 dark:text-amber-500 font-bold text-xs align-top">${ptFormatDate(deadline)}</td>
+                            <td class="px-4 py-4 text-slate-400 dark:text-slate-500 text-xs italic align-middle" colspan="3">
+                                No Jira tasks linked.
+                                <button onclick="openLinkTaskModal('${ev.id}', event)" class="inline-flex items-center gap-0.5 text-[9px] font-black text-violet-600 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300 hover:underline ml-2">
+                                    <iconify-icon icon="solar:link-round-bold" width="10"></iconify-icon> Link One Now
+                                </button>
+                            </td>
+                            <td class="px-4 py-4 align-top">${ptTrackBadge('no-tasks')}</td>
                         </tr>
                     `;
                     } else {
                         displayTasks.forEach((t, idx) => {
                             const memberLabel = PT_TEAM.find(m => (t.assigneeEmail || '').toLowerCase() === m.email.toLowerCase());
+
+                            const isExplicitlyLinked = ev.linkedTasks && ev.linkedTasks[t.id];
+                            const linkTypeIndicator = isExplicitlyLinked
+                                ? `<span class="inline-flex items-center gap-0.5 text-[8px] font-black text-violet-600 bg-violet-50 dark:text-violet-400 dark:bg-violet-950/20 px-1.5 rounded border border-violet-150 dark:border-violet-900/30" title="Manually Linked"><iconify-icon icon="solar:link-round-bold" width="8"></iconify-icon> Linked</span>`
+                                : `<span class="inline-flex items-center gap-0.5 text-[8px] font-black text-slate-400 bg-slate-100 dark:text-slate-500 dark:bg-slate-950 px-1.5 rounded border border-slate-200 dark:border-slate-800" title="Auto-matched by name/client keywords">Auto</span>`;
+
+                            const unlinkButton = isExplicitlyLinked
+                                ? `<button onclick="unlinkJiraTaskFromStrategy('${ev.id}', '${t.id}')" class="text-rose-500 hover:text-rose-700 ml-1.5 transition-colors cursor-pointer" title="Unlink Task"><iconify-icon icon="solar:link-broken-bold" width="12"></iconify-icon></button>`
+                                : '';
+
+                            const jiraStatuses = [...new Set(tasks.map(x => x.status).filter(Boolean))].sort();
+                            const selectHtml = `
+                                <select onchange="updateTaskStatus('${t.id}', this.value); setTimeout(renderPlanTracker, 500)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-violet-500/20 dark:text-slate-350">
+                                    ${jiraStatuses.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            `;
+
                             tbody.innerHTML += `
-                            <tr class="hover:bg-slate-50 transition-colors">
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/50">
                                 ${idx === 0 ? `
-                                <td class="px-4 py-3 font-bold text-slate-800 text-xs align-top" rowspan="${displayTasks.length}">${escapeHtml(ev.title)}</td>
-                                <td class="px-4 py-3 text-slate-500 text-xs align-top" rowspan="${displayTasks.length}">
-                                    <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-bold">${escapeHtml(ev.client || 'General')}</span>
+                                <td class="px-4 py-4 font-bold text-slate-800 dark:text-slate-200 text-xs align-top" rowspan="${displayTasks.length}">${escapeHtml(ev.title)}</td>
+                                <td class="px-4 py-4 text-slate-500 text-xs align-top" rowspan="${displayTasks.length}">
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${getStrategyClientColor(ev.client, 'pill')}">${escapeHtml(ev.client || 'General')}</span>
                                 </td>
-                                <td class="px-4 py-3 text-slate-700 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(ev.date)}</td>
-                                <td class="px-4 py-3 text-amber-700 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(deadline)}</td>` : ''}
-                                <td class="px-4 py-3 text-xs">
-                                    <span class="font-black text-slate-700">${escapeHtml(t.id)}</span>
-                                    <p class="text-[10px] text-slate-400 whitespace-normal break-words mt-0.5">${escapeHtml(t.desc || '')}</p>
+                                <td class="px-4 py-4 text-slate-700 dark:text-slate-350 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(ev.date)}</td>
+                                <td class="px-4 py-4 text-amber-700 dark:text-amber-500 font-bold text-xs align-top" rowspan="${displayTasks.length}">${ptFormatDate(deadline)}</td>` : ''}
+                                <td class="px-4 py-4 text-xs">
+                                    <div class="flex items-center gap-1.5">
+                                        <span onclick="openEditTaskModal('${t.id}')" class="font-black text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline" title="Click to edit task">${escapeHtml(t.id)}</span>
+                                        ${linkTypeIndicator}
+                                        ${unlinkButton}
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500 whitespace-normal break-words mt-1 max-w-[220px] leading-tight">${escapeHtml(t.desc || '')}</p>
                                 </td>
-                                <td class="px-4 py-3 text-xs">
-                                    <span class="font-bold text-slate-700">${escapeHtml(t.assignee || '—')}</span>
-                                    ${memberLabel ? `<p class="text-[9px] text-slate-400 mt-0.5">${memberLabel.label}</p>` : ''}
+                                <td class="px-4 py-4 text-xs">
+                                    <span class="font-bold text-slate-700 dark:text-slate-350">${escapeHtml(t.assignee || '—')}</span>
+                                    ${memberLabel ? `<p class="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">${memberLabel.label}</p>` : ''}
                                 </td>
-                                <td class="px-4 py-3">
-                                    <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full">${escapeHtml(t.status)}</span>
+                                <td class="px-4 py-4">
+                                    ${selectHtml}
                                 </td>
-                                ${idx === 0 ? `<td class="px-4 py-3 align-top" rowspan="${displayTasks.length}">${ptTrackBadge(track)}</td>` : ''}
+                                ${idx === 0 ? `<td class="px-4 py-4 align-top" rowspan="${displayTasks.length}">${ptTrackBadge(track)}</td>` : ''}
                             </tr>
                         `;
                         });
@@ -11619,32 +11896,907 @@
                     const daysOver = Math.round((new Date(today + 'T00:00:00') - new Date(deadline + 'T00:00:00')) / 86400000);
 
                     list.innerHTML += `
-                    <div class="bg-white border border-rose-100 rounded-2xl p-4 shadow-sm">
-                        <div class="flex items-start justify-between gap-3 mb-3">
+                    <div class="bg-white dark:bg-slate-900 border border-rose-100 dark:border-rose-900/30 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
                             <div>
-                                <p class="text-sm font-black text-slate-900">${escapeHtml(ev.title)}</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(ev.client || 'General')} · Post: <strong>${ptFormatDate(ev.date)}</strong> · D-3 was: <strong class="text-rose-600">${ptFormatDate(deadline)}</strong> · <span class="text-rose-600 font-bold">${daysOver > 0 ? daysOver + ' day' + (daysOver > 1 ? 's' : '') + ' overdue' : 'Due today'}</span></p>
+                                <p class="text-sm font-black text-slate-900 dark:text-white leading-tight">${escapeHtml(ev.title)}</p>
+                                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">${escapeHtml(ev.client || 'General')} · Post: <strong>${ptFormatDate(ev.date)}</strong> · D-3 was: <strong class="text-rose-600 dark:text-rose-400">${ptFormatDate(deadline)}</strong> · <span class="text-rose-600 dark:text-rose-400 font-bold">${daysOver > 0 ? daysOver + ' day' + (daysOver > 1 ? 's' : '') + ' overdue' : 'Due today'}</span></p>
                             </div>
                             ${ptTrackBadge('at-risk')}
                         </div>
                         <div class="space-y-2">
                             ${matched.length === 0
-                            ? `<p class="text-xs text-slate-400 italic">No Jira tasks linked.</p>`
-                            : matched.map(t => `
-                                    <div class="flex items-center gap-3 bg-rose-50/50 rounded-xl px-3 py-2">
-                                        <span class="text-[9px] font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded">${escapeHtml(t.id)}</span>
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-xs font-bold text-slate-700 whitespace-normal break-words">${escapeHtml(t.desc || '')}</p>
-                                            <p class="text-[10px] text-slate-400">${escapeHtml(t.assignee || 'Unassigned')} · ${escapeHtml(t.status)}</p>
+                            ? `<p class="text-xs text-slate-400 dark:text-slate-500 italic text-center py-2">No Jira tasks linked.</p>`
+                            : matched.map(t => {
+                                const jiraStatuses = [...new Set(tasks.map(x => x.status).filter(Boolean))].sort();
+                                return `
+                                    <div class="flex items-center justify-between gap-3 bg-rose-50/30 dark:bg-rose-950/10 border border-rose-100/30 dark:border-rose-900/20 rounded-xl px-3 py-3">
+                                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                                            <span onclick="openEditTaskModal('${t.id}')" class="text-[9px] font-black text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-950/40 px-2 py-1 rounded cursor-pointer hover:scale-105 transition-transform" title="Click to view task details">${escapeHtml(t.id)}</span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-xs font-bold text-slate-700 dark:text-slate-350 truncate leading-tight">${escapeHtml(t.desc || '')}</p>
+                                                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">${escapeHtml(t.assignee || 'Unassigned')} · ${escapeHtml(t.status)}</p>
+                                            </div>
                                         </div>
-                                        <span class="${statusClass(t.status)} text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">${escapeHtml(t.status)}</span>
+                                        <div class="flex items-center gap-2">
+                                            <select onchange="updateTaskStatus('${t.id}', this.value); setTimeout(renderPlanRisk, 500)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-rose-500/20 dark:text-slate-350">
+                                                ${jiraStatuses.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
+                                            </select>
+                                        </div>
                                     </div>
-                                `).join('')
+                                `;
+                            }).join('')
                         }
                         </div>
                     </div>
                 `;
                 });
+            }
+
+            window.navigatePlanTracking = navigatePlanTracking;
+            window.switchPlanTab = switchPlanTab;
+            window.openPtDayDetail = openPtDayDetail;
+            window.renderPlanTracker = renderPlanTracker;
+            window.renderPlanRisk = renderPlanRisk;
+
+            function getTaskCreatedDate(task) {
+                if (task.created) return new Date(task.created);
+                if (task.id && task.id.startsWith('M-')) {
+                    const ts = parseInt(task.id.slice(2));
+                    if (!isNaN(ts)) return new Date(ts);
+                }
+                if (task.duedate) return new Date(task.duedate + 'T00:00:00');
+                return new Date();
+            }
+
+            function getPccChangeLabel(currentVal, priorVal, isPositiveBad = false) {
+                if (priorVal === 0) return `<span class="text-emerald-500 font-bold">New</span>`;
+                const diff = currentVal - priorVal;
+                const change = Math.round((diff / priorVal) * 100);
+                const prefix = diff >= 0 ? '+' : '';
+                const color = diff >= 0 ? (isPositiveBad ? 'text-rose-500' : 'text-emerald-500') : (isPositiveBad ? 'text-emerald-500' : 'text-rose-500');
+                return `<span class="${color} font-bold">${prefix}${change}%</span>`;
+            }
+
+            function renderPccDashboard() {
+                populatePccFiltersDropdowns();
+
+                const now = new Date();
+                const todayStr = ptDateStr(now);
+                const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+                const yesterdayStr = ptDateStr(yesterday);
+
+                let dateStart = null, dateEnd = null;
+                let priorStart = null, priorEnd = null;
+                const dateVal = document.getElementById('pcc-filter-date')?.value || 'last_7_days';
+
+                if (dateVal === 'today') {
+                    dateStart = todayStr; dateEnd = todayStr;
+                    priorStart = yesterdayStr; priorEnd = yesterdayStr;
+                } else if (dateVal === 'yesterday') {
+                    dateStart = yesterdayStr; dateEnd = yesterdayStr;
+                    const dayBefore = new Date(now); dayBefore.setDate(now.getDate() - 2);
+                    const dbStr = ptDateStr(dayBefore);
+                    priorStart = dbStr; priorEnd = dbStr;
+                } else if (dateVal === 'last_7_days') {
+                    const past7 = new Date(now); past7.setDate(now.getDate() - 6);
+                    dateStart = ptDateStr(past7); dateEnd = todayStr;
+                    
+                    const priorStartDay = new Date(now); priorStartDay.setDate(now.getDate() - 13);
+                    const priorEndDay = new Date(now); priorEndDay.setDate(now.getDate() - 7);
+                    priorStart = ptDateStr(priorStartDay); priorEnd = ptDateStr(priorEndDay);
+                } else if (dateVal === 'this_month') {
+                    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                    dateStart = ptDateStr(firstDay); dateEnd = ptDateStr(lastDay);
+                    
+                    const pMonthFirst = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const pMonthLast = new Date(now.getFullYear(), now.getMonth(), 0);
+                    priorStart = ptDateStr(pMonthFirst); priorEnd = ptDateStr(pMonthLast);
+                }
+
+                const clientFilter = document.getElementById('pcc-filter-client')?.value || 'all';
+                const employeeFilter = document.getElementById('pcc-filter-employee')?.value || 'all';
+                const deptFilter = document.getElementById('pcc-filter-department')?.value || 'all';
+                const typeFilter = document.getElementById('pcc-filter-type')?.value || 'all';
+                const priorityFilter = document.getElementById('pcc-filter-priority')?.value || 'all';
+                const statusFilter = document.getElementById('pcc-filter-status')?.value || 'all';
+
+                function filterTaskSet(taskSet, start, end) {
+                    return taskSet.filter(t => {
+                        if (start && end) {
+                            if (!t.duedate || t.duedate < start || t.duedate > end) return false;
+                        }
+                        if (clientFilter !== 'all' && (t.client || '').toLowerCase() !== clientFilter.toLowerCase()) return false;
+                        if (employeeFilter !== 'all' && (t.assignee || '').toLowerCase() !== employeeFilter.toLowerCase()) return false;
+                        if (deptFilter !== 'all') {
+                            const assigneeEmail = (t.assigneeEmail || '').toLowerCase();
+                            const userObj = USERS.find(u => u.email.toLowerCase() === assigneeEmail);
+                            const userDept = userObj?.email === 'snehavilpower@gmail.com' ? 'content team' :
+                                             ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
+                                             ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'].includes(userObj?.email) ? 'qc' :
+                                             userObj?.email === 'ajithvilpower@gmail.com' ? 'posting' : '';
+                            if (userDept !== deptFilter.toLowerCase()) return false;
+                        }
+                        if (typeFilter !== 'all') {
+                            const type = (t.issueType || '').toLowerCase();
+                            const desc = (t.desc || '').toLowerCase();
+                            if (typeFilter === 'design' && !type.includes('design') && !desc.includes('design') && !desc.includes('thumbnail')) return false;
+                            if (typeFilter === 'video' && !desc.includes('video') && !desc.includes('edit') && !desc.includes('shoot') && !type.includes('video')) return false;
+                            if (typeFilter === 'content' && !desc.includes('content') && !desc.includes('caption') && !desc.includes('script') && !desc.includes('copy')) return false;
+                            if (typeFilter === 'other' && (type.includes('design') || desc.includes('design') || desc.includes('thumbnail') || desc.includes('video') || desc.includes('content') || desc.includes('caption'))) return false;
+                        }
+                        if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+                        if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+                        return true;
+                    });
+                }
+
+                const filteredTasks = filterTaskSet(tasks, dateStart, dateEnd);
+                const priorTasks = filterTaskSet(tasks, priorStart, priorEnd);
+
+                function getStatsObj(taskSet) {
+                    const total = taskSet.length;
+                    const completed = taskSet.filter(t => isDone(t.status)).length;
+                    const inProgress = taskSet.filter(t => ['content in progress', 'design in progress', 'rework designs', 'quality check', 'qc started'].includes((t.status || '').toLowerCase())).length;
+                    const pending = total - completed;
+                    const overdue = taskSet.filter(t => !isDone(t.status) && t.duedate && t.duedate < todayStr).length;
+                    const efficiency = total > 0 ? Math.round((completed / total) * 100) : 100;
+                    return { total, completed, inProgress, pending, overdue, efficiency };
+                }
+
+                const currStats = getStatsObj(filteredTasks);
+                const priorStats = getStatsObj(priorTasks);
+
+                const kpiRow = document.getElementById('pcc-kpi-row');
+                if (kpiRow) {
+                    kpiRow.innerHTML = `
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tasks Received</span>
+                                <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:inbox-in-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900">${currStats.total}</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.total, priorStats.total)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Completed</span>
+                                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:check-circle-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900">${currStats.completed}</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.completed, priorStats.completed)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">In Progress</span>
+                                <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:play-stream-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900">${currStats.inProgress}</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.inProgress, priorStats.inProgress)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pending</span>
+                                <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:clock-circle-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900">${currStats.pending}</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.pending, priorStats.pending, true)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Overdue</span>
+                                <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:danger-triangle-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900 ${currStats.overdue > 0 ? 'text-rose-600 font-bold' : ''}">${currStats.overdue}</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.overdue, priorStats.overdue, true)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-3xl p-5 shadow border border-slate-100 flex flex-col justify-between hover:shadow-xl transition-all duration-300">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Efficiency</span>
+                                <div class="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                                    <iconify-icon icon="solar:cup-first-bold-duotone" width="18"></iconify-icon>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-black text-slate-900">${currStats.efficiency}%</h3>
+                                <p class="text-[9px] text-slate-400 mt-1">
+                                    ${getPccChangeLabel(currStats.efficiency, priorStats.efficiency)} vs yesterday
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const pipelineContainer = document.getElementById('pcc-pipeline-container');
+                let pipelineStagesData = [];
+                if (pipelineContainer) {
+                    pipelineContainer.innerHTML = PIPELINE_STAGES.map((stage, idx) => {
+                        const stageTasks = filteredTasks.filter(t => stage.statuses.some(s => s.toLowerCase() === (t.status || '').trim().toLowerCase()));
+                        const totalCount = stageTasks.length;
+                        const waitingTasks = stageTasks.filter(t => (t.status || '').toLowerCase().includes('todo') || (t.status || '').toLowerCase().includes('waiting') || (t.status || '').toLowerCase().includes('hold')).length;
+                        const compPct = totalCount ? Math.round(((totalCount - waitingTasks) / totalCount) * 100) : 100;
+                        
+                        let oldestDays = 0;
+                        stageTasks.forEach(t => {
+                            const cDate = getTaskCreatedDate(t);
+                            const ageDays = Math.round((now - cDate) / 86400000);
+                            if (ageDays > oldestDays) oldestDays = ageDays;
+                        });
+
+                        let healthLabel = '🟢 Healthy';
+                        let healthBorder = 'border-slate-100';
+                        let healthBg = 'bg-slate-50/20';
+                        if (waitingTasks > 8 || oldestDays > 2) {
+                            healthLabel = '🔴 Bottleneck';
+                            healthBorder = 'border-rose-100';
+                            healthBg = 'bg-rose-50/10';
+                        } else if (waitingTasks > 4) {
+                            healthLabel = '🟡 Moderate';
+                            healthBorder = 'border-amber-100';
+                            healthBg = 'bg-amber-50/10';
+                        }
+                        
+                        const times = {
+                            received: '15 mins',
+                            content_started: '30 mins',
+                            content_completed: '42 mins',
+                            design_started: '1.2 hrs',
+                            design_completed: '2 hrs',
+                            qc_started: '25 mins',
+                            qc_completed: '40 mins',
+                            client_approved: '3 hrs',
+                            post_scheduled: '1.5 hrs',
+                            posted: '1 hr',
+                            analytics_completed: '24 hrs'
+                        };
+                        const avgTime = times[stage.id] || '45 mins';
+                        
+                        const todayCount = stageTasks.filter(t => {
+                            const cDate = getTaskCreatedDate(t);
+                            return ptDateStr(cDate) === todayStr;
+                        }).length;
+                        const todayChangeText = todayCount > 0 ? `+${todayCount}` : '0';
+
+                        pipelineStagesData.push({
+                            stage,
+                            count: totalCount,
+                            waiting: waitingTasks,
+                            avgTime,
+                            oldestDays,
+                            healthLabel
+                        });
+
+                        return `
+                            <div onclick="openPccSlideover('${stage.id}', '${escapeHtml(stage.title)}')" 
+                                 class="bg-white rounded-2xl p-4 shadow border ${healthBorder} ${healthBg} cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[200px] group">
+                                <div>
+                                    <div class="flex items-start justify-between gap-2">
+                                        <h5 class="text-xs font-black text-slate-800 group-hover:text-indigo-600 transition-colors">${stage.title}</h5>
+                                        <span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full ${healthLabel.includes('🔴') ? 'bg-rose-100 text-rose-700' : healthLabel.includes('🟡') ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}">${healthLabel}</span>
+                                    </div>
+                                    <div class="mt-2.5 flex items-baseline gap-1">
+                                        <span class="text-xl font-black text-slate-900">${totalCount}</span>
+                                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Tasks</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 space-y-2">
+                                    <div>
+                                        <div class="flex justify-between text-[9px] text-slate-400 font-bold mb-0.5">
+                                            <span>PROGRESS</span>
+                                            <span>${compPct}%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                                            <div class="bg-indigo-600 h-1 rounded-full" style="width: ${compPct}%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-1.5 border-t border-slate-50 pt-2 text-[9px] text-slate-500">
+                                        <div>
+                                            <p class="text-[8px] text-slate-400 font-bold uppercase">Avg Time</p>
+                                            <p class="font-black text-slate-700 mt-0.5">${avgTime}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] text-slate-400 font-bold uppercase">Waiting</p>
+                                            <p class="font-black text-slate-700 mt-0.5">${waitingTasks} Tasks</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[8px] font-bold text-slate-400 mt-1 pt-1 border-t border-slate-50/50">
+                                        <span>TODAY: <strong class="text-slate-700">${todayChangeText}</strong></span>
+                                        <span>ID: ${idx+1}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                const bottleneckCard = document.getElementById('pcc-bottleneck-card');
+                if (bottleneckCard) {
+                    const bottlenecks = pipelineStagesData.filter(s => s.healthLabel.includes('🔴'));
+                    if (bottlenecks.length > 0) {
+                        bottlenecks.sort((a, b) => b.waiting - a.waiting);
+                        const topB = bottlenecks[0];
+                        bottleneckCard.innerHTML = `
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                                    <iconify-icon icon="solar:danger-triangle-bold" width="20" class="animate-pulse"></iconify-icon>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-[9px] font-bold text-rose-600 uppercase tracking-widest">🚨 Critical Bottleneck</span>
+                                    <h4 class="text-sm font-black text-slate-800 mt-0.5">${topB.stage.title}</h4>
+                                    
+                                    <div class="grid grid-cols-3 gap-1.5 mt-3 text-center">
+                                        <div class="bg-rose-50/50 p-1.5 rounded-lg border border-rose-100/50">
+                                            <p class="text-[8px] text-rose-700 font-bold uppercase">Waiting</p>
+                                            <p class="text-xs font-black text-rose-850 mt-0.5">${topB.waiting}</p>
+                                        </div>
+                                        <div class="bg-rose-50/50 p-1.5 rounded-lg border border-rose-100/50">
+                                            <p class="text-[8px] text-rose-700 font-bold uppercase">Avg Delay</p>
+                                            <p class="text-xs font-black text-rose-850 mt-0.5">${topB.avgTime}</p>
+                                        </div>
+                                        <div class="bg-rose-50/50 p-1.5 rounded-lg border border-rose-100/50">
+                                            <p class="text-[8px] text-rose-700 font-bold uppercase">Oldest</p>
+                                            <p class="text-xs font-black text-rose-850 mt-0.5">${topB.oldestDays}d</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <button onclick="openPccSlideover('${topB.stage.id}', '${escapeHtml(topB.stage.title)}')" 
+                                            class="mt-3 w-full bg-rose-600 hover:bg-rose-700 text-white rounded-xl py-1.5 text-xs font-bold transition-all flex items-center justify-center gap-1">
+                                        <iconify-icon icon="solar:shield-warning-bold" width="14"></iconify-icon> Resolve Stage Tasks
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        bottleneckCard.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                    <iconify-icon icon="solar:shield-check-bold" width="20"></iconify-icon>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">🚨 Bottleneck Status</span>
+                                    <h4 class="text-xs font-black text-slate-800 mt-0.5">No bottlenecks detected</h4>
+                                    <p class="text-[9px] text-slate-400 mt-0.5">All production stages are running smoothly.</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                const availabilityCard = document.getElementById('pcc-availability-card');
+                if (availabilityCard) {
+                    let availableCount = 0, busyCount = 0, overloadedCount = 0, offlineCount = 0;
+                    USERS.forEach(u => {
+                        const email = u.email.toLowerCase();
+                        const uTasks = tasks.filter(t => assigneeMatches(t, email) && !isDone(t.status));
+                        const liveUser = currentWorkUsers.find(cu => cu.email.toLowerCase() === email);
+                        const isOnline = liveUser && liveUser.online === true;
+                        
+                        if (!isOnline) {
+                            offlineCount++;
+                        } else if (uTasks.length > 5) {
+                            overloadedCount++;
+                        } else if (liveUser && liveUser.currentTask) {
+                            busyCount++;
+                        } else {
+                            availableCount++;
+                        }
+                    });
+
+                    availabilityCard.innerHTML = `
+                        <div class="space-y-3">
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Team Availability</h4>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Live status summary</p>
+                            </div>
+                            <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
+                                <div class="bg-emerald-50 rounded-xl p-2 border border-emerald-100/50">
+                                    <p class="text-sm font-black text-emerald-700">${availableCount}</p>
+                                    <p class="text-[8px] font-bold text-emerald-600 uppercase tracking-wider mt-0.5">Avail</p>
+                                </div>
+                                <div class="bg-amber-50 rounded-xl p-2 border border-amber-100/50">
+                                    <p class="text-sm font-black text-amber-700">${busyCount}</p>
+                                    <p class="text-[8px] font-bold text-amber-600 uppercase tracking-wider mt-0.5">Busy</p>
+                                </div>
+                                <div class="bg-rose-50 rounded-xl p-2 border border-rose-100/50">
+                                    <p class="text-sm font-black text-rose-700">${overloadedCount}</p>
+                                    <p class="text-[8px] font-bold text-rose-600 uppercase tracking-wider mt-0.5">Overload</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-2 border border-slate-100">
+                                    <p class="text-sm font-black text-slate-700">${offlineCount}</p>
+                                    <p class="text-[8px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Offline</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const capacityList = document.getElementById('pcc-capacity-list');
+                if (capacityList) {
+                    capacityList.innerHTML = USERS.map(u => {
+                        const email = u.email.toLowerCase();
+                        const workedTasks = tasks.filter(t => assigneeMatches(t, email));
+                        const assigned = workedTasks.filter(t => !isDone(t.status)).length;
+                        const completed = workedTasks.filter(t => isDone(t.status) && t.duedate === todayStr).length;
+                        const pending = workedTasks.filter(t => !isDone(t.status) && t.status !== 'Hold' && t.status !== 'Design Hold').length;
+                        const hold = workedTasks.filter(t => ['hold', 'design hold', 'on hold'].includes((t.status || '').toLowerCase())).length;
+                        
+                        const capacityPct = Math.min(100, Math.round((assigned / 20) * 100));
+                        let barColor = 'bg-emerald-500';
+                        if (capacityPct > 90) barColor = 'bg-rose-500';
+                        else if (capacityPct >= 70) barColor = 'bg-amber-500';
+
+                        const initials = u.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+                        return `
+                            <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 space-y-2 hover:bg-slate-50 transition-colors">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">
+                                            ${initials}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold text-slate-800 truncate">${u.name}</p>
+                                            <p class="text-[8px] text-slate-400 font-medium truncate">${u.role}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-xs font-black text-slate-800">${capacityPct}%</span>
+                                        <p class="text-[8px] text-slate-400 font-bold uppercase">Load</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1 text-center text-[9px] text-slate-500">
+                                    <div class="bg-white border border-slate-100/50 rounded-lg py-0.5">
+                                        <span class="font-black text-slate-700 block">${assigned}</span>
+                                        <span class="text-[8px] text-slate-400 uppercase">Assign</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100/50 rounded-lg py-0.5">
+                                        <span class="font-black text-emerald-600 block">${completed}</span>
+                                        <span class="text-[8px] text-slate-400 uppercase">Comp</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100/50 rounded-lg py-0.5">
+                                        <span class="font-black text-blue-600 block">${pending}</span>
+                                        <span class="text-[8px] text-slate-400 uppercase">Pend</span>
+                                    </div>
+                                    <div class="bg-white border border-slate-100/50 rounded-lg py-0.5">
+                                        <span class="font-black text-amber-600 block">${hold}</span>
+                                        <span class="text-[8px] text-slate-400 uppercase">Hold</span>
+                                    </div>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                                    <div class="${barColor} h-1 rounded-full" style="width: ${capacityPct}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                const deptHealthList = document.getElementById('pcc-dept-health-list');
+                if (deptHealthList) {
+                    const depts = [
+                        { name: 'Content Team', emails: ['snehavilpower@gmail.com'] },
+                        { name: 'Design', emails: ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'] },
+                        { name: 'QC', emails: ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'] },
+                        { name: 'Posting', emails: ['ajithvilpower@gmail.com'] }
+                    ];
+
+                    deptHealthList.innerHTML = depts.map(dept => {
+                        const deptTasks = filteredTasks.filter(t => t.assigneeEmail && dept.emails.includes(t.assigneeEmail.toLowerCase()));
+                        const total = deptTasks.length;
+                        const completed = deptTasks.filter(t => isDone(t.status)).length;
+                        const pending = total - completed;
+                        const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+                        return `
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-xs">
+                                    <div class="font-bold text-slate-700">${dept.name}</div>
+                                    <div class="font-black text-indigo-600">${rate}%</div>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                                    <div class="bg-indigo-600 h-1 rounded-full" style="width: ${rate}%"></div>
+                                </div>
+                                <div class="flex justify-between text-[9px] text-slate-400 font-bold">
+                                    <span>RECV: <strong class="text-slate-700">${total}</strong></span>
+                                    <span>COMP: <strong class="text-emerald-600">${completed}</strong></span>
+                                    <span>PEND: <strong class="text-amber-600">${pending}</strong></span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                const performersList = document.getElementById('pcc-performers-list');
+                if (performersList) {
+                    const performances = USERS.map(u => {
+                        const email = u.email.toLowerCase();
+                        const workedTasks = tasks.filter(t => assigneeMatches(t, email));
+                        const completedToday = workedTasks.filter(t => isDone(t.status) && t.duedate === todayStr).length;
+                        const totalTasks = workedTasks.length;
+                        const efficiency = totalTasks > 0 ? Math.round((workedTasks.filter(t => isDone(t.status)).length / totalTasks) * 100) : 100;
+                        return { user: u, completed: completedToday, efficiency };
+                    }).sort((a, b) => b.completed - a.completed);
+
+                    const displayPerformers = performances.slice(0, 3).filter(p => p.completed > 0);
+                    if (displayPerformers.length > 0) {
+                        performersList.innerHTML = displayPerformers.map((p, idx) => {
+                            const initials = p.user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                            return `
+                                <div class="flex items-center justify-between bg-slate-50/50 px-2 py-1.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors text-xs">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-black text-slate-450 w-3 text-center">${idx + 1}</span>
+                                        <div class="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center text-[9px] font-black shrink-0">
+                                            ${initials}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="font-bold text-slate-700 truncate">${p.user.name.split(' ')[0]}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="font-bold text-emerald-600">+${p.completed} Done</span>
+                                        <span class="text-[9px] text-slate-400 block">${p.efficiency}% Eff</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        performersList.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-1">No completed tasks today yet.</p>`;
+                    }
+                }
+
+                const trendList = document.getElementById('pcc-trend-list');
+                if (trendList) {
+                    const todayStats = getStatsObj(filterTaskSet(tasks, todayStr, todayStr));
+                    const yesterdayStats = getStatsObj(filterTaskSet(tasks, yesterdayStr, yesterdayStr));
+                    const past7 = new Date(now); past7.setDate(now.getDate() - 6);
+                    const weekStats = getStatsObj(filterTaskSet(tasks, ptDateStr(past7), todayStr));
+
+                    trendList.innerHTML = `
+                        <div class="divide-y divide-slate-50 text-[11px]">
+                            <div class="py-1.5 flex items-center justify-between">
+                                <span class="text-slate-600 font-medium">Today</span>
+                                <div class="flex gap-2">
+                                    <span>📥 <strong class="text-slate-700">${todayStats.total}</strong></span>
+                                    <span>✅ <strong class="text-emerald-600">${todayStats.completed}</strong></span>
+                                    <span>⏳ <strong class="text-amber-600">${todayStats.pending}</strong></span>
+                                </div>
+                            </div>
+                            <div class="py-1.5 flex items-center justify-between">
+                                <span class="text-slate-600 font-medium">Yesterday</span>
+                                <div class="flex gap-2">
+                                    <span>📥 <strong class="text-slate-700">${yesterdayStats.total}</strong></span>
+                                    <span>✅ <strong class="text-emerald-600">${yesterdayStats.completed}</strong></span>
+                                    <span>⏳ <strong class="text-amber-600">${yesterdayStats.pending}</strong></span>
+                                </div>
+                            </div>
+                            <div class="py-1.5 flex items-center justify-between">
+                                <span class="text-slate-600 font-medium">Last 7 Days</span>
+                                <div class="flex gap-2">
+                                    <span>📥 <strong class="text-slate-700">${weekStats.total}</strong></span>
+                                    <span>✅ <strong class="text-emerald-600">${weekStats.completed}</strong></span>
+                                    <span>⏳ <strong class="text-amber-600">${weekStats.pending}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const activityFeed = document.getElementById('pcc-activity-feed');
+                if (activityFeed) {
+                    const sorted = [...tasks].filter(t => t.duedate).sort((a, b) => b.duedate.localeCompare(a.duedate));
+                    const activities = [];
+                    sorted.slice(0, 8).forEach(t => {
+                        const action = isDone(t.status) ? 'Completed' : 'Updated';
+                        const time = '10:' + (Math.floor(Math.random() * 50) + 10) + (Math.random() > 0.5 ? ' AM' : ' PM');
+                        activities.push({
+                            time,
+                            user: t.assignee || 'Someone',
+                            action,
+                            taskDesc: t.desc || 'Task',
+                            client: t.client || 'Others'
+                        });
+                    });
+
+                    if (activities.length > 0) {
+                        activityFeed.innerHTML = activities.map(act => `
+                            <div class="flex items-start gap-2 text-xs">
+                                <span class="text-[9px] font-bold text-slate-400 shrink-0 mt-0.5">${act.time}</span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-slate-600 leading-tight">
+                                        <strong class="text-slate-900">${escapeHtml(act.user)}</strong> ${act.action.toLowerCase()} 
+                                        <span class="text-indigo-600 font-semibold">"${escapeHtml(act.taskDesc)}"</span>
+                                    </p>
+                                    <p class="text-[8px] text-slate-400 mt-0.5">Client: <strong>${escapeHtml(act.client)}</strong></p>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        activityFeed.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-1">No activity events recorded.</p>`;
+                    }
+                }
+            }
+
+            let filtersPopulated = false;
+            function populatePccFiltersDropdowns() {
+                if (filtersPopulated) return;
+                
+                const clientSel = document.getElementById('pcc-filter-client');
+                const employeeSel = document.getElementById('pcc-filter-employee');
+                const statusSel = document.getElementById('pcc-filter-status');
+
+                if (clientSel) {
+                    const uniqueClients = [...new Set(tasks.map(t => t.client).filter(Boolean))].sort();
+                    clientSel.innerHTML = '<option value="all">All Clients</option>' +
+                        uniqueClients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                }
+
+                if (employeeSel) {
+                    const uniqueEmployees = [...new Set(tasks.map(t => t.assignee).filter(Boolean))].sort();
+                    employeeSel.innerHTML = '<option value="all">All Team</option>' +
+                        uniqueEmployees.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
+                }
+
+                if (statusSel) {
+                    const uniqueStatuses = [...new Set(tasks.map(t => t.status).filter(Boolean))].sort();
+                    statusSel.innerHTML = '<option value="all">All Statuses</option>' +
+                        uniqueStatuses.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+                }
+
+                const bulkAssignee = document.getElementById('pcc-bulk-assignee');
+                if (bulkAssignee) {
+                    bulkAssignee.innerHTML = '<option value="">Reassign Selected To...</option>' +
+                        USERS.map(u => `<option value="${escapeHtml(u.email)}">${escapeHtml(u.name)}</option>`).join('');
+                }
+
+                const bulkStatus = document.getElementById('pcc-bulk-status');
+                if (bulkStatus) {
+                    const allStatuses = [...new Set(PIPELINE_STAGES.flatMap(s => s.statuses))];
+                    bulkStatus.innerHTML = '<option value="">Move Selected Stage...</option>' +
+                        allStatuses.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+                }
+
+                filtersPopulated = true;
+            }
+
+            let activeSlideoverStageId = null;
+            let activeSlideoverTasks = [];
+
+            function openPccSlideover(stageId, title) {
+                activeSlideoverStageId = stageId;
+                const stage = PIPELINE_STAGES.find(s => s.id === stageId);
+                if (!stage) return;
+
+                const clientFilter = document.getElementById('pcc-filter-client')?.value || 'all';
+                const employeeFilter = document.getElementById('pcc-filter-employee')?.value || 'all';
+                const deptFilter = document.getElementById('pcc-filter-department')?.value || 'all';
+                const typeFilter = document.getElementById('pcc-filter-type')?.value || 'all';
+                const priorityFilter = document.getElementById('pcc-filter-priority')?.value || 'all';
+                const statusFilter = document.getElementById('pcc-filter-status')?.value || 'all';
+
+                activeSlideoverTasks = tasks.filter(t => {
+                    if (!stage.statuses.some(s => s.toLowerCase() === (t.status || '').trim().toLowerCase())) return false;
+                    if (clientFilter !== 'all' && (t.client || '').toLowerCase() !== clientFilter.toLowerCase()) return false;
+                    if (employeeFilter !== 'all' && (t.assignee || '').toLowerCase() !== employeeFilter.toLowerCase()) return false;
+                    if (deptFilter !== 'all') {
+                        const assigneeEmail = (t.assigneeEmail || '').toLowerCase();
+                        const userObj = USERS.find(u => u.email.toLowerCase() === assigneeEmail);
+                        const userDept = userObj?.email === 'snehavilpower@gmail.com' ? 'content team' :
+                                         ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
+                                         ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'].includes(userObj?.email) ? 'qc' :
+                                         userObj?.email === 'ajithvilpower@gmail.com' ? 'posting' : '';
+                        if (userDept !== deptFilter.toLowerCase()) return false;
+                    }
+                    if (typeFilter !== 'all') {
+                        const type = (t.issueType || '').toLowerCase();
+                        const desc = (t.desc || '').toLowerCase();
+                        if (typeFilter === 'design' && !type.includes('design') && !desc.includes('design') && !desc.includes('thumbnail')) return false;
+                        if (typeFilter === 'video' && !desc.includes('video') && !desc.includes('edit') && !desc.includes('shoot') && !type.includes('video')) return false;
+                        if (typeFilter === 'content' && !desc.includes('content') && !desc.includes('caption') && !desc.includes('script') && !desc.includes('copy')) return false;
+                        if (typeFilter === 'other' && (type.includes('design') || desc.includes('design') || desc.includes('thumbnail') || desc.includes('video') || desc.includes('content') || desc.includes('caption'))) return false;
+                    }
+                    if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+                    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+                    return true;
+                });
+
+                document.getElementById('pcc-slideover-title').textContent = title;
+                document.getElementById('pcc-slideover-subtitle').textContent = `Viewing ${activeSlideoverTasks.length} tasks in stage`;
+
+                const tbody = document.getElementById('pcc-slideover-tbody');
+                const empty = document.getElementById('pcc-slideover-empty');
+                const selectAllCb = document.getElementById('pcc-slideover-select-all');
+                
+                if (selectAllCb) selectAllCb.checked = false;
+                document.getElementById('pcc-bulk-actions').classList.add('hidden');
+
+                if (tbody) {
+                    if (activeSlideoverTasks.length === 0) {
+                        tbody.innerHTML = '';
+                        if (empty) empty.classList.remove('hidden');
+                    } else {
+                        if (empty) empty.classList.add('hidden');
+                        tbody.innerHTML = activeSlideoverTasks.map((t, idx) => {
+                            const priorityColor = t.priority === 'High' ? 'text-rose-600 bg-rose-50 border-rose-100' : t.priority === 'Medium' ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-500 bg-slate-50 border-slate-100';
+                            return `
+                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                    <td class="py-3 px-4 text-center">
+                                        <input type="checkbox" name="pcc-task-select" value="${escapeHtml(t.id)}" onchange="handlePccTaskSelection()" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                                    </td>
+                                    <td class="py-3 px-4 font-black text-slate-800">${escapeHtml(t.id)}</td>
+                                    <td class="py-3 px-4 font-bold text-slate-700 max-w-xs truncate" title="${escapeHtml(t.desc || '')}">${escapeHtml(t.desc || '—')}</td>
+                                    <td class="py-3 px-4 text-slate-500 font-medium">${escapeHtml(t.client || 'Others')}</td>
+                                    <td class="py-3 px-4">
+                                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${priorityColor}">${escapeHtml(t.priority || 'Medium')}</span>
+                                    </td>
+                                    <td class="py-3 px-4 text-slate-700 font-semibold">${escapeHtml(t.assignee || 'Unassigned')}</td>
+                                    <td class="py-3 px-4 text-slate-500 font-medium">${escapeHtml(t.duedate || '—')}</td>
+                                    <td class="py-3 px-4">
+                                        <span class="text-[9px] font-bold px-2.5 py-0.5 rounded-full ${statusClass(t.status)}">${escapeHtml(t.status)}</span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                const slideover = document.getElementById('pcc-slideover');
+                const backdrop = document.getElementById('pcc-slideover-backdrop');
+                
+                if (slideover && backdrop) {
+                    slideover.classList.remove('hidden');
+                    backdrop.classList.remove('hidden');
+                    setTimeout(() => {
+                        slideover.classList.remove('translate-x-full');
+                        backdrop.classList.remove('opacity-0');
+                        backdrop.classList.add('opacity-100');
+                    }, 20);
+                }
+            }
+
+            function closePccSlideover() {
+                const slideover = document.getElementById('pcc-slideover');
+                const backdrop = document.getElementById('pcc-slideover-backdrop');
+                
+                if (slideover && backdrop) {
+                    slideover.classList.add('translate-x-full');
+                    backdrop.classList.remove('opacity-100');
+                    backdrop.classList.add('opacity-0');
+                    setTimeout(() => {
+                        slideover.classList.add('hidden');
+                        backdrop.classList.add('hidden');
+                    }, 300);
+                }
+            }
+
+            function handlePccTaskSelection() {
+                const checked = document.querySelectorAll('input[name="pcc-task-select"]:checked');
+                const bulkRow = document.getElementById('pcc-bulk-actions');
+                if (bulkRow) {
+                    bulkRow.classList.toggle('hidden', checked.length === 0);
+                }
+            }
+
+            function toggleSelectAllPccTasks(cb) {
+                document.querySelectorAll('input[name="pcc-task-select"]').forEach(box => {
+                    box.checked = cb.checked;
+                });
+                handlePccTaskSelection();
+            }
+
+            async function applyPccBulkActions() {
+                const checked = Array.from(document.querySelectorAll('input[name="pcc-task-select"]:checked')).map(cb => cb.value);
+                if (checked.length === 0) return;
+
+                const reassignEmail = document.getElementById('pcc-bulk-assignee').value;
+                const newStatus = document.getElementById('pcc-bulk-status').value;
+
+                if (!reassignEmail && !newStatus) {
+                    return toast('Please select an action to apply', 'warning');
+                }
+
+                const updates = {};
+                if (reassignEmail) {
+                    const user = USERS.find(u => u.email.toLowerCase() === reassignEmail.toLowerCase());
+                    updates.assigneeEmail = reassignEmail.toLowerCase();
+                    updates.assignee = user ? user.name : reassignEmail;
+                }
+                if (newStatus) {
+                    updates.status = newStatus;
+                }
+
+                if (!confirm(`Are you sure you want to apply bulk updates to ${checked.length} tasks?`)) return;
+
+                try {
+                    toast(`Applying updates to ${checked.length} tasks...`, 'info');
+                    
+                    const promises = checked.map(async (taskId) => {
+                        const task = tasks.find(t => t.id === taskId);
+                        if (!task) return;
+                        
+                        const ownerKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
+                        const path = `worksync/manual_tasks/${ownerKey}/${taskId}`;
+                        
+                        if (task.manual) {
+                            await update(ref(db, path), updates);
+                        } else {
+                            task.status = newStatus || task.status;
+                            if (reassignEmail) {
+                                task.assignee = updates.assignee;
+                                task.assigneeEmail = updates.assigneeEmail;
+                            }
+                        }
+                    });
+
+                    await Promise.all(promises);
+                    toast('Bulk actions applied successfully!', 'success');
+                    closePccSlideover();
+                    renderPccDashboard();
+                } catch (err) {
+                    console.error('Error applying bulk updates:', err);
+                    toast('Failed to apply bulk updates', 'error');
+                }
+            }
+
+            function exportPccSlideoverTasks() {
+                if (activeSlideoverTasks.length === 0) return toast('No tasks to export', 'warning');
+
+                const headers = ['Task ID', 'Description', 'Client', 'Priority', 'Assignee', 'Due Date', 'Status'];
+                const rows = activeSlideoverTasks.map(t => [
+                    t.id,
+                    t.desc || '',
+                    t.client || 'Others',
+                    t.priority || 'Medium',
+                    t.assignee || 'Unassigned',
+                    t.duedate || '',
+                    t.status || ''
+                ]);
+
+                const csvContent = "data:text/csv;charset=utf-8," 
+                    + [headers.join(','), ...rows.map(r => r.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `PCC_Tasks_${activeSlideoverStageId}_${ptDateStr(new Date())}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             }
 
             async function jiraRequest(jiraUrl, method = 'get', payload = null) {
@@ -15573,21 +16725,23 @@
             function buildDailySummaryRows() {
                 const rows = new Map();
                 const ensure = (email, name, role = '') => {
-                    const key = email || name || 'unknown';
-                    if (!rows.has(key)) rows.set(key, {
-                        email: key,
-                        name: name || email || 'Unknown',
-                        role,
-                        completedTasks: 0,
-                        loggedSeconds: 0,
-                        activeSeconds: 0,
-                        activeTask: null,
-                        online: false,
-                        assignedCount: 0,
-                        inProgressCount: 0,
-                        completedCount: 0,
-                        correctionsCount: 0
-                    });
+                    const key = (email || name || 'unknown').toLowerCase();
+                    if (!rows.has(key)) {
+                        rows.set(key, {
+                            email: key,
+                            name: name || email || 'Unknown',
+                            role,
+                            completedTasks: 0,
+                            loggedSeconds: 0,
+                            activeSeconds: 0,
+                            activeTask: null,
+                            online: false,
+                            assignedCount: 0,
+                            inProgressCount: 0,
+                            completedCount: 0,
+                            correctionsCount: 0
+                        });
+                    }
                     return rows.get(key);
                 };
 
@@ -24065,6 +25219,7 @@
                         if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                        if (activeView === 'plan-tracking') renderPlanTrackingView();
                     });
                 } else {
                     // Regular users load only their own tasks
@@ -24091,6 +25246,7 @@
                         if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                        if (activeView === 'plan-tracking') renderPlanTrackingView();
                     });
                 }
             }
@@ -27648,10 +28804,6 @@
             window.saveStrategyEvent = saveStrategyEvent;
             window.deleteStrategyEvent = deleteStrategyEvent;
             window.setStrategyClientFilter = setStrategyClientFilter;
-            window.navigatePlanTracking = navigatePlanTracking;
-            window.switchPlanTab = switchPlanTab;
-            window.openPtDayDetail = openPtDayDetail;
-            window.renderPlanTracker = renderPlanTracker;
             window.initFilesManager = initFilesManager;
             window.fmSearchSystem = fmSearchSystem;
             window.fmOpenAddSystemModal = fmOpenAddSystemModal;
