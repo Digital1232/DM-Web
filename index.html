@@ -21223,20 +21223,23 @@
 
                     const user = allUsersMap.get(email) || knownUserByEmail(email) || { name: email, email, role: '' };
 
+                    const getTaskStatusForUser = (t, usrEmail) => {
+                        if (!t) return '';
+                        if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
+                            const userPlans = dailyPlans[eKey(usrEmail)];
+                            if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
+                                return userPlans[t.id].localStatus;
+                            }
+                        }
+                        return t.status;
+                    };
+                    const getTaskStatus = (t) => getTaskStatusForUser(t, email);
+
                     const getStatsFor = (usrEmail, start, end) => {
                         // isExcludedTask defined at outer scope above
 
                         const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
-                        const getTaskStatus = (t) => {
-                            if (!t) return '';
-                            if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
-                                const userPlans = dailyPlans[eKey(usrEmail)];
-                                if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
-                                    return userPlans[t.id].localStatus;
-                                }
-                            }
-                            return t.status;
-                        };
+                        const getTaskStatus = (t) => getTaskStatusForUser(t, usrEmail);
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
                             'immanuelvilpower@gmail.com',
