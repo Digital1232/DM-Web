@@ -1932,14 +1932,22 @@
                                         class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
                                         <option value="all">All Clients</option>
                                     </select>
-                                    <select id="duedate-filter" onchange="setDueDateFilter(this.value)"
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
-                                        <option value="all">All Dates</option>
-                                        <option value="overdue">Overdue</option>
-                                        <option value="today">Due Today</option>
-                                        <option value="this_week">Due this Week</option>
-                                        <option value="this_month">Due this Month</option>
-                                    </select>
+                                    <button type="button"
+                                        onclick="document.getElementById('jira-date-range-picker').showPicker ? document.getElementById('jira-date-range-picker').showPicker() : document.getElementById('jira-date-range-picker').click()"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center gap-2">
+                                        <iconify-icon icon="solar:calendar-linear" width="16"></iconify-icon>
+                                        <span id="jira-date-range-label">All Dates</span>
+                                    </button>
+                                    <button type="button" onclick="clearJiraDateRange()" id="jira-date-clear-btn" 
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-slate-500 hover:text-rose-600 hover:border-rose-200 hidden"
+                                        title="Clear date range">
+                                        <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
+                                    </button>
+                                    <div class="hidden">
+                                        <input id="jira-date-from" type="date" onchange="handleJiraDateRangeChange()">
+                                        <input id="jira-date-to" type="date" onchange="handleJiraDateRangeChange()">
+                                        <input id="jira-date-range-picker" type="text" style="display:none;">
+                                    </div>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
                                             class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
@@ -2282,6 +2290,10 @@
                                 class="p-6 border-b border-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div class="flex flex-wrap items-center gap-3">
                                     <h3 class="text-lg font-black text-slate-900 tracking-tight">Planned Tasks</h3>
+                                    <button type="button" onclick="renderDailyPlan()" title="Refresh task list"
+                                        class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-indigo-600">
+                                        <iconify-icon icon="solar:refresh-circle-bold" width="20"></iconify-icon>
+                                    </button>
                                     <div class="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
                                         <button type="button" onclick="setDailyPlanView('table')" id="dp-view-table"
                                             class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-indigo-600 shadow-sm transition-all">Table</button>
@@ -3706,6 +3718,7 @@
                                                                 <option>Content</option>
                                                                 <option>Quality Check</option>
                                                                 <option>Image Extract</option>
+                                                                <option>Print Materials</option>
                                                                 <option>Other</option>
                                                             </select>
                                                             <input id="dpr-count" type="number" min="0"
@@ -8321,6 +8334,8 @@
             let currentAssigneeFilter = 'me';
             let currentClientFilter = 'all';
             let currentDueDateFilter = 'all';
+            let currentDueDateFromRange = null;
+            let currentDueDateToRange = null;
             let currentSearchTerm = '';
             let currentInternalStatusFilter = 'all';
             let currentInternalAssigneeFilter = 'me';
@@ -9478,6 +9493,9 @@
                         new Promise(resolve => setTimeout(() => { loadQcReports(); resolve(); }, 100))
                     ]);
                     
+                    // Initialize Jira date picker
+                    initJiraDatePicker();
+                    
                     // NOW switch to the last view after tasks are loaded
                     switchView(validViews.includes(lastView) ? lastView : 'dashboard');
                     
@@ -9773,6 +9791,8 @@
                     assignee: currentAssigneeFilter,
                     client: currentClientFilter,
                     dueDate: currentDueDateFilter,
+                    dueDateFromRange: currentDueDateFromRange,
+                    dueDateToRange: currentDueDateToRange,
                     viewMode: currentTaskViewMode,
                     columnOrder: boardColumnOrder
                 };
@@ -9790,6 +9810,8 @@
                     currentAssigneeFilter = settings.assignee ?? 'me';
                     currentClientFilter = settings.client ?? 'all';
                     currentDueDateFilter = settings.dueDate ?? 'all';
+                    currentDueDateFromRange = settings.dueDateFromRange ?? null;
+                    currentDueDateToRange = settings.dueDateToRange ?? null;
                     currentTaskViewMode = settings.viewMode ?? 'list';
                     boardColumnOrder = settings.columnOrder ?? null;
 
@@ -9818,7 +9840,15 @@
                 }
                 if (document.getElementById('assignee-filter')) document.getElementById('assignee-filter').value = currentAssigneeFilter;
                 if (document.getElementById('client-filter')) document.getElementById('client-filter').value = currentClientFilter; // populateClientFilter is called after syncTasks
-                if (document.getElementById('duedate-filter')) document.getElementById('duedate-filter').value = currentDueDateFilter;
+                
+                // Apply date range if saved
+                if (currentDueDateFromRange || currentDueDateToRange) {
+                    const fromInput = document.getElementById('jira-date-from');
+                    const toInput = document.getElementById('jira-date-to');
+                    if (fromInput) fromInput.value = currentDueDateFromRange || '';
+                    if (toInput) toInput.value = currentDueDateToRange || '';
+                    handleJiraDateRangeChange();
+                }
 
                 const btn = document.getElementById('view-toggle-btn');
                 if (btn) {
@@ -14192,8 +14222,28 @@
                 if (currentClientFilter !== 'all') {
                     filtered = filtered.filter(t => t.client === currentClientFilter);
                 }
-
-                if (currentDueDateFilter !== 'all') {
+                if (currentDueDateFromRange || currentDueDateToRange) {
+                    // Custom date range filtering
+                    filtered = filtered.filter(t => {
+                        if (!t.duedate) return false;
+                        const dueDate = new Date(t.duedate);
+                        dueDate.setHours(0, 0, 0, 0);
+                        
+                        if (currentDueDateFromRange) {
+                            const fromDate = new Date(currentDueDateFromRange);
+                            fromDate.setHours(0, 0, 0, 0);
+                            if (dueDate < fromDate) return false;
+                        }
+                        
+                        if (currentDueDateToRange) {
+                            const toDate = new Date(currentDueDateToRange);
+                            toDate.setHours(23, 59, 59, 999);
+                            if (dueDate > toDate) return false;
+                        }
+                        
+                        return true;
+                    });
+                } else if (currentDueDateFilter !== 'all') {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
@@ -19594,6 +19644,7 @@
                                 <option>Content</option>
                                 <option>Quality Check</option>
                                 <option>Image Extract</option>
+                                <option>Print Materials</option>
                                 <option>Other</option>
                             </select>
                             <input id="dpr-count" type="number" min="0" placeholder="Completed count"
@@ -26571,6 +26622,75 @@
                 renderTasks();
             }
 
+            function handleJiraDateRangeChange() {
+                const fromInput = document.getElementById('jira-date-from');
+                const toInput = document.getElementById('jira-date-to');
+                const labelEl = document.getElementById('jira-date-range-label');
+                const clearBtn = document.getElementById('jira-date-clear-btn');
+                
+                const fromDate = fromInput.value;
+                const toDate = toInput.value;
+                
+                currentDueDateFromRange = fromDate || null;
+                currentDueDateToRange = toDate || null;
+                
+                // Update label
+                if (fromDate && toDate) {
+                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `${from} - ${to}`;
+                    clearBtn.classList.remove('hidden');
+                } else if (fromDate) {
+                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `From ${from}`;
+                    clearBtn.classList.remove('hidden');
+                } else if (toDate) {
+                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                    labelEl.textContent = `Until ${to}`;
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    labelEl.textContent = 'All Dates';
+                    clearBtn.classList.add('hidden');
+                }
+                
+                renderTasks();
+            }
+
+            function clearJiraDateRange() {
+                document.getElementById('jira-date-from').value = '';
+                document.getElementById('jira-date-to').value = '';
+                document.getElementById('jira-date-clear-btn').classList.add('hidden');
+                currentDueDateFromRange = null;
+                currentDueDateToRange = null;
+                document.getElementById('jira-date-range-label').textContent = 'All Dates';
+                renderTasks();
+            }
+
+            function initJiraDatePicker() {
+                const datePickerEl = document.getElementById('jira-date-range-picker');
+                if (datePickerEl && window.Litepicker) {
+                    const fromInput = document.getElementById('jira-date-from');
+                    const toInput = document.getElementById('jira-date-to');
+                    
+                    new Litepicker({
+                        element: datePickerEl,
+                        singleMode: false,
+                        startDate: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000),
+                        endDate: new Date(),
+                        format: 'YYYY-MM-DD',
+                        tooltipText: [' to '],
+                        onSelect: (date1, date2) => {
+                            if (date1) fromInput.value = date1.format('YYYY-MM-DD');
+                            if (date2) toInput.value = date2.format('YYYY-MM-DD');
+                            handleJiraDateRangeChange();
+                        }
+                    });
+                    
+                    // Store reference for later access
+                    datePickerEl.litepicker = Litepicker;
+                }
+            }
+
             function toggleInternalStatusFilter(cb) {
                 const val = cb.value;
                 const allCheckbox = document.querySelector('#internal-status-menu input[value="all"]');
@@ -27294,6 +27414,14 @@
                     seen.add(k);
                     return true;
                 });
+                
+                // Filter out completed tasks
+                uniquePlans = uniquePlans.filter(t => {
+                    const taskStatus = (t.status || '').toLowerCase().trim();
+                    const isCompleted = isDone(taskStatus) || isInternalDone(taskStatus);
+                    return !isCompleted;
+                });
+                
                 if (dpFilter === 'carryover') {
                     uniquePlans = uniquePlans.filter(t => t.isCarryOver);
                 }
@@ -29612,6 +29740,9 @@
             window.setClientFilter = setClientFilter;
             window.setInternalClientFilter = setInternalClientFilter;
             window.setDueDateFilter = setDueDateFilter;
+            window.handleJiraDateRangeChange = handleJiraDateRangeChange;
+            window.clearJiraDateRange = clearJiraDateRange;
+            window.initJiraDatePicker = initJiraDatePicker;
             window.setInternalDueDateFilter = setInternalDueDateFilter;
             window.searchTasks = searchTasks;
             window.searchInternalTasks = searchInternalTasks;
