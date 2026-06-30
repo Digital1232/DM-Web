@@ -2240,8 +2240,16 @@
                                             class="transition-transform" id="dp-user-filter-arrow"></iconify-icon>
                                     </button>
                                     <div id="dp-user-dropdown"
-                                        class="hidden absolute left-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-3">
-                                        <div id="dp-user-checkboxes" class="max-h-60 overflow-y-auto space-y-1">
+                                        class="hidden absolute left-0 top-full mt-2 w-72 bg-white border border-slate-100 rounded-3xl shadow-2xl z-50 p-4">
+                                        <div class="flex justify-between items-center pb-2.5 mb-2.5 border-b border-slate-50">
+                                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter Users</span>
+                                            <div class="flex gap-2">
+                                                <button type="button" onclick="selectAllDpUsers(true)" class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wider">Select All</button>
+                                                <span class="text-slate-200">|</span>
+                                                <button type="button" onclick="selectAllDpUsers(false)" class="text-[10px] font-black text-rose-600 hover:text-rose-800 transition-colors uppercase tracking-wider">Clear All</button>
+                                            </div>
+                                        </div>
+                                        <div id="dp-user-checkboxes" class="max-h-60 overflow-y-auto space-y-1 pr-1">
                                             <!-- Populated dynamically -->
                                         </div>
                                     </div>
@@ -24943,16 +24951,68 @@
                 container.innerHTML = usersList.map(u => {
                     const email = u.email.toLowerCase();
                     const isChecked = hasExisting ? (checkedStates[email] !== false) : true;
+                    const name = u.name || email;
+                    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                     return `
-                        <label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-all">
-                            <input type="checkbox" name="dp_user_select" value="${email}" ${isChecked ? 'checked' : ''}
-                                onchange="updateDpUserLabel(); renderDailyPlan();"
-                                class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-sm font-bold text-slate-700">${escapeHtml(u.name || email)}</span>
+                        <label class="dp-user-item flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-all duration-200 border border-transparent select-none ${isChecked ? 'bg-indigo-50/50 border-indigo-100/50' : ''}">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" name="dp_user_select" value="${email}" ${isChecked ? 'checked' : ''}
+                                    onchange="updateDpUserLabel(); handleDpUserCheckChange(this)"
+                                    class="sr-only">
+                                
+                                <div class="dp-user-avatar w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isChecked ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'} transition-all duration-200">
+                                    ${initials}
+                                </div>
+                                
+                                <div class="flex flex-col">
+                                    <span class="dp-user-name text-xs font-bold text-slate-800 transition-colors duration-200 ${isChecked ? 'text-indigo-900' : ''}">${escapeHtml(name)}</span>
+                                    <span class="text-[9px] text-slate-400 font-semibold truncate max-w-[130px]">${escapeHtml(email)}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                <iconify-icon 
+                                    icon="${isChecked ? 'solar:check-circle-bold' : 'solar:circle-linear'}" 
+                                    class="${isChecked ? 'text-indigo-600' : 'text-slate-300'} transition-all duration-200" 
+                                    width="20">
+                                </iconify-icon>
+                            </div>
                         </label>`;
                 }).join('');
 
                 updateDpUserLabel();
+            }
+
+            function handleDpUserCheckChange(cb) {
+                const label = cb.closest('label');
+                if (!label) return;
+                const avatar = label.querySelector('.dp-user-avatar');
+                const nameSpan = label.querySelector('.dp-user-name');
+                const icon = label.querySelector('iconify-icon');
+                
+                if (cb.checked) {
+                    label.classList.add('bg-indigo-50/50', 'border-indigo-100/50');
+                    if (avatar) {
+                        avatar.classList.remove('bg-slate-100', 'text-slate-600');
+                        avatar.classList.add('bg-indigo-600', 'text-white');
+                    }
+                    if (nameSpan) nameSpan.classList.add('text-indigo-900');
+                    if (icon) {
+                        icon.setAttribute('icon', 'solar:check-circle-bold');
+                        icon.className = 'text-indigo-600 transition-all duration-200';
+                    }
+                } else {
+                    label.classList.remove('bg-indigo-50/50', 'border-indigo-100/50');
+                    if (avatar) {
+                        avatar.classList.remove('bg-indigo-600', 'text-white');
+                        avatar.classList.add('bg-slate-100', 'text-slate-600');
+                    }
+                    if (nameSpan) nameSpan.classList.remove('text-indigo-900');
+                    if (icon) {
+                        icon.setAttribute('icon', 'solar:circle-linear');
+                        icon.className = 'text-slate-300 transition-all duration-200';
+                    }
+                }
             }
 
             function getDpSelectedUsers() {
@@ -24971,42 +25031,60 @@
                 } else if (checked.length === checkboxes.length) {
                     labelEl.textContent = 'All Users';
                 } else if (checked.length === 1) {
-                    const labelSpan = checked[0].closest('label')?.querySelector('span');
+                    const labelSpan = checked[0].closest('label')?.querySelector('.dp-user-name');
                     labelEl.textContent = labelSpan?.textContent || checked[0].value;
                 } else {
                     labelEl.textContent = `${checked.length} Users`;
                 }
             }
 
+            let dpCloseHandler = null;
+
             function toggleDpUserDropdown() {
-                if (canViewDailyPlanTeamAccess()) {
-                    populateDpUserFilter();
-                }
                 const dropdown = document.getElementById('dp-user-dropdown');
                 const arrow = document.getElementById('dp-user-filter-arrow');
                 if (!dropdown) return;
-                const isOpen = !dropdown.classList.contains('hidden');
-                dropdown.classList.toggle('hidden', isOpen);
-                if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
-                if (!isOpen) {
-                    // Close on outside click
+                
+                const isCurrentlyOpen = !dropdown.classList.contains('hidden');
+                
+                if (dpCloseHandler) {
+                    document.removeEventListener('click', dpCloseHandler);
+                    dpCloseHandler = null;
+                }
+
+                if (isCurrentlyOpen) {
+                    dropdown.classList.add('hidden');
+                    if (arrow) arrow.style.transform = '';
+                    renderDailyPlan();
+                } else {
+                    if (canViewDailyPlanTeamAccess()) {
+                        populateDpUserFilter();
+                    }
+                    dropdown.classList.remove('hidden');
+                    if (arrow) arrow.style.transform = 'rotate(180deg)';
+                    
                     setTimeout(() => {
-                        const closeHandler = (e) => {
-                            if (!document.getElementById('dp-user-filter-container')?.contains(e.target)) {
+                        dpCloseHandler = (e) => {
+                            const container = document.getElementById('dp-user-filter-container');
+                            if (container && !container.contains(e.target)) {
                                 dropdown.classList.add('hidden');
                                 if (arrow) arrow.style.transform = '';
-                                document.removeEventListener('click', closeHandler);
+                                document.removeEventListener('click', dpCloseHandler);
+                                dpCloseHandler = null;
+                                renderDailyPlan();
                             }
                         };
-                        document.addEventListener('click', closeHandler);
+                        document.addEventListener('click', dpCloseHandler);
                     }, 0);
                 }
             }
 
             function selectAllDpUsers(selectAll) {
-                document.querySelectorAll('input[name="dp_user_select"]').forEach(cb => cb.checked = selectAll);
+                document.querySelectorAll('input[name="dp_user_select"]').forEach(cb => {
+                    cb.checked = selectAll;
+                    handleDpUserCheckChange(cb);
+                });
                 updateDpUserLabel();
-                renderDailyPlan();
             }
 
             function filterDailyPlan(type) {
@@ -27442,7 +27520,7 @@
             window.renderQcChecklist = renderQcChecklist; window.addQcCustomItem = addQcCustomItem;
             window.filterQcReportsList = filterQcReportsList; window.renderQcReportsList = renderQcReportsList; window.loadMoreQcReports = loadMoreQcReports;
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
-            window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers;
+            window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
