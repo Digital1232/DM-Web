@@ -273,11 +273,11 @@
         const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
         let qcReportDateFrom = null; // New state variable for QC reports filter
         let qcReportDateTo = null;   // New state variable for QC reports filter
-        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
-        const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
-        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
+        const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
+        const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
+        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
         const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs'];
-        const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed'];
+        const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
         const DAILY_REPORT_TIMES = [
             { hour: 12, minute: 55, label: 'Afternoon (1 PM)' },
             { hour: 15, minute: 55, label: 'Evening (4 PM)' },
@@ -8742,9 +8742,10 @@ async function sendAnnouncement() {
 
             tbody.innerHTML = uniquePlans.map(t => {
                 const taskKeyHtml = t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+                const statusOptions = [...new Set([...MANUAL_TASK_STATUSES, ...tasks.map(x => x.status).filter(Boolean)])].sort();
                 const statusSelectHtml = `
                     <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
-                        ${[...new Set(tasks.map(x => x.status).filter(Boolean))].sort().map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        ${statusOptions.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
                 const userLive = currentWorkUsers.find(u => (u.email || '').toLowerCase() === t.plannedForUser.toLowerCase());
