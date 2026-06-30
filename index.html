@@ -18313,15 +18313,18 @@
 
                 const div = document.createElement('div');
                 div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in`;
+                div.setAttribute('data-msg-id', id);
                 div.innerHTML = `
                 <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
                     ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}">
-                        <div class="px-4 py-2.5 rounded-2xl text-sm shadow-sm ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
-                            ${attachmentHtml}
-                            ${text ? `<div class="whitespace-pre-wrap break-words">${text}</div>` : ''}
+                        <div class="message-bubble px-4 py-2.5 rounded-2xl text-sm shadow-sm ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
+                            <div class="message-text">
+                                ${attachmentHtml}
+                                ${text ? `<div class="whitespace-pre-wrap break-words">${text}</div>` : ''}
+                            </div>
                         </div>
-                        <div class="flex items-center gap-1 shrink-0">
+                        <div class="own-actions flex items-center gap-1 shrink-0">
                             ${ownActions}
                         </div>
                     </div>
@@ -18454,13 +18457,111 @@
                 const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
                 const msg = snap.val();
                 if (!msg || msg.senderEmail !== currentUser.email || msg.unsent) return;
-                const next = prompt('Edit message', msg.text || '');
-                if (next === null) return;
-                const text = next.trim();
-                if (!text) return toast('Message cannot be empty', 'error');
-                await update(ref(db, `worksync/messages/${activeConvId}/${id}`), { text, editedAt: Date.now() });
-                await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: text, lastTimestamp: Date.now() });
-                toast('Message edited', 'success');
+                
+                // Find and activate edit mode for this message
+                const msgBubble = document.querySelector(`[data-msg-id="${id}"] .message-bubble`);
+                const msgText = document.querySelector(`[data-msg-id="${id}"] .message-text`);
+                const ownActions = document.querySelector(`[data-msg-id="${id}"] .own-actions`);
+                
+                if (!msgBubble || !msgText) return;
+                
+                // Hide the message text and actions
+                msgText.classList.add('hidden');
+                ownActions?.classList.add('hidden');
+                
+                // Create edit container
+                const editContainer = document.createElement('div');
+                editContainer.className = 'edit-container flex flex-col gap-2 w-full transition-all duration-150';
+                editContainer.innerHTML = `
+                    <textarea 
+                        class="msg-edit-textarea px-3 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 bg-white text-slate-900 text-sm resize-none"
+                        style="min-height: 60px; max-height: 200px; font-family: inherit;"
+                        placeholder="Edit your message...">${escapeHtml(msg.text || '')}</textarea>
+                    <div class="flex items-center gap-2 justify-end">
+                        <button class="msg-cancel-btn px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 transition-colors duration-150">
+                            Cancel
+                        </button>
+                        <button class="msg-save-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors duration-150">
+                            Save
+                        </button>
+                    </div>
+                `;
+                
+                msgBubble.appendChild(editContainer);
+                const textarea = editContainer.querySelector('.msg-edit-textarea');
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                
+                // Auto-resize textarea
+                function resizeTextarea() {
+                    textarea.style.height = 'auto';
+                    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+                }
+                textarea.addEventListener('input', resizeTextarea);
+                resizeTextarea();
+                
+                // Prevent other edits
+                const allEditBtns = document.querySelectorAll('[data-msg-id]:not([data-msg-id="' + id + '"]) .own-actions button');
+                allEditBtns.forEach(btn => btn.disabled = true);
+                
+                // Save handler
+                const saveHandler = async () => {
+                    const newText = textarea.value.trim();
+                    if (!newText) {
+                        toast('Message cannot be empty', 'error');
+                        return;
+                    }
+                    
+                    try {
+                        await update(ref(db, `worksync/messages/${activeConvId}/${id}`), { 
+                            text: newText, 
+                            editedAt: Date.now(),
+                            edited: true
+                        });
+                        await update(ref(db, `worksync/conversations/${activeConvId}`), { 
+                            lastMessage: newText, 
+                            lastTimestamp: Date.now() 
+                        });
+                        toast('Message edited', 'success');
+                    } catch (err) {
+                        toast('Failed to edit message', 'error');
+                        console.error(err);
+                    }
+                };
+                
+                // Cancel handler
+                const cancelHandler = () => {
+                    editContainer.remove();
+                    msgText.classList.remove('hidden');
+                    ownActions?.classList.remove('hidden');
+                    allEditBtns.forEach(btn => btn.disabled = false);
+                };
+                
+                // Event listeners
+                editContainer.querySelector('.msg-save-btn').addEventListener('click', saveHandler);
+                editContainer.querySelector('.msg-cancel-btn').addEventListener('click', cancelHandler);
+                
+                // Keyboard shortcuts
+                textarea.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        saveHandler();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelHandler();
+                    }
+                });
+                
+                // Cleanup on blur (allow save/cancel buttons to work)
+                textarea.addEventListener('blur', (e) => {
+                    // Only cancel if blur is not to our save/cancel buttons
+                    setTimeout(() => {
+                        if (document.activeElement !== editContainer.querySelector('.msg-save-btn') && 
+                            document.activeElement !== editContainer.querySelector('.msg-cancel-btn')) {
+                            // User clicked elsewhere - just refocus or let them decide
+                        }
+                    }, 0);
+                });
             }
 
             async function deleteMessage(id) {
