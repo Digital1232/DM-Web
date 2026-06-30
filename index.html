@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -9458,8 +9458,7 @@
                     if (canViewStrategyCalendar()) validViews.push('strategy-calendar');
                     if (canViewPlanTracking()) validViews.push('plan-tracking');
                     if (canViewMetaAds()) validViews.push('meta-ads');
-                    switchView(validViews.includes(lastView) ? lastView : 'dashboard');
-
+                    
                     initClientSettings();
                     initDailyPlan();
                     registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
@@ -9471,6 +9470,18 @@
                     initTaskNotifications();
                     loadAllNotificationsForUser();
                     initOrganisersListener();
+                    
+                    // Load tasks and related data BEFORE switching views
+                    await Promise.all([
+                        new Promise(resolve => setTimeout(() => { syncTasks(); resolve(); }, 100)),
+                        new Promise(resolve => setTimeout(() => { loadManualTasks(); resolve(); }, 100)),
+                        new Promise(resolve => setTimeout(() => { loadDiscussions(); resolve(); }, 100)),
+                        new Promise(resolve => setTimeout(() => { loadQcReports(); resolve(); }, 100))
+                    ]);
+                    
+                    // NOW switch to the last view after tasks are loaded
+                    switchView(validViews.includes(lastView) ? lastView : 'dashboard');
+                    
                     allUsersMap = await getAllUsers(); // Populate the global map
                     // Re-render the floating chat list now that user data is ready
                     if (typeof fcpRenderList === 'function' && fcpOpen) fcpRenderList();
@@ -9498,7 +9509,6 @@
                     // Removed auto-update mechanism to stop page reloads
                     setTimeout(checkBirthdays, 5000); // Check shortly after login
                     setTimeout(checkDailyPlanProgressNotification, 5000); // Check daily plan progress alert shortly after login
-                    setTimeout(() => { syncTasks(); loadManualTasks(); loadDiscussions(); loadQcReports(); }, 600);
 
                     // Apply saved sidebar state or force collapse on mobile
                     const isMobile = window.innerWidth < 768;
