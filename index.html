@@ -20830,6 +20830,43 @@
             }
 
             function exportReportsCsv() {
+                // Context-aware export that exports the currently active report
+                const reportTab = currentReportTab;
+                
+                if (!reportDateFrom || !reportDateTo) {
+                    return toast('Please select a date range to export.', 'error');
+                }
+
+                // Dispatch to the correct exporter based on the active report tab
+                switch(reportTab) {
+                    case 'timing':
+                        return exportAttendanceReport();
+                    case 'task':
+                        return exportTaskReport();
+                    case 'analytics':
+                        return exportAnalyticsReport();
+                    case 'summary':
+                        return exportSummaryReport();
+                    case 'detailed':
+                        return exportDetailedReport();
+                    case 'performance':
+                        return exportPerformanceReport();
+                    case 'client':
+                        return exportClientReport();
+                    case 'client-wide':
+                        return exportClientWideReport();
+                    case 'client-wise-timing':
+                        return exportClientWiseTimingReport();
+                    case 'indiv-perf':
+                        return exportIndivPerfReport();
+                    case 'client-perf':
+                        return exportClientPerfReport();
+                    default:
+                        return toast('No export function available for this report', 'warning');
+                }
+            }
+
+            function exportAttendanceReport() {
                 if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (!reportDateFrom || !reportDateTo) {
                     return toast('Please select a date range to export.', 'error');
@@ -20879,12 +20916,94 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `attendance-report-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
+                link.download = `Attendance_Report_${period}.csv`;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
                 URL.revokeObjectURL(url);
-                toast('Report exported to CSV', 'success');
+                toast('Attendance report exported', 'success');
+            }
+
+            function exportTaskReport() {
+                // Export deliverables/task report
+                if (!reportDateFrom || !reportDateTo) {
+                    return toast('Please select a date range to export.', 'error');
+                }
+
+                const fromTs = new Date(reportDateFrom).getTime();
+                const toTs = new Date(reportDateTo).getTime() + 86400000;
+                const period = `${reportDateFrom}_to_${reportDateTo}`;
+
+                let periodTasks = tasks.filter(t => {
+                    const cTs = t.created ? new Date(t.created).getTime() : 0;
+                    const uTs = t.updated ? new Date(t.updated).getTime() : 0;
+                    const dTs = t.duedate ? new Date(t.duedate).getTime() : 0;
+                    return (cTs >= fromTs && cTs < toTs) || (uTs >= fromTs && uTs < toTs) || (dTs >= fromTs && dTs < toTs);
+                });
+
+                const typeFilterEl = document.getElementById('task-report-type-filter');
+                const selectedType = typeFilterEl ? typeFilterEl.value : 'all';
+                if (selectedType === 'jira') periodTasks = periodTasks.filter(t => !isInternalTask(t));
+                if (selectedType === 'internal') periodTasks = periodTasks.filter(t => isInternalTask(t));
+
+                const headers = ['Task ID', 'Description', 'Status', 'Assignee', 'Priority', 'Due Date', 'Client'];
+                const rows = periodTasks.map(t => [
+                    t.id,
+                    t.desc || '',
+                    t.status || '',
+                    assigneeName(t) || '',
+                    t.priority || '',
+                    t.duedate || '',
+                    t.client || ''
+                ]);
+
+                const csv = [
+                    headers.map(h => `"${h}"`).join(','),
+                    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Task_Report_${period}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                toast('Task report exported', 'success');
+            }
+
+            function exportAnalyticsReport() {
+                toast('Analytics report export coming soon', 'info');
+            }
+
+            function exportSummaryReport() {
+                toast('Summary report export coming soon', 'info');
+            }
+
+            function exportDetailedReport() {
+                toast('Detailed report export coming soon', 'info');
+            }
+
+            function exportPerformanceReport() {
+                toast('Performance report export coming soon', 'info');
+            }
+
+            function exportClientWideReport() {
+                toast('Client wide report export coming soon', 'info');
+            }
+
+            function exportClientWiseTimingReport() {
+                toast('Client timing report export coming soon', 'info');
+            }
+
+            function exportIndivPerfReport() {
+                toast('Individual performance report export coming soon', 'info');
+            }
+
+            function exportClientPerfReport() {
+                toast('Client performance report export coming soon', 'info');
             }
 
             function renderClientReport() {
