@@ -4967,7 +4967,8 @@
                                 </div>
                                 <p class="text-[11px] text-slate-400 leading-normal">Required permissions:
                                     <code>ads_read</code>. Keep this token confidential as it grants access to your
-                                    Facebook marketing campaigns.</p>
+                                    Facebook marketing campaigns.
+                                </p>
                             </div>
 
                             <!-- Status feedback message -->
@@ -6141,7 +6142,6 @@
                         <option>University</option>
                         <option>Client</option>
                         <option>SKM</option>
-                        <option>AshmithaSree</option>
                     </select>
                 </div>
                 <div>
@@ -7585,10 +7585,10 @@
                 useLocalApi: false
             };
 
-            const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'AshmithaSree', 'Ramachandran'];
+            const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran'];
 
             // Sub-clients managed under Vilpower DM — used for Murugesh daily task client selection
-            const VILPOWER_DM_CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'AshmithaSree', 'Quade', 'Ramachandran'];
+            const VILPOWER_DM_CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'Quade', 'Ramachandran'];
 
             let clientLabelMap = {};
             let customClients = [...CLIENTS];
@@ -11814,21 +11814,30 @@
                 return String(label || '').trim().toLowerCase();
             }
 
+            function normalizeClientName(name) {
+                const trimmed = String(name || '').trim();
+                if (!trimmed) return '';
+                const key = trimmed.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+                const customMapping = {
+                    'ezhilvanan': 'Aladi Ezhilvanan',
+                    '3jo_toys': '3Jo Toys',
+                    'dreamdaa': 'DreamDaa',
+                    'ashmithasree': 'Ashmithashree',
+                    'ashmithashree': 'Ashmithashree'
+                };
+                return customMapping[key] || trimmed;
+            }
+
             function resolveClientLabel(label) {
                 const trimmed = String(label || '').trim();
                 if (!trimmed) return '';
                 const mapped = clientLabelMap[normalizeLabelKey(trimmed)];
-                if (mapped) return mapped;
+                if (mapped) return normalizeClientName(mapped);
+
+                const normalized = normalizeClientName(trimmed);
+                if (normalized !== trimmed) return normalized;
 
                 const normalizedSearch = trimmed.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
-                const customMapping = {
-                    'ashmithashree': 'AshmithaSree',
-                    'ezhilvanan': 'Aladi Ezhilvanan',
-                    '3jo_toys': '3Jo Toys',
-                    'dreamdaa': 'DreamDaa'
-                };
-                if (customMapping[normalizedSearch]) return customMapping[normalizedSearch];
-
                 const catalog = getClientCatalog();
                 const matched = catalog.find(c => {
                     const normCat = c.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
@@ -11870,7 +11879,8 @@
             }
 
             function getClientCatalog() {
-                return [...new Set(customClients)].sort((a, b) => a.localeCompare(b));
+                const resolved = customClients.map(c => normalizeClientName(c)).filter(Boolean);
+                return [...new Set(resolved)].sort((a, b) => a.localeCompare(b));
             }
 
             function populateClientSelect(selectEl, selectedValue = '', emptyLabel = 'Select client...') {
@@ -23008,18 +23018,67 @@
                 const now = new Date(), month = now.getMonth(), year = now.getFullYear();
                 const today = new Date(); today.setHours(0, 0, 0, 0);
                 const monthKey = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-                const saturdays = [];
+
+                const lastDayObj = new Date(year, month + 1, 0);
+                const lastDay = lastDayObj.getDate();
+                const isInLastThreeDays = now.getDate() >= (lastDay - 2);
+
+                const nextYear = month === 11 ? year + 1 : year;
+                const nextMonth = (month + 1) % 12;
+                const nextMonthKey = `${nextYear}-${(nextMonth + 1).toString().padStart(2, '0')}`;
+
+                const currentSaturdays = [];
                 for (let i = 1; i <= 31; i++) {
                     const d = new Date(year, month, i);
-                    if (d.getMonth() === month && d.getDay() === 6) saturdays.push(d);
+                    if (d.getMonth() === month && d.getDay() === 6) currentSaturdays.push(d);
                 }
+
+                const nextSaturdays = [];
+                for (let i = 1; i <= 31; i++) {
+                    const d = new Date(nextYear, nextMonth, i);
+                    if (d.getMonth() === nextMonth && d.getDay() === 6) nextSaturdays.push(d);
+                }
+
                 const q = query(ref(db, 'worksync/requests'), orderByChild('userId'), equalTo(currentUser.email));
                 get(q).then(snap => {
                     const reqs = snap.val() || {};
-                    const applied = Object.values(reqs).some(r => r.type === 'saturday' && r.date?.startsWith(monthKey) && r.status !== 'rejected');
-                    document.getElementById('saturday-already-applied').classList.toggle('hidden', !applied);
-                    document.getElementById('saturday-picker').classList.toggle('hidden', applied);
-                    document.getElementById('saturday-picker').innerHTML = saturdays.map(s => {
+                    const appliedCurrent = Object.values(reqs).some(r => r.type === 'saturday' && r.date?.startsWith(monthKey) && r.status !== 'rejected');
+                    const appliedNext = Object.values(reqs).some(r => r.type === 'saturday' && r.date?.startsWith(nextMonthKey) && r.status !== 'rejected');
+
+                    let showNextMonth = false;
+                    let alreadyApplied = false;
+                    let message = "You have already applied for a Saturday weekoff this month.";
+
+                    if (appliedCurrent) {
+                        if (isInLastThreeDays) {
+                            if (appliedNext) {
+                                alreadyApplied = true;
+                                message = "You have already applied for next month's Saturday weekoff.";
+                            } else {
+                                showNextMonth = true;
+                            }
+                        } else {
+                            alreadyApplied = true;
+                            message = "You have already applied for a Saturday weekoff this month.";
+                        }
+                    }
+
+                    const displayedSaturdays = showNextMonth ? nextSaturdays : currentSaturdays;
+
+                    document.getElementById('saturday-already-applied').textContent = message;
+                    document.getElementById('saturday-already-applied').classList.toggle('hidden', !alreadyApplied);
+                    document.getElementById('saturday-picker').classList.toggle('hidden', alreadyApplied);
+
+                    const labelEl = document.querySelector('#saturday-div label');
+                    if (labelEl) {
+                        const currentMonthName = now.toLocaleDateString('en-IN', { month: 'long' });
+                        const nextMonthName = new Date(nextYear, nextMonth, 1).toLocaleDateString('en-IN', { month: 'long' });
+                        labelEl.innerHTML = showNextMonth 
+                            ? `Select Saturday <span class="text-xs text-indigo-500 font-semibold">(Next Month: ${nextMonthName})</span>` 
+                            : `Select Saturday <span class="text-xs text-slate-400 font-semibold">(${currentMonthName})</span>`;
+                    }
+
+                    document.getElementById('saturday-picker').innerHTML = displayedSaturdays.map(s => {
                         const str = formatLocalDate(s);
                         const label = s.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
