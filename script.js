@@ -8741,11 +8741,16 @@ async function sendAnnouncement() {
             }
 
             tbody.innerHTML = uniquePlans.map(t => {
-                const taskKeyHtml = t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
-                const statusOptions = [...new Set([...MANUAL_TASK_STATUSES, ...tasks.map(x => x.status).filter(Boolean)])].sort();
+                const isInternal = isInternalTask(t);
+                const taskKeyHtml = (t.manual || isInternal)
+                    ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>`
+                    : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+                const statusOptions = isInternal
+                    ? [...new Set([...INTERNAL_TASK_STATUSES, t.status])].filter(Boolean)
+                    : [...new Set([...MANUAL_TASK_STATUSES, ...tasks.filter(x => !isInternalTask(x)).map(x => x.status).filter(Boolean), t.status])].filter(Boolean).sort();
                 const statusSelectHtml = `
                     <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
-                        ${statusOptions.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === (t.status || '').trim().toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
                 const userLive = currentWorkUsers.find(u => (u.email || '').toLowerCase() === t.plannedForUser.toLowerCase());
