@@ -152,6 +152,8 @@ if (initializeApp) {
     let internalTaskSortCol = null;
     let internalTaskSortDir = 'asc';
     let activeTaskId = null;
+    let dismissedDiscussionIds = [];
+    let wasPausedByDiscussionHold = false;
     let shootCalendarDate = new Date();
     let activeConvId = null;
     let activeView = 'dashboard';
@@ -3501,12 +3503,6 @@ if (initializeApp) {
                         currentDiscussion = disc;
                         showDiscussionJoinPopup(disc);
                     }
-
-                    // Mark as in-progress when time arrives
-                    if (timeUntilStart <= 0 && disc.status === 'scheduled') {
-                        disc.status = 'in-progress';
-                        updateDiscussionStatus(disc.id, 'in-progress');
-                    }
                 }
             });
         }, 1000);
@@ -3601,7 +3597,57 @@ if (initializeApp) {
         popup.close();
         clearInterval(discussionJoinCountdown);
         discussionPopupShown = false;
+        if (currentDiscussion) {
+            dismissedDiscussionIds.push(currentDiscussion.id);
+        }
         currentDiscussion = null;
+    }
+
+    async function joinDiscussionById(discId) {
+        const disc = discussions.find(d => d.id === discId);
+        if (!disc) return toast('Discussion not found', 'error');
+        if ((disc.joinedBy || []).includes(currentUser.email)) {
+            return toast('You have already joined this discussion', 'info');
+        }
+        currentDiscussion = disc;
+        await joinDiscussion();
+    }
+
+    async function startScheduledDiscussion(discId) {
+        await joinDiscussionById(discId);
+    }
+
+    async function holdCurrentDiscussionLive(discussionId) {
+        if (!confirm('Are you sure you want to pause/hold this discussion?')) return;
+        try {
+            await update(ref(db, `worksync/discussions/${discussionId}`), { status: 'hold' });
+            toast('Discussion placed on hold!', 'info');
+            if (activeTaskId) {
+                const currentTaskObj = tasks.find(t => t.id === activeTaskId);
+                if (currentTaskObj && currentTaskObj.discussionId === discussionId && !taskOnHold) {
+                    holdTask();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to hold discussion:', err);
+            toast('Failed to hold discussion: ' + err.message, 'error');
+        }
+    }
+
+    async function resumeCurrentDiscussionLive(discussionId) {
+        try {
+            await update(ref(db, `worksync/discussions/${discussionId}`), { status: 'in-progress' });
+            toast('Discussion resumed!', 'success');
+            if (activeTaskId) {
+                const currentTaskObj = tasks.find(t => t.id === activeTaskId);
+                if (currentTaskObj && currentTaskObj.discussionId === discussionId && taskOnHold) {
+                    resumeTaskTimer();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to resume discussion:', err);
+            toast('Failed to resume discussion: ' + err.message, 'error');
+        }
     }
 
     async function updateDiscussionStatus(discussionId, status) {
@@ -3617,8 +3663,45 @@ if (initializeApp) {
             onValue(ref(db, 'worksync/discussions'), (snapshot) => {
                 discussions = [];
                 snapshot.forEach(childSnapshot => {
-                    discussions.push(childSnapshot.val());
+                    const disc = childSnapshot.val();
+                    if (disc) {
+                        discussions.push(disc);
+                        
+                        // Auto-trigger popup for other participants when status becomes in-progress
+                        if (disc.status === 'in-progress' && disc.participants && disc.participants.includes(currentUser.email)) {
+                            const hasJoined = (disc.joinedBy || []).includes(currentUser.email);
+                            if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(disc.id)) {
+                                discussionPopupShown = true;
+                                currentDiscussion = disc;
+                                showDiscussionJoinPopup(disc);
+                            }
+                        }
+                    }
                 });
+
+                // Sync active task timer with discussion status
+                if (activeTaskId) {
+                    const activeTask = tasks.find(t => t.id === activeTaskId);
+                    if (activeTask && activeTask.discussionId) {
+                        const disc = discussions.find(d => d.id === activeTask.discussionId);
+                        if (disc) {
+                            if (disc.status === 'hold' && !taskOnHold) {
+                                wasPausedByDiscussionHold = true;
+                                holdTask();
+                                toast(`Discussion "${disc.title}" put on hold. Task paused.`, 'info');
+                            } else if (disc.status === 'in-progress' && taskOnHold && wasPausedByDiscussionHold) {
+                                wasPausedByDiscussionHold = false;
+                                resumeTaskTimer();
+                                toast(`Discussion "${disc.title}" resumed. Task resumed.`, 'success');
+                            } else if (disc.status === 'completed') {
+                                wasPausedByDiscussionHold = false;
+                                endTask();
+                                toast(`Discussion "${disc.title}" completed.`, 'info');
+                            }
+                        }
+                    }
+                }
+
                 startDiscussionListener();
             });
         } catch (err) {

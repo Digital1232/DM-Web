@@ -8324,6 +8324,8 @@
             let internalBoardColumnOrder = null;
             let activeTasksTab = localStorage.getItem('worksync_activeTasksTab') || 'jira'; // tracks which tab is active inside Tasks Hub
             let activeTaskId = null;
+            let dismissedDiscussionIds = [];
+            let wasPausedByDiscussionHold = false;
             let shootCalendarDate = new Date();
             let activeConvId = null;
             let activeConvMessageLimit = 30;
@@ -16662,12 +16664,6 @@
                                     showDiscussionJoinPopup(disc);
                                 }
                             }
-
-                            // Mark as in-progress when time arrives
-                            if (timeUntilStart <= 0 && disc.status === 'scheduled') {
-                                disc.status = 'in-progress';
-                                updateDiscussionStatus(disc.id, 'in-progress');
-                            }
                         }
                     });
                 }, 1000);
@@ -16786,7 +16782,47 @@
                 popup.close();
                 clearInterval(discussionJoinCountdown);
                 discussionPopupShown = false;
+                if (currentDiscussion) {
+                    dismissedDiscussionIds.push(currentDiscussion.id);
+                }
                 currentDiscussion = null;
+            }
+
+            async function startScheduledDiscussion(discId) {
+                await joinDiscussionById(discId);
+            }
+
+            async function holdCurrentDiscussionLive(discussionId) {
+                if (!confirm('Are you sure you want to pause/hold this discussion?')) return;
+                try {
+                    await update(ref(db, `worksync/discussions/${discussionId}`), { status: 'hold' });
+                    toast('Discussion placed on hold!', 'info');
+                    if (activeTaskId) {
+                        const currentTaskObj = tasks.find(t => t.id === activeTaskId);
+                        if (currentTaskObj && currentTaskObj.discussionId === discussionId && !taskOnHold) {
+                            holdTask();
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to hold discussion:', err);
+                    toast('Failed to hold discussion: ' + err.message, 'error');
+                }
+            }
+
+            async function resumeCurrentDiscussionLive(discussionId) {
+                try {
+                    await update(ref(db, `worksync/discussions/${discussionId}`), { status: 'in-progress' });
+                    toast('Discussion resumed!', 'success');
+                    if (activeTaskId) {
+                        const currentTaskObj = tasks.find(t => t.id === activeTaskId);
+                        if (currentTaskObj && currentTaskObj.discussionId === discussionId && taskOnHold) {
+                            resumeTaskTimer();
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to resume discussion:', err);
+                    toast('Failed to resume discussion: ' + err.message, 'error');
+                }
             }
 
             async function updateDiscussionStatus(discussionId, status) {
@@ -16803,9 +16839,44 @@
                         discussions = [];
                         snapshot.forEach(childSnapshot => {
                             const disc = childSnapshot.val();
-                            // Load ALL discussions so every user can see and join upcoming ones
-                            if (disc) discussions.push(disc);
+                            if (disc) {
+                                discussions.push(disc);
+                                
+                                // Auto-trigger popup for other participants when status becomes in-progress
+                                if (disc.status === 'in-progress' && disc.participants && disc.participants.includes(currentUser.email)) {
+                                    const hasJoined = (disc.joinedBy || []).includes(currentUser.email);
+                                    if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(disc.id)) {
+                                        discussionPopupShown = true;
+                                        currentDiscussion = disc;
+                                        showDiscussionJoinPopup(disc);
+                                    }
+                                }
+                            }
                         });
+
+                        // Sync active task timer with discussion status
+                        if (activeTaskId) {
+                            const activeTask = tasks.find(t => t.id === activeTaskId);
+                            if (activeTask && activeTask.discussionId) {
+                                const disc = discussions.find(d => d.id === activeTask.discussionId);
+                                if (disc) {
+                                    if (disc.status === 'hold' && !taskOnHold) {
+                                        wasPausedByDiscussionHold = true;
+                                        holdTask();
+                                        toast(`Discussion "${disc.title}" put on hold. Task paused.`, 'info');
+                                    } else if (disc.status === 'in-progress' && taskOnHold && wasPausedByDiscussionHold) {
+                                        wasPausedByDiscussionHold = false;
+                                        resumeTaskTimer();
+                                        toast(`Discussion "${disc.title}" resumed. Task resumed.`, 'success');
+                                    } else if (disc.status === 'completed') {
+                                        wasPausedByDiscussionHold = false;
+                                        endTask();
+                                        toast(`Discussion "${disc.title}" completed.`, 'info');
+                                    }
+                                }
+                            }
+                        }
+
                         startDiscussionListener();
                         if (activeView === 'discussions') {
                             renderDiscussionsView();
@@ -16824,7 +16895,8 @@
                 if (!liveSection || !upcomingList || !pastList) return;
 
                 const now = Date.now();
-                const activeDisc = discussions.find(d => d.status === 'in-progress');
+                // Find active or held discussions for current user
+                const activeDisc = discussions.find(d => (d.status === 'in-progress' || d.status === 'hold') && (d.participants || []).includes(currentUser.email));
 
                 if (activeDisc) {
                     liveSection.classList.remove('hidden');
@@ -16844,21 +16916,67 @@
                     `;
                     }).join('');
 
+                    const hasJoinedActive = (activeDisc.joinedBy || []).includes(currentUser.email);
+                    
+                    let liveIndicatorHtml = '';
+                    let liveHeaderHtml = '';
+                    let actionButtonsHtml = '';
+
+                    if (activeDisc.status === 'hold') {
+                        liveIndicatorHtml = `
+                            <span class="flex h-3 w-3 relative">
+                              <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                        `;
+                        liveHeaderHtml = `<h4 class="text-base font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Discussion On Hold / Paused</h4>`;
+                    } else {
+                        liveIndicatorHtml = `
+                            <span class="flex h-3 w-3 relative">
+                              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                              <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                            </span>
+                        `;
+                        liveHeaderHtml = `<h4 class="text-base font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Live Meeting Happening Now</h4>`;
+                    }
+
+                    if (!hasJoinedActive) {
+                        actionButtonsHtml = `
+                            <button onclick="joinDiscussionById('${activeDisc.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-emerald-900/30 flex items-center gap-2">
+                                <iconify-icon icon="solar:users-group-rounded-bold" width="14"></iconify-icon> Join Discussion
+                            </button>
+                        `;
+                    } else {
+                        if (activeDisc.status === 'hold') {
+                            actionButtonsHtml = `
+                                <button onclick="resumeCurrentDiscussionLive('${activeDisc.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-emerald-900/30 flex items-center gap-2">
+                                    <iconify-icon icon="solar:play-bold" width="14"></iconify-icon> Resume Discussion
+                                </button>
+                            `;
+                        } else {
+                            actionButtonsHtml = `
+                                <button onclick="holdCurrentDiscussionLive('${activeDisc.id}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-amber-900/30 flex items-center gap-2">
+                                    <iconify-icon icon="solar:pause-bold" width="14"></iconify-icon> Hold Discussion
+                                </button>
+                            `;
+                        }
+
+                        actionButtonsHtml += `
+                            <button onclick="endCurrentDiscussionLive('${activeDisc.id}')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-rose-900/30 flex items-center gap-2">
+                                <iconify-icon icon="solar:stop-bold" width="14"></iconify-icon> Complete & End Discussion
+                            </button>
+                        `;
+                    }
+
                     liveSection.innerHTML = `
                     <div class="bg-white text-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 relative overflow-hidden mb-6 dark:bg-gradient-to-br dark:from-indigo-900 dark:to-slate-950 dark:text-white dark:border-transparent">
                         <div class="relative z-10 space-y-6">
                             <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 dark:border-white/10">
                                 <div class="flex items-center gap-3">
-                                    <span class="flex h-3 w-3 relative">
-                                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                      <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                                    </span>
-                                    <h4 class="text-base font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Live Meeting Happening Now</h4>
+                                    ${liveIndicatorHtml}
+                                    ${liveHeaderHtml}
                                 </div>
                                 <div class="flex gap-2">
-                                    <button onclick="endCurrentDiscussionLive('${activeDisc.id}')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-lg shadow-rose-900/30 flex items-center gap-2">
-                                        <iconify-icon icon="solar:stop-bold" width="14"></iconify-icon> Complete & End Discussion
-                                    </button>
+                                    ${actionButtonsHtml}
                                 </div>
                             </div>
 
@@ -16900,7 +17018,7 @@
 
                 // Render Upcoming List
                 const upcoming = discussions
-                    .filter(d => d.status === 'scheduled' && d.scheduledTime > now)
+                    .filter(d => d.status === 'scheduled' && (d.participants || []).includes(currentUser.email))
                     .sort((a, b) => a.scheduledTime - b.scheduledTime);
 
                 if (upcoming.length === 0) {
@@ -16921,23 +17039,20 @@
                         }).join(', ');
 
                         return `
-                        <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl space-y-3">
+                        <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 dark:bg-white/5 dark:border-white/10">
                             <div class="flex items-center justify-between">
-                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">${dateStr} @ ${timeStr}</span>
-                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">${escapeHtml(disc.client)}</span>
+                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider dark:text-indigo-400">${dateStr} @ ${timeStr}</span>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-white/10 dark:text-slate-300 dark:border-white/10">${escapeHtml(disc.client)}</span>
                             </div>
-                            <h5 class="text-xs font-black text-slate-900">${escapeHtml(disc.title)}</h5>
-                            <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(disc.description || 'No description.')}</p>
-                            <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between gap-3">
+                            <h5 class="text-xs font-black text-slate-900 dark:text-white">${escapeHtml(disc.title)}</h5>
+                            <p class="text-xs text-slate-500 line-clamp-2 dark:text-slate-300">${escapeHtml(disc.description || 'No description.')}</p>
+                            <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between gap-3 dark:border-white/10">
                                 <div class="text-[10px] text-slate-400 font-bold">
-                                    Participants: <span class="text-slate-600 font-medium">${escapeHtml(participantNames)}</span>
+                                    Participants: <span class="text-slate-600 font-medium dark:text-slate-300">${escapeHtml(participantNames)}</span>
                                 </div>
-                                ${(disc.joinedBy || []).includes(currentUser.email)
-                                ? `<span class="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><iconify-icon icon="solar:check-circle-bold" width="13"></iconify-icon> Joined</span>`
-                                : `<button onclick="joinDiscussionById('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
-                                        <iconify-icon icon="solar:users-group-rounded-bold" width="13"></iconify-icon> Join
-                                       </button>`
-                            }
+                                <button onclick="startScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                    <iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start
+                                </button>
                             </div>
                         </div>
                     `;
@@ -16946,7 +17061,7 @@
 
                 // Render Past / Completed List
                 const past = discussions
-                    .filter(d => d.status === 'completed' || (d.status === 'scheduled' && d.scheduledTime <= now))
+                    .filter(d => d.status === 'completed' && (d.participants || []).includes(currentUser.email))
                     .sort((a, b) => b.scheduledTime - a.scheduledTime);
 
                 if (past.length === 0) {
@@ -16967,24 +17082,24 @@
                         }).join(', ');
 
                         return `
-                        <div class="p-5 bg-slate-50/50 border border-slate-100 rounded-2xl space-y-3">
+                        <div class="p-5 bg-slate-50/50 border border-slate-100 rounded-2xl space-y-3 dark:bg-white/5 dark:border-white/10">
                             <div class="flex items-center justify-between">
                                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">${dateStr} @ ${timeStr}</span>
-                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">${escapeHtml(disc.client)}</span>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/10 dark:text-slate-300 dark:border-white/10">${escapeHtml(disc.client)}</span>
                             </div>
-                            <h5 class="text-xs font-black text-slate-900">${escapeHtml(disc.title)}</h5>
-                            <p class="text-xs text-slate-500 leading-relaxed">${escapeHtml(disc.description || 'No description.')}</p>
+                            <h5 class="text-xs font-black text-slate-900 dark:text-white">${escapeHtml(disc.title)}</h5>
+                            <p class="text-xs text-slate-500 leading-relaxed dark:text-slate-300">${escapeHtml(disc.description || 'No description.')}</p>
                             
-                            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/50 text-[10px] text-slate-400">
-                                <div>Participants: <span class="text-slate-600 font-bold">${escapeHtml(participantNames)}</span></div>
-                                <button onclick="togglePastDiscussionNotes('${disc.id}')" class="text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1">
+                            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/50 text-[10px] text-slate-400 dark:border-white/10">
+                                <div>Participants: <span class="text-slate-600 font-bold dark:text-slate-300">${escapeHtml(participantNames)}</span></div>
+                                <button onclick="togglePastDiscussionNotes('${disc.id}')" class="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-bold flex items-center gap-1">
                                     <iconify-icon icon="solar:document-text-bold" width="14"></iconify-icon> View Minutes/Notes
                                 </button>
                             </div>
                             
-                            <div id="past-notes-${disc.id}" class="hidden mt-3 p-4 bg-white border border-slate-200/60 rounded-xl space-y-2">
+                            <div id="past-notes-${disc.id}" class="hidden mt-3 p-4 bg-white border border-slate-200/60 rounded-xl space-y-2 dark:bg-slate-950/40 dark:border-white/10">
                                 <h6 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Meeting Notes / Minutes</h6>
-                                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(disc.notes || 'No notes were captured for this discussion.')}</p>
+                                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap dark:text-slate-300">${escapeHtml(disc.notes || 'No notes were captured for this discussion.')}</p>
                             </div>
                         </div>
                     `;
