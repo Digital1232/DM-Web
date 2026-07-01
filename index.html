@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -1932,21 +1932,24 @@
                                         class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
                                         <option value="all">All Clients</option>
                                     </select>
-                                    <button type="button"
-                                        onclick="const jiaPicker = document.getElementById('jira-date-range-picker')?.litepicker; if(jiaPicker) jiaPicker.show();"
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center gap-2">
-                                        <iconify-icon icon="solar:calendar-linear" width="16"></iconify-icon>
-                                        <span id="jira-date-range-label">All Dates</span>
-                                    </button>
-                                    <button type="button" onclick="clearJiraDateRange()" id="jira-date-clear-btn" 
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-slate-500 hover:text-rose-600 hover:border-rose-200 hidden"
-                                        title="Clear date range">
-                                        <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
-                                    </button>
+                                    <div class="relative">
+                                        <select id="jira-due-date-filter" onchange="setDueDateFilter(this.value)"
+                                            class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                                            <option value="all">All Dates</option>
+                                            <option value="today">Today</option>
+                                            <option value="yesterday">Yesterday</option>
+                                            <option value="this_week">This Week</option>
+                                            <option value="last_week">Last Week</option>
+                                            <option value="this_month">This Month</option>
+                                            <option value="overdue">Overdue</option>
+                                            <option value="custom" id="jira-custom-date-option">Custom Range...</option>
+                                        </select>
+                                        <input id="jira-date-range-picker" type="text" readonly
+                                            class="absolute inset-0 w-full h-full opacity-0 pointer-events-none">
+                                    </div>
                                     <div class="hidden">
                                         <input id="jira-date-from" type="date" onchange="handleJiraDateRangeChange()">
                                         <input id="jira-date-to" type="date" onchange="handleJiraDateRangeChange()">
-                                        <input id="jira-date-range-picker" type="text" style="display:none;">
                                     </div>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
@@ -2124,21 +2127,24 @@
                                         class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
                                         <option value="all">All Clients</option>
                                     </select>
-                                    <button type="button"
-                                        onclick="const intPicker = document.getElementById('internal-date-range-picker')?.litepicker; if(intPicker) intPicker.show();"
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center gap-2">
-                                        <iconify-icon icon="solar:calendar-linear" width="16"></iconify-icon>
-                                        <span id="internal-date-range-label">All Dates</span>
-                                    </button>
-                                    <button type="button" onclick="clearInternalDateRange()" id="internal-date-clear-btn" 
-                                        class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-slate-500 hover:text-rose-600 hover:border-rose-200 hidden"
-                                        title="Clear date range">
-                                        <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
-                                    </button>
+                                    <div class="relative">
+                                        <select id="internal-due-date-filter" onchange="setInternalDueDateFilter(this.value)"
+                                            class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                                            <option value="all">All Dates</option>
+                                            <option value="today">Today</option>
+                                            <option value="yesterday">Yesterday</option>
+                                            <option value="this_week">This Week</option>
+                                            <option value="last_week">Last Week</option>
+                                            <option value="this_month">This Month</option>
+                                            <option value="overdue">Overdue</option>
+                                            <option value="custom" id="internal-custom-date-option">Custom Range...</option>
+                                        </select>
+                                        <input id="internal-date-range-picker" type="text" readonly
+                                            class="absolute inset-0 w-full h-full opacity-0 pointer-events-none">
+                                    </div>
                                     <div class="hidden">
                                         <input id="internal-date-from" type="date" onchange="handleInternalDateRangeChange()">
                                         <input id="internal-date-to" type="date" onchange="handleInternalDateRangeChange()">
-                                        <input id="internal-date-range-picker" type="text" style="display:none;">
                                     </div>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear"
@@ -7422,47 +7428,7 @@
         </div>
     </dialog>
 
-    <!-- Modal: Checkout Reason -->
-    <dialog id="checkoutReasonModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
-        <div class="p-8">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight">Daily Plan Incomplete</h3>
-                <button onclick="document.getElementById('checkoutReasonModal').close()"
-                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
-                </button>
-            </div>
-            <div class="space-y-4">
-                <div class="bg-rose-50 p-4 rounded-2xl border border-rose-100/50 flex gap-3">
-                    <iconify-icon icon="solar:danger-circle-bold-duotone" width="24"
-                        class="text-rose-500 shrink-0"></iconify-icon>
-                    <div>
-                        <p class="text-xs font-bold text-rose-800">Reason Required for Checkout</p>
-                        <p class="text-[11px] text-rose-600 mt-0.5">Your daily plan is not completed. You must submit a
-                            reason to proceed with checkout.</p>
-                    </div>
-                </div>
-                <div id="checkout-incomplete-tasks-container"
-                    class="hidden bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50">
-                    <label class="block text-[10px] font-black text-rose-700 uppercase tracking-widest mb-2">Unstarted
-                        Tasks ("To Do")</label>
-                    <div id="checkout-incomplete-tasks-list"
-                        class="max-h-40 overflow-y-auto space-y-2 pr-1 text-[11px] text-rose-800 font-semibold">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Submit Reason</p>
-                    <textarea id="checkout-reason-text" rows="4"
-                        class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        placeholder="Please write the reason for not completing your daily plan..."></textarea>
-                </div>
-            </div>
-            <button onclick="submitCheckoutReason()"
-                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all">Submit
-                &amp; Check Out</button>
-        </div>
-    </dialog>
+
 
     <!-- Modal: Admin Checkout Reason Notification -->
     <dialog id="adminReasonPopupModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
@@ -10155,37 +10121,8 @@
 
             function confirmCheckOut() {
                 if (!currentUser) return;
-                const stats = getDailyPlanStats(currentUser.email);
-                if (stats.total > 0 && stats.completed < stats.total) {
-                    // Incomplete daily plan! Show the reason submission modal.
-                    document.getElementById('checkout-reason-text').value = '';
-
-                    // Populate unstarted tasks in the warning modal
-                    const todoTasks = stats.tasks.filter(t => t.status === 'To Do' || t.status === 'To do');
-                    const container = document.getElementById('checkout-incomplete-tasks-container');
-                    const listEl = document.getElementById('checkout-incomplete-tasks-list');
-
-                    if (todoTasks.length > 0 && container && listEl) {
-                        container.classList.remove('hidden');
-                        listEl.innerHTML = todoTasks.map(t => {
-                            const taskId = t.id || t.taskId || 'Manual';
-                            const taskDesc = t.desc || t.name || 'Unnamed Task';
-                            return `
-                            <div class="flex items-start gap-2 bg-white/70 p-2.5 rounded-xl border border-rose-100 shadow-sm">
-                                <span class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[9px] font-black uppercase shrink-0">${escapeHtml(taskId)}</span>
-                                <span class="flex-1 truncate" title="${escapeHtml(taskDesc)}">${escapeHtml(taskDesc)}</span>
-                            </div>
-                        `;
-                        }).join('');
-                    } else {
-                        if (container) container.classList.add('hidden');
-                    }
-
-                    document.getElementById('checkoutReasonModal').showModal();
-                } else {
-                    if (confirm('Are you sure you want to Check Out for today?')) {
-                        executeCheckOut();
-                    }
+                if (confirm('Are you sure you want to Check Out for today?')) {
+                    executeCheckOut();
                 }
             }
 
@@ -10205,31 +10142,6 @@
                 localStorage.removeItem('worksync_breakStartTime');
                 resetTimerUI();
                 toast('Checked Out - Great job today!', 'success');
-            }
-
-            async function submitCheckoutReason() {
-                const txt = document.getElementById('checkout-reason-text').value.trim();
-                if (!txt) {
-                    toast('Please provide a reason before checking out.', 'error');
-                    return;
-                }
-                try {
-                    // Save reason to Firebase
-                    const reasonData = {
-                        userId: currentUser.email,
-                        userName: currentUser.name,
-                        reason: txt,
-                        timestamp: Date.now(),
-                        date: todayIso(),
-                        readBy: {}
-                    };
-                    await push(ref(db, 'worksync/checkout_reasons'), reasonData);
-                    document.getElementById('checkoutReasonModal').close();
-                    executeCheckOut();
-                } catch (err) {
-                    console.error(err);
-                    toast('Failed to save reason. Please try again.', 'error');
-                }
             }
 
             let checkoutReasonsUnsub = null;
@@ -14237,17 +14149,20 @@
                     // Custom date range filtering
                     filtered = filtered.filter(t => {
                         if (!t.duedate) return false;
-                        const dueDate = new Date(t.duedate);
+                        const [y, m, d] = t.duedate.split('-').map(Number);
+                        const dueDate = new Date(y, m - 1, d);
                         dueDate.setHours(0, 0, 0, 0);
                         
                         if (currentDueDateFromRange) {
-                            const fromDate = new Date(currentDueDateFromRange);
+                            const [fy, fm, fd] = currentDueDateFromRange.split('-').map(Number);
+                            const fromDate = new Date(fy, fm - 1, fd);
                             fromDate.setHours(0, 0, 0, 0);
                             if (dueDate < fromDate) return false;
                         }
                         
                         if (currentDueDateToRange) {
-                            const toDate = new Date(currentDueDateToRange);
+                            const [ty, tm, td] = currentDueDateToRange.split('-').map(Number);
+                            const toDate = new Date(ty, tm - 1, td);
                             toDate.setHours(23, 59, 59, 999);
                             if (dueDate > toDate) return false;
                         }
@@ -14261,30 +14176,56 @@
                     if (currentDueDateFilter === 'overdue') {
                         filtered = filtered.filter(t => {
                             if (!t.duedate || isDone(t.status)) return false;
-                            const dueDate = new Date(t.duedate);
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
                             return dueDate < today;
                         });
                     } else if (currentDueDateFilter === 'today') {
-                        const todayStr = today.toISOString().slice(0, 10);
+                        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
                         filtered = filtered.filter(t => t.duedate === todayStr);
+                    } else if (currentDueDateFilter === 'yesterday') {
+                        const yesterday = new Date(today);
+                        yesterday.setDate(today.getDate() - 1);
+                        const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+                        filtered = filtered.filter(t => t.duedate === yesterdayStr);
                     } else if (currentDueDateFilter === 'this_week') {
                         const startOfWeek = new Date(today);
                         startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday as start of week
+                        startOfWeek.setHours(0, 0, 0, 0);
                         const endOfWeek = new Date(startOfWeek);
                         endOfWeek.setDate(startOfWeek.getDate() + 6);
                         endOfWeek.setHours(23, 59, 59, 999);
 
                         filtered = filtered.filter(t => {
                             if (!t.duedate) return false;
-                            const dueDate = new Date(t.duedate);
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
                             return dueDate >= startOfWeek && dueDate <= endOfWeek;
+                        });
+                    } else if (currentDueDateFilter === 'last_week') {
+                        const startOfLastWeek = new Date(today);
+                        const currentDay = today.getDay();
+                        const daysToSubtract = currentDay === 0 ? 13 : currentDay + 6;
+                        startOfLastWeek.setDate(today.getDate() - daysToSubtract);
+                        startOfLastWeek.setHours(0, 0, 0, 0);
+                        
+                        const endOfLastWeek = new Date(startOfLastWeek);
+                        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
+                        endOfLastWeek.setHours(23, 59, 59, 999);
+                        
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate) return false;
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
+                            return dueDate >= startOfLastWeek && dueDate <= endOfLastWeek;
                         });
                     } else if (currentDueDateFilter === 'this_month') {
                         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
                         filtered = filtered.filter(t => {
                             if (!t.duedate) return false;
-                            const dueDate = new Date(t.duedate);
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
                             return dueDate >= startOfMonth && dueDate <= endOfMonth;
                         });
                     }
@@ -14492,17 +14433,20 @@
                     // Custom date range filtering
                     filtered = filtered.filter(t => {
                         if (!t.duedate) return false;
-                        const dueDate = new Date(t.duedate);
+                        const [y, m, d] = t.duedate.split('-').map(Number);
+                        const dueDate = new Date(y, m - 1, d);
                         dueDate.setHours(0, 0, 0, 0);
                         
                         if (currentInternalDueDateFromRange) {
-                            const fromDate = new Date(currentInternalDueDateFromRange);
+                            const [fy, fm, fd] = currentInternalDueDateFromRange.split('-').map(Number);
+                            const fromDate = new Date(fy, fm - 1, fd);
                             fromDate.setHours(0, 0, 0, 0);
                             if (dueDate < fromDate) return false;
                         }
                         
                         if (currentInternalDueDateToRange) {
-                            const toDate = new Date(currentInternalDueDateToRange);
+                            const [ty, tm, td] = currentInternalDueDateToRange.split('-').map(Number);
+                            const toDate = new Date(ty, tm - 1, td);
                             toDate.setHours(23, 59, 59, 999);
                             if (dueDate > toDate) return false;
                         }
@@ -14513,20 +14457,59 @@
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     if (currentInternalDueDateFilter === 'overdue') {
-                        filtered = filtered.filter(t => t.duedate && new Date(t.duedate) < today && !isDone(t.status) && !isInternalDone(t.status));
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate || (isDone(t.status) || isInternalDone(t.status))) return false;
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
+                            return dueDate < today;
+                        });
                     } else if (currentInternalDueDateFilter === 'today') {
-                        filtered = filtered.filter(t => t.duedate === today.toISOString().slice(0, 10));
+                        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                        filtered = filtered.filter(t => t.duedate === todayStr);
+                    } else if (currentInternalDueDateFilter === 'yesterday') {
+                        const yesterday = new Date(today);
+                        yesterday.setDate(today.getDate() - 1);
+                        const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+                        filtered = filtered.filter(t => t.duedate === yesterdayStr);
+                    } else if (currentInternalDueDateFilter === 'last_week') {
+                        const startOfLastWeek = new Date(today);
+                        const currentDay = today.getDay();
+                        const daysToSubtract = currentDay === 0 ? 13 : currentDay + 6;
+                        startOfLastWeek.setDate(today.getDate() - daysToSubtract);
+                        startOfLastWeek.setHours(0, 0, 0, 0);
+                        
+                        const endOfLastWeek = new Date(startOfLastWeek);
+                        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
+                        endOfLastWeek.setHours(23, 59, 59, 999);
+                        
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate) return false;
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
+                            return dueDate >= startOfLastWeek && dueDate <= endOfLastWeek;
+                        });
                     } else if (currentInternalDueDateFilter === 'this_week') {
                         const startOfWeek = new Date(today);
                         startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+                        startOfWeek.setHours(0, 0, 0, 0);
                         const endOfWeek = new Date(startOfWeek);
                         endOfWeek.setDate(startOfWeek.getDate() + 6);
                         endOfWeek.setHours(23, 59, 59, 999);
-                        filtered = filtered.filter(t => t.duedate && new Date(t.duedate) >= startOfWeek && new Date(t.duedate) <= endOfWeek);
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate) return false;
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
+                            return dueDate >= startOfWeek && dueDate <= endOfWeek;
+                        });
                     } else if (currentInternalDueDateFilter === 'this_month') {
                         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-                        filtered = filtered.filter(t => t.duedate && new Date(t.duedate) >= startOfMonth && new Date(t.duedate) <= endOfMonth);
+                        filtered = filtered.filter(t => {
+                            if (!t.duedate) return false;
+                            const [y, m, d] = t.duedate.split('-').map(Number);
+                            const dueDate = new Date(y, m - 1, d);
+                            return dueDate >= startOfMonth && dueDate <= endOfMonth;
+                        });
                     }
                 }
                 if (currentInternalSearchTerm) {
@@ -26652,14 +26635,31 @@
 
             function setDueDateFilter(v) {
                 currentDueDateFilter = v;
+                if (v === 'custom') {
+                    setTimeout(() => {
+                        const picker = document.getElementById('jira-date-range-picker')?.litepicker;
+                        if (picker) picker.show();
+                    }, 50);
+                } else {
+                    currentDueDateFromRange = null;
+                    currentDueDateToRange = null;
+                    
+                    const customOption = document.getElementById('jira-custom-date-option');
+                    if (customOption) {
+                        customOption.textContent = 'Custom Range...';
+                    }
+                    
+                    const pickerEl = document.getElementById('jira-date-range-picker');
+                    if (pickerEl && pickerEl.litepicker) {
+                        pickerEl.litepicker.clearSelection();
+                    }
+                }
                 renderTasks();
             }
 
             function handleJiraDateRangeChange() {
                 const fromInput = document.getElementById('jira-date-from');
                 const toInput = document.getElementById('jira-date-to');
-                const labelEl = document.getElementById('jira-date-range-label');
-                const clearBtn = document.getElementById('jira-date-clear-btn');
                 
                 const fromDate = fromInput.value;
                 const toDate = toInput.value;
@@ -26667,23 +26667,18 @@
                 currentDueDateFromRange = fromDate || null;
                 currentDueDateToRange = toDate || null;
                 
-                // Update label
-                if (fromDate && toDate) {
-                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `${from} - ${to}`;
-                    clearBtn.classList.remove('hidden');
-                } else if (fromDate) {
-                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `From ${from}`;
-                    clearBtn.classList.remove('hidden');
-                } else if (toDate) {
-                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `Until ${to}`;
-                    clearBtn.classList.remove('hidden');
-                } else {
-                    labelEl.textContent = 'All Dates';
-                    clearBtn.classList.add('hidden');
+                // Update dropdown custom option text
+                const customOption = document.getElementById('jira-custom-date-option');
+                if (customOption) {
+                    if (fromDate && toDate) {
+                        const [fy, fm, fd] = fromDate.split('-').map(Number);
+                        const [ty, tm, td] = toDate.split('-').map(Number);
+                        const from = new Date(fy, fm - 1, fd).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                        const to = new Date(ty, tm - 1, td).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                        customOption.textContent = `${from} - ${to}`;
+                    } else {
+                        customOption.textContent = 'Custom Range...';
+                    }
                 }
                 
                 renderTasks();
@@ -26692,30 +26687,65 @@
             function clearJiraDateRange() {
                 document.getElementById('jira-date-from').value = '';
                 document.getElementById('jira-date-to').value = '';
-                document.getElementById('jira-date-clear-btn').classList.add('hidden');
                 currentDueDateFromRange = null;
                 currentDueDateToRange = null;
-                document.getElementById('jira-date-range-label').textContent = 'All Dates';
+                
+                const customOption = document.getElementById('jira-custom-date-option');
+                if (customOption) {
+                    customOption.textContent = 'Custom Range...';
+                }
+                
+                // Clear the selection in the date picker input
+                const pickerEl = document.getElementById('jira-date-range-picker');
+                if (pickerEl) {
+                    pickerEl.value = '';
+                    if (pickerEl.litepicker) {
+                        pickerEl.litepicker.clearSelection();
+                    }
+                }
+                
+                // Reset dropdown to all dates
+                const presetSelect = document.getElementById('jira-due-date-filter');
+                if (presetSelect) presetSelect.value = 'all';
+                currentDueDateFilter = 'all';
+                
                 renderTasks();
             }
 
             function initJiraDatePicker() {
                 const datePickerEl = document.getElementById('jira-date-range-picker');
                 if (datePickerEl && window.Litepicker) {
-                    const fromInput = document.getElementById('jira-date-from');
-                    const toInput = document.getElementById('jira-date-to');
-                    
                     const picker = new Litepicker({
                         element: datePickerEl,
                         singleMode: false,
                         format: 'DD MMM, YYYY',
-                        numberOfMonths: 2,
+                        numberOfMonths: 1,
+                        autoApply: true,
                         plugins: ['mobilefriendly'],
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
-                                fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
-                                toInput.value = date2.dateInstance.toISOString().slice(0, 10);
-                                handleJiraDateRangeChange();
+                                const getNativeDate = (ld) => {
+                                    if (!ld) return null;
+                                    if (ld.dateInstance) return ld.dateInstance;
+                                    if (typeof ld.toDate === 'function') return ld.toDate();
+                                    return new Date(ld);
+                                };
+                                const d1 = getNativeDate(date1);
+                                const d2 = getNativeDate(date2) || d1;
+                                if (d1) {
+                                    const fromInput = document.getElementById('jira-date-from');
+                                    const toInput = document.getElementById('jira-date-to');
+                                    if (fromInput) fromInput.value = d1.getFullYear() + '-' + String(d1.getMonth() + 1).padStart(2, '0') + '-' + String(d1.getDate()).padStart(2, '0');
+                                    if (toInput) toInput.value = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0') + '-' + String(d2.getDate()).padStart(2, '0');
+                                    
+                                    setTimeout(() => {
+                                        const presetSelect = document.getElementById('jira-due-date-filter');
+                                        if (presetSelect) presetSelect.value = 'custom';
+                                        currentDueDateFilter = 'custom';
+                                        handleJiraDateRangeChange();
+                                        if (document.activeElement) document.activeElement.blur();
+                                    }, 150);
+                                }
                             });
                         }
                     });
@@ -26772,14 +26802,31 @@
 
             function setInternalDueDateFilter(v) {
                 currentInternalDueDateFilter = v;
+                if (v === 'custom') {
+                    setTimeout(() => {
+                        const picker = document.getElementById('internal-date-range-picker')?.litepicker;
+                        if (picker) picker.show();
+                    }, 50);
+                } else {
+                    currentInternalDueDateFromRange = null;
+                    currentInternalDueDateToRange = null;
+                    
+                    const customOption = document.getElementById('internal-custom-date-option');
+                    if (customOption) {
+                        customOption.textContent = 'Custom Range...';
+                    }
+                    
+                    const pickerEl = document.getElementById('internal-date-range-picker');
+                    if (pickerEl && pickerEl.litepicker) {
+                        pickerEl.litepicker.clearSelection();
+                    }
+                }
                 renderInternalTasks();
             }
 
             function handleInternalDateRangeChange() {
                 const fromInput = document.getElementById('internal-date-from');
                 const toInput = document.getElementById('internal-date-to');
-                const labelEl = document.getElementById('internal-date-range-label');
-                const clearBtn = document.getElementById('internal-date-clear-btn');
                 
                 const fromDate = fromInput.value;
                 const toDate = toInput.value;
@@ -26787,23 +26834,18 @@
                 currentInternalDueDateFromRange = fromDate || null;
                 currentInternalDueDateToRange = toDate || null;
                 
-                // Update label
-                if (fromDate && toDate) {
-                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `${from} - ${to}`;
-                    clearBtn.classList.remove('hidden');
-                } else if (fromDate) {
-                    const from = new Date(fromDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `From ${from}`;
-                    clearBtn.classList.remove('hidden');
-                } else if (toDate) {
-                    const to = new Date(toDate).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
-                    labelEl.textContent = `Until ${to}`;
-                    clearBtn.classList.remove('hidden');
-                } else {
-                    labelEl.textContent = 'All Dates';
-                    clearBtn.classList.add('hidden');
+                // Update dropdown custom option text
+                const customOption = document.getElementById('internal-custom-date-option');
+                if (customOption) {
+                    if (fromDate && toDate) {
+                        const [fy, fm, fd] = fromDate.split('-').map(Number);
+                        const [ty, tm, td] = toDate.split('-').map(Number);
+                        const from = new Date(fy, fm - 1, fd).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                        const to = new Date(ty, tm - 1, td).toLocaleDateString('en-GB', { day: 'short', month: 'short' });
+                        customOption.textContent = `${from} - ${to}`;
+                    } else {
+                        customOption.textContent = 'Custom Range...';
+                    }
                 }
                 
                 renderInternalTasks();
@@ -26812,30 +26854,65 @@
             function clearInternalDateRange() {
                 document.getElementById('internal-date-from').value = '';
                 document.getElementById('internal-date-to').value = '';
-                document.getElementById('internal-date-clear-btn').classList.add('hidden');
                 currentInternalDueDateFromRange = null;
                 currentInternalDueDateToRange = null;
-                document.getElementById('internal-date-range-label').textContent = 'All Dates';
+                
+                const customOption = document.getElementById('internal-custom-date-option');
+                if (customOption) {
+                    customOption.textContent = 'Custom Range...';
+                }
+                
+                // Clear the selection in the date picker input
+                const pickerEl = document.getElementById('internal-date-range-picker');
+                if (pickerEl) {
+                    pickerEl.value = '';
+                    if (pickerEl.litepicker) {
+                        pickerEl.litepicker.clearSelection();
+                    }
+                }
+                
+                // Reset dropdown to all dates
+                const presetSelect = document.getElementById('internal-due-date-filter');
+                if (presetSelect) presetSelect.value = 'all';
+                currentInternalDueDateFilter = 'all';
+                
                 renderInternalTasks();
             }
 
             function initInternalDatePicker() {
                 const datePickerEl = document.getElementById('internal-date-range-picker');
                 if (datePickerEl && window.Litepicker) {
-                    const fromInput = document.getElementById('internal-date-from');
-                    const toInput = document.getElementById('internal-date-to');
-                    
                     const picker = new Litepicker({
                         element: datePickerEl,
                         singleMode: false,
                         format: 'DD MMM, YYYY',
-                        numberOfMonths: 2,
+                        numberOfMonths: 1,
+                        autoApply: true,
                         plugins: ['mobilefriendly'],
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
-                                fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
-                                toInput.value = date2.dateInstance.toISOString().slice(0, 10);
-                                handleInternalDateRangeChange();
+                                const getNativeDate = (ld) => {
+                                    if (!ld) return null;
+                                    if (ld.dateInstance) return ld.dateInstance;
+                                    if (typeof ld.toDate === 'function') return ld.toDate();
+                                    return new Date(ld);
+                                };
+                                const d1 = getNativeDate(date1);
+                                const d2 = getNativeDate(date2) || d1;
+                                if (d1) {
+                                    const fromInput = document.getElementById('internal-date-from');
+                                    const toInput = document.getElementById('internal-date-to');
+                                    if (fromInput) fromInput.value = d1.getFullYear() + '-' + String(d1.getMonth() + 1).padStart(2, '0') + '-' + String(d1.getDate()).padStart(2, '0');
+                                    if (toInput) toInput.value = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0') + '-' + String(d2.getDate()).padStart(2, '0');
+                                    
+                                    setTimeout(() => {
+                                        const presetSelect = document.getElementById('internal-due-date-filter');
+                                        if (presetSelect) presetSelect.value = 'custom';
+                                        currentInternalDueDateFilter = 'custom';
+                                        handleInternalDateRangeChange();
+                                        if (document.activeElement) document.activeElement.blur();
+                                    }, 150);
+                                }
                             });
                         }
                     });
