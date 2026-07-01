@@ -8173,7 +8173,7 @@
             }
 
             function getNextPendingApproval(r) {
-                if (r.type !== 'leave') return null;
+                if (r.type !== 'leave' && r.type !== 'saturday' && r.type !== 'permission') return null;
                 const approvals = buildApprovalsFromChain(resolveLeaveRequesterEmail(r), r.approvals);
                 if (approvals.some(a => a.status === 'rejected')) return null;
                 const approvedCount = approvals.filter(a => a.status === 'approved').length;
@@ -11769,6 +11769,9 @@
                     .filter(w => w.length > 2 && !stopWords.has(w));
 
                 return tasks.filter(t => {
+                    // Production Control Center is ONLY for Jira tasks
+                    if (t.manual || isInternalTask(t)) return false;
+
                     // ── Client match (required) ──
                     const clientMatch = ev.client && t.client && t.client.toLowerCase() === ev.client.toLowerCase();
                     const labelMatch = ev.client && (t.clientLabels || []).some(l => l.toLowerCase().includes(ev.client.toLowerCase()));
@@ -11793,7 +11796,7 @@
 
             /** Get all Jira tasks due on a specific date (non-done) */
             function ptTasksDueOn(dateStr) {
-                return tasks.filter(t => t.duedate === dateStr && !isDone(t.status));
+                return tasks.filter(t => t.duedate === dateStr && !isDone(t.status) && !t.manual && !isInternalTask(t));
             }
 
             /** Determine production track status for an event */
@@ -12191,7 +12194,7 @@
                     );
                     const allMyTasks = tasks.filter(t =>
                         (t.assigneeEmail || '').toLowerCase() === member.email.toLowerCase() &&
-                        !isDone(t.status)
+                        !isDone(t.status) && !t.manual && !isInternalTask(t)
                     );
                     const load = allMyTasks.length;
                     const capPct = member.pct;
@@ -12225,7 +12228,7 @@
                         const member = PT_TEAM.find(m => (t.assigneeEmail || '').toLowerCase() === m.email.toLowerCase());
                         const avatarColor = member ? `text-${member.color}-600 bg-${member.color}-50 dark:text-${member.color}-400 dark:bg-${member.color}-950/20` : 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-850';
 
-                        const jiraStatuses = [...new Set(tasks.map(x => x.status).filter(Boolean))].sort();
+                        const jiraStatuses = [...new Set(tasks.filter(x => !x.manual && !isInternalTask(x)).map(x => x.status).filter(Boolean))].sort();
                         const selectHtml = `
                             <select onchange="updateTaskStatus('${t.id}', this.value); setTimeout(() => openPtDayDetail('${dateStr}'), 500)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-violet-500/20 dark:text-slate-350">
                                 ${jiraStatuses.map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
@@ -12462,6 +12465,8 @@
             function renderPccDashboard() {
                 populatePccFiltersDropdowns();
 
+                const jiraTasksOnly = tasks.filter(t => !t.manual && !isInternalTask(t));
+
                 const now = new Date();
                 const todayStr = ptDateStr(now);
                 const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
@@ -12533,8 +12538,8 @@
                     });
                 }
 
-                const filteredTasks = filterTaskSet(tasks, dateStart, dateEnd);
-                const priorTasks = filterTaskSet(tasks, priorStart, priorEnd);
+                const filteredTasks = filterTaskSet(jiraTasksOnly, dateStart, dateEnd);
+                const priorTasks = filterTaskSet(jiraTasksOnly, priorStart, priorEnd);
 
                 function getStatsObj(taskSet) {
                     const total = taskSet.length;
@@ -12852,7 +12857,7 @@
                 if (capacityList) {
                     capacityList.innerHTML = USERS.map(u => {
                         const email = u.email.toLowerCase();
-                        const workedTasks = tasks.filter(t => assigneeMatches(t, email));
+                        const workedTasks = jiraTasksOnly.filter(t => assigneeMatches(t, email));
                         const assigned = workedTasks.filter(t => !isDone(t.status)).length;
                         const completed = workedTasks.filter(t => isDone(t.status) && t.duedate === todayStr).length;
                         const pending = workedTasks.filter(t => !isDone(t.status) && t.status !== 'Hold' && t.status !== 'Design Hold').length;
@@ -12918,7 +12923,7 @@
                     ];
 
                     deptHealthList.innerHTML = depts.map(dept => {
-                        const deptTasks = filteredTasks.filter(t => t.assigneeEmail && dept.emails.includes(t.assigneeEmail.toLowerCase()));
+                        const deptTasks = jiraTasksOnly.filter(t => t.assigneeEmail && dept.emails.includes(t.assigneeEmail.toLowerCase()));
                         const total = deptTasks.length;
                         const completed = deptTasks.filter(t => isDone(t.status)).length;
                         const pending = total - completed;
@@ -12947,7 +12952,7 @@
                 if (performersList) {
                     const performances = USERS.map(u => {
                         const email = u.email.toLowerCase();
-                        const workedTasks = tasks.filter(t => assigneeMatches(t, email));
+                        const workedTasks = jiraTasksOnly.filter(t => assigneeMatches(t, email));
                         const completedToday = workedTasks.filter(t => isDone(t.status) && t.duedate === todayStr).length;
                         const totalTasks = workedTasks.length;
                         const efficiency = totalTasks > 0 ? Math.round((workedTasks.filter(t => isDone(t.status)).length / totalTasks) * 100) : 100;
@@ -12983,10 +12988,10 @@
 
                 const trendList = document.getElementById('pcc-trend-list');
                 if (trendList) {
-                    const todayStats = getStatsObj(filterTaskSet(tasks, todayStr, todayStr));
-                    const yesterdayStats = getStatsObj(filterTaskSet(tasks, yesterdayStr, yesterdayStr));
+                    const todayStats = getStatsObj(filterTaskSet(jiraTasksOnly, todayStr, todayStr));
+                    const yesterdayStats = getStatsObj(filterTaskSet(jiraTasksOnly, yesterdayStr, yesterdayStr));
                     const past7 = new Date(now); past7.setDate(now.getDate() - 6);
-                    const weekStats = getStatsObj(filterTaskSet(tasks, ptDateStr(past7), todayStr));
+                    const weekStats = getStatsObj(filterTaskSet(jiraTasksOnly, ptDateStr(past7), todayStr));
 
                     trendList.innerHTML = `
                         <div class="divide-y divide-slate-50 text-[11px]">
@@ -13020,7 +13025,7 @@
 
                 const activityFeed = document.getElementById('pcc-activity-feed');
                 if (activityFeed) {
-                    const sorted = [...tasks].filter(t => t.duedate).sort((a, b) => b.duedate.localeCompare(a.duedate));
+                    const sorted = [...jiraTasksOnly].filter(t => t.duedate).sort((a, b) => b.duedate.localeCompare(a.duedate));
                     const activities = [];
                     sorted.slice(0, 8).forEach(t => {
                         const action = isDone(t.status) ? 'Completed' : 'Updated';
@@ -13057,24 +13062,26 @@
             function populatePccFiltersDropdowns() {
                 if (filtersPopulated) return;
 
+                const jiraTasksOnly = tasks.filter(t => !t.manual && !isInternalTask(t));
+
                 const clientSel = document.getElementById('pcc-filter-client');
                 const employeeSel = document.getElementById('pcc-filter-employee');
                 const statusSel = document.getElementById('pcc-filter-status');
 
                 if (clientSel) {
-                    const uniqueClients = [...new Set(tasks.map(t => t.client).filter(Boolean))].sort();
+                    const uniqueClients = [...new Set(jiraTasksOnly.map(t => t.client).filter(Boolean))].sort();
                     clientSel.innerHTML = '<option value="all">All Clients</option>' +
                         uniqueClients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                 }
 
                 if (employeeSel) {
-                    const uniqueEmployees = [...new Set(tasks.map(t => t.assignee).filter(Boolean))].sort();
+                    const uniqueEmployees = [...new Set(jiraTasksOnly.map(t => t.assignee).filter(Boolean))].sort();
                     employeeSel.innerHTML = '<option value="all">All Team</option>' +
                         uniqueEmployees.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
                 }
 
                 if (statusSel) {
-                    const uniqueStatuses = [...new Set(tasks.map(t => t.status).filter(Boolean))].sort();
+                    const uniqueStatuses = [...new Set(jiraTasksOnly.map(t => t.status).filter(Boolean))].sort();
                     statusSel.innerHTML = '<option value="all">All Statuses</option>' +
                         uniqueStatuses.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
                 }
@@ -13111,6 +13118,7 @@
                 const statusFilter = document.getElementById('pcc-filter-status')?.value || 'all';
 
                 activeSlideoverTasks = tasks.filter(t => {
+                    if (t.manual || isInternalTask(t)) return false;
                     if (!stage.statuses.some(s => s.toLowerCase() === (t.status || '').trim().toLowerCase())) return false;
                     if (clientFilter !== 'all' && (t.client || '').toLowerCase() !== clientFilter.toLowerCase()) return false;
                     if (employeeFilter !== 'all' && (t.assignee || '').toLowerCase() !== employeeFilter.toLowerCase()) return false;
