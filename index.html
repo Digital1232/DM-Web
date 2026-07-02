@@ -8263,7 +8263,7 @@
             }
             function hasClientWideAccess() { return currentUser && CLIENT_WIDE_ACCESS_EMAILS.some(e => e.toLowerCase() === (currentUser.email || '').toLowerCase()); }
             function canViewReports() { return true; }
-            function canViewDailySummary() { return isAdmin(); }
+            function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
             function canViewMetaAds() {
@@ -17815,10 +17815,13 @@
                     });
                 }
 
-                return [...rows.values()].sort((a, b) => {
-                    const activeSort = (b.activeTask ? 1 : 0) - (a.activeTask ? 1 : 0);
-                    return activeSort || (b.loggedSeconds + b.activeSeconds) - (a.loggedSeconds + a.activeSeconds) || a.name.localeCompare(b.name);
-                });
+                return [...rows.values()]
+                    // Filter: Non-admins only see their own data
+                    .filter(row => isAdmin() || row.email === (currentUser?.email || '').toLowerCase())
+                    .sort((a, b) => {
+                        const activeSort = (b.activeTask ? 1 : 0) - (a.activeTask ? 1 : 0);
+                        return activeSort || (b.loggedSeconds + b.activeSeconds) - (a.loggedSeconds + a.activeSeconds) || a.name.localeCompare(b.name);
+                    });
             }
 
             function showIndivPerfTasks(email, type, name) {
