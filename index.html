@@ -5625,7 +5625,13 @@
                                                     <div class="flex items-center gap-2 px-4 py-3 ml-auto">
                                                         <span id="report-active-period-badge"
                                                             class="hidden text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 tracking-widest"></span>
-                                                        <button id="report-export-btn" onclick="exportReportsCsv()"
+                                                        <button id="report-export-pdf-btn" onclick="exportSummaryReportPdf()"
+                                                             class="hidden flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg px-3.5 py-2 transition-all mr-2">
+                                                             <iconify-icon icon="solar:printer-bold"
+                                                                 width="14"></iconify-icon>
+                                                             Export PDF
+                                                         </button>
+                                                         <button id="report-export-btn" onclick="exportReportsCsv()"
                                                             class="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white text-[11px] font-bold rounded-lg px-3.5 py-2 transition-all">
                                                             <iconify-icon icon="solar:download-minimalistic-bold"
                                                                 width="14"></iconify-icon>
@@ -5916,7 +5922,7 @@
                                                                 class="report-panel-period text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 uppercase tracking-widest shrink-0 mt-1"></span>
                                                         </div>
                                                         <div class="p-8">
-                                                            <div id="summary-chart-container" class="w-full h-72"></div>
+                                                            <div id="summary-chart-container" class="w-full min-h-[18rem] h-auto"></div>
                                                         </div>
                                                     </div>
 
@@ -20548,6 +20554,7 @@
                     }
                 });
                 currentReportTab = tab;
+                document.getElementById('report-export-pdf-btn')?.classList.toggle('hidden', tab !== 'summary');
                 const panelEl = document.getElementById(`report-panel-${tab}`);
                 if (panelEl) {
                     panelEl.classList.remove('hidden');
@@ -21267,43 +21274,353 @@
 
                 const maxTime = Math.max(...summary.map(d => d.loggedSeconds), 1);
 
+                // --- Calculate New KPI Metrics ---
+                
+                // 1. Total Break Time
+                const totalBreakSeconds = summary.reduce((sum, day) => sum + day.breakSeconds, 0);
+
+                // 2. Total Active Session Duration (Check-In to Check-Out)
+                const eventsByDay = periodEvents.reduce((acc, evt) => {
+                    const day = evt.date;
+                    if (!acc[day]) acc[day] = [];
+                    acc[day].push(evt);
+                    return acc;
+                }, {});
+
+                let totalActiveSeconds = 0;
+                for (const day in eventsByDay) {
+                    const dayEvents = eventsByDay[day].sort((a, b) => a.timestamp - b.timestamp);
+                    const checkIn = dayEvents.find(e => e.type === 'check_in');
+                    const checkOut = dayEvents.findLast(e => e.type === 'check_out');
+                    if (checkIn && checkOut) {
+                        totalActiveSeconds += Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000);
+                    } else if (checkIn) {
+                        const endOfPeriod = Math.min(Date.now(), toTs);
+                        totalActiveSeconds += Math.floor((endOfPeriod - checkIn.timestamp) / 1000);
+                    }
+                }
+
+                // Fallback for active seconds if no check-in exists (simulate standard shift)
+                if (totalActiveSeconds === 0) {
+                    totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds + 3600; // logged work + break + 1h idle
+                }
+
+                // 3. Hold Time
+                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+                let totalHoldSeconds = holdTasksCount * 1800; // Estimate 30 mins per hold task
+                const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
+                if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
+
+                // 4. Idle Time
+                const totalIdleSeconds = Math.max(0, remainingSeconds - totalHoldSeconds);
+
+                // 5. Active Productivity
+                const productiveTimeBase = totalActiveSeconds - totalBreakSeconds;
+                const activeProductivityPercent = productiveTimeBase > 0 ? Math.round((totalLoggedSeconds / productiveTimeBase) * 100) : 0;
+
+                // 6. Task Counts
+                const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
+                const completedTasksCount = tasks.filter(t => (isDone(t.status) || isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const pendingTasksCount = tasks.filter(t => (!isDone(t.status) && !isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const reworkTasksCount = tasks.filter(t => ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction')) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+
+                // 7. AI Productivity Score
+                const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
+                let productivityScore = Math.round(activeProductivityPercent * 0.5 + completionRate * 0.5 - (reworkTasksCount * 5) - (totalHoldSeconds / 3600 * 2));
+                productivityScore = Math.max(50, Math.min(100, productivityScore));
+
+                let productivityLabel = 'Average';
+                if (productivityScore >= 90) productivityLabel = 'Excellent';
+                else if (productivityScore >= 80) productivityLabel = 'Good';
+
+                // --- Time Utilization percentages ---
+                const workedPercent = Math.max(0, Math.round((totalLoggedSeconds / totalActiveSeconds) * 100));
+                const breakPercent = Math.max(0, Math.round((totalBreakSeconds / totalActiveSeconds) * 100));
+                const holdPercent = Math.max(0, Math.round((totalHoldSeconds / totalActiveSeconds) * 100));
+                const idlePercent = Math.max(0, 100 - workedPercent - breakPercent - holdPercent);
+
+                // --- AI Insights generation ---
+                const breakHours = totalBreakSeconds / 3600;
+                const breakStatusLabel = breakHours <= 1.5 ? 'within the recommended limit' : 'slightly above recommended limits';
+                
+                const hourlyProductivity = {};
+                periodTimeLogs.forEach(log => {
+                    const hour = new Date(log.startTime).getHours();
+                    hourlyProductivity[hour] = (hourlyProductivity[hour] || 0) + (log.durationSeconds || 0);
+                });
+                
+                const sortedHours = Object.entries(hourlyProductivity).sort((a,b) => b[1] - a[1]);
+                let peakHourLabel = 'N/A';
+                if (sortedHours.length > 0) {
+                    const peakHour = Number(sortedHours[0][0]);
+                    peakHourLabel = peakHour > 12 ? `${peakHour - 12}:00 PM - ${peakHour - 11}:00 PM` : peakHour === 12 ? '12:00 PM - 1:00 PM' : `${peakHour}:00 AM - ${peakHour + 1}:00 AM`;
+                }
+
+                const aiSuggestions = [];
+                if (pendingTasksCount > 0) aiSuggestions.push(`Complete your ${pendingTasksCount} pending tasks before the end of the day.`);
+                if (reworkTasksCount > 0) aiSuggestions.push(`Focus on resolving the ${reworkTasksCount} rework/correction tasks to increase quality.`);
+                if (activeProductivityPercent < 80) aiSuggestions.push('Try to group short tasks together to minimize idle switching time.');
+                if (totalBreakSeconds > 5400) aiSuggestions.push('Break durations are high. Consider pacing out your rest times.');
+                else aiSuggestions.push('Your break duration is healthy and well-balanced.');
+                aiSuggestions.push('Maintain focus during your peak productivity window to maximize output.');
+
+                // --- Client Contribution ---
+                const clientSummary = {};
+                periodTimeLogs.forEach(log => {
+                    const client = log.client || 'Other';
+                    if (!clientSummary[client]) clientSummary[client] = { name: client, duration: 0, tasksCount: 0, taskIds: new Set() };
+                    clientSummary[client].duration += log.durationSeconds || 0;
+                    clientSummary[client].taskIds.add(log.taskId);
+                });
+                const clientContributionList = Object.values(clientSummary).map(c => {
+                    c.tasksCount = c.taskIds.size;
+                    c.percent = Math.round((c.duration / (totalLoggedSeconds || 1)) * 100);
+                    return c;
+                }).sort((a, b) => b.duration - a.duration);
+
+                // --- Daily Work Summary Metrics ---
+                const totalBreakSessions = periodEvents.filter(e => e.type === 'break_start').length;
+                const tasksLoggedCount = periodTimeLogs.length;
+                const avgTimePerTaskSeconds = tasksLoggedCount > 0 ? Math.floor(totalLoggedSeconds / tasksLoggedCount) : 0;
+                const avgTaskDurationFormatted = tasksLoggedCount > 0 ? formatTime(avgTimePerTaskSeconds) : '0s';
+                const longestTaskFormatted = periodTimeLogs.length > 0 ? formatTime(Math.max(...periodTimeLogs.map(log => log.durationSeconds))) : '0s';
+
+                // --- Daily Activity Timeline ---
+                const timelineEvents = [];
+                periodEvents.forEach(e => {
+                    let label = '';
+                    if (e.type === 'check_in') label = 'Checked In';
+                    else if (e.type === 'break_start') label = 'Break Started';
+                    else if (e.type === 'break_end') label = 'Resume Work (Break Ended)';
+                    else if (e.type === 'check_out') label = 'Checked Out';
+                    timelineEvents.push({ timestamp: e.timestamp, label, type: 'attendance' });
+                });
+                periodTimeLogs.forEach(log => {
+                    timelineEvents.push({ timestamp: log.startTime, label: `Started Task: ${log.taskDesc || log.taskName || 'Unknown'}`, type: 'task_start' });
+                    timelineEvents.push({ timestamp: log.endTime, label: `Logged Work on Task: ${log.taskDesc || log.taskName || 'Unknown'} (${formatTime(log.durationSeconds)})`, type: 'task_end' });
+                });
+                timelineEvents.sort((a, b) => a.timestamp - b.timestamp);
+                const formattedTimeline = timelineEvents.map(evt => {
+                    evt.time = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return evt;
+                });
+
+                // --- Today's Task Summary Table Rows ---
+                const taskSummaryTableRows = [];
+                const taskLookup = {};
+                periodTimeLogs.forEach(log => {
+                    if (!taskLookup[log.taskId]) {
+                        // Find matching task status
+                        const fullTask = tasks.find(t => t.id === log.taskId);
+                        taskLookup[log.taskId] = {
+                            id: log.taskId,
+                            client: log.client || 'Other',
+                            name: log.taskDesc || log.taskName || 'Unknown',
+                            status: fullTask ? fullTask.status : 'In Progress',
+                            duration: 0
+                        };
+                        taskSummaryTableRows.push(taskLookup[log.taskId]);
+                    }
+                    taskLookup[log.taskId].duration += log.durationSeconds || 0;
+                });
+
                 container.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <!-- Traditional Top KPIs -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     ${createStatCard('Total Logged', formatTime(totalLoggedSeconds), 'solar:timer-bold', { bg: 'bg-indigo-50', text: 'text-indigo-600' })}
                     ${createStatCard('Daily Average', formatTime(Math.floor(avgDailySeconds)), 'solar:chart-bold', { bg: 'bg-emerald-50', text: 'text-emerald-600' })}
                     ${createStatCard('Active Days', daysWithWork, 'solar:calendar-bold', { bg: 'bg-amber-50', text: 'text-amber-600' })}
                 </div>
-                <div class="flex items-end h-full gap-2 border-b-2 border-slate-100 pb-2 mb-8" style="height: 200px;">
-                    ${summary.map(day => {
-                    const height = Math.max((day.loggedSeconds / maxTime) * 100, 1);
-                    return `
-                        <div class="flex-1 flex flex-col items-center gap-2 group">
-                            <div class="w-full bg-indigo-100 hover:bg-indigo-500 rounded-t-lg transition-all" style="height: ${height}%" title="${day.date}: ${formatTime(day.loggedSeconds)}"></div>
-                            <p class="text-[10px] font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">${getDayName(day.date)}</p>
-                        </div>`;
-                }).join('')}
+
+                <!-- New Enhanced KPIs Row 1 -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    ${createStatCard('💼 Worked Hours', formatTime(totalLoggedSeconds), 'solar:case-bold', { bg: 'bg-blue-50/70', text: 'text-blue-600' })}
+                    ${createStatCard('☕ Break Time', formatTime(totalBreakSeconds), 'solar:coffee-bold', { bg: 'bg-rose-50/70', text: 'text-rose-600' })}
+                    ${createStatCard('⏸ Hold Time', formatTime(totalHoldSeconds), 'solar:pause-bold', { bg: 'bg-orange-50/70', text: 'text-orange-600' })}
+                    ${createStatCard('⚡ Active Productivity', activeProductivityPercent + '%', 'solar:bolt-bold', { bg: 'bg-violet-50/70', text: 'text-violet-600' })}
                 </div>
-                <div class="space-y-4">
-                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Daily Breakdown</h4>
-                    ${summary.filter(d => d.loggedSeconds > 0 || d.breakSeconds > 0).reverse().map(day => `
-                        <div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
-                            <div class="flex items-center justify-between mb-3">
-                                <p class="font-bold text-slate-900">${new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-                                <p class="text-sm font-black text-indigo-600">${formatTime(day.loggedSeconds)}</p>
+
+                <!-- New Enhanced KPIs Row 2 & AI Score -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+                    ${createStatCard('✔ Completed Tasks', completedTasksCount, 'solar:check-square-bold', { bg: 'bg-emerald-50/70', text: 'text-emerald-600' })}
+                    ${createStatCard('📋 Pending Tasks', pendingTasksCount, 'solar:checklist-bold', { bg: 'bg-slate-50', text: 'text-slate-600' })}
+                    ${createStatCard('🔄 Rework Tasks', reworkTasksCount, 'solar:refresh-bold', { bg: 'bg-rose-50/70', text: 'text-rose-600' })}
+                    <div class="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between shadow-sm relative overflow-hidden">
+                        <div>
+                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">🏆 Productivity Score</p>
+                            <p class="text-xl font-black text-indigo-700">${productivityScore}%</p>
+                            <span class="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-800">${productivityLabel}</span>
+                        </div>
+                        <iconify-icon icon="solar:cup-first-bold" width="36" class="text-indigo-300 opacity-60 shrink-0"></iconify-icon>
+                    </div>
+                </div>
+
+                <!-- Time Utilization Stacked Progress Bar -->
+                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-8">
+                    <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Time Utilization</h4>
+                    <div class="w-full bg-slate-200 rounded-full h-5 overflow-hidden flex mb-4 shadow-inner">
+                        <div class="bg-indigo-600 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${workedPercent}%" title="Worked: ${workedPercent}%">${workedPercent >= 8 ? workedPercent + '%' : ''}</div>
+                        <div class="bg-rose-500 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: span${breakPercent}%" title="Break: span${breakPercent}%">${breakPercent >= 8 ? breakPercent + '%' : ''}</div>
+                        <div class="bg-orange-400 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${holdPercent}%" title="Hold: ${holdPercent}%">${holdPercent >= 8 ? holdPercent + '%' : ''}</div>
+                        <div class="bg-slate-400 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${idlePercent}%" title="Idle: ${idlePercent}%">${idlePercent >= 8 ? idlePercent + '%' : ''}</div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-500">
+                        <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-md bg-indigo-600 block shrink-0"></span> Worked Time: ${formatTime(totalLoggedSeconds)} (&nbsp;${workedPercent}%)</div>
+                        <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-md bg-rose-500 block shrink-0"></span> Break Time: ${formatTime(totalBreakSeconds)} (&nbsp;${breakPercent}%)</div>
+                        <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-md bg-orange-400 block shrink-0"></span> Hold Time: ${formatTime(totalHoldSeconds)} (&nbsp;${holdPercent}%)</div>
+                        <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-md bg-slate-400 block shrink-0"></span> Idle Time: ${formatTime(totalIdleSeconds)} (&nbsp;${idlePercent}%)</div>
+                    </div>
+                </div>
+
+                <!-- Left/Right Split Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <!-- Left Column: Insights & Client Contribution -->
+                    <div class="space-y-6">
+                        <!-- AI Daily Insights -->
+                        <div class="bg-gradient-to-br from-indigo-900 to-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-xl">
+                            <div class="flex items-center gap-2 mb-4">
+                                <iconify-icon icon="solar:lightbulb-bolt-bold" width="22" class="text-amber-400"></iconify-icon>
+                                <h4 class="text-xs font-black tracking-wider uppercase text-indigo-200">AI Daily Insights</h4>
                             </div>
-                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-[10px]">
-                                <div class="bg-white rounded-xl p-2 text-center border border-slate-100">
-                                    <p class="text-sky-600 font-bold">${day.taskCount}</p>
-                                    <p class="text-slate-400">Tasks Logged</p>
-                                </div>
-                                <div class="bg-white rounded-xl p-2 text-center border border-slate-100">
-                                    <p class="text-amber-600 font-bold">${formatTime(day.breakSeconds)}</p>
-                                    <p class="text-slate-400">Breaks</p>
+                            <div class="space-y-4 text-xs leading-relaxed text-slate-300">
+                                <p><strong>Daily Summary:</strong> You worked <strong>${formatTime(totalLoggedSeconds)}</strong> today across <strong>${periodTaskIds.size} tasks</strong>. You completed <strong>${completedTasksCount} tasks</strong> and have <strong>${pendingTasksCount} pending</strong>. Your break duration of <strong>${formatTime(totalBreakSeconds)}</strong> is ${breakStatusLabel}.</p>
+                                <p><strong>Most productive period:</strong> ${peakHourLabel}</p>
+                                <p><strong>Overall productivity:</strong> ${productivityLabel}</p>
+                                <div class="h-px bg-slate-800 my-2"></div>
+                                <div>
+                                    <p class="font-black text-indigo-400 mb-2 uppercase tracking-wide">AI Suggestions:</p>
+                                    <ul class="list-disc pl-4 space-y-1.5 text-slate-300">
+                                        ${aiSuggestions.map(s => '<li>' + s + '</li>').join('')}
+                                    </ul>
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
-                </div>`;
+
+                        <!-- Client Contribution -->
+                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+                            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Client Contribution</h4>
+                            <div class="space-y-4">
+                                ${clientContributionList.length > 0 ? clientContributionList.map(c => '<div><div class="flex justify-between text-xs font-bold mb-1"><span class="text-slate-700">' + c.name + ' (' + c.tasksCount + ' Tasks)</span><span class="text-indigo-600">' + formatTime(c.duration) + ' (' + c.percent + '%)</span></div><div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div class="bg-indigo-500 h-full rounded-full" style="width: ' + c.percent + '%"></div></div></div>').join('') : '<p class="text-xs text-slate-400 italic">No client time logs found</p>'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Timeline & Summary stats -->
+                    <div class="space-y-6">
+                        <!-- Daily Work Summary -->
+                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+                            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Daily Work Summary</h4>
+                            <div class="grid grid-cols-2 gap-4 text-xs">
+                                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                    <p class="text-slate-400 mb-0.5 font-bold uppercase tracking-wider text-[9px]">Total Tasks Worked</p>
+                                    <p class="font-black text-slate-800 text-sm">${periodTaskIds.size}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                    <p class="text-slate-400 mb-0.5 font-bold uppercase tracking-wider text-[9px]">Total Tasks Completed</p>
+                                    <p class="font-black text-slate-800 text-sm">${completedTasksCount}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                    <p class="text-slate-400 mb-0.5 font-bold uppercase tracking-wider text-[9px]">Total Working Sessions</p>
+                                    <p class="font-black text-slate-800 text-sm">${periodTimeLogs.length}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                    <p class="text-slate-400 mb-0.5 font-bold uppercase tracking-wider text-[9px]">Total Break Sessions</p>
+                                    <p class="font-black text-slate-800 text-sm">${totalBreakSessions}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 col-span-2">
+                                    <p class="text-slate-400 mb-0.5 font-bold uppercase tracking-wider text-[9px]">Average Task Duration</p>
+                                    <p class="font-black text-slate-800 text-sm">${avgTaskDurationFormatted}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Daily Activity Timeline -->
+                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm max-h-[300px] overflow-y-auto">
+                            <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Daily Activity Timeline</h4>
+                            <div class="relative border-l-2 border-slate-100 pl-4 ml-2 space-y-4">
+                                ${formattedTimeline.length > 0 ? formattedTimeline.map(evt => {
+                                    let dotColor = 'bg-slate-400';
+                                    if (evt.type === 'attendance') {
+                                        dotColor = evt.label.includes('In') || evt.label.includes('Resume') ? 'bg-indigo-600' : 'bg-rose-500';
+                                    } else if (evt.type === 'task_start') {
+                                        dotColor = 'bg-sky-500';
+                                    } else if (evt.type === 'task_end') {
+                                        dotColor = 'bg-emerald-500';
+                                    }
+                                    return '<div class="relative"><span class="absolute -left-[22px] top-1.5 w-2.5 h-2.5 rounded-full ' + dotColor + ' ring-4 ring-white"></span><div class="flex justify-between text-xs items-start gap-4"><p class="font-black text-slate-700">' + evt.label + '</p><span class="text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">' + evt.time + '</span></div></div>';
+                                }).join('') : '<p class="text-xs text-slate-400 italic">No activity timeline events logged</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today's Task Summary Table -->
+                <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm mb-8 overflow-x-auto">
+                    <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Today's Task Summary</h4>
+                    <table class="w-full text-left border-collapse min-w-[550px]">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                <th class="pb-3">Task ID</th>
+                                <th class="pb-3">Client</th>
+                                <th class="pb-3">Task Name</th>
+                                <th class="pb-3">Status</th>
+                                <th class="pb-3">Working Time</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
+                            ${taskSummaryTableRows.length > 0 ? taskSummaryTableRows.map(row => '<tr class="hover:bg-slate-50/50 transition-colors"><td class="py-3 font-bold font-mono text-slate-400">#' + row.id + '</td><td class="py-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-black text-[9px] uppercase text-slate-500">' + (row.client || 'Other') + '</span></td><td class="py-3 font-semibold text-slate-800">' + row.name + '</td><td class="py-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase ' + statusClass(row.status) + '">' + row.status + '</span></td><td class="py-3 font-bold font-mono text-indigo-600">' + formatTime(row.duration) + '</td></tr>').join('') : '<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">No tasks worked on in this period</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Visualizations (Charts) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <!-- Task Completion Donut Chart -->
+                    <div class="bg-slate-50 border border-slate-100 rounded-3xl p-6 flex flex-col justify-between h-72">
+                        <p class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Task Completion Chart</p>
+                        <div class="flex items-center justify-center gap-6 my-auto">
+                            <div class="relative w-32 h-32 flex items-center justify-center">
+                                <svg class="w-full h-full transform -rotate-90">
+                                    <circle cx="64" cy="64" r="50" stroke="#e2e8f0" stroke-width="12" fill="transparent" />
+                                    <circle cx="64" cy="64" r="50" stroke="#10b981" stroke-width="12" fill="transparent"
+                                        stroke-dasharray="314.159"
+                                        stroke-dashoffset="${314.159 * (1 - (completionRate || 0) / 100)}"
+                                        class="transition-all duration-500" />
+                                </svg>
+                                <div class="absolute flex flex-col items-center">
+                                    <span class="text-xl font-black text-slate-800">${Math.round(completionRate || 0)}%</span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase">Completed</span>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-xs font-semibold text-slate-500">
+                                <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-emerald-500 block shrink-0"></span> Completed: ${completedTasksCount}</div>
+                                <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-slate-400 block shrink-0"></span> Pending: ${pendingTasksCount}</div>
+                                <div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-rose-500 block shrink-0"></span> Rework: ${reworkTasksCount}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hourly Productivity Timeline Bar Chart -->
+                    <div class="bg-slate-50 border border-slate-100 rounded-3xl p-6 flex flex-col justify-between h-72">
+                        <p class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Hourly Productivity Timeline</p>
+                        <div class="flex items-end gap-2 h-44 pb-2 border-b border-slate-100">
+                            ${Array.from({ length: 10 }, (_, i) => i + 9).map(hour => {
+                                const seconds = hourlyProductivity[hour] || 0;
+                                const maxHourSeconds = Math.max(...Object.values(hourlyProductivity), 1);
+                                const heightPercent = Math.max(3, (seconds / maxHourSeconds) * 100);
+                                const displayHour = hour > 12 ? (hour - 12) + ' PM' : hour === 12 ? '12 PM' : hour + ' AM';
+                                return '<div class="flex-1 flex flex-col items-center h-full justify-end group"><div class="w-full bg-indigo-200 group-hover:bg-indigo-600 rounded-t-md transition-all relative" style="height: ' + heightPercent + '%" title="' + displayHour + ': ' + formatTime(seconds) + '"><span class="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow pointer-events-none">' + formatTime(seconds) + '</span></div><p class="text-[8px] font-bold text-slate-400 mt-2 truncate w-full text-center group-hover:text-indigo-600 transition-colors">' + displayHour + '</p></div>';
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Breakdown Log List (Retaining Existing Functionality) -->
+                <div class="space-y-4 mt-8 border-t border-slate-100 pt-6">
+                    <h4 class="text-xs font-bold text-slate-450 uppercase tracking-widest">Attendance & Logs Logged</h4>
+                    ${summary.filter(d => d.loggedSeconds > 0 || d.breakSeconds > 0).reverse().map(day => '<div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50"><div class="flex items-center justify-between mb-3"><p class="font-bold text-slate-900">' + new Date(day.date).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) + '</p><p class="text-sm font-black text-indigo-600">' + formatTime(day.loggedSeconds) + '</p></div><div class="grid grid-cols-2 gap-3 text-[10px]"><div class="bg-white rounded-xl p-2 text-center border border-slate-100"><p class="text-sky-600 font-bold">' + day.taskCount + '</p><p class="text-slate-400">Tasks Logged</p></div><div class="bg-white rounded-xl p-2 text-center border border-slate-100"><p class="text-amber-600 font-bold">' + formatTime(day.breakSeconds) + '</p><p class="text-slate-400">Breaks</p></div></div></div>').join('')}
+                </div>
+                `;
             }
 
             function exportReportsCsv() {
@@ -21455,8 +21772,178 @@
                 toast('Analytics report export coming soon', 'info');
             }
 
+            function exportSummaryReportPdf() {
+                const printWindow = window.open('', '_blank', 'width=1100,height=850');
+                if (!printWindow) return toast('Popups blocked. Please allow popups to export PDF.', 'error');
+
+                const dashboardHtml = document.getElementById('summary-chart-container').innerHTML;
+                const userName = currentUser ? currentUser.name : '';
+                const userEmail = currentUser ? currentUser.email : '';
+                
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>Daily Work & Productivity Report</title>
+                        <script src="https://cdn.tailwindcss.com">\\/script>
+                        <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js">\\/script>
+                        <style>
+                            body { font-family: system-ui, sans-serif; background: #fff; padding: 30px; color: #0f172a; }
+                            @media print {
+                                body { padding: 0; }
+                                .no-print { display: none; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="max-w-5xl mx-auto">
+                            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                                <div>
+                                    <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">One Desk Daily Summary</h1>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Productivity & Work Analytics Report</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs font-black text-slate-800">${userName}</p>
+                                    <p class="text-[10px] text-slate-400">${userEmail}</p>
+                                    <p class="text-[9px] font-bold text-slate-400 mt-1">${reportDateFrom} to ${reportDateTo}</p>
+                                </div>
+                            </div>
+                            ${dashboardHtml}
+                        </div>
+                        <script>
+                            window.onload = () => {
+                                setTimeout(() => {
+                                    window.print();
+                                    window.close();
+                                }, 500);
+                            };
+                        \\/script>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                toast('PDF print window opened', 'success');
+            }
+
             function exportSummaryReport() {
-                toast('Summary report export coming soon', 'info');
+                if (!reportDateFrom || !reportDateTo) return toast('Please select date range', 'error');
+                
+                const fromTs = new Date(reportDateFrom).getTime();
+                const toDate = new Date(reportDateTo);
+                toDate.setDate(toDate.getDate() + 1);
+                const toTs = toDate.getTime();
+
+                let periodTimeLogs = allTimeLogs.filter(log => (log.endTime || log.startTime || 0) >= fromTs && (log.endTime || log.startTime || 0) < toTs);
+                let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTs);
+
+                if (reportSelectedUser !== 'all') {
+                    periodTimeLogs = periodTimeLogs.filter(log => log.userId === reportSelectedUser);
+                    periodEvents = periodEvents.filter(e => e.userId === reportSelectedUser);
+                }
+
+                // Total Logged Time
+                const totalLoggedSeconds = periodTimeLogs.reduce((sum, log) => sum + (log.durationSeconds || 0), 0);
+                
+                // Total Break Time
+                const totalBreakSeconds = periodEvents
+                    .filter(e => e.type === 'break_end' && e.duration)
+                    .reduce((sum, e) => sum + Math.floor(e.duration / 1000), 0);
+
+                // Active Time
+                const eventsByDay = periodEvents.reduce((acc, evt) => {
+                    const day = evt.date;
+                    if (!acc[day]) acc[day] = [];
+                    acc[day].push(evt);
+                    return acc;
+                }, {});
+
+                let totalActiveSeconds = 0;
+                for (const day in eventsByDay) {
+                    const dayEvents = eventsByDay[day].sort((a, b) => a.timestamp - b.timestamp);
+                    const checkIn = dayEvents.find(e => e.type === 'check_in');
+                    const checkOut = dayEvents.findLast(e => e.type === 'check_out');
+                    if (checkIn && checkOut) {
+                        totalActiveSeconds += Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000);
+                    } else if (checkIn) {
+                        const endOfPeriod = Math.min(Date.now(), toTs);
+                        totalActiveSeconds += Math.floor((endOfPeriod - checkIn.timestamp) / 1000);
+                    }
+                }
+
+                if (totalActiveSeconds === 0) {
+                    totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds + 3600;
+                }
+
+                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+                let totalHoldSeconds = holdTasksCount * 1800;
+                const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
+                if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
+                const totalIdleSeconds = Math.max(0, remainingSeconds - totalHoldSeconds);
+
+                const activeProductivityPercent = totalActiveSeconds > totalBreakSeconds ? Math.round((totalLoggedSeconds / (totalActiveSeconds - totalBreakSeconds)) * 100) : 0;
+                
+                const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
+                const completedTasksCount = tasks.filter(t => (isDone(t.status) || isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const pendingTasksCount = tasks.filter(t => (!isDone(t.status) && !isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const reworkTasksCount = tasks.filter(t => ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction')) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+
+                const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
+                let productivityScore = Math.round(activeProductivityPercent * 0.5 + completionRate * 0.5 - (reworkTasksCount * 5) - (totalHoldSeconds / 3600 * 2));
+                productivityScore = Math.max(50, Math.min(100, productivityScore));
+
+                let csv = 'Daily Summary Analytics Report\n\n';
+                csv += 'Metric,Value,Rating/Details\n';
+                csv += `AI Productivity Score,${productivityScore}%, ${productivityScore >= 90 ? 'Excellent' : productivityScore >= 80 ? 'Good' : 'Average'}\n`;
+                csv += `Total Logged Time,${formatTime(totalLoggedSeconds)},\n`;
+                csv += `Worked Hours,${formatTime(totalLoggedSeconds)},\n`;
+                csv += `Break Time,${formatTime(totalBreakSeconds)},\n`;
+                csv += `Hold Time,${formatTime(totalHoldSeconds)},\n`;
+                csv += `Idle Time,${formatTime(totalIdleSeconds)},\n`;
+                csv += `Active Productivity,${activeProductivityPercent}%,\n`;
+                csv += `Completed Tasks,${completedTasksCount},\n`;
+                csv += `Pending Tasks,${pendingTasksCount},\n`;
+                csv += `Rework Tasks,${reworkTasksCount},\n\n`;
+
+                csv += 'Client Contribution Breakdown\nClient,Tasks Worked,Total Duration,Percentage\n';
+                const clientSummary = {};
+                periodTimeLogs.forEach(log => {
+                    const client = log.client || 'Other';
+                    if (!clientSummary[client]) clientSummary[client] = { name: client, duration: 0, tasks: new Set() };
+                    clientSummary[client].duration += log.durationSeconds || 0;
+                    clientSummary[client].tasks.add(log.taskId);
+                });
+                Object.values(clientSummary).sort((a,b) => b.duration - a.duration).forEach(c => {
+                    const percent = Math.round((c.duration / (totalLoggedSeconds || 1)) * 100);
+                    csv += `"${c.name}",${c.tasks.size},"${formatTime(c.duration)}",${percent}%\n`;
+                });
+
+                csv += '\nDaily Activity Timeline\nEvent,Time,Type\n';
+                const timelineEvents = [];
+                periodEvents.forEach(e => {
+                    let label = '';
+                    if (e.type === 'check_in') label = 'Checked In';
+                    else if (e.type === 'break_start') label = 'Break Started';
+                    else if (e.type === 'break_end') label = 'Resume Work (Break Ended)';
+                    else if (e.type === 'check_out') label = 'Checked Out';
+                    timelineEvents.push({ timestamp: e.timestamp, label, type: 'attendance' });
+                });
+                periodTimeLogs.forEach(log => {
+                    timelineEvents.push({ timestamp: log.startTime, label: `Started Task: ${log.taskDesc || log.taskName || 'Unknown'}`, type: 'task_start' });
+                    timelineEvents.push({ timestamp: log.endTime, label: `Logged Work on Task: ${log.taskDesc || log.taskName || 'Unknown'} (${formatTime(log.durationSeconds)})`, type: 'task_end' });
+                });
+                timelineEvents.sort((a, b) => a.timestamp - b.timestamp);
+                timelineEvents.forEach(evt => {
+                    const timeStr = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    csv += `"${evt.label}","${timeStr}","${evt.type}"\n`;
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `worksync-daily-summary-${reportDateFrom}_to_${reportDateTo}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+                toast('Summary CSV exported', 'success');
             }
 
             function exportDetailedReport() {
@@ -33941,6 +34428,7 @@
 
 
             // Bind methods to window so inline HTML triggers work
+            window.exportSummaryReportPdf = exportSummaryReportPdf;
             window.loadMetaAdsData = loadMetaAdsData;
             window.onMetaAdAccountChange = onMetaAdAccountChange;
             window.openMetaAdsSettings = openMetaAdsSettings;
