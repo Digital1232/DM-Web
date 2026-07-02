@@ -6693,23 +6693,23 @@ if (initializeApp) {
             <!-- Left Column: Insights & Client Contribution -->
             <div class="space-y-6">
         <!-- AI Daily Insights -->
-        <div class="bg-gradient-to-br from-indigo-900 to-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-xl">
-            <div class="flex items-center gap-2 mb-4">
-                <iconify-icon icon="solar:lightbulb-bolt-bold" width="22" class="text-amber-400"></iconify-icon>
-                <h4 class="text-xs font-black tracking-wider uppercase text-indigo-200">AI Daily Insights</h4>
-            </div>
-            <div class="space-y-4 text-xs leading-relaxed text-slate-300">
-                <p><strong>Daily Summary:</strong> You worked <strong>${formatTime(totalLoggedSeconds)}</strong> today across <strong>${periodTaskIds.size} tasks</strong>. You completed <strong>${completedTasksCount} tasks</strong> and have <strong>${pendingTasksCount} pending</strong>. Your break duration of <strong>${formatTime(totalBreakSeconds)}</strong> is ${breakStatusLabel}.</p>
-                <p><strong>Most productive period:</strong> ${peakHourLabel}</p>
-                <p><strong>Overall productivity:</strong> ${productivityLabel}</p>
-                <div class="h-px bg-slate-800 my-2"></div>
-                <div>
-            <p class="font-black text-indigo-400 mb-2 uppercase tracking-wide">AI Suggestions:</p>
-            <ul class="list-disc pl-4 space-y-1.5 text-slate-300">
-                ${aiSuggestions.map(s => '<li>' + s + '</li>').join('')}
-            </ul>
-                </div>
-            </div>
+                        <div class="dark:bg-gradient-to-br dark:from-indigo-900 dark:to-slate-900 dark:border-slate-800 dark:text-white bg-indigo-50 border border-indigo-100 rounded-3xl p-6 text-slate-800 shadow-xl print:bg-indigo-50 print:text-slate-800 print:border-indigo-100">
+                            <div class="flex items-center gap-2 mb-4">
+                                <iconify-icon icon="solar:lightbulb-bolt-bold" width="22" class="text-amber-500 dark:text-amber-400 print:text-amber-500"></iconify-icon>
+                                <h4 class="text-xs font-black tracking-wider uppercase dark:text-indigo-200 text-indigo-800 print:text-indigo-800">AI Daily Insights</h4>
+                            </div>
+                            <div class="space-y-4 text-xs leading-relaxed dark:text-slate-300 text-slate-600 print:text-slate-600">
+                                <p><strong>Daily Summary:</strong> You worked <strong>${formatTime(totalLoggedSeconds)}</strong> today across <strong>${periodTaskIds.size} tasks</strong>. You completed <strong>${completedTasksCount} tasks</strong> and have <strong>${pendingTasksCount} pending</strong>. Your break duration of <strong>${formatTime(totalBreakSeconds)}</strong> is ${breakStatusLabel}.</p>
+                                <p><strong>Most productive period:</strong> ${peakHourLabel}</p>
+                                <p><strong>Overall productivity:</strong> ${productivityLabel}</p>
+                                <div class="h-px dark:bg-slate-800 bg-indigo-200 my-2 print:bg-indigo-200"></div>
+                                <div>
+                                    <p class="font-black dark:text-indigo-400 text-indigo-700 mb-2 uppercase tracking-wide print:text-indigo-700">AI Suggestions:</p>
+                                    <ul class="list-disc pl-4 space-y-1.5 dark:text-slate-300 text-slate-600 print:text-slate-600">
+                                        ${aiSuggestions.map(s => '<li>' + s + '</li>').join('')}
+                                    </ul>
+                                </div>
+                            </div>
         </div>
 
         <!-- Client Contribution -->
