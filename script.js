@@ -6676,7 +6676,7 @@ if (initializeApp) {
             <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Time Utilization</h4>
             <div class="w-full bg-slate-200 rounded-full h-5 overflow-hidden flex mb-4 shadow-inner">
         <div class="bg-indigo-600 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${workedPercent}%" title="Worked: ${workedPercent}%">${workedPercent >= 8 ? workedPercent + '%' : ''}</div>
-        <div class="bg-rose-500 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: span${breakPercent}%" title="Break: span${breakPercent}%">${breakPercent >= 8 ? breakPercent + '%' : ''}</div>
+        <div class="bg-rose-500 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${breakPercent}%" title="Break: ${breakPercent}%">${breakPercent >= 8 ? breakPercent + '%' : ''}</div>
         <div class="bg-orange-400 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${holdPercent}%" title="Hold: ${holdPercent}%">${holdPercent >= 8 ? holdPercent + '%' : ''}</div>
         <div class="bg-slate-400 h-full flex items-center justify-center text-[10px] text-white font-bold" style="width: ${idlePercent}%" title="Idle: ${idlePercent}%">${idlePercent >= 8 ? idlePercent + '%' : ''}</div>
             </div>
@@ -6966,6 +6966,8 @@ function exportSummaryReportPdf() {
         const printWindow = window.open('', '_blank', 'width=1100,height=850');
         if (!printWindow) return toast('Popups blocked. Please allow popups to export PDF.', 'error');
 
+        printWindow.document.title = 'Daily Work & Productivity Report';
+
         const dashboardHtml = document.getElementById('summary-chart-container').innerHTML;
         const userName = currentUser ? currentUser.name : '';
         const userEmail = currentUser ? currentUser.email : '';
@@ -6979,7 +6981,8 @@ function exportSummaryReportPdf() {
         <style>
             body { font-family: system-ui, sans-serif; background: #fff; padding: 30px; color: #0f172a; }
             @media print {
-                body { padding: 0; }
+                @page { margin: 0; }
+                body { padding: 20mm; }
                 .no-print { display: none; }
             }
         </style>
@@ -7013,7 +7016,6 @@ function exportSummaryReportPdf() {
         printWindow.document.close();
         toast('PDF print window opened', 'success');
     }
-
 
     function exportReportsCsv() {
         const reportTab = currentReportTab;
