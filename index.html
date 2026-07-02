@@ -21427,11 +21427,11 @@
                 const productiveTimeBase = totalActiveSeconds - totalBreakSeconds;
                 const activeProductivityPercent = productiveTimeBase > 0 ? Math.round((totalLoggedSeconds / productiveTimeBase) * 100) : 0;
 
-                // 6. Task Counts
+                // 6. Task Counts - Only count tasks with logs in the selected date range
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const completedTasksCount = tasks.filter(t => (isDone(t.status) || isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
-                const pendingTasksCount = tasks.filter(t => (!isDone(t.status) && !isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
-                const reworkTasksCount = tasks.filter(t => ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction')) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const completedTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (isDone(t.status) || isInternalDone(t.status))).length;
+                const pendingTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (!isDone(t.status) && !isInternalDone(t.status))).length;
+                const reworkTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction'))).length;
 
                 // 7. AI Productivity Score
                 const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
@@ -21998,9 +21998,9 @@
                 const activeProductivityPercent = totalActiveSeconds > totalBreakSeconds ? Math.round((totalLoggedSeconds / (totalActiveSeconds - totalBreakSeconds)) * 100) : 0;
                 
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const completedTasksCount = tasks.filter(t => (isDone(t.status) || isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
-                const pendingTasksCount = tasks.filter(t => (!isDone(t.status) && !isInternalDone(t.status)) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
-                const reworkTasksCount = tasks.filter(t => ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction')) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser) || periodTaskIds.has(t.id))).length;
+                const completedTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (isDone(t.status) || isInternalDone(t.status))).length;
+                const pendingTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (!isDone(t.status) && !isInternalDone(t.status))).length;
+                const reworkTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction'))).length;
 
                 const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
                 let productivityScore = Math.round(activeProductivityPercent * 0.5 + completionRate * 0.5 - (reworkTasksCount * 5) - (totalHoldSeconds / 3600 * 2));
