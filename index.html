@@ -21427,11 +21427,34 @@
                 const productiveTimeBase = totalActiveSeconds - totalBreakSeconds;
                 const activeProductivityPercent = productiveTimeBase > 0 ? Math.round((totalLoggedSeconds / productiveTimeBase) * 100) : 0;
 
-                // 6. Task Counts - Only count tasks with logs in the selected date range
+                // 6. Task Counts - Count based on task updated date or time logs in the selected date range
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const completedTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (isDone(t.status) || isInternalDone(t.status))).length;
-                const pendingTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (!isDone(t.status) && !isInternalDone(t.status))).length;
-                const reworkTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction'))).length;
+                const completedTasksCount = tasks.filter(t => {
+                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
+                    if (!isCompleted) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
+                
+                const pendingTasksCount = tasks.filter(t => {
+                    const isPending = !isDone(t.status) && !isInternalDone(t.status);
+                    if (!isPending) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
+                
+                const reworkTasksCount = tasks.filter(t => {
+                    const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
+                    if (!isRework) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
 
                 // 7. AI Productivity Score
                 const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
@@ -21998,9 +22021,32 @@
                 const activeProductivityPercent = totalActiveSeconds > totalBreakSeconds ? Math.round((totalLoggedSeconds / (totalActiveSeconds - totalBreakSeconds)) * 100) : 0;
                 
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const completedTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (isDone(t.status) || isInternalDone(t.status))).length;
-                const pendingTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && (!isDone(t.status) && !isInternalDone(t.status))).length;
-                const reworkTasksCount = tasks.filter(t => periodTaskIds.has(t.id) && ((t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction'))).length;
+                const completedTasksCount = tasks.filter(t => {
+                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
+                    if (!isCompleted) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
+                
+                const pendingTasksCount = tasks.filter(t => {
+                    const isPending = !isDone(t.status) && !isInternalDone(t.status);
+                    if (!isPending) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
+                
+                const reworkTasksCount = tasks.filter(t => {
+                    const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
+                    if (!isRework) return false;
+                    // Count if: has time logs in period OR task was updated in period
+                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
+                    const wasUpdatedInPeriod = taskUpdatedTs >= fromTs && taskUpdatedTs < toTs;
+                    return periodTaskIds.has(t.id) || wasUpdatedInPeriod;
+                }).length;
 
                 const completionRate = completedTasksCount / (completedTasksCount + pendingTasksCount || 1) * 100;
                 let productivityScore = Math.round(activeProductivityPercent * 0.5 + completionRate * 0.5 - (reworkTasksCount * 5) - (totalHoldSeconds / 3600 * 2));
