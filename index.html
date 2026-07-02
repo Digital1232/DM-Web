@@ -21438,9 +21438,13 @@
                 else if (productivityScore >= 80) productivityLabel = 'Good';
 
                 // --- Time Utilization percentages ---
-                const workedPercent = Math.max(0, Math.round((totalLoggedSeconds / totalActiveSeconds) * 100));
-                const breakPercent = Math.max(0, Math.round((totalBreakSeconds / totalActiveSeconds) * 100));
-                const holdPercent = Math.max(0, Math.round((totalHoldSeconds / totalActiveSeconds) * 100));
+                // Calculate percentages based on total active time
+                const totalTimeAccountedFor = totalLoggedSeconds + totalBreakSeconds + totalHoldSeconds;
+                const actualTotalTime = Math.max(totalActiveSeconds, totalTimeAccountedFor);
+                
+                const workedPercent = Math.max(0, Math.round((totalLoggedSeconds / actualTotalTime) * 100));
+                const breakPercent = Math.max(0, Math.round((totalBreakSeconds / actualTotalTime) * 100));
+                const holdPercent = Math.max(0, Math.round((totalHoldSeconds / actualTotalTime) * 100));
                 const idlePercent = Math.max(0, 100 - workedPercent - breakPercent - holdPercent);
 
                 // --- AI Insights generation ---
