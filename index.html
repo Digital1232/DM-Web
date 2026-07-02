@@ -17691,6 +17691,17 @@
             function loadTodayWorkSummary() {
                 if (!canViewDailySummary()) return;
                 if (todayReportUnsub) return; // Only load once
+                
+                // Load attendance events for break time calculation
+                if (!attendanceUnsub) {
+                    const attRef = ref(db, 'worksync/attendance_events');
+                    const attQ = canViewDailySummary() ? attRef : query(attRef, orderByChild('userId'), equalTo(currentUser.email));
+                    
+                    attendanceUnsub = onValue(attQ, snap => {
+                        attendanceEvents = snap.val() ? Object.entries(snap.val()).map(([id, evt]) => ({ id, ...evt })) : [];
+                    });
+                }
+                
                 const dbRef = ref(db, 'worksync/timelogs');
                 const q = canViewDailySummary() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
@@ -17734,12 +17745,6 @@
                     return rows.get(key);
                 };
 
-                // Calculate break time from attendance events
-                const todayBreakEvents = attendanceEvents.filter(e => {
-                    const eventDate = new Date(e.timestamp).toISOString().slice(0, 10);
-                    return eventDate === today && e.type === 'break_end' && e.duration;
-                });
-
                 todayTimeLogs.forEach(log => {
                     const row = ensure(log.userId, log.userName);
                     const task = tasks.find(t => t.id === log.taskId);
@@ -17749,11 +17754,28 @@
                     row.loggedSeconds += Number(log.durationSeconds || 0);
                 });
 
-                // Add break time for each user
-                todayBreakEvents.forEach(evt => {
-                    const row = ensure(evt.userId);
-                    row.breakSeconds += Math.floor((evt.duration || 0) / 1000);
-                });
+                // Calculate break time from attendance events - match by email
+                if (attendanceEvents && attendanceEvents.length > 0) {
+                    attendanceEvents.forEach(evt => {
+                        if (evt.type === 'break_end' && evt.duration) {
+                            const eventDate = evt.date || new Date(evt.timestamp).toISOString().slice(0, 10);
+                            if (eventDate === today) {
+                                // Match by userId (which is email)
+                                const userEmail = (evt.userId || '').toLowerCase();
+                                const row = rows.get(userEmail);
+                                if (row) {
+                                    row.breakSeconds += Math.floor((evt.duration || 0) / 1000);
+                                    console.log(`✓ Break time added for ${userEmail}: ${Math.floor((evt.duration || 0) / 1000)}s`);
+                                } else {
+                                    // Create new row if user not found
+                                    const newRow = ensure(evt.userId, evt.userName || 'Unknown User');
+                                    newRow.breakSeconds += Math.floor((evt.duration || 0) / 1000);
+                                    console.log(`✓ New user added for break time: ${userEmail}: ${Math.floor((evt.duration || 0) / 1000)}s`);
+                                }
+                            }
+                        }
+                    });
+                }
 
                 currentWorkUsers.forEach(u => {
                     const row = ensure(u.email, u.name, u.role);
@@ -21388,7 +21410,7 @@
                 }
 
                 // 3. Hold Time
-                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.status === 'Design Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
                 let totalHoldSeconds = holdTasksCount * 1800; // Estimate 30 mins per hold task
                 const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
                 if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
@@ -21958,7 +21980,7 @@
                     totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds + 3600;
                 }
 
-                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+                const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.status === 'Design Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
                 let totalHoldSeconds = holdTasksCount * 1800;
                 const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
                 if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
@@ -23649,16 +23671,7 @@
                         const user = allUsersMap.get(email.toLowerCase()) || knownUserByEmail(email) || { name: email, email, role: '' };
                         const avatar = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.avatar || user.name || email)}`;
 
-                        const getTaskStatus = (t) => {
-                            if (!t) return '';
-                            if (email.toLowerCase() === 'karthikavilpower@gmail.com') {
-                                const userPlans = dailyPlans[eKey(email)];
-                                if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
-                                    return userPlans[t.id].localStatus;
-                                }
-                            }
-                            return t.status;
-                        };
+                        const getTaskStatus = (t) => { if (!t) return ''; return t.status; };
 
                         // Helper: get stats for a time window
                         const getStats = (fromTs, toTs) => {
@@ -24199,16 +24212,7 @@
 
                     const user = allUsersMap.get(email) || knownUserByEmail(email) || { name: email, email, role: '' };
 
-                    const getTaskStatusForUser = (t, usrEmail) => {
-                        if (!t) return '';
-                        if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
-                            const userPlans = dailyPlans[eKey(usrEmail)];
-                            if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
-                                return userPlans[t.id].localStatus;
-                            }
-                        }
-                        return t.status;
-                    };
+                    const getTaskStatusForUser = (t, usrEmail) => { if (!t) return ''; return t.status; };
                     const getTaskStatus = (t) => getTaskStatusForUser(t, email);
 
                     const getStatsFor = (usrEmail, start, end) => {
@@ -24672,14 +24676,7 @@
                                 status === 'learnings' || status === 'discussion' ||
                                 id.startsWith('learn-') || id.startsWith('disc-');
                         };
-                        const getEffectiveTask = (t) => {
-                            if (!t) return t;
-                            const planData = karthikaPlans[t.id];
-                            if (planData && planData.localStatus) {
-                                return { ...t, status: planData.localStatus };
-                            }
-                            return t;
-                        };
+                        const getEffectiveTask = (t) => { return t; };
                         Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
                             if (!planData.date) return;
                             const planTs = new Date(planData.date + 'T00:00:00').getTime();
@@ -30363,16 +30360,7 @@
                 const taskIndex = tasks.findIndex(t => t.id === taskId);
                 if (taskIndex === -1) return;
                 const task = tasks[taskIndex];
-                const oldStatus = task.status;
-
-                // Karthika should only update her local daily-plan status
-                // for tasks assigned to others (where the main task belongs to the video editor, not her).
-                // If a Jira task is directly assigned to her, she should update it in Jira.
-                const isKarthikaUser = currentUser?.email?.toLowerCase() === 'karthikavilpower@gmail.com';
-                const isTaskAssignedToKarthika = task.assigneeEmail?.toLowerCase() === 'karthikavilpower@gmail.com';
-                const shouldUpdateLocallyOnly = isKarthikaUser && !isTaskAssignedToKarthika;
-
-                if (task.manual || shouldUpdateLocallyOnly) {
+                const oldStatus = task.status;                if (task.manual) {
                     try {
                         const userKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
                         if (task.manual) {
@@ -30947,16 +30935,7 @@
                 if (!modal || !body) return;
 
                 // Gather signals about this person's work
-                const getTaskStatus = (t) => {
-                    if (!t) return '';
-                    if (email.toLowerCase() === 'karthikavilpower@gmail.com') {
-                        const userPlans = dailyPlans[eKey(email)];
-                        if (userPlans && userPlans[t.id] && userPlans[t.id].localStatus) {
-                            return userPlans[t.id].localStatus;
-                        }
-                    }
-                    return t.status;
-                };
+                const getTaskStatus = (t) => { if (!t) return ''; return t.status; };
 
                 const userTasks = tasks.filter(t => assigneeMatches(t, email));
                 const completed = userTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t)));
@@ -33651,16 +33630,7 @@
 
                 // Need to carefully check global tasks, ensure functions exist
                 const getAssignees = (t) => (t.assigneeEmail || t.userId || '').toLowerCase().split(',').map(s => s.trim());
-                const getTaskStatus = (t) => {
-                    if (email === 'karthikavilpower@gmail.com') {
-                        const escapeKey = email.replace(/[.#$\\[\\]]/g, '_');
-                        const plans = window.dailyPlans && window.dailyPlans[escapeKey] ? window.dailyPlans[escapeKey] : {};
-                        if (plans[t.id] && plans[t.id].localStatus) {
-                            return plans[t.id].localStatus;
-                        }
-                    }
-                    return t.status;
-                };
+                const getTaskStatus = (t) => { return t.status; };
                 const isCompletedStatus = (st) => {
                     if (!st) return false;
                     const l = st.toLowerCase().trim();
