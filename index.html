@@ -1955,6 +1955,7 @@
                                         <iconify-icon icon="solar:magnifer-linear"
                                             class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
                                         <input id="task-search" type="text" placeholder="Search tasks..."
+                                            autocomplete="off"
                                             oninput="searchTasks(this.value)"
                                             class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-40">
                                     </div>
@@ -2150,6 +2151,7 @@
                                         <iconify-icon icon="solar:magnifer-linear"
                                             class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
                                         <input id="internal-task-search" type="text" placeholder="Search tasks..."
+                                            autocomplete="off"
                                             oninput="searchInternalTasks(this.value)"
                                             class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-40">
                                     </div>
@@ -9271,32 +9273,35 @@
             async function dropTask(event, newStatusCategory) {
                 event.preventDefault();
                 event.stopPropagation();
-                console.log('FCP/Kanban: dropTask triggered for status:', newStatusCategory);
+                console.log('✓ Drag & Drop: Dropped task to status:', newStatusCategory);
 
                 document.body.classList.remove('dragging-active');
                 const col = event.currentTarget;
                 if (col) col.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50/30');
 
                 const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
-                console.log('FCP/Kanban: dropTask task ID resolved to:', taskId);
                 if (!taskId) {
-                    console.error('FCP/Kanban: dropTask failed - no taskId in dataTransfer or fallback variable');
+                    console.error('✗ Drag & Drop: No task ID found');
                     return;
                 }
 
                 const task = tasks.find(t => t.id === taskId);
                 if (!task) {
-                    console.error('FCP/Kanban: dropTask failed - task not found in global tasks list for ID:', taskId);
+                    console.error('✗ Drag & Drop: Task not found:', taskId);
                     return;
                 }
+                
                 if (task.status === newStatusCategory || task._canonicalStatus === newStatusCategory) {
-                    console.log('FCP/Kanban: task already has target status');
+                    console.log('ℹ Drag & Drop: Task already has target status');
                     return;
                 }
 
                 const oldStatus = task.status;
                 task.status = newStatusCategory;
-                renderTasks(); updateStats();
+                console.log(`ℹ Drag & Drop: Status changed: ${oldStatus} → ${newStatusCategory}`);
+                
+                renderTasks(); 
+                updateStats();
                 if (isInternalTabActive()) renderInternalTasks();
 
                 if (activeTaskId === taskId && (isDone(newStatusCategory))) {
@@ -9308,17 +9313,27 @@
                         const userKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
                         if (!userKey) throw new Error('Could not resolve user key for task ' + taskId);
                         await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatusCategory });
-                        if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
-                        toast('Task moved successfully', 'success');
-                        if (newStatusCategory === 'Quality Check') sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
+                        console.log('✓ Drag & Drop: Firebase updated');
+                        
+                        if ((activeView === 'dailyplan' || isDailyPlanTabActive())) {
+                            renderDailyPlan();
+                            console.log('✓ Drag & Drop: Daily plan refreshed');
+                        }
+                        
+                        toast('✓ Task moved', 'success');
+                        if (newStatusCategory === 'Quality Check') {
+                            sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
+                        }
                     } catch (err) {
-                        console.error('FCP/Kanban: failed to update manual task status:', err);
+                        console.error('✗ Drag & Drop: Firebase update failed:', err);
                         task.status = oldStatus;
-                        renderTasks(); updateStats();
+                        renderTasks(); 
+                        updateStats();
                         if (isInternalTabActive()) renderInternalTasks();
-                        toast('Failed to save status: ' + err.message, 'error');
+                        toast('✗ Failed to save status: ' + err.message, 'error');
                     }
                 } else {
+                    // Jira task - sync to Jira
                     toast('Syncing to Jira...', 'info');
                     const jiraStatusMap = {
                         'To Do': 'To Do',
@@ -9326,14 +9341,30 @@
                         'Done': 'Done'
                     };
                     const jiraStatus = jiraStatusMap[newStatusCategory] || newStatusCategory;
-                    const jiraSuccess = await updateJiraStatus(taskId, jiraStatus);
-                    if (!jiraSuccess) {
+                    
+                    try {
+                        const jiraSuccess = await updateJiraStatus(taskId, jiraStatus);
+                        if (!jiraSuccess) {
+                            task.status = oldStatus;
+                            renderTasks(); 
+                            updateStats();
+                            if (isInternalTabActive()) renderInternalTasks();
+                            toast(`✗ Could not move to "${newStatusCategory}" in Jira`, 'error');
+                        } else {
+                            console.log('✓ Drag & Drop: Jira synced, refreshing dashboards...');
+                            toast('✓ Jira synced', 'success');
+                            
+                            // Refresh all dependent views
+                            if (activeView === 'dailyplan' || isDailyPlanTabActive()) renderDailyPlan();
+                            if (activeView === 'daily-summary') renderDailySummary();
+                            if (activeView === 'reports') updateReportFilters();
+                        }
+                    } catch (err) {
+                        console.error('✗ Drag & Drop: Jira sync error:', err);
                         task.status = oldStatus;
-                        renderTasks(); updateStats();
-                        if (isInternalTabActive()) renderInternalTasks();
-                        toast(`Could not move "${taskId}" to "${newStatusCategory}" in Jira — status reverted. Check available transitions.`, 'error');
-                    } else {
-                        toast('Jira board updated ✓', 'success');
+                        renderTasks();
+                        updateStats();
+                        toast('✗ Jira sync failed', 'error');
                     }
                 }
             }
@@ -16965,10 +16996,13 @@
             // Join a discussion directly from the upcoming list (no popup needed)
             async function joinDiscussionById(discId) {
                 const disc = discussions.find(d => d.id === discId);
-                if (!disc) return toast('Discussion not found', 'error');
+                if (!disc) {
+                    throw new Error('Discussion not found');
+                }
                 // Already joined?
                 if ((disc.joinedBy || []).includes(currentUser.email)) {
-                    return toast('You have already joined this discussion', 'info');
+                    toast('You have already joined this discussion', 'info');
+                    return;
                 }
                 currentDiscussion = disc;
                 await joinDiscussion();
@@ -16985,8 +17019,37 @@
                 currentDiscussion = null;
             }
 
+            // Track discussion join operations to prevent duplicates
+            let discussionJoining = false;
+
             async function startScheduledDiscussion(discId) {
-                await joinDiscussionById(discId);
+                // Prevent duplicate clicks while processing
+                if (discussionJoining) {
+                    toast('Starting discussion... please wait', 'info');
+                    return;
+                }
+                
+                discussionJoining = true;
+                const btn = event?.target?.closest('button');
+                const originalText = btn?.textContent;
+                
+                try {
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.textContent = 'Starting...';
+                    }
+                    
+                    await joinDiscussionById(discId);
+                } catch (err) {
+                    console.error('Error starting discussion:', err);
+                    toast('Failed to start discussion. Please try again.', 'error');
+                } finally {
+                    discussionJoining = false;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = originalText || 'Start';
+                    }
+                }
             }
 
             async function holdCurrentDiscussionLive(discussionId) {
@@ -17812,9 +17875,14 @@
                                 <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
                                 <p class="text-xs font-black text-indigo-600 font-mono">${row.activeTask ? formatTime(row.activeSeconds) : 'Idle'}</p>
                             </div>
-                            <div class="bg-slate-50 rounded-xl px-3 py-2">
-                                <p class="text-[9px] font-bold text-slate-400 uppercase">Current</p>
-                                <p class="text-xs font-black text-slate-700 truncate">${row.activeTask ? (row.activeTask.taskId.startsWith('M-') ? row.activeTask.taskId : `<a href="https://${JIRA.domain}/browse/${row.activeTask.taskId}" target="_blank" class="hover:underline text-indigo-600" title="Open in Jira">${row.activeTask.taskId}</a>`) : 'None'}</p>
+                            <div class="bg-orange-50 rounded-xl px-3 py-2">
+                                <div class="flex items-center gap-1">
+                                    <iconify-icon icon="solar:coffee-bold" width="14" class="text-orange-500"></iconify-icon>
+                                    <div class="min-w-0">
+                                        <p class="text-[9px] font-bold text-orange-500 uppercase">Break</p>
+                                        <p class="text-xs font-black text-orange-600 font-mono">${row.breakSeconds ? formatTime(row.breakSeconds) : '00:00'}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>`;
@@ -27139,7 +27207,9 @@
                 alert('DIAGNOSTIC RESULTS:\n\n' + results.join('\n') + '\n\nCheck console for full JSON responses.');
             }
 
-            async function updateJiraStatus(taskId, newStatusName) {
+            async function updateJiraStatus(taskId, newStatusName, retryCount = 0) {
+                const maxRetries = 2;
+                
                 try {
                     // 1. Get available transitions for the issue
                     const transitionsUrl = `https://${JIRA.domain}/rest/api/3/issue/${taskId}/transitions`;
@@ -27150,14 +27220,14 @@
                     }
 
                     const transitions = transitionsRes.data.transitions;
-                    console.log(`Available transitions for ${taskId}:`, transitions.map(t => t.name));
+                    console.log(`✓ Available transitions for ${taskId}:`, transitions.map(t => t.name).join(', '));
 
                     // 2. Find the transition that matches the target status name
                     const targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
 
                     if (!targetTransition) {
+                        console.warn(`✗ Transition to "${newStatusName}" not found. Available:`, transitions.map(t => t.name).join(', '));
                         toast(`Transition to "${newStatusName}" not available for this task in Jira.`, 'error');
-                        console.error(`Transition to "${newStatusName}" not found. Available:`, transitions.map(t => t.name));
                         return false; // Indicate failure
                     }
 
@@ -27171,14 +27241,23 @@
                     const updateRes = await jiraRequest(postTransitionsUrl, 'post', transitionPayload);
 
                     if (updateRes.status === 204 || updateRes.success) {
-                        toast(`Jira task ${taskId} updated to "${newStatusName}"`, 'success');
+                        console.log(`✓ Jira task ${taskId} synced to "${newStatusName}"`);
+                        toast(`✓ Jira synced: ${taskId} → ${newStatusName}`, 'success');
                         return true; // Indicate success
                     } else {
                         throw new Error('Failed to update Jira status. ' + jiraErrorMessage(updateRes));
                     }
                 } catch (err) {
-                    console.error('Jira status update failed:', err);
-                    toast(err.message, 'error');
+                    console.error(`✗ Jira sync failed (attempt ${retryCount + 1}/${maxRetries + 1}):`, err.message);
+                    
+                    // Retry on network or temporary errors
+                    if (retryCount < maxRetries) {
+                        console.log(`Retrying Jira status update in 1 second...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        return updateJiraStatus(taskId, newStatusName, retryCount + 1);
+                    }
+                    
+                    toast(`✗ Unable to sync Jira. Please try again.`, 'error');
                     return false; // Indicate failure
                 }
             }
@@ -27420,8 +27499,38 @@
             }
 
             function searchTasks(term) {
-                currentSearchTerm = term.trim();
+                currentSearchTerm = (term || '').trim();
+                // Clear the input value to prevent auto-fill issues
+                const searchInput = document.getElementById('task-search');
+                if (searchInput && searchInput.value !== currentSearchTerm) {
+                    searchInput.value = currentSearchTerm;
+                }
                 renderTasks();
+            }
+
+            function searchInternalTasks(term) {
+                currentInternalSearchTerm = (term || '').trim();
+                // Clear the input value to prevent auto-fill issues
+                const searchInput = document.getElementById('internal-task-search');
+                if (searchInput && searchInput.value !== currentInternalSearchTerm) {
+                    searchInput.value = currentInternalSearchTerm;
+                }
+                renderInternalTasks();
+            }
+
+            // Clear search boxes when switching between task tabs
+            function clearTaskSearches() {
+                const jiraSearch = document.getElementById('task-search');
+                const internalSearch = document.getElementById('internal-task-search');
+                
+                if (jiraSearch) {
+                    jiraSearch.value = '';
+                    currentSearchTerm = '';
+                }
+                if (internalSearch) {
+                    internalSearch.value = '';
+                    currentInternalSearchTerm = '';
+                }
             }
 
             function setClientFilter(v) {
@@ -27595,11 +27704,6 @@
 
             function setInternalAssigneeFilter(v) {
                 currentInternalAssigneeFilter = v;
-                renderInternalTasks();
-            }
-
-            function searchInternalTasks(term) {
-                currentInternalSearchTerm = term.trim();
                 renderInternalTasks();
             }
 
