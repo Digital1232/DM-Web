@@ -7929,6 +7929,59 @@
         </div>
     </dialog>
 
+    <!-- Automatic Break Status Popup Modal -->
+    <dialog id="breakStatusModal" class="rounded-[24px] shadow-2xl p-0 w-full max-w-md border-0 bg-transparent outline-none">
+        <div class="bg-white/95 dark:bg-slate-900/95 border border-slate-200/50 dark:border-slate-800/80 rounded-[24px] overflow-hidden p-8 flex flex-col items-center text-center shadow-2xl backdrop-blur-md relative">
+            <!-- SVG Illustration -->
+            <div class="relative w-48 h-48 mb-6 flex items-center justify-center">
+                <img src="img/Programming Computer.svg" alt="Break Illustration" class="w-full h-full object-contain">
+            </div>
+            
+            <!-- Message icon & Title -->
+            <div class="flex flex-col items-center gap-1 mb-2">
+                <span id="break-popup-icon" class="text-4xl">☕</span>
+                <h3 id="break-popup-title" class="text-xl font-extrabold text-slate-800 dark:text-white tracking-tight leading-snug">
+                    You're Currently on Break
+                </h3>
+            </div>
+            
+            <!-- Message Description -->
+            <p id="break-popup-message" class="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+                Take a moment to relax.
+            </p>
+
+            <!-- Timer Box -->
+            <div class="bg-indigo-50/50 dark:bg-slate-800/40 border border-indigo-100/50 dark:border-slate-700/50 rounded-2xl py-4 px-6 mb-8 w-full">
+                <span class="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Current Break Time</span>
+                <span id="break-popup-timer" class="text-3xl font-black text-indigo-600 dark:text-indigo-400 font-mono tracking-wider tabular-nums">00:00:00</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-3 w-full">
+                <button onclick="doResumeFromBreakPopup()" class="w-full py-3.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                    <iconify-icon icon="solar:play-bold" width="16"></iconify-icon> Resume Work
+                </button>
+                <button onclick="closeBreakPopupOnly()" class="w-full py-3 px-6 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                    <iconify-icon icon="solar:close-circle-bold" width="16"></iconify-icon> Close
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Floating Break Reminder -->
+    <div id="breakFloatingReminder" onclick="openBreakPopup()" class="hidden fixed bottom-6 right-6 z-[9999] cursor-pointer bg-white/95 dark:bg-slate-900/95 border border-slate-200/50 dark:border-slate-850/80 rounded-2xl shadow-xl px-4 py-3 flex items-center gap-4 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 text-base">☕</div>
+            <div class="flex flex-col">
+                <span class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">On Break</span>
+                <span id="break-floating-timer" class="text-sm font-extrabold text-slate-800 dark:text-white font-mono tabular-nums leading-none mt-1">00:00:00</span>
+            </div>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-1 transition-colors hover:bg-indigo-100 hover:text-indigo-700">
+            Reopen
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <!-- ══════════════════════════════════════════
          SCRIPTS
@@ -8381,6 +8434,7 @@
             let emailReportEnabled = false;
             let checkInTime = null;
             let breakStartTime = null;
+            let breakTimerRef = null;
             let totalBreakDuration = 0;
             let syncIntervalRef = null;
             let currentTaskViewMode = 'list';
@@ -10044,6 +10098,81 @@
                 registerOnline();
                 showCheckInPendingTasksReminder();
             }
+            // AUTOMATIC BREAK STATUS POPUP SYSTEM
+            function selectRandomBreakMessage() {
+                const messages = [
+                    { icon: '☕', title: 'Enjoy your break!', text: 'Take a few moments to refresh before continuing your work.' },
+                    { icon: '🌿', title: 'A short break helps improve productivity.', text: 'Resume work whenever you\'re ready.' },
+                    { icon: '☕', title: 'You\'re currently on break.', text: 'Click Resume Work when you\'re ready to continue.' },
+                    { icon: '💜', title: 'Relax, recharge, and come back stronger.', text: 'Your break timer is running.' }
+                ];
+                const randomIndex = Math.floor(Math.random() * messages.length);
+                const chosen = messages[randomIndex];
+                
+                const iconEl = document.getElementById('break-popup-icon');
+                if (iconEl) iconEl.textContent = chosen.icon;
+                const titleEl = document.getElementById('break-popup-title');
+                if (titleEl) titleEl.textContent = chosen.title;
+                const msgEl = document.getElementById('break-popup-message');
+                if (msgEl) msgEl.textContent = chosen.text;
+            }
+
+            function openBreakPopup() {
+                const modal = document.getElementById('breakStatusModal');
+                if (modal && !modal.open) {
+                    selectRandomBreakMessage();
+                    modal.showModal();
+                }
+                const floating = document.getElementById('breakFloatingReminder');
+                if (floating) {
+                    floating.classList.add('hidden');
+                }
+                startBreakTimer();
+            }
+
+            function closeBreakPopupOnly() {
+                const modal = document.getElementById('breakStatusModal');
+                if (modal && modal.open) {
+                    modal.close();
+                }
+                const floating = document.getElementById('breakFloatingReminder');
+                if (floating) {
+                    floating.classList.remove('hidden');
+                }
+            }
+
+            async function doResumeFromBreakPopup() {
+                await doResume();
+            }
+
+            function startBreakTimer() {
+                if (breakTimerRef) clearInterval(breakTimerRef);
+                breakTimerRef = setInterval(tickBreakTimer, 1000);
+                tickBreakTimer();
+            }
+
+            function stopBreakTimer() {
+                if (breakTimerRef) {
+                    clearInterval(breakTimerRef);
+                    breakTimerRef = null;
+                }
+            }
+
+            function tickBreakTimer() {
+                if (!breakStartTime) {
+                    stopBreakTimer();
+                    return;
+                }
+                const elapsedSeconds = Math.floor((Date.now() - breakStartTime) / 1000);
+                const formatted = formatTime(elapsedSeconds);
+                
+                const popupTimer = document.getElementById('break-popup-timer');
+                if (popupTimer) popupTimer.textContent = formatted;
+                
+                const floatingTimer = document.getElementById('break-floating-timer');
+                if (floatingTimer) floatingTimer.textContent = formatted;
+            }
+
             function doBreak() {
                 clearInterval(timerRef);
                 breakStartTime = Date.now();
@@ -10072,6 +10201,9 @@
                     const teaModal = document.getElementById('teaBreakModal');
                     if (teaModal) teaModal.showModal();
                 }
+
+                // Open the Break Status Popup immediately
+                openBreakPopup();
             }
             async function doResume() {
                 if (breakStartTime) {
@@ -10086,6 +10218,17 @@
                 localStorage.setItem('worksync_timerState', 'running');
                 setTimerState('running');
                 toast('Work session resumed', 'success');
+
+                // Close break popup and floating reminder
+                const modal = document.getElementById('breakStatusModal');
+                if (modal && modal.open) {
+                    modal.close();
+                }
+                const floating = document.getElementById('breakFloatingReminder');
+                if (floating) {
+                    floating.classList.add('hidden');
+                }
+                stopBreakTimer();
 
                 try {
                     if (currentUser) {
@@ -10144,6 +10287,17 @@
                 localStorage.removeItem('worksync_breakStartTime');
                 resetTimerUI();
                 toast('Checked Out - Great job today!', 'success');
+
+                // Close break popup and floating reminder
+                const modal = document.getElementById('breakStatusModal');
+                if (modal && modal.open) {
+                    modal.close();
+                }
+                const floating = document.getElementById('breakFloatingReminder');
+                if (floating) {
+                    floating.classList.add('hidden');
+                }
+                stopBreakTimer();
             }
 
             let checkoutReasonsUnsub = null;
@@ -10302,6 +10456,17 @@
                 localStorage.removeItem('worksync_breakStartTime');
                 resetTimerUI();
                 toast('Auto-checked out at end of shift', 'info');
+
+                // Close break popup and floating reminder
+                const modal = document.getElementById('breakStatusModal');
+                if (modal && modal.open) {
+                    modal.close();
+                }
+                const floating = document.getElementById('breakFloatingReminder');
+                if (floating) {
+                    floating.classList.add('hidden');
+                }
+                stopBreakTimer();
             }
 
             let lastBreakAlertTime = 0;
@@ -10475,6 +10640,9 @@
                         if (headerDisplay) headerDisplay.textContent = formatted;
                     }
                     setTimerState('paused');
+
+                    // Restore break popup state
+                    openBreakPopup();
                 }
             }
 
@@ -10538,6 +10706,10 @@
                         seconds = Math.floor(Math.max(0, workMs / 1000));
                         document.getElementById('timer-display').textContent = formatTime(seconds);
                         setTimerState('paused');
+
+                        // Restore break popup state
+                        openBreakPopup();
+
                         toast('Check-in restored — currently on break', 'info');
                     } else {
                         // Currently working
@@ -30032,6 +30204,7 @@
             }
             window.handleLogin = handleLogin; window.logout = logout; window.switchView = switchView; window.toggleSidebar = toggleSidebar;
             window.doCheckIn = doCheckIn; window.doBreak = doBreak; window.doResume = doResume; window.confirmCheckOut = confirmCheckOut;
+            window.openBreakPopup = openBreakPopup; window.closeBreakPopupOnly = closeBreakPopupOnly; window.doResumeFromBreakPopup = doResumeFromBreakPopup;
             window.syncTasks = syncTasks; window.toggleActiveTask = toggleActiveTask;
             window.saveBoardSettings = saveBoardSettings;
             window.filterDailyPlan = filterDailyPlan;

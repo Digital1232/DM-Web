@@ -198,6 +198,7 @@ if (initializeApp) {
     let totalBreakDuration = 0;
     let lastBreakAlertTime = 0;
     let syncIntervalRef = null;
+    let breakTimerInterval = null;
     let currentTaskViewMode = 'list';
     let statusChangeStats = {};
 
@@ -1405,6 +1406,9 @@ if (initializeApp) {
         } else {
             toast('Break session started', 'info');
         }
+        
+        // Open break popup and start break timer
+        openBreakPopup();
     }
     function doResume() {
         if (breakStartTime) {
@@ -1419,6 +1423,17 @@ if (initializeApp) {
         localStorage.setItem('worksync_timerState', 'running');
         setTimerState('running');
         toast('Work session resumed', 'success');
+
+        // Close break popup and floating reminder
+        const modal = document.getElementById('breakStatusModal');
+        if (modal && modal.open) {
+            modal.close();
+        }
+        const floating = document.getElementById('breakFloatingReminder');
+        if (floating) {
+            floating.classList.add('hidden');
+        }
+        stopBreakTimer();
     }
     function confirmCheckOut() {
         if (confirm('Are you sure you want to Check Out for today?')) {
@@ -1437,6 +1452,17 @@ if (initializeApp) {
             localStorage.removeItem('worksync_breakStartTime');
             resetTimerUI();
             toast('Checked Out - Great job today!', 'success');
+
+            // Close break popup and floating reminder
+            const modal = document.getElementById('breakStatusModal');
+            if (modal && modal.open) {
+                modal.close();
+            }
+            const floating = document.getElementById('breakFloatingReminder');
+            if (floating) {
+                floating.classList.add('hidden');
+            }
+            stopBreakTimer();
         }
     }
     function setTimerState(state) {
@@ -1480,6 +1506,17 @@ if (initializeApp) {
         localStorage.removeItem('worksync_breakStartTime');
         resetTimerUI();
         toast('Auto-checked out at end of shift', 'info');
+
+        // Close break popup and floating reminder
+        const modal = document.getElementById('breakStatusModal');
+        if (modal && modal.open) {
+            modal.close();
+        }
+        const floating = document.getElementById('breakFloatingReminder');
+        if (floating) {
+            floating.classList.add('hidden');
+        }
+        stopBreakTimer();
     }
 
     function checkAutoCheckout() {
@@ -1565,6 +1602,49 @@ if (initializeApp) {
         modal.showModal();
     }
 
+    function openBreakPopup() {
+        const modal = document.getElementById('breakStatusModal');
+        if (!modal) return;
+        modal.showModal();
+
+        const floating = document.getElementById('breakFloatingReminder');
+        if (floating) {
+            floating.classList.remove('hidden');
+        }
+
+        // Start the break timer display
+        if (breakTimerInterval) clearInterval(breakTimerInterval);
+        updateBreakDurationUI();
+        breakTimerInterval = setInterval(updateBreakDurationUI, 1000);
+    }
+
+    function stopBreakTimer() {
+        if (breakTimerInterval) {
+            clearInterval(breakTimerInterval);
+            breakTimerInterval = null;
+        }
+    }
+
+    function updateBreakDurationUI() {
+        if (!breakStartTime) return;
+        const elapsedMs = Date.now() - breakStartTime;
+        const totalSecs = Math.floor(elapsedMs / 1000);
+        const hrs = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        const formatted = [
+            String(hrs).padStart(2, '0'),
+            String(mins).padStart(2, '0'),
+            String(secs).padStart(2, '0')
+        ].join(':');
+
+        const popupTime = document.getElementById('breakPopupTimer');
+        if (popupTime) popupTime.textContent = formatted;
+
+        const floatTime = document.getElementById('breakFloatTimer');
+        if (floatTime) floatTime.textContent = formatted;
+    }
+
     async function handleBreakExceededResume(btn) {
         const dialog = btn.closest('dialog');
         if (dialog) {
@@ -1640,6 +1720,9 @@ if (initializeApp) {
                 document.getElementById('timer-display').textContent = formatTime(seconds);
             }
             setTimerState('paused');
+
+            // Restore break popup state
+            openBreakPopup();
         }
     }
 
@@ -9861,6 +9944,9 @@ if (initializeApp) {
     window.closeStrategyEventModal = closeStrategyEventModal;
     window.selectStrategyFormat = selectStrategyFormat;
     window.handleBreakExceededResume = handleBreakExceededResume;
+    window.openBreakPopup = openBreakPopup;
+    window.stopBreakTimer = stopBreakTimer;
+    window.updateBreakDurationUI = updateBreakDurationUI;
     window.saveStrategyEvent = saveStrategyEvent;
     window.deleteStrategyEvent = deleteStrategyEvent;
 }
