@@ -6973,21 +6973,21 @@ function exportSummaryReportPdf() {
         const userEmail = currentUser ? currentUser.email : '';
         
         printWindow.document.write(`
-            <html>
-            <head>
-        <title>Daily Work & Productivity Report</title>
+            \\x3chtml>
+            \\x3chead>
+        \\x3ctitle>Daily Work & Productivity Report\\x3c/title>
         \\x3cscript src="https://cdn.tailwindcss.com">\\x3c/script>
         \\x3cscript src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js">\\x3c/script>
-        <style>
+        \\x3cstyle>
             body { font-family: system-ui, sans-serif; background: #fff; padding: 30px; color: #0f172a; }
             @media print {
                 @page { margin: 0; }
                 body { padding: 20mm; }
                 .no-print { display: none; }
             }
-        </style>
-            </head>
-            <body>
+        \\x3c/style>
+            \\x3c/head>
+            \\x3cbody>
         <div class="max-w-5xl mx-auto">
             <div class="flex justify-between items-center border-b pb-4 mb-6">
                 <div>
@@ -7010,8 +7010,8 @@ function exportSummaryReportPdf() {
                 }, 500);
             };
         \\x3c/script>
-            </body>
-            </html>
+            \\x3c/body>
+            \\x3c/html>
         `);
         printWindow.document.close();
         toast('PDF print window opened', 'success');
