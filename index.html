@@ -17711,6 +17711,7 @@
 
             function buildDailySummaryRows() {
                 const rows = new Map();
+                const today = new Date().toISOString().slice(0, 10);
                 const ensure = (email, name, role = '') => {
                     const key = (email || name || 'unknown').toLowerCase();
                     if (!rows.has(key)) {
@@ -17721,6 +17722,7 @@
                             completedTasks: 0,
                             loggedSeconds: 0,
                             activeSeconds: 0,
+                            breakSeconds: 0,
                             activeTask: null,
                             online: false,
                             assignedCount: 0,
@@ -17732,6 +17734,12 @@
                     return rows.get(key);
                 };
 
+                // Calculate break time from attendance events
+                const todayBreakEvents = attendanceEvents.filter(e => {
+                    const eventDate = new Date(e.timestamp).toISOString().slice(0, 10);
+                    return eventDate === today && e.type === 'break_end' && e.duration;
+                });
+
                 todayTimeLogs.forEach(log => {
                     const row = ensure(log.userId, log.userName);
                     const task = tasks.find(t => t.id === log.taskId);
@@ -17739,6 +17747,12 @@
 
                     row.completedTasks++;
                     row.loggedSeconds += Number(log.durationSeconds || 0);
+                });
+
+                // Add break time for each user
+                todayBreakEvents.forEach(evt => {
+                    const row = ensure(evt.userId);
+                    row.breakSeconds += Math.floor((evt.duration || 0) / 1000);
                 });
 
                 currentWorkUsers.forEach(u => {
