@@ -6976,8 +6976,8 @@ function exportSummaryReportPdf() {
             <html>
             <head>
         <title>Daily Work & Productivity Report</title>
-        <script src="https://cdn.tailwindcss.com">\\/script>
-        <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js">\\/script>
+        \\x3cscript src="https://cdn.tailwindcss.com">\\x3c/script>
+        \\x3cscript src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js">\\x3c/script>
         <style>
             body { font-family: system-ui, sans-serif; background: #fff; padding: 30px; color: #0f172a; }
             @media print {
@@ -7002,14 +7002,14 @@ function exportSummaryReportPdf() {
             </div>
             ${dashboardHtml}
         </div>
-        <script>
+        \\x3cscript>
             window.onload = () => {
                 setTimeout(() => {
             window.print();
             window.close();
                 }, 500);
             };
-        \\/script>
+        \\x3c/script>
             </body>
             </html>
         `);
