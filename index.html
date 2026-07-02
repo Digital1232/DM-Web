@@ -17794,6 +17794,27 @@
                     row.correctionsCount = ut.filter(t => isCorrections(t.status)).length;
                 });
 
+                // Also include all employees from allUsersMap to ensure everyone appears in Daily Summary
+                // This ensures employees who haven't logged time today still appear with their task counts
+                if (allUsersMap && allUsersMap.size > 0) {
+                    Array.from(allUsersMap.values()).forEach(u => {
+                        if (!u.email || u.email === '123') return; // Skip invalid entries
+                        
+                        const row = ensure(u.email, u.name, u.role);
+                        row.role = u.role || row.role;
+                        
+                        // Only calculate tasks if not already done above
+                        if (!row.assignedCount && !row.inProgressCount && !row.completedCount && !row.correctionsCount) {
+                            const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
+                            const isCorrections = (s) => ['Quality Check', 'Quality check', 'Rework Designs', 'Rework designs'].includes(s);
+                            row.assignedCount = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status))).length;
+                            row.inProgressCount = ut.filter(t => (isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))) && !isCorrections(t.status)).length;
+                            row.completedCount = ut.filter(t => isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))).length;
+                            row.correctionsCount = ut.filter(t => isCorrections(t.status)).length;
+                        }
+                    });
+                }
+
                 return [...rows.values()].sort((a, b) => {
                     const activeSort = (b.activeTask ? 1 : 0) - (a.activeTask ? 1 : 0);
                     return activeSort || (b.loggedSeconds + b.activeSeconds) - (a.loggedSeconds + a.activeSeconds) || a.name.localeCompare(b.name);
