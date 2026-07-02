@@ -5642,7 +5642,7 @@
                                                 <div class="w-full lg:w-56 shrink-0 lg:sticky lg:top-4 space-y-2">
 
                                                     <!-- CLIENT REPORTS group -->
-                                                    <div
+                                                    <div id="report-group-client"
                                                         class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                                                         <button onclick="switchReportMainTab('client')"
                                                             id="main-tab-client"
@@ -5691,7 +5691,7 @@
 
 
                                                     <!-- TEAM REPORTS group -->
-                                                    <div
+                                                    <div id="report-group-team"
                                                         class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                                                         <button onclick="switchReportMainTab('task')" id="main-tab-task"
                                                             class="w-full flex items-center gap-3 px-4 py-3.5 font-black text-sm transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
@@ -8254,7 +8254,7 @@
                 return false;
             }
             function hasClientWideAccess() { return currentUser && CLIENT_WIDE_ACCESS_EMAILS.some(e => e.toLowerCase() === (currentUser.email || '').toLowerCase()); }
-            function canViewReports() { return isAdmin() || isManager() || hasClientWideAccess(); }
+            function canViewReports() { return true; }
             function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
@@ -9759,6 +9759,7 @@
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
                 document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
+                document.getElementById('report-group-client')?.classList.remove('hidden');
                 if (hasClientWideAccess() && !isAdmin() && !isManager()) {
                     // Client-wide only access
                     document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
@@ -9769,10 +9770,20 @@
                     document.getElementById('report-tab-client')?.classList.remove('hidden');
                     document.getElementById('report-tab-client-wide')?.classList.remove('hidden');
                     if (currentReportTab !== 'client' && currentReportTab !== 'client-wide') currentReportTab = 'client';
-                } else {
+                } else if (isAdmin()) {
                     ['timing', 'task', 'analytics', 'summary', 'detailed', 'client', 'client-wide'].forEach(tab => {
                         document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
                     });
+                } else {
+                    // Non-admin / non-manager / regular users
+                    document.getElementById('report-group-client')?.classList.add('hidden');
+                    document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
+                    ['summary', 'detailed', 'task'].forEach(tab => {
+                        document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
+                    });
+                    if (currentReportTab !== 'summary' && currentReportTab !== 'detailed' && currentReportTab !== 'task') {
+                        currentReportTab = 'summary';
+                    }
                 }
                 if (canApproveLeaves()) {
                     document.getElementById('hr-tab-approvals')?.classList.remove('hidden');
@@ -22952,7 +22963,7 @@
                 if (allTimeLogsUnsub) allTimeLogsUnsub();
 
                 const dbRef = ref(db, 'worksync/timelogs');
-                const q = canViewReports() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+                const q = (isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
                 allTimeLogsUnsub = onValue(q, snap => {
                     allTimeLogs = snap.val() ? Object.values(snap.val()) : [];

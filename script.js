@@ -63,7 +63,7 @@ if (initializeApp) {
         return role === 'Manager' || MANAGER_EMAILS.some(e => e.toLowerCase() === email);
     }
     function hasClientWideAccess() { return currentUser && CLIENT_WIDE_ACCESS_EMAILS.some(e => e.toLowerCase() === (currentUser.email || '').toLowerCase()); }
-    function canViewReports() { return isAdmin() || isManager() || hasClientWideAccess(); }
+    function canViewReports() { return true; }
     function canViewDailySummary() { return isAdmin() || isManager(); }
     function canViewProjects() { return isAdmin() || isManager(); }
     function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
@@ -1148,6 +1148,7 @@ if (initializeApp) {
         document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
         document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
         document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
+        document.getElementById('report-group-client')?.classList.remove('hidden');
         if (hasClientWideAccess() && !isAdmin() && !isManager()) {
             // Client-wide only access
             document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
@@ -1158,10 +1159,20 @@ if (initializeApp) {
             document.getElementById('report-tab-client')?.classList.remove('hidden');
             document.getElementById('report-tab-client-wide')?.classList.remove('hidden');
             if (currentReportTab !== 'client' && currentReportTab !== 'client-wide') currentReportTab = 'client';
-        } else {
+        } else if (isAdmin()) {
             ['timing', 'task', 'analytics', 'summary', 'detailed', 'client', 'client-wide'].forEach(tab => {
                 document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
             });
+        } else {
+            // Non-admin / non-manager / regular users
+            document.getElementById('report-group-client')?.classList.add('hidden');
+            document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
+            ['summary', 'detailed', 'task'].forEach(tab => {
+                document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
+            });
+            if (currentReportTab !== 'summary' && currentReportTab !== 'detailed' && currentReportTab !== 'task') {
+                currentReportTab = 'summary';
+            }
         }
         if (isAdmin()) {
             document.getElementById('hr-tab-approvals')?.classList.remove('hidden');
@@ -7147,7 +7158,7 @@ if (initializeApp) {
         if (allTimeLogsUnsub) allTimeLogsUnsub();
 
         const dbRef = ref(db, 'worksync/timelogs');
-        const q = canViewReports() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+        const q = (isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
         allTimeLogsUnsub = onValue(q, snap => {
             allTimeLogs = snap.val() ? Object.values(snap.val()) : [];
