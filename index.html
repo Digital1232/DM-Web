@@ -21487,7 +21487,7 @@
                 const productiveTimeBase = totalActiveSeconds - totalBreakSeconds;
                 const activeProductivityPercent = productiveTimeBase > 0 ? Math.round((totalLoggedSeconds / productiveTimeBase) * 100) : 0;
 
-                // 6. Task Counts - Count based on multiple criteria: time logs, due date, or completion date in selected range
+                // 6. Task Counts - Categorize all assigned tasks by status
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
                 const countFromDateStr = formatLocalDate(new Date(fromTs));
                 const countToDateStr = formatLocalDate(new Date(toTs - 86400000)); // Last second of toDate
@@ -21498,7 +21498,8 @@
                     return true;
                 });
                 
-                const completedTasksCount = tasks.filter(t => {
+                // Completed Tasks: Count only those completed in the selected period
+                const completedTasksCount = dailyPlanTasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     if (!isCompleted) return false;
                     // Count if any of these conditions are true:
@@ -21514,14 +21515,19 @@
                     return false;
                 }).length;
                 
+                // In Progress Tasks: Count all that are in progress status (regardless of period)
                 const inProgressTasksCount = dailyPlanTasks.filter(t => {
                     const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
                     return isProgressStatus;
                 }).length;
                 
-                // Pending Tasks = Daily Plan Tasks - Completed Tasks - In Progress Tasks
-                const dailyPlanCount = dailyPlanTasks.length;
-                const pendingTasksCount = Math.max(0, dailyPlanCount - completedTasksCount - inProgressTasksCount);
+                // Pending Tasks: Not completed AND not in progress (regardless of whether they had activity in period)
+                const pendingTasksCount = dailyPlanTasks.filter(t => {
+                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
+                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
+                    // Exclude both completed and in-progress tasks
+                    return !isCompleted && !isProgressStatus;
+                }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
                     const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
@@ -22153,14 +22159,19 @@
                     return true;
                 });
                 
+                // In Progress Tasks: Count all that are in progress status (regardless of period)
                 const inProgressTasksCount = dailyPlanTasks.filter(t => {
                     const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
                     return isProgressStatus;
                 }).length;
                 
-                // Pending Tasks = Daily Plan Tasks - Completed Tasks - In Progress Tasks
-                const dailyPlanCount = dailyPlanTasks.length;
-                const pendingTasksCount = Math.max(0, dailyPlanCount - completedTasksCount - inProgressTasksCount);
+                // Pending Tasks: Not completed AND not in progress (regardless of whether they had activity in period)
+                const pendingTasksCount = dailyPlanTasks.filter(t => {
+                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
+                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
+                    // Exclude both completed and in-progress tasks
+                    return !isCompleted && !isProgressStatus;
+                }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
                     const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
