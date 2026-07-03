@@ -18865,6 +18865,21 @@
                 return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
             }
 
+            // Helper function to parse date strings in local timezone (not UTC)
+            // Fixes timezone issues where new Date('2026-07-02') interprets as UTC
+            function parseLocalDate(dateStr) {
+                const [year, month, day] = dateStr.split('-').map(Number);
+                return new Date(year, month - 1, day);
+            }
+
+            // Helper function to format date to string in local timezone
+            function formatLocalDate(d) {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
             function isTaskCompletedStatus(status) {
                 if (!status) return false;
                 const s = status.trim().toLowerCase();
@@ -19845,8 +19860,9 @@
                 else if (preset === 'this_month') { fromDate = new Date(today.getFullYear(), today.getMonth(), 1); }
 
                 const toDate = new Date(today); // end = today (start of today)
-                fromInput.value = fromDate.toISOString().slice(0, 10);
-                toInput.value = toDate.toISOString().slice(0, 10);
+                // Use local date format helper to avoid UTC timezone shift
+                fromInput.value = formatLocalDate(fromDate);
+                toInput.value = formatLocalDate(toDate);
 
                 const picker = document.getElementById('report-datepicker')?.litepicker;
                 if (picker) {
@@ -21374,9 +21390,14 @@
                     container.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">Please select a date range.</p>`;
                     return;
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toDate = new Date(reportDateTo);
+                
+                // Parse dates in local timezone using helper function
+                const fromDate = parseLocalDate(reportDateFrom);
+                const toDate = parseLocalDate(reportDateTo);
+                // Add 1 day to toDate to include the entire end date
                 toDate.setDate(toDate.getDate() + 1);
+                
+                const fromTs = fromDate.getTime();
                 const toTs = toDate.getTime();
 
                 let periodTimeLogs = allTimeLogs.filter(log => (log.endTime || log.startTime || 0) >= fromTs && (log.endTime || log.startTime || 0) < toTs);
@@ -21469,8 +21490,8 @@
 
                 // 6. Task Counts - Count based on multiple criteria: time logs, due date, or completion date in selected range
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const fromDate = new Date(fromTs).toISOString().slice(0, 10);
-                const toDateStr = new Date(toTs - 1).toISOString().slice(0, 10);
+                const countFromDateStr = formatLocalDate(new Date(fromTs));
+                const countToDateStr = formatLocalDate(new Date(toTs - 86400000)); // Last second of toDate
                 
                 const completedTasksCount = tasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
@@ -21479,12 +21500,12 @@
                     // 1. Has time logs in period
                     if (periodTaskIds.has(t.id)) return true;
                     // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= fromDate && t.duedate <= toDateStr) return true;
+                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
                     // 3. Task was updated/completed in the period
                     const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
                     if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
                     // 4. For internal tasks with lastCompletedDate
-                    if (t.lastCompletedDate && t.lastCompletedDate >= fromDate && t.lastCompletedDate <= toDateStr) return true;
+                    if (t.lastCompletedDate && t.lastCompletedDate >= countFromDateStr && t.lastCompletedDate <= countToDateStr) return true;
                     return false;
                 }).length;
                 
@@ -21495,7 +21516,7 @@
                     // 1. Has time logs in period
                     if (periodTaskIds.has(t.id)) return true;
                     // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= fromDate && t.duedate <= toDateStr) return true;
+                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
                     // 3. Task was updated in the period
                     const taskUpdatedTs = t.updatedAt || 0;
                     if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
@@ -21509,7 +21530,7 @@
                     // 1. Has time logs in period
                     if (periodTaskIds.has(t.id)) return true;
                     // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= fromDate && t.duedate <= toDateStr) return true;
+                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
                     // 3. Task was updated in the period
                     const taskUpdatedTs = t.updatedAt || 0;
                     if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
