@@ -10953,12 +10953,23 @@
             }
 
             // TASK STATUS HELPERS
-            function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted', 'Analytics', 'Client Sent', 'Shoot Completed', 'Shoot Cancelled'].includes(s); }
-            function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Design Hold', 'Design hold', 'Design In Progress', 'Design To Do', 'Quality Check', 'Thumbnail Waiting', 'Rework Designs', 'Shoot In Progress', 'Hold', 'hold', 'On Hold', 'on hold'].includes(s); }
+            // Jira Completed Statuses: Design Completed, Quality Check, Client Sent, Client Approved, Posted, Analytics
+            function isDone(s) { 
+                const completed = ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Quality Check', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Shoot Completed', 'Shoot Cancelled'];
+                return completed.includes(s);
+            }
+            
+            // In Progress: Only "In Progress" status - Quality Check, Client Sent, Analytics are now COMPLETED
+            function isInProgress(s) { 
+                return ['In Progress'].includes(s);
+            }
+
             function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Content In Progress', 'Client Content Approval'].includes(s); }
             function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
-            function isInternalInProgress(s) { return ['In Progress', 'Learnings', 'Learning'].includes(s); }
-            function isInternalDone(s) { return ['Completed', 'Done'].includes(s); }
+            // Internal In Progress: Only "In Progress"
+            function isInternalInProgress(s) { return ['In Progress'].includes(s); }
+            // Internal Completed: Done, Completed, Shoot Completed
+            function isInternalDone(s) { return ['Completed', 'Done', 'Shoot Completed'].includes(s); }
 
             async function getAllUsers() {
                 const snap = await get(ref(db, 'worksync/users'));
@@ -21517,17 +21528,16 @@
                 
                 // In Progress Tasks: Count all that are in progress status (regardless of period)
                 const inProgressTasksCount = dailyPlanTasks.filter(t => {
-                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    return isProgressStatus;
+                    return isInProgress(t.status) || isInternalInProgress(t.status);
                 }).length;
                 
-                // Pending Tasks: Not completed AND not in progress AND not in quality check (regardless of period)
+                // Pending Tasks: Not completed AND not in progress
+                // (Quality Check is now part of completed, so no need to exclude it separately)
                 const pendingTasksCount = dailyPlanTasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
-                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    const isQualityCheck = (t.status || '').toLowerCase().trim() === 'quality check';
-                    // Exclude completed, in-progress, and quality check tasks
-                    return !isCompleted && !isProgressStatus && !isQualityCheck;
+                    const isProgressStatus = isInProgress(t.status) || isInternalInProgress(t.status);
+                    // Exclude completed and in-progress tasks
+                    return !isCompleted && !isProgressStatus;
                 }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
@@ -22162,17 +22172,16 @@
                 
                 // In Progress Tasks: Count all that are in progress status (regardless of period)
                 const inProgressTasksCount = dailyPlanTasks.filter(t => {
-                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    return isProgressStatus;
+                    return isInProgress(t.status) || isInternalInProgress(t.status);
                 }).length;
                 
-                // Pending Tasks: Not completed AND not in progress AND not in quality check (regardless of period)
+                // Pending Tasks: Not completed AND not in progress
+                // (Quality Check is now part of completed, so no need to exclude it separately)
                 const pendingTasksCount = dailyPlanTasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
-                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    const isQualityCheck = (t.status || '').toLowerCase().trim() === 'quality check';
-                    // Exclude completed, in-progress, and quality check tasks
-                    return !isCompleted && !isProgressStatus && !isQualityCheck;
+                    const isProgressStatus = isInProgress(t.status) || isInternalInProgress(t.status);
+                    // Exclude completed and in-progress tasks
+                    return !isCompleted && !isProgressStatus;
                 }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
