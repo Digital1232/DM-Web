@@ -21586,21 +21586,43 @@
                 });
 
                 // --- Today's Task Summary Table Rows ---
+                // Build task summary including assignee, started time, completed time info
                 const taskSummaryTableRows = [];
                 const taskLookup = {};
+                const summaryFromDate = new Date(reportDateFrom);
+                const summaryToDate = new Date(reportDateTo);
+                const dateRangeLabel = reportDateFrom === reportDateTo ? 
+                    `${summaryFromDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}` : 
+                    `${summaryFromDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })} - ${summaryToDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}`;
+                
                 periodTimeLogs.forEach(log => {
                     if (!taskLookup[log.taskId]) {
-                        // Find matching task status
+                        // Find matching task in tasks array
                         const fullTask = tasks.find(t => t.id === log.taskId);
+                        
+                        // Get assignee and other task details
+                        const assignee = log.assignee || (fullTask && fullTask.assignee) || 'Unassigned';
+                        const pipeline = fullTask ? (fullTask.pipeline || fullTask.category || '') : '';
+                        
+                        // Get started and completed times from logs within date range
+                        const taskLogs = periodTimeLogs.filter(l => l.taskId === log.taskId);
+                        const startedTime = taskLogs.length > 0 ? new Date(Math.min(...taskLogs.map(l => l.startTime || l.endTime || Date.now()))).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-';
+                        const completedTime = fullTask && fullTask.completedDate ? new Date(fullTask.completedDate).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+                        
                         taskLookup[log.taskId] = {
                             id: log.taskId,
-                            client: log.client || 'Other',
-                            name: log.taskDesc || log.taskName || 'Unknown',
+                            client: log.client || fullTask?.client || 'Other',
+                            name: log.taskDesc || log.taskName || fullTask?.name || 'Unknown',
+                            assignee: assignee,
                             status: fullTask ? fullTask.status : 'In Progress',
+                            pipeline: pipeline,
+                            startedTime: startedTime,
+                            completedTime: completedTime,
                             duration: 0
                         };
                         taskSummaryTableRows.push(taskLookup[log.taskId]);
                     }
+                    // Accumulate duration only from logs in the selected date range
                     taskLookup[log.taskId].duration += log.durationSeconds || 0;
                 });
 
@@ -21736,19 +21758,23 @@
 
                 <!-- Today's Task Summary Table -->
                 <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm mb-8 overflow-x-auto">
-                    <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Today's Task Summary</h4>
-                    <table class="w-full text-left border-collapse min-w-[550px]">
+                    <h4 class="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Task Summary — ${dateRangeLabel}</h4>
+                    <table class="w-full text-left border-collapse min-w-[750px]">
                         <thead>
                             <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
                                 <th class="pb-3">Task ID</th>
                                 <th class="pb-3">Client</th>
                                 <th class="pb-3">Task Name</th>
+                                <th class="pb-3">Assignee</th>
                                 <th class="pb-3">Status</th>
+                                <th class="pb-3">Pipeline</th>
                                 <th class="pb-3">Working Time</th>
+                                <th class="pb-3">Started</th>
+                                <th class="pb-3">Completed</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
-                            ${taskSummaryTableRows.length > 0 ? taskSummaryTableRows.map(row => '<tr class="hover:bg-slate-50/50 transition-colors"><td class="py-3 font-bold font-mono text-slate-400">#' + row.id + '</td><td class="py-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-black text-[9px] uppercase text-slate-500">' + (row.client || 'Other') + '</span></td><td class="py-3 font-semibold text-slate-800">' + row.name + '</td><td class="py-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase ' + statusClass(row.status) + '">' + row.status + '</span></td><td class="py-3 font-bold font-mono text-indigo-600">' + formatTime(row.duration) + '</td></tr>').join('') : '<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">No tasks worked on in this period</td></tr>'}
+                            ${taskSummaryTableRows.length > 0 ? taskSummaryTableRows.map(row => '<tr class="hover:bg-slate-50/50 transition-colors"><td class="py-3 font-bold font-mono text-slate-400">#' + row.id + '</td><td class="py-3"><span class="px-2 py-0.5 rounded bg-slate-100 font-black text-[9px] uppercase text-slate-500">' + (row.client || 'Other') + '</span></td><td class="py-3 font-semibold text-slate-800 max-w-xs truncate" title="' + row.name + '">' + row.name + '</td><td class="py-3 text-slate-600">' + row.assignee + '</td><td class="py-3"><span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase ' + statusClass(row.status) + '">' + row.status + '</span></td><td class="py-3 text-slate-500 text-[9px]">' + (row.pipeline || '-') + '</td><td class="py-3 font-bold font-mono text-indigo-600">' + formatTime(row.duration) + '</td><td class="py-3 text-slate-500">' + row.startedTime + '</td><td class="py-3 text-slate-500">' + row.completedTime + '</td></tr>').join('') : '<tr><td colspan="9" class="py-4 text-center text-slate-400 italic">No tasks worked on in this period</td></tr>'}
                         </tbody>
                     </table>
                 </div>
