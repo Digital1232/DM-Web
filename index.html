@@ -9844,12 +9844,18 @@
                     document.getElementById('announcement-compose-card')?.classList.remove('hidden');
                     document.getElementById('dpr-tab-team')?.classList.remove('hidden');
                     document.getElementById('report-tab-performance')?.classList.remove('hidden');
-                } else { // Non-admin users
+                    document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
+                } else if (isManager()) {
+                    // Managers can see employee performance reports
+                    document.getElementById('report-tab-performance')?.classList.remove('hidden');
+                    document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
+                } else { // Non-admin, non-manager users (regular employees)
                     document.getElementById('admin-nav')?.classList.add('hidden');
                     document.getElementById('group-create-btn')?.classList.add('hidden');
                     document.getElementById('announcement-compose-card')?.classList.add('hidden');
                     document.getElementById('dpr-tab-team')?.classList.add('hidden');
                     document.getElementById('report-tab-performance')?.classList.add('hidden');
+                    document.getElementById('report-tab-indiv-perf')?.classList.add('hidden');
                 }
                 // Daily summary cards and data loading - available to admins AND managers
                 if (canViewDailySummary()) {
@@ -20668,7 +20674,17 @@
 
             async function switchReportTab(tab) {
                 if (!canViewReports()) return;
-                if (isManager() && !isAdmin()) tab = 'client';
+                
+                // Permission checks for restricted tabs
+                if ((tab === 'performance' || tab === 'indiv-perf') && !isAdmin() && !isManager()) {
+                    // Non-admin, non-manager users cannot access employee performance reports
+                    // Redirect to summary or detailed tab
+                    tab = 'summary';
+                }
+                
+                if (isManager() && !isAdmin() && tab !== 'client' && tab !== 'client-wide' && tab !== 'performance' && tab !== 'indiv-perf') {
+                    tab = 'client';
+                }
                 const allTabs = ['timing', 'task', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide', 'client-wise-timing', 'indiv-perf', 'client-perf'];
                 allTabs.forEach(t => {
                     document.getElementById(`report-panel-${t}`)?.classList.add('hidden');
