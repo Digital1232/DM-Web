@@ -21413,8 +21413,9 @@
                     if (!byDate[dateStr]) byDate[dateStr] = { date: dateStr, loggedSeconds: 0, breakSeconds: 0, taskCount: 0 };
                 };
 
-                for (let d = new Date(reportDateFrom); d <= new Date(reportDateTo); d.setDate(d.getDate() + 1)) {
-                    ensureDate(d.toISOString().slice(0, 10));
+                // Use local date parsing to avoid UTC issues
+                for (let d = parseLocalDate(reportDateFrom); d <= parseLocalDate(reportDateTo); d.setDate(d.getDate() + 1)) {
+                    ensureDate(formatLocalDate(d));
                 }
 
                 periodTimeLogs.forEach(log => {
@@ -21519,8 +21520,8 @@
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     if (isCompleted) return false;
                     
-                    const isInProgress = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    if (isInProgress) return false;
+                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
+                    if (isProgressStatus) return false;
                     
                     return true;
                 }).length;
@@ -22159,8 +22160,8 @@
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     if (isCompleted) return false;
                     
-                    const isInProgress = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    if (isInProgress) return false;
+                    const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
+                    if (isProgressStatus) return false;
                     
                     return true;
                 }).length;
