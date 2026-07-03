@@ -21494,6 +21494,12 @@
                 const countFromDateStr = formatLocalDate(new Date(fromTs));
                 const countToDateStr = formatLocalDate(new Date(toTs - 86400000)); // Last second of toDate
                 
+                // Get all tasks assigned to the user (Daily Plan)
+                const dailyPlanTasks = tasks.filter(t => {
+                    if (reportSelectedUser !== 'all' && !assigneeMatches(t, reportSelectedUser)) return false;
+                    return true;
+                });
+                
                 const completedTasksCount = tasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     if (!isCompleted) return false;
@@ -21510,31 +21516,14 @@
                     return false;
                 }).length;
                 
-                const pendingTasksCount = tasks.filter(t => {
-                    // Count tasks that are:
-                    // 1. In Daily Plan (assigned to user)
-                    // 2. NOT Completed
-                    // 3. NOT In Progress
-                    // 4. Have activity in the selected date range
-                    if (reportSelectedUser !== 'all' && !assigneeMatches(t, reportSelectedUser)) return false;
-                    
-                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
-                    if (isCompleted) return false;
-                    
+                const inProgressTasksCount = dailyPlanTasks.filter(t => {
                     const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    if (isProgressStatus) return false;
-                    
-                    // Count if any of these conditions are true:
-                    // 1. Has time logs in period
-                    if (periodTaskIds.has(t.id)) return true;
-                    // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
-                    // 3. Task was updated in the period
-                    const taskUpdatedTs = t.updatedAt || 0;
-                    if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
-                    
-                    return false;
+                    return isProgressStatus;
                 }).length;
+                
+                // Pending Tasks = Daily Plan Tasks - Completed Tasks - In Progress Tasks
+                const dailyPlanCount = dailyPlanTasks.length;
+                const pendingTasksCount = Math.max(0, dailyPlanCount - completedTasksCount - inProgressTasksCount);
                 
                 const reworkTasksCount = tasks.filter(t => {
                     const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
@@ -22160,31 +22149,20 @@
                     return false;
                 }).length;
                 
-                const pendingTasksCount = tasks.filter(t => {
-                    // Count tasks that are:
-                    // 1. In Daily Plan (assigned to user)
-                    // 2. NOT Completed
-                    // 3. NOT In Progress
-                    // 4. Have activity in the selected date range
+                // Get all tasks assigned to the user (Daily Plan)
+                const dailyPlanTasks = tasks.filter(t => {
                     if (reportSelectedUser !== 'all' && !assigneeMatches(t, reportSelectedUser)) return false;
-                    
-                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
-                    if (isCompleted) return false;
-                    
+                    return true;
+                });
+                
+                const inProgressTasksCount = dailyPlanTasks.filter(t => {
                     const isProgressStatus = isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status));
-                    if (isProgressStatus) return false;
-                    
-                    // Count if any of these conditions are true:
-                    // 1. Has time logs in period
-                    if (periodTaskIds.has(t.id)) return true;
-                    // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= fromDateStr && t.duedate <= toDateStr) return true;
-                    // 3. Task was updated in the period
-                    const taskUpdatedTs = t.updatedAt || 0;
-                    if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
-                    
-                    return false;
+                    return isProgressStatus;
                 }).length;
+                
+                // Pending Tasks = Daily Plan Tasks - Completed Tasks - In Progress Tasks
+                const dailyPlanCount = dailyPlanTasks.length;
+                const pendingTasksCount = Math.max(0, dailyPlanCount - completedTasksCount - inProgressTasksCount);
                 
                 const reworkTasksCount = tasks.filter(t => {
                     const isRework = (t.status || '').toLowerCase().includes('rework') || (t.status || '').toLowerCase().includes('correction');
