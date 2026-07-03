@@ -6669,7 +6669,7 @@
                             <option value="18:30">9:00 AM - 6:30 PM</option>
                         </select>
                     </div>
-                    <div class="flex items-center justify-between gap-4">
+                    <div class="flex items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-200">
                         <div>
                             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Chat Alerts
                             </p>
@@ -6680,6 +6680,19 @@
                             class="w-12 h-7 rounded-full bg-emerald-500 relative transition-colors shrink-0"
                             aria-label="Toggle chat notifications">
                             <span id="chat-mute-knob"
+                                class="absolute top-1 right-1 w-5 h-5 rounded-full bg-white shadow transition-all"></span>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Water Widget
+                            </p>
+                            <p class="text-xs text-slate-600 leading-relaxed">Show water reminder and tracking widget.</p>
+                        </div>
+                        <button id="water-widget-toggle" onclick="toggleWaterWidgetVisibility()"
+                            class="w-12 h-7 rounded-full bg-emerald-500 relative transition-colors shrink-0"
+                            aria-label="Toggle water widget">
+                            <span id="water-widget-knob"
                                 class="absolute top-1 right-1 w-5 h-5 rounded-full bg-white shadow transition-all"></span>
                         </button>
                     </div>
@@ -34332,6 +34345,34 @@
                 if (st) { st.textContent = waterEnabled ? '✓ Reminders ON' : '✕ Reminders OFF — tap toggle to re-enable'; st.style.color = waterEnabled ? '#0ea5e9' : '#f97316'; }
             }
 
+            // ── Toggle widget visibility ──
+            var waterWidgetVisible = localStorage.getItem('worksync_water_widget_visible') !== 'false'; // default ON
+
+            function toggleWaterWidgetVisibility() {
+                waterWidgetVisible = !waterWidgetVisible;
+                localStorage.setItem('worksync_water_widget_visible', String(waterWidgetVisible));
+                renderWaterWidgetToggle();
+                
+                // Show/hide the widget button
+                var wbtn = document.getElementById('water-widget-btn');
+                if (wbtn) wbtn.style.display = waterWidgetVisible ? 'flex' : 'none';
+                
+                // Close the settings panel
+                var settingsModal = document.getElementById('settingsModal');
+                if (settingsModal) settingsModal.close();
+                
+                toast(waterWidgetVisible ? 'Water widget enabled' : 'Water widget disabled', 'info');
+            }
+
+            function renderWaterWidgetToggle() {
+                const toggle = document.getElementById('water-widget-toggle');
+                const knob = document.getElementById('water-widget-knob');
+                if (!toggle || !knob) return;
+                toggle.className = `w-12 h-7 rounded-full relative transition-colors shrink-0 ${!waterWidgetVisible ? 'bg-slate-300' : 'bg-emerald-500'}`;
+                knob.className = `absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${!waterWidgetVisible ? 'left-1' : 'right-1'}`;
+                toggle.setAttribute('aria-pressed', String(waterWidgetVisible));
+            }
+
             // ── Reset at midnight ──
             function waterCheckMidnightReset() {
                 var lastDate = localStorage.getItem('worksync_water_last_date');
@@ -34352,9 +34393,11 @@
                 waterUpdateBottle();
                 waterUpdateToggleUI();
                 waterUpdateLog();
-                // Show the widget button
+                // Show the widget button (respects visibility setting)
                 var wbtn = document.getElementById('water-widget-btn');
-                if (wbtn) wbtn.style.display = 'flex';
+                if (wbtn) wbtn.style.display = waterWidgetVisible ? 'flex' : 'none';
+                // Initialize the water widget toggle UI
+                renderWaterWidgetToggle();
                 // Start reminder if enabled
                 if (waterEnabled) {
                     // Request notification permission (gracefully ignored if not supported)
@@ -34453,6 +34496,7 @@
             window.initWaterWidget = initWaterWidget;
             window.hideWaterWidget = hideWaterWidget;
             window.toggleWaterPanel = toggleWaterPanel;
+            window.toggleWaterWidgetVisibility = toggleWaterWidgetVisibility;
             window.waterLogDrink = waterLogDrink;
             window.waterToggleReminder = waterToggleReminder;
             window.waterPopupDrink = waterPopupDrink;
