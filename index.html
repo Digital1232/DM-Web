@@ -21512,8 +21512,13 @@
                 const pendingTasksCount = tasks.filter(t => {
                     const isPending = !isDone(t.status) && !isInternalDone(t.status);
                     if (!isPending) return false;
-                    // Only count if it has time logs in the period (matches what appears in task table)
+                    // Count if any of these conditions are true:
+                    // 1. Has time logs in the selected period
                     if (periodTaskIds.has(t.id)) return true;
+                    // 2. Due date is in the selected period
+                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
+                    // 3. Task is in Daily Plan (assigned to user)
+                    if (reportSelectedUser !== 'all' && assigneeMatches(t, reportSelectedUser)) return true;
                     return false;
                 }).length;
                 
@@ -22144,8 +22149,13 @@
                 const pendingTasksCount = tasks.filter(t => {
                     const isPending = !isDone(t.status) && !isInternalDone(t.status);
                     if (!isPending) return false;
-                    // Only count if it has time logs in the period (matches what appears in task table)
+                    // Count if any of these conditions are true:
+                    // 1. Has time logs in the selected period
                     if (periodTaskIds.has(t.id)) return true;
+                    // 2. Due date is in the selected period
+                    if (t.duedate && t.duedate >= fromDateStr && t.duedate <= toDateStr) return true;
+                    // 3. Task is in Daily Plan (assigned to user)
+                    if (reportSelectedUser !== 'all' && assigneeMatches(t, reportSelectedUser)) return true;
                     return false;
                 }).length;
                 
