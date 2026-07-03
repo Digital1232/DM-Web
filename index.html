@@ -21531,13 +21531,22 @@
                     return isInProgress(t.status) || isInternalInProgress(t.status);
                 }).length;
                 
-                // Pending Tasks: Not completed AND not in progress
-                // (Quality Check is now part of completed, so no need to exclude it separately)
+                // Pending Tasks: Not completed AND not in progress AND has activity in the selected period
                 const pendingTasksCount = dailyPlanTasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     const isProgressStatus = isInProgress(t.status) || isInternalInProgress(t.status);
-                    // Exclude completed and in-progress tasks
-                    return !isCompleted && !isProgressStatus;
+                    if (isCompleted || isProgressStatus) return false;
+                    
+                    // Only count if task has activity in the selected period:
+                    // 1. Has time logs in period
+                    if (periodTaskIds.has(t.id)) return true;
+                    // 2. Duedate is in the selected period
+                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
+                    // 3. Task was created/updated in the period
+                    const taskUpdatedTs = t.updatedAt || t.createdAt || 0;
+                    if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
+                    
+                    return false;
                 }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
@@ -22175,13 +22184,22 @@
                     return isInProgress(t.status) || isInternalInProgress(t.status);
                 }).length;
                 
-                // Pending Tasks: Not completed AND not in progress
-                // (Quality Check is now part of completed, so no need to exclude it separately)
+                // Pending Tasks: Not completed AND not in progress AND has activity in the selected period
                 const pendingTasksCount = dailyPlanTasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
                     const isProgressStatus = isInProgress(t.status) || isInternalInProgress(t.status);
-                    // Exclude completed and in-progress tasks
-                    return !isCompleted && !isProgressStatus;
+                    if (isCompleted || isProgressStatus) return false;
+                    
+                    // Only count if task has activity in the selected period:
+                    // 1. Has time logs in period
+                    if (periodTaskIds.has(t.id)) return true;
+                    // 2. Duedate is in the selected period
+                    if (t.duedate && t.duedate >= fromDateStr && t.duedate <= toDateStr) return true;
+                    // 3. Task was created/updated in the period
+                    const taskUpdatedTs = t.updatedAt || t.createdAt || 0;
+                    if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
+                    
+                    return false;
                 }).length;
                 
                 const reworkTasksCount = tasks.filter(t => {
