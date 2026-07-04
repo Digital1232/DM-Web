@@ -5033,7 +5033,7 @@ if (initializeApp) {
         if (!activeConvId) return;
         const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
         const msg = snap.val();
-        if (!msg || msg.senderEmail !== currentUser.email || msg.unsent) return;
+        if (!msg || (msg.senderEmail || '').toLowerCase() !== (currentUser.email || '').toLowerCase() || msg.unsent) { toast('You can only edit your own messages', 'error'); return; }
         const next = prompt('Edit message', msg.text || '');
         if (next === null) return;
         const text = next.trim();
@@ -5047,7 +5047,7 @@ if (initializeApp) {
         if (!activeConvId || !confirm('Delete this message permanently?')) return;
         const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
         const msg = snap.val();
-        if (!msg || msg.senderEmail !== currentUser.email) return;
+        if (!msg || (msg.senderEmail || '').toLowerCase() !== (currentUser.email || '').toLowerCase()) { toast('You can only delete your own messages', 'error'); return; }
         await remove(ref(db, `worksync/messages/${activeConvId}/${id}`));
         toast('Message deleted', 'success');
     }
@@ -5056,7 +5056,7 @@ if (initializeApp) {
         if (!activeConvId || !confirm('Unsend this message for everyone?')) return;
         const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
         const msg = snap.val();
-        if (!msg || msg.senderEmail !== currentUser.email || msg.unsent) return;
+        if (!msg || (msg.senderEmail || '').toLowerCase() !== (currentUser.email || '').toLowerCase() || msg.unsent) { toast('You can only unsend your own messages', 'error'); return; }
         await update(ref(db, `worksync/messages/${activeConvId}/${id}`), { text: '', unsent: true, unsentAt: Date.now(), editedAt: null, reactions: null });
         await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: 'Message unsent', lastTimestamp: Date.now() });
         toast('Message unsent', 'success');
@@ -6522,7 +6522,7 @@ if (initializeApp) {
         }
 
         // 3. Hold Time
-        const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+        const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.status === 'Design Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
         let totalHoldSeconds = holdTasksCount * 1800; // Estimate 30 mins per hold task
         const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
         if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
@@ -6889,7 +6889,7 @@ function exportSummaryReport() {
             totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds + 3600;
         }
 
-        const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
+        const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.status === 'Design Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
         let totalHoldSeconds = holdTasksCount * 1800;
         const remainingSeconds = Math.max(0, totalActiveSeconds - totalLoggedSeconds - totalBreakSeconds);
         if (totalHoldSeconds > remainingSeconds) totalHoldSeconds = remainingSeconds;
