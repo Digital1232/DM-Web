@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -636,6 +636,73 @@
         .glass-header {
             background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(12px);
+        }
+
+        /* ── DARK MODE: Social Analytics ── */
+        html.dark #view-social-analytics-panel .sa-kpi-card,
+        html.dark #view-social-analytics-panel .bg-white {
+            background-color: #1a2236 !important;
+            border-color: #253347 !important;
+        }
+
+        html.dark #sa-top-post-wrapper>div {
+            background-color: #1a2236 !important;
+        }
+
+        html.dark #saAddModal {
+            background-color: #1a2236 !important;
+            color: #f1f5f9 !important;
+        }
+
+        /* ── Social Analytics Animations ── */
+        @keyframes sa-pulse {
+            0%,
+            100% {
+                opacity: 0.1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .sa-kpi-card:hover .absolute {
+            animation: sa-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes sa-gradient-rotate {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        #sa-top-post-wrapper {
+            background-size: 200% 200%;
+            animation: sa-gradient-rotate 4s ease infinite;
+        }
+
+        @keyframes sa-fade-up {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .sa-fade-up {
+            animation: sa-fade-up 0.4s ease-out forwards;
         }
 
         dialog::backdrop {
@@ -1614,6 +1681,12 @@
                         <iconify-icon icon="solar:graph-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Reports
+                    </button>
+                    <button onclick="switchView('social-analytics')" id="nav-social-analytics"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:chart-square-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Social Analytics
                     </button>
                     <button onclick="switchView('meta-ads')" id="nav-meta-ads" data-label="Meta Ads"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left hidden">
@@ -6557,12 +6630,433 @@
                                         </div>
 
                             </div>
+
+                <!-- ════ SOCIAL ANALYTICS VIEW ════ -->
+                <div id="view-social-analytics-panel" class="hidden space-y-6 fade-in">
+                    <!-- Header Bar -->
+                    <div
+                        class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl flex items-center justify-center"
+                                style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);">
+                                <iconify-icon icon="solar:chart-square-bold-duotone" width="28"
+                                    style="color:#fff"></iconify-icon>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-black text-slate-900">Social Media Analytics</h3>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Track
+                                    post performance · Views · Engagement · Growth</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <select id="sa-date-range" onchange="filterSocialAnalytics()"
+                                class="text-xs border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-600 focus:ring-2 focus:ring-indigo-200 outline-none">
+                                <option value="7">Last 7 Days</option>
+                                <option value="30" selected>Last 30 Days</option>
+                                <option value="90">Last 90 Days</option>
+                                <option value="all">All Time</option>
+                            </select>
+                            <button id="sa-add-entry-btn" onclick="openAddAnalyticsModal()"
+                                class="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+                                style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important; color: #ffffff !important;">
+                                <iconify-icon icon="solar:add-circle-bold" width="18"
+                                    style="color: #ffffff !important;"></iconify-icon>
+                                Add Entry
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards Row -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="sa-kpi-row">
+                        <!-- Total Posts -->
+                        <div
+                            class="sa-kpi-card bg-white rounded-3xl p-5 shadow-lg border border-slate-100 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+                            <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+                                style="background: linear-gradient(135deg, #6366f1, #818cf8);"></div>
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                                style="background: linear-gradient(135deg, #eef2ff, #e0e7ff);">
+                                <iconify-icon icon="solar:document-text-bold" width="20"
+                                    style="color:#6366f1"></iconify-icon>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Posts</p>
+                            <p class="text-2xl font-black text-slate-900 mt-1 sa-counter" data-target="0"
+                                id="sa-total-posts">0</p>
+                        </div>
+                        <!-- Total Views -->
+                        <div
+                            class="sa-kpi-card bg-white rounded-3xl p-5 shadow-lg border border-slate-100 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+                            <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+                                style="background: linear-gradient(135deg, #3b82f6, #60a5fa);"></div>
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                                style="background: linear-gradient(135deg, #eff6ff, #dbeafe);">
+                                <iconify-icon icon="solar:eye-bold" width="20" style="color:#3b82f6"></iconify-icon>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Views</p>
+                            <p class="text-2xl font-black text-slate-900 mt-1 sa-counter" data-target="0"
+                                id="sa-total-views">0</p>
+                        </div>
+                        <!-- Total Likes -->
+                        <div
+                            class="sa-kpi-card bg-white rounded-3xl p-5 shadow-lg border border-slate-100 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+                            <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+                                style="background: linear-gradient(135deg, #ec4899, #f472b6);"></div>
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                                style="background: linear-gradient(135deg, #fdf2f8, #fce7f3);">
+                                <iconify-icon icon="solar:heart-bold" width="20" style="color:#ec4899"></iconify-icon>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Likes</p>
+                            <p class="text-2xl font-black text-slate-900 mt-1 sa-counter" data-target="0"
+                                id="sa-total-likes">0</p>
+                        </div>
+                        <!-- Total Shares -->
+                        <div
+                            class="sa-kpi-card bg-white rounded-3xl p-5 shadow-lg border border-slate-100 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+                            <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+                                style="background: linear-gradient(135deg, #f59e0b, #fbbf24);"></div>
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                                style="background: linear-gradient(135deg, #fffbeb, #fef3c7);">
+                                <iconify-icon icon="solar:share-bold" width="20" style="color:#f59e0b"></iconify-icon>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Shares</p>
+                            <p class="text-2xl font-black text-slate-900 mt-1 sa-counter" data-target="0"
+                                id="sa-total-shares">0</p>
+                        </div>
+                        <!-- Followers Gained -->
+                        <div
+                            class="sa-kpi-card bg-white rounded-3xl p-5 shadow-lg border border-slate-100 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+                            <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 group-hover:opacity-20 transition-opacity"
+                                style="background: linear-gradient(135deg, #10b981, #34d399);"></div>
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                                style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
+                                <iconify-icon icon="solar:users-group-rounded-bold" width="20"
+                                    style="color:#10b981"></iconify-icon>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Followers Gained
+                            </p>
+                            <p class="text-2xl font-black text-slate-900 mt-1 sa-counter" data-target="0"
+                                id="sa-total-followers">0</p>
+                        </div>
+                    </div>
+
+                    <!-- Top Performing Post + Platform Breakdown Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <!-- Top Performing Post Spotlight -->
+                        <div class="lg:col-span-3 rounded-3xl p-[2px] shadow-xl"
+                            style="background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899, #f59e0b);"
+                            id="sa-top-post-wrapper">
+                            <div class="bg-white rounded-[22px] p-6 h-full">
+                                <div class="flex items-center gap-2 mb-4">
+                                    <iconify-icon icon="solar:fire-bold-duotone" width="22"
+                                        style="color:#f59e0b"></iconify-icon>
+                                    <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">🔥 Top
+                                        Performing Post</h4>
+                                </div>
+                                <div id="sa-top-post-content">
+                                    <div class="flex items-center justify-center h-32 text-slate-400 text-sm">
+                                        <p>No analytics data yet. Add your first entry!</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Platform Breakdown Doughnut -->
+                        <div class="lg:col-span-2 bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                            <div class="flex items-center gap-2 mb-4">
+                                <iconify-icon icon="solar:pie-chart-2-bold-duotone" width="22"
+                                    style="color:#6366f1"></iconify-icon>
+                                <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">Platform
+                                    Breakdown</h4>
+                            </div>
+                            <div class="flex items-center justify-center">
+                                <canvas id="sa-platform-chart" width="220" height="220"
+                                    style="max-width:220px;max-height:220px;"></canvas>
+                            </div>
+                            <div id="sa-platform-legend"
+                                class="mt-4 flex flex-wrap gap-3 justify-center text-xs font-semibold"></div>
+                        </div>
+                    </div>
+
+                    <!-- Trend Charts Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Views Trend -->
+                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                            <div class="flex items-center gap-2 mb-4">
+                                <iconify-icon icon="solar:graph-up-bold-duotone" width="22"
+                                    style="color:#3b82f6"></iconify-icon>
+                                <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">Views Trend</h4>
+                            </div>
+                            <canvas id="sa-views-chart" width="500" height="200"
+                                style="width:100%;max-height:200px;"></canvas>
+                        </div>
+                        <!-- Engagement Trend -->
+                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                            <div class="flex items-center gap-2 mb-4">
+                                <iconify-icon icon="solar:heart-pulse-bold-duotone" width="22"
+                                    style="color:#ec4899"></iconify-icon>
+                                <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">Engagement Trend
+                                </h4>
+                            </div>
+                            <canvas id="sa-engagement-chart" width="500" height="200"
+                                style="width:100%;max-height:200px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Entries Table -->
+                    <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                            <div class="flex items-center gap-2">
+                                <iconify-icon icon="solar:list-check-bold-duotone" width="22"
+                                    style="color:#6366f1"></iconify-icon>
+                                <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">All Entries</h4>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <select id="sa-platform-filter" onchange="filterSocialAnalytics()"
+                                    class="text-xs border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-600 outline-none">
+                                    <option value="all">All Platforms</option>
+                                    <option value="Facebook">Facebook</option>
+                                    <option value="Instagram">Instagram</option>
+                                    <option value="YouTube">YouTube</option>
+                                    <option value="LinkedIn">LinkedIn</option>
+                                    <option value="X (Twitter)">X (Twitter)</option>
+                                </select>
+                                <select id="sa-type-filter" onchange="filterSocialAnalytics()"
+                                    class="text-xs border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-600 outline-none">
+                                    <option value="all">All Types</option>
+                                    <option value="Video">Video</option>
+                                    <option value="Image">Image</option>
+                                    <option value="Reel">Reel</option>
+                                    <option value="Story">Story</option>
+                                    <option value="Carousel">Carousel</option>
+                                    <option value="Text">Text</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm" id="sa-entries-table">
+                                <thead>
+                                    <tr
+                                        class="text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                        <th class="pb-3 pr-4">Date</th>
+                                        <th class="pb-3 pr-4">Title</th>
+                                        <th class="pb-3 pr-4">Platform</th>
+                                        <th class="pb-3 pr-4">Type</th>
+                                        <th class="pb-3 pr-4 text-right">Views</th>
+                                        <th class="pb-3 pr-4 text-right">Likes</th>
+                                        <th class="pb-3 pr-4 text-right">Shares</th>
+                                        <th class="pb-3 pr-4 text-right">Comments</th>
+                                        <th class="pb-3 pr-4 text-right">Followers</th>
+                                        <th class="pb-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sa-entries-tbody" class="divide-y divide-slate-50">
+                                    <tr>
+                                        <td colspan="10" class="py-8 text-center text-slate-400 text-sm">No entries yet.
+                                            Click "Add Entry" to get started!</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
         </main>
     </div>
 
     <!-- ══════════════════════════════════════════
          MODALS
     ══════════════════════════════════════════ -->
+
+    <!-- Modal: Social Analytics Add Entry -->
+    <dialog id="saAddModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden"
+        style="max-height:90vh;">
+        <div class="p-8 overflow-y-auto" style="max-height:88vh;">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center"
+                        style="background: linear-gradient(135deg, #6366f1, #a855f7);">
+                        <iconify-icon icon="solar:chart-square-bold-duotone" width="20"
+                            style="color:#fff"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900 tracking-tight" id="sa-modal-title">Add Post
+                            Analytics</h3>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Enter social media
+                            performance data</p>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('saAddModal').close()"
+                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <!-- Date Row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Report
+                            Date</label>
+                        <input type="date" id="sa-report-date"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date
+                            of Posting</label>
+                        <input type="date" id="sa-posting-date"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                </div>
+
+                <!-- Title (Pick from Posted Jira Tasks) + Client Filter Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Filter
+                            by Client</label>
+                        <select id="sa-task-client-filter" onchange="renderSaTaskPickerList()"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                            <option value="all">All Clients</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2 relative">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Post
+                            Title <span class="text-indigo-400">(Pick from Posted Tasks)</span></label>
+                        <div class="relative">
+                            <input type="text" id="sa-title" placeholder="Search or pick a posted Jira task…"
+                                autocomplete="off" oninput="filterSaTaskPicker()" onfocus="showSaTaskPicker()"
+                                class="w-full border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                            <button type="button" onclick="toggleSaTaskPicker()"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                                title="Browse posted tasks">
+                                <iconify-icon icon="solar:list-down-bold" width="18"></iconify-icon>
+                            </button>
+                        </div>
+                        <input type="hidden" id="sa-jira-task-id" value="">
+                        <!-- Dropdown suggestions -->
+                        <div id="sa-task-picker-dropdown"
+                            class="hidden absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl max-h-64 overflow-y-auto"
+                            style="scrollbar-width:thin;">
+                            <div id="sa-task-picker-list" class="p-2 space-y-0.5"></div>
+                            <div id="sa-task-picker-empty" class="hidden p-4 text-center text-sm text-slate-400">No
+                                posted tasks found</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Platform + Type Row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Platform</label>
+                        <select id="sa-platform"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                            <option value="">Select Platform</option>
+                            <option value="Facebook">Facebook</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="LinkedIn">LinkedIn</option>
+                            <option value="X (Twitter)">X (Twitter)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Post
+                            Type</label>
+                        <select id="sa-post-type"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                            <option value="">Select Type</option>
+                            <option value="Video">Video</option>
+                            <option value="Image">Image</option>
+                            <option value="Reel">Reel</option>
+                            <option value="Story">Story</option>
+                            <option value="Carousel">Carousel</option>
+                            <option value="Text">Text</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Link -->
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Post
+                        Link</label>
+                    <input type="url" id="sa-link" placeholder="https://fb.watch/..."
+                        class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                </div>
+
+                <!-- Client -->
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</label>
+                    <select id="sa-client"
+                        class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                        <option value="">Select Client (Optional)</option>
+                    </select>
+                </div>
+
+                <!-- Metrics Row 1 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Views</label>
+                        <input type="number" id="sa-views" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Likes</label>
+                        <input type="number" id="sa-likes" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Shares</label>
+                        <input type="number" id="sa-shares" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Comments</label>
+                        <input type="number" id="sa-comments" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                </div>
+
+                <!-- Followers -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Followers
+                            Gained</label>
+                        <input type="number" id="sa-followers" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Reach
+                            (Optional)</label>
+                        <input type="number" id="sa-reach" placeholder="0" min="0"
+                            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Notes /
+                        Summary</label>
+                    <textarea id="sa-notes" rows="3"
+                        placeholder="e.g. This reel reaches over 11.8K views with increase in 89 Followers within 30 hours organically"
+                        class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none resize-none"></textarea>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-3 pt-2">
+                    <button onclick="document.getElementById('saAddModal').close()"
+                        class="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-3 text-sm font-bold transition-all">Cancel</button>
+                    <button onclick="saveAnalyticsEntry()"
+                        class="flex-1 text-white rounded-xl py-3 text-sm font-bold shadow-lg hover:shadow-xl transition-all"
+                        style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important; color: #ffffff !important;">Save
+                        Entry</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
 
     <!-- Modal: Client label mapping -->
     <dialog id="clientMapModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
@@ -10118,6 +10612,7 @@
 
                 document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
                 document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
+                document.getElementById('nav-social-analytics')?.classList.toggle('hidden', !canViewAllAnalytics());
                 document.getElementById('nav-meta-ads')?.classList.toggle('hidden', !canViewMetaAds());
                 document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
@@ -11171,6 +11666,7 @@
                     setTimeout(() => switchTasksTab('jira'), 10);
                 }
                 if (view === 'reports' && !canViewReports()) view = 'dashboard';
+                if (view === 'social-analytics' && !canViewAllAnalytics()) view = 'dashboard';
                 if (view === 'daily-summary' && !canViewDailySummary()) view = 'dashboard';
                 if (view === 'projects' && !canViewProjects()) view = 'dashboard';
                 if (view === 'users' && !isAdmin()) view = 'dashboard';
@@ -11188,7 +11684,7 @@
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
+                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
                     document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                     const navEl = document.getElementById(`nav-${v}`);
                     if (navEl) navEl.classList.remove('nav-active');
@@ -11211,6 +11707,7 @@
                     chat: 'Team Chat',
                     announcements: 'Announcements',
                     reports: 'Reports & Analytics',
+                    'social-analytics': 'Social Media Analytics',
                     'meta-ads': 'Meta Ads Manager & Analytics',
                     users: 'User Management',
                     'clients-admin': 'Client Names',
@@ -11258,6 +11755,7 @@
                 else if (view === 'dm-content-org') { renderDmContentOrgPanel(); }
                 else if (view === 'strategy-calendar') { initStrategyCalendar(); }
                 else if (view === 'plan-tracking') { initPlanTracking(); }
+                else if (view === 'social-analytics') { initSocialAnalytics(); }
                 else if (view === 'files-manager') { initFilesManager(); }
                 else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
                 else if (view === 'discussions') { renderDiscussionsView(); }
@@ -31903,6 +32401,19 @@
             window.saveStrategyEvent = saveStrategyEvent;
             window.deleteStrategyEvent = deleteStrategyEvent;
             window.setStrategyClientFilter = setStrategyClientFilter;
+            window.initSocialAnalytics = initSocialAnalytics;
+            window.filterSocialAnalytics = filterSocialAnalytics;
+            window.renderSaDashboard = renderSaDashboard;
+            window.openAddAnalyticsModal = openAddAnalyticsModal;
+            window.saveAnalyticsEntry = saveAnalyticsEntry;
+            window.editAnalyticsEntry = editAnalyticsEntry;
+            window.deleteAnalyticsEntry = deleteAnalyticsEntry;
+            window.showSaTaskPicker = showSaTaskPicker;
+            window.hideSaTaskPicker = hideSaTaskPicker;
+            window.toggleSaTaskPicker = toggleSaTaskPicker;
+            window.filterSaTaskPicker = filterSaTaskPicker;
+            window.renderSaTaskPickerList = renderSaTaskPickerList;
+            window.selectSaPickerTask = selectSaPickerTask;
             window.initFilesManager = initFilesManager;
             window.fmSearchSystem = fmSearchSystem;
             window.fmOpenAddSystemModal = fmOpenAddSystemModal;
@@ -31930,6 +32441,46 @@
             window.togglePastDiscussionNotes = togglePastDiscussionNotes;
 
             // ══════════════════════════════════════════════════════════════════
+            // SOCIAL MEDIA ANALYTICS DASHBOARD
+            // ═══════════════════════════════════════════════════════════════════
+            let saAllEntries = [];
+            let saFilteredEntries = [];
+            let saEditingId = null;
+            let saUnsub = null;
+
+            const SA_PLATFORM_COLORS = {
+                'Facebook': '#1877F2',
+                'Instagram': '#E4405F',
+                'YouTube': '#FF0000',
+                'LinkedIn': '#0A66C2',
+                'X (Twitter)': '#1DA1F2'
+            };
+
+            const SA_TYPE_ICONS = {
+                'Video': 'solar:videocamera-record-bold',
+                'Image': 'solar:gallery-bold',
+                'Reel': 'solar:reel-bold',
+                'Story': 'solar:stories-bold',
+                'Carousel': 'solar:slider-horizontal-bold',
+                'Text': 'solar:text-bold'
+            };
+
+            function saUserKey() {
+                if (!currentUser) return null;
+                return currentUser.email.replace(/[.#$\[\]]/g, '_');
+            }
+
+            function canViewAllAnalytics() {
+                return true; // Everyone can view all details
+            }
+
+            function canEditSocialAnalytics() {
+                if (!currentUser) return false;
+                const email = (currentUser.email || '').toLowerCase().trim();
+                return isAdmin() || email === 'ajithvilpower@gmail.com';
+            }
+
+            // ══════════════════════════════════════════════════════════════════
             // FILES MANAGER
             // ══════════════════════════════════════════════════════════════════
             let fmSystems = {};          // Firebase data: { id: { name, ip, type, location, owner, drives: { label: { total, used, folders: [] } } } }
@@ -31937,6 +32488,135 @@
             let fmSelectedSystemId = null;
             let fmSelectedDriveLabel = null;
             let fmEditingFolder = null;
+
+            // ───────────────────────────────────────────────────────────────────
+            // SOCIAL ANALYTICS FUNCTIONS
+            // ───────────────────────────────────────────────────────────────────
+
+            async function initSocialAnalytics() {
+                if (!currentUser) return;
+
+                // Show/hide Add Entry button depending on permission
+                const addBtn = document.getElementById('sa-add-entry-btn');
+                if (addBtn) {
+                    if (canEditSocialAnalytics()) {
+                        addBtn.style.setProperty('display', 'flex', 'important');
+                    } else {
+                        addBtn.style.setProperty('display', 'none', 'important');
+                    }
+                }
+
+                // Load data from Firebase
+                if (saUnsub) { off(saUnsub.ref, 'value', saUnsub.cb); saUnsub = null; }
+
+                let dbPath;
+                if (canViewAllAnalytics()) {
+                    dbPath = 'worksync/social_analytics';
+                } else {
+                    dbPath = `worksync/social_analytics/${saUserKey()}`;
+                }
+                const dbRef2 = ref(db, dbPath);
+                const cb = (snapshot) => {
+                    const data = snapshot.val() || {};
+                    saAllEntries = [];
+                    if (canViewAllAnalytics()) {
+                        // Flatten all users' entries
+                        Object.entries(data).forEach(([userKey, userEntries]) => {
+                            if (typeof userEntries === 'object') {
+                                Object.entries(userEntries).forEach(([id, entry]) => {
+                                    saAllEntries.push({ ...entry, id, userKey });
+                                });
+                            }
+                        });
+                    } else {
+                        Object.entries(data).forEach(([id, entry]) => {
+                            saAllEntries.push({ ...entry, id, userKey: saUserKey() });
+                        });
+                    }
+                    // Sort by posting date descending
+                    saAllEntries.sort((a, b) => (b.postingDate || '').localeCompare(a.postingDate || ''));
+                    filterSocialAnalytics();
+                };
+                onValue(dbRef2, cb);
+                saUnsub = { ref: dbRef2, cb };
+            }
+
+            function filterSocialAnalytics() {
+                const range = document.getElementById('sa-date-range')?.value || '30';
+                const platformFilter = document.getElementById('sa-platform-filter')?.value || 'all';
+                const typeFilter = document.getElementById('sa-type-filter')?.value || 'all';
+
+                let entries = [...saAllEntries];
+
+                // Date filter
+                if (range !== 'all') {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - parseInt(range));
+                    const cutoffStr = cutoff.toISOString().slice(0, 10);
+                    entries = entries.filter(e => (e.postingDate || e.reportDate || '') >= cutoffStr);
+                }
+
+                // Platform filter
+                if (platformFilter !== 'all') {
+                    entries = entries.filter(e => e.platform === platformFilter);
+                }
+
+                // Type filter
+                if (typeFilter !== 'all') {
+                    entries = entries.filter(e => e.postType === typeFilter);
+                }
+
+                saFilteredEntries = entries;
+                renderSaDashboard();
+            }
+
+            function renderSaDashboard() {
+                const entries = saFilteredEntries;
+
+                // KPI Calculations
+                const totalPosts = entries.length;
+                const totalViews = entries.reduce((s, e) => s + (parseInt(e.views) || 0), 0);
+                const totalLikes = entries.reduce((s, e) => s + (parseInt(e.likes) || 0), 0);
+                const totalShares = entries.reduce((s, e) => s + (parseInt(e.shares) || 0), 0);
+                const totalFollowers = entries.reduce((s, e) => s + (parseInt(e.followers) || 0), 0);
+
+                // Animate counters
+                animateSaCounter('sa-total-posts', totalPosts);
+                animateSaCounter('sa-total-views', totalViews);
+                animateSaCounter('sa-total-likes', totalLikes);
+                animateSaCounter('sa-total-shares', totalShares);
+                animateSaCounter('sa-total-followers', totalFollowers);
+
+                // Top performing post
+                renderSaTopPost(entries);
+
+                // Platform doughnut chart
+                renderSaPlatformChart(entries);
+
+                // Trend charts
+                renderSaLineChart('sa-views-chart', entries, 'views', '#3b82f6', '#93c5fd');
+                renderSaLineChart('sa-engagement-chart', entries, 'engagement', '#ec4899', '#f9a8d4');
+
+                // Table
+                renderSaTable(entries);
+            }
+
+            function animateSaCounter(id, target) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const start = parseInt(el.textContent.replace(/,/g, '')) || 0;
+                if (start === target) { el.textContent = target.toLocaleString(); return; }
+                const duration = 800;
+                const startTime = performance.now();
+                function step(now) {
+                    const progress = Math.min((now - startTime) / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+                    const current = Math.round(start + (target - start) * eased);
+                    el.textContent = current.toLocaleString();
+                    if (progress < 1) requestAnimationFrame(step);
+                }
+                requestAnimationFrame(step);
+            }
 
             function fmFmtBytes(gb) {
                 if (gb === null || gb === undefined || (gb !== 0 && !gb)) return '—';
@@ -31953,6 +32633,152 @@
                 return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + ' GB';
             }
 
+            function renderSaTopPost(entries) {
+                const container = document.getElementById('sa-top-post-content');
+                if (!container) return;
+                if (!entries.length) {
+                    container.innerHTML = '<div class="flex items-center justify-center h-32 text-slate-400 text-sm"><p>No analytics data yet. Add your first entry!</p></div>';
+                    return;
+                }
+                // Find top post by views
+                const top = entries.reduce((best, e) => (parseInt(e.views) || 0) > (parseInt(best.views) || 0) ? e : best, entries[0]);
+                const platformColor = SA_PLATFORM_COLORS[top.platform] || '#6366f1';
+                const typeIcon = SA_TYPE_ICONS[top.postType] || 'solar:document-text-bold';
+
+                container.innerHTML = `
+                    <div class="sa-fade-up">
+                        <div class="flex items-start gap-4 flex-wrap">
+                            <div class="flex-1 min-w-[200px]">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold text-white" style="background:${platformColor}">
+                                        <iconify-icon icon="solar:share-circle-bold" width="12"></iconify-icon>
+                                        ${top.platform || 'Unknown'}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                        <iconify-icon icon="${typeIcon}" width="12"></iconify-icon>
+                                        ${top.postType || 'Post'}
+                                    </span>
+                                </div>
+                                <h4 class="text-lg font-black text-slate-900 mb-2">${top.title || 'Untitled Post'}</h4>
+                                <p class="text-xs text-slate-400 mb-4">
+                                    Posted on ${formatSaDate(top.postingDate)}
+                                    ${top.link ? ` · <a href="${top.link}" target="_blank" class="text-indigo-500 hover:underline">View Post ↗</a>` : ''}
+                                </p>
+                                <div class="flex flex-wrap gap-3">
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700">
+                                        <iconify-icon icon="solar:eye-bold" width="16"></iconify-icon>
+                                        <span class="text-sm font-black">${(parseInt(top.views) || 0).toLocaleString()}</span>
+                                        <span class="text-[10px] font-bold opacity-60">views</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-50 text-pink-700">
+                                        <iconify-icon icon="solar:heart-bold" width="16"></iconify-icon>
+                                        <span class="text-sm font-black">${(parseInt(top.likes) || 0).toLocaleString()}</span>
+                                        <span class="text-[10px] font-bold opacity-60">likes</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700">
+                                        <iconify-icon icon="solar:share-bold" width="16"></iconify-icon>
+                                        <span class="text-sm font-black">${(parseInt(top.shares) || 0).toLocaleString()}</span>
+                                        <span class="text-[10px] font-bold opacity-60">shares</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700">
+                                        <iconify-icon icon="solar:chat-round-dots-bold" width="16"></iconify-icon>
+                                        <span class="text-sm font-black">${(parseInt(top.comments) || 0).toLocaleString()}</span>
+                                        <span class="text-[10px] font-bold opacity-60">comments</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">
+                                        <iconify-icon icon="solar:users-group-rounded-bold" width="16"></iconify-icon>
+                                        <span class="text-sm font-black">+${(parseInt(top.followers) || 0).toLocaleString()}</span>
+                                        <span class="text-[10px] font-bold opacity-60">followers</span>
+                                    </div>
+                                </div>
+                                ${top.notes ? `<p class="mt-3 text-xs text-slate-500 italic bg-slate-50 rounded-xl p-3 border border-slate-100">"${top.notes}"</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function formatSaDate(dateStr) {
+                if (!dateStr) return '—';
+                try {
+                    const parts = dateStr.split('-');
+                    if (parts.length === 3) {
+                        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    }
+                } catch (e) { }
+                return dateStr;
+            }
+
+            function renderSaPlatformChart(entries) {
+                const canvas = document.getElementById('sa-platform-chart');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = 220 * dpr;
+                canvas.height = 220 * dpr;
+                ctx.scale(dpr, dpr);
+
+                // Count posts per platform
+                const counts = {};
+                entries.forEach(e => {
+                    const p = e.platform || 'Other';
+                    counts[p] = (counts[p] || 0) + 1;
+                });
+
+                const platforms = Object.keys(counts);
+                const values = platforms.map(p => counts[p]);
+                const total = values.reduce((s, v) => s + v, 0);
+                const colors = platforms.map(p => SA_PLATFORM_COLORS[p] || '#94a3b8');
+
+                ctx.clearRect(0, 0, 220, 220);
+
+                if (total === 0) {
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.beginPath();
+                    ctx.arc(110, 110, 80, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.font = '600 12px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('No data', 110, 115);
+                    document.getElementById('sa-platform-legend').innerHTML = '';
+                    return;
+                }
+
+                let startAngle = -Math.PI / 2;
+                const cx = 110, cy = 110, outerR = 80, innerR = 50;
+
+                platforms.forEach((p, i) => {
+                    const sliceAngle = (values[i] / total) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, outerR, startAngle, startAngle + sliceAngle);
+                    ctx.arc(cx, cy, innerR, startAngle + sliceAngle, startAngle, true);
+                    ctx.closePath();
+                    ctx.fillStyle = colors[i];
+                    ctx.fill();
+                    startAngle += sliceAngle;
+                });
+
+                // Center text
+                ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#f1f5f9' : '#1e293b';
+                ctx.font = '800 22px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(total, cx, cy - 6);
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '700 9px Inter, sans-serif';
+                ctx.fillText('POSTS', cx, cy + 12);
+
+                // Legend
+                const legendEl = document.getElementById('sa-platform-legend');
+                if (legendEl) {
+                    legendEl.innerHTML = platforms.map((p, i) =>
+                        `<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${colors[i]}"></span>${p} <span class="text-slate-400">(${values[i]})</span></span>`
+                    ).join('');
+                }
+            }
+
             function fmDecodeArg(value) {
                 try { return decodeURIComponent(value); }
                 catch { return value; }
@@ -31963,6 +32789,463 @@
                 if (pct >= 75) return 'bg-amber-500';
                 return 'bg-emerald-500';
             }
+
+            function renderSaLineChart(canvasId, entries, metric, color, lightColor) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                const w = rect.width || 500;
+                const h = 200;
+                canvas.width = w * dpr;
+                canvas.height = h * dpr;
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
+                ctx.scale(dpr, dpr);
+
+                // Aggregate data by date
+                const dateMap = {};
+                entries.forEach(e => {
+                    const d = e.postingDate || e.reportDate || '';
+                    if (!d) return;
+                    if (!dateMap[d]) dateMap[d] = { views: 0, likes: 0, shares: 0, comments: 0 };
+                    dateMap[d].views += parseInt(e.views) || 0;
+                    dateMap[d].likes += parseInt(e.likes) || 0;
+                    dateMap[d].shares += parseInt(e.shares) || 0;
+                    dateMap[d].comments += parseInt(e.comments) || 0;
+                });
+
+                const dates = Object.keys(dateMap).sort();
+                let values;
+                if (metric === 'engagement') {
+                    values = dates.map(d => dateMap[d].likes + dateMap[d].shares + dateMap[d].comments);
+                } else {
+                    values = dates.map(d => dateMap[d][metric] || 0);
+                }
+
+                ctx.clearRect(0, 0, w, h);
+
+                if (dates.length < 2) {
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.font = '600 12px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Need at least 2 data points', w / 2, h / 2);
+                    return;
+                }
+
+                const padding = { top: 20, right: 20, bottom: 35, left: 50 };
+                const chartW = w - padding.left - padding.right;
+                const chartH = h - padding.top - padding.bottom;
+                const maxVal = Math.max(...values, 1);
+                const minVal = 0;
+
+                // Grid lines
+                const isDark = document.documentElement.classList.contains('dark');
+                ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 4; i++) {
+                    const y = padding.top + (chartH / 4) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(padding.left, y);
+                    ctx.lineTo(w - padding.right, y);
+                    ctx.stroke();
+
+                    // Y-axis labels
+                    const val = maxVal - (maxVal / 4) * i;
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.font = '600 9px Inter, sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'K' : Math.round(val), padding.left - 8, y + 3);
+                }
+
+                // Points
+                const points = values.map((v, i) => ({
+                    x: padding.left + (i / (values.length - 1)) * chartW,
+                    y: padding.top + chartH - ((v - minVal) / (maxVal - minVal)) * chartH
+                }));
+
+                // Gradient fill under curve
+                const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
+                gradient.addColorStop(0, lightColor + '40');
+                gradient.addColorStop(1, lightColor + '00');
+
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, h - padding.bottom);
+                ctx.lineTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    const prev = points[i - 1];
+                    const curr = points[i];
+                    const cpx = (prev.x + curr.x) / 2;
+                    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+                }
+                ctx.lineTo(points[points.length - 1].x, h - padding.bottom);
+                ctx.closePath();
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // Line
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    const prev = points[i - 1];
+                    const curr = points[i];
+                    const cpx = (prev.x + curr.x) / 2;
+                    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+                }
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Dots
+                points.forEach((p, i) => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#fff';
+                    ctx.fill();
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+
+                // X-axis labels (show max 8)
+                const step = Math.max(1, Math.floor(dates.length / 8));
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '600 9px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                dates.forEach((d, i) => {
+                    if (i % step === 0 || i === dates.length - 1) {
+                        const parts = d.split('-');
+                        const label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+                        ctx.fillText(label, points[i].x, h - padding.bottom + 18);
+                    }
+                });
+            }
+
+            function renderSaTable(entries) {
+                const tbody = document.getElementById('sa-entries-tbody');
+                if (!tbody) return;
+                if (!entries.length) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-400 text-sm">No entries match your filters.</td></tr>';
+                    return;
+                }
+
+                const allowedToEdit = canEditSocialAnalytics();
+                tbody.innerHTML = entries.map((e, idx) => {
+                    const platformColor = SA_PLATFORM_COLORS[e.platform] || '#94a3b8';
+                    const canEdit = allowedToEdit;
+                    return `
+                        <tr class="hover:bg-slate-50 transition-colors sa-fade-up" style="animation-delay:${idx * 30}ms">
+                            <td class="py-3 pr-4 text-xs font-semibold text-slate-600 whitespace-nowrap">${formatSaDate(e.postingDate)}</td>
+                            <td class="py-3 pr-4">
+                                <div class="text-sm font-bold text-slate-900 max-w-[200px] truncate" title="${(e.title || '').replace(/"/g, '&quot;')}">${e.title || 'Untitled'}</div>
+                                ${e.link ? `<a href="${e.link}" target="_blank" class="text-[10px] text-indigo-500 hover:underline">View Post ↗</a>` : ''}
+                            </td>
+                            <td class="py-3 pr-4">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-white" style="background:${platformColor}">
+                                    ${e.platform || '—'}
+                                </span>
+                            </td>
+                            <td class="py-3 pr-4 text-xs font-semibold text-slate-500">${e.postType || '—'}</td>
+                            <td class="py-3 pr-4 text-right text-sm font-black text-slate-900">${(parseInt(e.views) || 0).toLocaleString()}</td>
+                            <td class="py-3 pr-4 text-right text-sm font-bold text-pink-600">${(parseInt(e.likes) || 0).toLocaleString()}</td>
+                            <td class="py-3 pr-4 text-right text-sm font-bold text-amber-600">${(parseInt(e.shares) || 0).toLocaleString()}</td>
+                            <td class="py-3 pr-4 text-right text-sm font-bold text-slate-600">${(parseInt(e.comments) || 0).toLocaleString()}</td>
+                            <td class="py-3 pr-4 text-right text-sm font-bold text-emerald-600">+${(parseInt(e.followers) || 0).toLocaleString()}</td>
+                            <td class="py-3 text-center">
+                                ${canEdit ? `
+                                <div class="flex items-center justify-center gap-1">
+                                    <button onclick="editAnalyticsEntry('${e.id}','${e.userKey}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all" title="Edit">
+                                        <iconify-icon icon="solar:pen-2-bold" width="14"></iconify-icon>
+                                    </button>
+                                    <button onclick="deleteAnalyticsEntry('${e.id}','${e.userKey}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all" title="Delete">
+                                        <iconify-icon icon="solar:trash-bin-trash-bold" width="14"></iconify-icon>
+                                    </button>
+                                </div>
+                                ` : '—'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function fmPctColor(pct) {
+                if (pct >= 90) return 'bg-rose-500';
+                if (pct >= 75) return 'bg-amber-500';
+                return 'bg-emerald-500';
+            }
+
+            function openAddAnalyticsModal(editId, editUserKey) {
+                if (!canEditSocialAnalytics()) {
+                    toast('You do not have permission to add or edit entries', 'error');
+                    return;
+                }
+                saEditingId = editId || null;
+                const modal = document.getElementById('saAddModal');
+                if (!modal) return;
+
+                // Populate client dropdown
+                const clientSelect = document.getElementById('sa-client');
+                if (clientSelect && clientSelect.options.length <= 1) {
+                    CLIENTS.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c;
+                        opt.textContent = c;
+                        clientSelect.appendChild(opt);
+                    });
+                }
+
+                // Populate client filter inside the task picker
+                const taskClientFilter = document.getElementById('sa-task-client-filter');
+                if (taskClientFilter && taskClientFilter.options.length <= 1) {
+                    CLIENTS.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c;
+                        opt.textContent = c;
+                        taskClientFilter.appendChild(opt);
+                    });
+                }
+                if (taskClientFilter) taskClientFilter.value = 'all';
+
+                // Reset form
+                const fields = ['sa-report-date', 'sa-posting-date', 'sa-title', 'sa-platform', 'sa-post-type', 'sa-link', 'sa-client', 'sa-views', 'sa-likes', 'sa-shares', 'sa-comments', 'sa-followers', 'sa-reach', 'sa-notes'];
+                fields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+
+                // Set default dates
+                const today = new Date().toISOString().slice(0, 10);
+                document.getElementById('sa-report-date').value = today;
+                document.getElementById('sa-posting-date').value = today;
+
+                const titleEl = document.getElementById('sa-modal-title');
+
+                if (editId) {
+                    // Load existing data
+                    const entry = saAllEntries.find(e => e.id === editId && e.userKey === editUserKey);
+                    if (entry) {
+                        if (titleEl) titleEl.textContent = 'Edit Post Analytics';
+                        document.getElementById('sa-report-date').value = entry.reportDate || '';
+                        document.getElementById('sa-posting-date').value = entry.postingDate || '';
+                        document.getElementById('sa-title').value = entry.title || '';
+                        document.getElementById('sa-platform').value = entry.platform || '';
+                        document.getElementById('sa-post-type').value = entry.postType || '';
+                        document.getElementById('sa-link').value = entry.link || '';
+                        document.getElementById('sa-client').value = entry.client || '';
+                        document.getElementById('sa-views').value = entry.views || '';
+                        document.getElementById('sa-likes').value = entry.likes || '';
+                        document.getElementById('sa-shares').value = entry.shares || '';
+                        document.getElementById('sa-comments').value = entry.comments || '';
+                        document.getElementById('sa-followers').value = entry.followers || '';
+                        document.getElementById('sa-reach').value = entry.reach || '';
+                        document.getElementById('sa-notes').value = entry.notes || '';
+                        saEditingId = editId;
+                        // Store the userKey for editing
+                        modal.dataset.editUserKey = editUserKey || '';
+                    }
+                } else {
+                    if (titleEl) titleEl.textContent = 'Add Post Analytics';
+                }
+
+                modal.showModal();
+            }
+
+            function editAnalyticsEntry(id, userKey) {
+                openAddAnalyticsModal(id, userKey);
+            }
+
+            async function saveAnalyticsEntry() {
+                if (!currentUser) return;
+                if (!canEditSocialAnalytics()) {
+                    toast('You do not have permission to save entries', 'error');
+                    return;
+                }
+
+                const reportDate = document.getElementById('sa-report-date')?.value;
+                const postingDate = document.getElementById('sa-posting-date')?.value;
+                const title = document.getElementById('sa-title')?.value?.trim();
+                const platform = document.getElementById('sa-platform')?.value;
+                const postType = document.getElementById('sa-post-type')?.value;
+                const link = document.getElementById('sa-link')?.value?.trim();
+                const client = document.getElementById('sa-client')?.value;
+                const views = document.getElementById('sa-views')?.value || '0';
+                const likes = document.getElementById('sa-likes')?.value || '0';
+                const shares = document.getElementById('sa-shares')?.value || '0';
+                const comments = document.getElementById('sa-comments')?.value || '0';
+                const followers = document.getElementById('sa-followers')?.value || '0';
+                const reach = document.getElementById('sa-reach')?.value || '0';
+                const notes = document.getElementById('sa-notes')?.value?.trim();
+
+                if (!title) { toast('Please enter a post title', 'error'); return; }
+                if (!platform) { toast('Please select a platform', 'error'); return; }
+
+                const entry = {
+                    reportDate, postingDate, title, platform, postType, link, client,
+                    views: parseInt(views) || 0,
+                    likes: parseInt(likes) || 0,
+                    shares: parseInt(shares) || 0,
+                    comments: parseInt(comments) || 0,
+                    followers: parseInt(followers) || 0,
+                    reach: parseInt(reach) || 0,
+                    notes,
+                    createdBy: currentUser.email,
+                    createdByName: currentUser.name,
+                    updatedAt: new Date().toISOString()
+                };
+
+                try {
+                    const modal = document.getElementById('saAddModal');
+                    const targetKey = (saEditingId && modal?.dataset.editUserKey) ? modal.dataset.editUserKey : saUserKey();
+
+                    if (saEditingId) {
+                        // Update existing
+                        await update(ref(db, `worksync/social_analytics/${targetKey}/${saEditingId}`), entry);
+                        toast('Analytics entry updated!', 'success');
+                    } else {
+                        // Create new
+                        entry.createdAt = new Date().toISOString();
+                        const newRef = push(ref(db, `worksync/social_analytics/${saUserKey()}`));
+                        await set(newRef, entry);
+                        toast('Analytics entry saved!', 'success');
+                    }
+                    document.getElementById('saAddModal')?.close();
+                    saEditingId = null;
+                } catch (err) {
+                    console.error('Failed to save analytics entry:', err);
+                    toast('Failed to save. Please try again.', 'error');
+                }
+            }
+
+            async function deleteAnalyticsEntry(id, userKey) {
+                if (!canEditSocialAnalytics()) {
+                    toast('You do not have permission to delete entries', 'error');
+                    return;
+                }
+                if (!confirm('Delete this analytics entry?')) return;
+                try {
+                    const targetKey = userKey || saUserKey();
+                    await remove(ref(db, `worksync/social_analytics/${targetKey}/${id}`));
+                    toast('Entry deleted', 'success');
+                } catch (err) {
+                    console.error('Failed to delete analytics entry:', err);
+                    toast('Failed to delete. Please try again.', 'error');
+                }
+            }
+
+            function getPostedJiraTasks() {
+                if (!tasks) return [];
+                return tasks.filter(t => !t.manual && t.status && t.status.toLowerCase() === 'posted');
+            }
+
+            function showSaTaskPicker() {
+                const dropdown = document.getElementById('sa-task-picker-dropdown');
+                if (!dropdown) return;
+                dropdown.classList.remove('hidden');
+                renderSaTaskPickerList();
+            }
+
+            function hideSaTaskPicker() {
+                const dropdown = document.getElementById('sa-task-picker-dropdown');
+                if (dropdown) {
+                    dropdown.classList.add('hidden');
+                }
+            }
+
+            function toggleSaTaskPicker() {
+                const dropdown = document.getElementById('sa-task-picker-dropdown');
+                if (!dropdown) return;
+                if (dropdown.classList.contains('hidden')) {
+                    showSaTaskPicker();
+                } else {
+                    hideSaTaskPicker();
+                }
+            }
+
+            function filterSaTaskPicker() {
+                showSaTaskPicker();
+            }
+
+            function renderSaTaskPickerList() {
+                const listContainer = document.getElementById('sa-task-picker-list');
+                const emptyEl = document.getElementById('sa-task-picker-empty');
+                const searchInput = document.getElementById('sa-title');
+                const clientFilter = document.getElementById('sa-task-client-filter')?.value || 'all';
+                if (!listContainer) return;
+
+                const query = (searchInput?.value || '').toLowerCase().trim();
+                let postedTasks = getPostedJiraTasks();
+
+                if (clientFilter !== 'all') {
+                    postedTasks = postedTasks.filter(t => t.client && t.client.toLowerCase() === clientFilter.toLowerCase());
+                }
+
+                const filtered = postedTasks.filter(t => {
+                    const descMatch = (t.desc || '').toLowerCase().includes(query);
+                    const idMatch = (t.id || '').toLowerCase().includes(query);
+                    const clientMatch = (t.client || '').toLowerCase().includes(query);
+                    return descMatch || idMatch || clientMatch;
+                });
+
+                if (filtered.length === 0) {
+                    listContainer.innerHTML = '';
+                    emptyEl?.classList.remove('hidden');
+                    return;
+                }
+
+                emptyEl?.classList.add('hidden');
+                listContainer.innerHTML = filtered.map(t => {
+                    return `
+                        <button type="button" onclick="selectSaPickerTask('${t.id}')"
+                            class="w-full text-left px-3 py-2 hover:bg-indigo-50 rounded-lg flex flex-col gap-0.5 transition-colors">
+                            <div class="flex justify-between items-center gap-2">
+                                <span class="text-xs font-black text-slate-800 line-clamp-1">${escapeHtml(t.desc)}</span>
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">${t.id}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] text-slate-400 font-semibold">
+                                <span>Client: ${escapeHtml(t.client || 'Others')}</span>
+                                ${t.assignee ? `• <span>Assignee: ${escapeHtml(t.assignee)}</span>` : ''}
+                            </div>
+                        </button>
+                    `;
+                }).join('');
+            }
+
+            function selectSaPickerTask(taskId) {
+                const postedTasks = getPostedJiraTasks();
+                const task = postedTasks.find(t => t.id === taskId);
+                if (task) {
+                    const titleInput = document.getElementById('sa-title');
+                    const idInput = document.getElementById('sa-jira-task-id');
+                    const clientSelect = document.getElementById('sa-client');
+
+                    if (titleInput) titleInput.value = task.desc || '';
+                    if (idInput) idInput.value = task.id || '';
+
+                    if (clientSelect && task.client) {
+                        for (let i = 0; i < clientSelect.options.length; i++) {
+                            if (clientSelect.options[i].value.toLowerCase() === task.client.toLowerCase()) {
+                                clientSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+                hideSaTaskPicker();
+            }
+
+            // Click outside to close JIRA task picker
+            document.addEventListener('click', (e) => {
+                const container = document.getElementById('sa-task-picker-dropdown');
+                const titleInput = document.getElementById('sa-title');
+                const toggleBtn = document.querySelector('[onclick="toggleSaTaskPicker()"]');
+                if (container && !container.classList.contains('hidden')) {
+                    if (e.target !== titleInput && !container.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+                        hideSaTaskPicker();
+                    }
+                }
+            });
 
             function initFilesManager() {
                 if (fmUnsub) { renderFilesManager(); return; }
