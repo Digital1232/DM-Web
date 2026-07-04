@@ -17341,8 +17341,9 @@
                 if (!disc) {
                     throw new Error('Discussion not found');
                 }
-                // Already joined?
-                if ((disc.joinedBy || []).includes(currentUser.email)) {
+                // Already joined? (case-insensitive)
+                const myEmail = (currentUser.email || '').toLowerCase();
+                if ((disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail)) {
                     toast('You have already joined this discussion', 'info');
                     return;
                 }
@@ -17364,7 +17365,7 @@
             // Track discussion join operations to prevent duplicates
             let discussionJoining = false;
 
-            async function startScheduledDiscussion(discId) {
+            async function startScheduledDiscussion(discId, btnEl) {
                 // Prevent duplicate clicks while processing
                 if (discussionJoining) {
                     toast('Starting discussion... please wait', 'info');
@@ -17372,13 +17373,14 @@
                 }
                 
                 discussionJoining = true;
-                const btn = event?.target?.closest('button');
-                const originalText = btn?.textContent;
+                // Accept button element passed directly, or fall back to event target
+                const btn = btnEl || event?.target?.closest('button') || null;
+                const originalHtml = btn?.innerHTML;
                 
                 try {
                     if (btn) {
                         btn.disabled = true;
-                        btn.textContent = 'Starting...';
+                        btn.innerHTML = '<iconify-icon icon="svg-spinners:ring-resize" width="12"></iconify-icon> Starting...';
                     }
                     
                     await joinDiscussionById(discId);
@@ -17389,7 +17391,7 @@
                     discussionJoining = false;
                     if (btn) {
                         btn.disabled = false;
-                        btn.textContent = originalText || 'Start';
+                        btn.innerHTML = originalHtml || '<iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start';
                     }
                 }
             }
@@ -17445,8 +17447,10 @@
                                 discussions.push(disc);
                                 
                                 // Auto-trigger popup for other participants when status becomes in-progress
-                                if (disc.status === 'in-progress' && disc.participants && disc.participants.includes(currentUser.email)) {
-                                    const hasJoined = (disc.joinedBy || []).includes(currentUser.email);
+                                const myEmail = (currentUser.email || '').toLowerCase();
+                                const isParticipant = (disc.participants || []).some(p => (p || '').toLowerCase() === myEmail);
+                                if (disc.status === 'in-progress' && isParticipant) {
+                                    const hasJoined = (disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail);
                                     if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(disc.id)) {
                                         discussionPopupShown = true;
                                         currentDiscussion = disc;
@@ -17652,7 +17656,7 @@
                                 <div class="text-[10px] text-slate-400 font-bold">
                                     Participants: <span class="text-slate-600 font-medium dark:text-slate-300">${escapeHtml(participantNames)}</span>
                                 </div>
-                                <button onclick="startScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                <button onclick="startScheduledDiscussion('${disc.id}', this)" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
                                     <iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start
                                 </button>
                             </div>
