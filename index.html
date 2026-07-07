@@ -17703,8 +17703,10 @@
 
                 const btn = document.getElementById('disc-submit-btn');
                 const originalText = btn.textContent;
+                const isEditing = btn.dataset.editingDiscId;
+                
                 btn.disabled = true;
-                btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Scheduling...`;
+                btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> ${isEditing ? 'Updating...' : 'Scheduling...'}`;
 
                 try {
                     // Combine date and time
@@ -17719,37 +17721,66 @@
                         return;
                     }
 
-                    const discussionId = 'DISC-' + Date.now();
-                    const discussion = {
-                        id: discussionId,
-                        title,
-                        client,
-                        scheduledTime,
-                        duration: duration * 60 * 1000, // Convert to milliseconds
-                        participants,
-                        description,
-                        createdBy: currentUser.email,
-                        createdAt: Date.now(),
-                        status: 'scheduled' // scheduled, in-progress, completed
-                    };
+                    if (isEditing) {
+                        // Update existing discussion
+                        const discussionId = btn.dataset.editingDiscId;
+                        await update(ref(db, `worksync/discussions/${discussionId}`), {
+                            title,
+                            client,
+                            scheduledTime,
+                            duration: duration * 60 * 1000,
+                            participants,
+                            description
+                        });
+                        
+                        // Update in-memory discussions array
+                        const discIdx = discussions.findIndex(d => d.id === discussionId);
+                        if (discIdx >= 0) {
+                            discussions[discIdx] = {
+                                ...discussions[discIdx],
+                                title, client, scheduledTime, duration: duration * 60 * 1000, participants, description
+                            };
+                        }
+                        
+                        toast('Discussion updated successfully!', 'success');
+                    } else {
+                        // Create new discussion
+                        const discussionId = 'DISC-' + Date.now();
+                        const discussion = {
+                            id: discussionId,
+                            title,
+                            client,
+                            scheduledTime,
+                            duration: duration * 60 * 1000, // Convert to milliseconds
+                            participants,
+                            description,
+                            createdBy: currentUser.email,
+                            createdAt: Date.now(),
+                            status: 'scheduled' // scheduled, in-progress, completed
+                        };
 
-                    await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
+                        await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
 
-                    await push(ref(db, 'worksync/task_notifications'), {
-                        title: 'Discussion Scheduled',
-                        body: `You have been added to a discussion: "${title}" on ${date} at ${time}.`,
-                        timestamp: Date.now(),
-                        readBy: {},
-                        notifyEmails: participants
-                    });
+                        await push(ref(db, 'worksync/task_notifications'), {
+                            title: 'Discussion Scheduled',
+                            body: `You have been added to a discussion: "${title}" on ${date} at ${time}.`,
+                            timestamp: Date.now(),
+                            readBy: {},
+                            notifyEmails: participants
+                        });
+
+                        discussions.push(discussion);
+                        toast(`Discussion scheduled successfully!`, 'success');
+                    }
 
                     document.getElementById('scheduleDiscussionModal').close();
-                    discussions.push(discussion);
+                    delete btn.dataset.editingDiscId;
+                    btn.innerHTML = '<iconify-icon icon="solar:calendar-plus-bold" width="18"></iconify-icon> Schedule';
                     startDiscussionListener();
-                    toast(`Discussion scheduled successfully!`, 'success');
+                    renderDiscussionsView();
                 } catch (err) {
-                    console.error('Failed to schedule discussion:', err);
-                    toast('Failed to schedule discussion: ' + err.message, 'error');
+                    console.error('Failed to save discussion:', err);
+                    toast('Failed to save discussion: ' + err.message, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.textContent = originalText;
@@ -18174,6 +18205,53 @@
                 currentDiscussion = null;
             }
 
+            async function editScheduledDiscussion(discId) {
+                const disc = discussions.find(d => d.id === discId);
+                if (!disc) {
+                    toast('Discussion not found', 'error');
+                    return;
+                }
+                
+                if (disc.createdBy !== currentUser.email) {
+                    toast('Only the organizer can edit this discussion', 'error');
+                    return;
+                }
+                
+                // Populate edit modal with current discussion details
+                document.getElementById('disc-title').value = disc.title || '';
+                document.getElementById('disc-client').value = disc.client || '';
+                document.getElementById('disc-description').value = disc.description || '';
+                
+                // Set date and time
+                const discDate = new Date(disc.scheduledTime);
+                const dateStr = discDate.toISOString().slice(0, 10);
+                const timeStr = discDate.toTimeString().slice(0, 5);
+                document.getElementById('disc-date').value = dateStr;
+                document.getElementById('disc-time').value = timeStr;
+                
+                // Set duration
+                const durationMinutes = Math.floor((disc.duration || 0) / (60 * 1000));
+                document.getElementById('disc-duration').value = durationMinutes || 30;
+                
+                // Set participants - check the checkboxes
+                const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]');
+                participantCheckboxes.forEach(cb => {
+                    cb.checked = (disc.participants || []).includes(cb.value);
+                });
+                
+                // Change the modal title and button text to indicate edit mode
+                setDiscussionMode('schedule');
+                const modal = document.getElementById('scheduleDiscussionModal');
+                const submitBtn = document.getElementById('disc-submit-btn');
+                
+                // Store the discussion ID for update
+                submitBtn.dataset.editingDiscId = discId;
+                submitBtn.innerHTML = '<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Update Discussion';
+                
+                // Open modal
+                modal.showModal();
+            }
+
             // Track discussion join operations to prevent duplicates
             let discussionJoining = false;
 
@@ -18461,6 +18539,14 @@
                             const userObj = knownUserByEmail(p);
                             return userObj?.name || p;
                         }).join(', ');
+                        
+                        // Only allow edit if user created the discussion
+                        const isCreator = disc.createdBy === currentUser.email;
+                        const editButton = isCreator ? `
+                            <button onclick="editScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon> Edit
+                            </button>
+                        ` : '';
 
                         return `
                         <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 dark:bg-white/5 dark:border-white/10">
@@ -18474,9 +18560,12 @@
                                 <div class="text-[10px] text-slate-400 font-bold">
                                     Participants: <span class="text-slate-600 font-medium dark:text-slate-300">${escapeHtml(participantNames)}</span>
                                 </div>
-                                <button onclick="startScheduledDiscussion('${disc.id}', this)" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
-                                    <iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start
-                                </button>
+                                <div class="flex gap-2">
+                                    ${editButton}
+                                    <button onclick="startScheduledDiscussion('${disc.id}', this)" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                        <iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     `;
