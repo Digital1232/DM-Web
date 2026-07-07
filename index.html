@@ -19132,27 +19132,49 @@
                         'karthikavilpower@gmail.com'
                     ].includes(email.toLowerCase());
 
-                    // Filter tasks for this user (no time-period filtering for on-demand lookup)
-                    const userTasks = tasks.filter(t => {
-                        if (isExcludedTask(t)) return false;
-                        if (isInternalOnlyUser) return isInternalTask(t);
-                        return true;
-                    });
+                    // Collect all tasks for this user
+                    let allUserTasks = [];
+                    const addedIds = new Set();
 
-                    // Get tasks assigned to this user
-                    const assignedTasks = userTasks.filter(t => assigneeMatches(t, email));
-
-                    // Get tasks for this user via daily plan
-                    let allUserTasks = [...assignedTasks];
+                    // 1. Add tasks from daily plans (for daily-plan users)
                     if (isDailyPlanUser) {
                         const userPlans = dailyPlans[eKey(email)] || {};
                         Object.keys(userPlans).forEach(taskId => {
-                            if (!allUserTasks.some(t => t.id === taskId)) {
-                                const t = tasks.find(tk => tk.id === taskId);
-                                if (t && !isExcludedTask(t)) {
-                                    allUserTasks.push(t);
-                                }
+                            const t = tasks.find(tk => tk.id === taskId);
+                            if (t && !isExcludedTask(t) && !addedIds.has(taskId)) {
+                                allUserTasks.push(t);
+                                addedIds.add(taskId);
                             }
+                        });
+                    }
+
+                    // 2. Add tasks directly assigned to this user
+                    const assignedTasks = tasks.filter(t => {
+                        if (isExcludedTask(t)) return false;
+                        if (addedIds.has(t.id)) return false; // Already added via daily plan
+                        if (isInternalOnlyUser && !isInternalTask(t)) return false; // Internal-only users get only internal tasks
+                        return assigneeMatches(t, email);
+                    });
+                    assignedTasks.forEach(t => {
+                        allUserTasks.push(t);
+                        addedIds.add(t.id);
+                    });
+
+                    // DEBUG: Log what we found
+                    if (email === 'karthikavilpower@gmail.com') {
+                        const completedFiltered = allUserTasks.filter(t => isTaskCompletedStatus(t.status));
+                        console.log(`[DEBUG] Karthika (${email}) tasks analysis for type="${type}":`, {
+                            totalTasksCollected: allUserTasks.length,
+                            dailyPlanCount: isDailyPlanUser ? Object.keys(dailyPlans[eKey(email)] || {}).length : 0,
+                            directlyAssignedCount: assignedTasks.length,
+                            completedAfterFilter: completedFiltered.length,
+                            allTasks: allUserTasks.map(t => ({ 
+                                id: t.id, 
+                                status: t.status,
+                                isCompleted: isTaskCompletedStatus(t.status),
+                                assignee: t.assignee,
+                                assigneeEmail: t.assigneeEmail
+                            }))
                         });
                     }
 
