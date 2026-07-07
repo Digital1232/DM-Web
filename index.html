@@ -18286,6 +18286,39 @@
                 }
             }
 
+            async function cancelScheduledDiscussion(discId) {
+                const disc = discussions.find(d => d.id === discId);
+                if (!disc) {
+                    toast('Discussion not found', 'error');
+                    return;
+                }
+                
+                if (disc.createdBy !== currentUser.email) {
+                    toast('Only the organizer can cancel this discussion', 'error');
+                    return;
+                }
+                
+                if (!confirm(`Are you sure you want to cancel the discussion "${disc.title}"?`)) {
+                    return;
+                }
+                
+                try {
+                    // Delete from Firebase
+                    await remove(ref(db, `worksync/discussions/${discId}`));
+                    
+                    // Remove from local array
+                    discussions = discussions.filter(d => d.id !== discId);
+                    
+                    // Refresh the view
+                    renderDiscussionsView();
+                    
+                    toast(`Discussion "${disc.title}" has been cancelled`, 'success');
+                } catch (err) {
+                    console.error('Error cancelling discussion:', err);
+                    toast('Failed to cancel discussion. Please try again.', 'error');
+                }
+            }
+
             async function holdCurrentDiscussionLive(discussionId) {
                 if (!confirm('Are you sure you want to pause/hold this discussion?')) return;
                 try {
@@ -18547,6 +18580,12 @@
                                 <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon> Edit
                             </button>
                         ` : '';
+                        
+                        const deleteButton = isCreator ? `
+                            <button onclick="cancelScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
+                                <iconify-icon icon="solar:trash-bin-trash-bold" width="13"></iconify-icon> Cancel
+                            </button>
+                        ` : '';
 
                         return `
                         <div class="p-5 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 dark:bg-white/5 dark:border-white/10">
@@ -18565,6 +18604,7 @@
                                     <button onclick="startScheduledDiscussion('${disc.id}', this)" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
                                         <iconify-icon icon="solar:play-bold" width="13"></iconify-icon> Start
                                     </button>
+                                    ${deleteButton}
                                 </div>
                             </div>
                         </div>
