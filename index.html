@@ -25933,14 +25933,32 @@
                                 .filter(Boolean)
                         );
                         const logCompIds = new Set(comp.map(t => t.id));
+                        
+                        // ── FIX: Include internal completed tasks that match the user even if not in daily plan ──
                         filteredTasks
-                            .filter(t =>
-                                periodLogIds.has(t.id) &&
-                                !logCompIds.has(t.id) &&
-                                isTaskCompletedStatus(getTaskStatus(t)) &&
-                                !isExcludedTask(t)
-                            )
-                            .forEach(t => comp.push(t));
+                            .filter(t => {
+                                // Already included
+                                if (logCompIds.has(t.id)) return false;
+                                
+                                // Must be completed
+                                if (!isTaskCompletedStatus(getTaskStatus(t))) return false;
+                                
+                                // Must match this user
+                                if (!isExcludedTask(t) && isInternalTask(t) && assigneeMatches(t, usrEmail)) {
+                                    // For internal tasks, also check if completed timestamp is in period
+                                    const ts = getTaskTs(t);
+                                    if (ts >= start && ts <= end) return true;
+                                }
+                                
+                                // Also include via timelogs
+                                if (periodLogIds.has(t.id)) return true;
+                                
+                                return false;
+                            })
+                            .forEach(t => {
+                                comp.push(t);
+                                logCompIds.add(t.id);
+                            });
 
                         // Build hold and rework BEFORE assigned so we can exclude them
                         const hold = filteredTasks.filter(t =>
