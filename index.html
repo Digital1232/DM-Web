@@ -19160,24 +19160,6 @@
                         addedIds.add(t.id);
                     });
 
-                    // DEBUG: Log what we found
-                    if (email === 'karthikavilpower@gmail.com') {
-                        const completedFiltered = allUserTasks.filter(t => isTaskCompletedStatus(t.status));
-                        console.log(`[DEBUG] Karthika (${email}) tasks analysis for type="${type}":`, {
-                            totalTasksCollected: allUserTasks.length,
-                            dailyPlanCount: isDailyPlanUser ? Object.keys(dailyPlans[eKey(email)] || {}).length : 0,
-                            directlyAssignedCount: assignedTasks.length,
-                            completedAfterFilter: completedFiltered.length,
-                            allTasks: allUserTasks.map(t => ({ 
-                                id: t.id, 
-                                status: t.status,
-                                isCompleted: isTaskCompletedStatus(t.status),
-                                assignee: t.assignee,
-                                assigneeEmail: t.assigneeEmail
-                            }))
-                        });
-                    }
-
                     // Filter by requested type
                     if (type === 'completed') {
                         matchedTasks = allUserTasks.filter(t => isTaskCompletedStatus(t.status));
@@ -26476,8 +26458,7 @@
                         const karthikaReworkTasks = workedTasks.filter(t => (t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()));
                         const karthikaAssignedTasks = workedTasks.filter(t => {
                             const id = t.id;
-                            return isAssignedToUser(t, email) &&
-                                !karthikaCompletedTasks.some(x => x.id === id) &&
+                            return !karthikaCompletedTasks.some(x => x.id === id) &&
                                 !karthikaHoldTasks.some(x => x.id === id) &&
                                 !karthikaReworkTasks.some(x => x.id === id);
                         });
