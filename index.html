@@ -25914,6 +25914,13 @@
                                         if (dpTs >= start && dpTs <= end) return true;
                                     }
                                 }
+                                
+                                // ── FIX: Also include assigned Jira tasks in period, even without daily plan entry ──
+                                // Completed Jira tasks should count even if not explicitly in daily plan
+                                if (!isInternalTask(t) && assigneeMatches(t, usrEmail) && isTaskCompletedStatus(getTaskStatus(t))) {
+                                    const ts = getTaskTs(t);
+                                    if (ts >= start && ts <= end) return true;
+                                }
                             }
                             return assigneeMatches(t, usrEmail) && (() => {
                                 const ts = getTaskTs(t);
