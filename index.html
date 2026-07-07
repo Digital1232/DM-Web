@@ -26337,8 +26337,33 @@
                                 workedTasks.push(getEffectiveTask(t));
                             }
                         });
+                        
+                        // ── FIX: Also include all completed Jira tasks assigned to Karthika in period ──
+                        // This ensures completed tasks not in daily plan are still counted
+                        tasks
+                            .filter(t => {
+                                // Skip if already added
+                                if (workedTaskIds.has(t.id)) return false;
+                                // Must be Jira task (not internal)
+                                if (isInternalTask(t)) return false;
+                                // Must be completed
+                                if (!isTaskCompletedStatus(t.status)) return false;
+                                // Must be assigned to Karthika
+                                if (!assigneeMatches(t, email)) return false;
+                                // Must be in period
+                                const ts = getTaskTs(t);
+                                if (ts < fromTs || ts > toTs) return false;
+                                // Must not be excluded
+                                if (localIsExcludedTask(t)) return false;
+                                return true;
+                            })
+                            .forEach(t => {
+                                workedTaskIds.add(t.id);
+                                workedTasks.push(getEffectiveTask(t));
+                            });
+                        
                         // Also include directly-assigned tasks from Jira/Internal that may not be in daily plan
-                        tasks.filter(t => !isExcludedTask(t) && assigneeMatches(t, email)).forEach(t => {
+                        tasks.filter(t => !localIsExcludedTask(t) && assigneeMatches(t, email)).forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
                                 workedTaskIds.add(t.id);
                                 workedTasks.push(getEffectiveTask(t));
