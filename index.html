@@ -24401,28 +24401,50 @@
                         'karthikavilpower@gmail.com'
                     ].includes(userEmail.toLowerCase());
 
-                    tasks.filter(t => {
-                        // Must be completed
-                        if (!isTaskCompletedStatus(t.status)) return false;
+                    // For daily-plan users, check daily plan date for today's tasks
+                    // For others, check task's own timestamp
+                    if (isDailyPlanUser) {
+                        const userPlans = dailyPlans[eKey(userEmail)] || {};
+                        const todayIso = new Date(todayStartTsVal).toISOString().slice(0, 10);
                         
-                        // Must be in today's time window
-                        const ts = getTaskTs(t);
-                        if (ts < todayStartTsVal || ts > Date.now()) return false;
-                        
-                        // Must not be excluded
-                        if (isExcludedTask(t)) return false;
-                        
-                        // For daily-plan users, include if directly assigned OR in daily plan
-                        if (isDailyPlanUser) {
-                            if (assigneeMatches(t, userEmail)) return true;
-                            // Check if in daily plan
-                            const userPlans = dailyPlans[eKey(userEmail)] || {};
-                            return userPlans[t.id] !== undefined;
-                        }
-                        
-                        // For others, must be directly assigned
-                        return assigneeMatches(t, userEmail);
-                    }).forEach(t => addItem(t.id, t, '', t.status));
+                        tasks.filter(t => {
+                            // Must be completed
+                            if (!isTaskCompletedStatus(t.status)) return false;
+                            
+                            // Must not be excluded
+                            if (isExcludedTask(t)) return false;
+                            
+                            // Check if in today's daily plan
+                            const planData = userPlans[t.id];
+                            if (planData && planData.date === todayIso) return true;
+                            
+                            // Or directly assigned and completed today
+                            if (assigneeMatches(t, userEmail)) {
+                                const ts = getTaskTs(t);
+                                if (ts >= todayStartTsVal && ts <= Date.now()) return true;
+                            }
+                            
+                            return false;
+                        }).forEach(t => addItem(t.id, t, '', t.status));
+                    } else {
+                        // For non-daily-plan users, use task timestamp
+                        tasks.filter(t => {
+                            // Must be completed
+                            if (!isTaskCompletedStatus(t.status)) return false;
+                            
+                            // Must be directly assigned
+                            if (!assigneeMatches(t, userEmail)) return false;
+                            
+                            // Must be in today's time window
+                            const ts = getTaskTs(t);
+                            if (ts < todayStartTsVal || ts > Date.now()) return false;
+                            
+                            // Must not be excluded
+                            if (isExcludedTask(t)) return false;
+                            
+                            return true;
+                        }).forEach(t => addItem(t.id, t, '', t.status));
+                    }
 
                     if (userEmail === SNEHA_EMAIL) {
                         const todaySelections = snehaSelections.filter(s =>
