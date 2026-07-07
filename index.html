@@ -18239,11 +18239,14 @@
             function loadDiscussions() {
                 try {
                     onValue(ref(db, 'worksync/discussions'), (snapshot) => {
-                        discussions = [];
+                        const allDiscussions = [];
+                        const idSet = new Set();
+                        
                         snapshot.forEach(childSnapshot => {
                             const disc = childSnapshot.val();
-                            if (disc) {
-                                discussions.push(disc);
+                            if (disc && disc.id && !idSet.has(disc.id)) {
+                                idSet.add(disc.id);
+                                allDiscussions.push(disc);
                                 
                                 // Auto-trigger popup for other participants when status becomes in-progress
                                 const myEmail = (currentUser.email || '').toLowerCase();
@@ -18253,11 +18256,14 @@
                                     if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(disc.id)) {
                                         discussionPopupShown = true;
                                         currentDiscussion = disc;
-                                        showDiscussionJoinPopup(disc);
+                                        // Delay popup to prevent duplicate from rapid re-renders
+                                        setTimeout(() => showDiscussionJoinPopup(disc), 100);
                                     }
                                 }
                             }
                         });
+                        
+                        discussions = allDiscussions;
 
                         // Sync active task timer with discussion status
                         if (activeTaskId) {
