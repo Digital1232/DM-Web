@@ -24394,15 +24394,35 @@
                         }
                     };
 
-                    tasks.filter(t =>
-                        assigneeMatches(t, userEmail) &&
-                        isTaskCompletedStatus(t.status) &&
-                        (() => {
-                            const ts = getTaskTs(t);
-                            return ts >= todayStartTsVal && ts <= Date.now();
-                        })() &&
-                        !isExcludedTask(t)
-                    ).forEach(t => addItem(t.id, t, '', t.status));
+                    // Determine if user gets tasks from daily plans
+                    const isDailyPlanUser = [
+                        'barathvilpower@gmail.com',
+                        'immanuelvilpower@gmail.com',
+                        'karthikavilpower@gmail.com'
+                    ].includes(userEmail.toLowerCase());
+
+                    tasks.filter(t => {
+                        // Must be completed
+                        if (!isTaskCompletedStatus(t.status)) return false;
+                        
+                        // Must be in today's time window
+                        const ts = getTaskTs(t);
+                        if (ts < todayStartTsVal || ts > Date.now()) return false;
+                        
+                        // Must not be excluded
+                        if (isExcludedTask(t)) return false;
+                        
+                        // For daily-plan users, include if directly assigned OR in daily plan
+                        if (isDailyPlanUser) {
+                            if (assigneeMatches(t, userEmail)) return true;
+                            // Check if in daily plan
+                            const userPlans = dailyPlans[eKey(userEmail)] || {};
+                            return userPlans[t.id] !== undefined;
+                        }
+                        
+                        // For others, must be directly assigned
+                        return assigneeMatches(t, userEmail);
+                    }).forEach(t => addItem(t.id, t, '', t.status));
 
                     if (userEmail === SNEHA_EMAIL) {
                         const todaySelections = snehaSelections.filter(s =>
