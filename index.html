@@ -18136,10 +18136,23 @@
 
             // Join a discussion directly from the upcoming list (no popup needed)
             async function joinDiscussionById(discId) {
-                const disc = discussions.find(d => d.id === discId);
+                let disc = discussions.find(d => d.id === discId);
+                
                 if (!disc) {
-                    throw new Error('Discussion not found');
+                    // If not found in memory, try to fetch from Firebase directly
+                    try {
+                        const snapshot = await get(ref(db, `worksync/discussions/${discId}`));
+                        if (snapshot.exists()) {
+                            disc = snapshot.val();
+                        } else {
+                            throw new Error('Discussion not found in database');
+                        }
+                    } catch (err) {
+                        console.error('Error fetching discussion:', err);
+                        throw new Error('Discussion not found. Please refresh and try again.');
+                    }
                 }
+                
                 // Already joined? (case-insensitive)
                 const myEmail = (currentUser.email || '').toLowerCase();
                 if ((disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail)) {
