@@ -11934,12 +11934,44 @@
                 }
             }
 
-            // TASK STATUS HELPERS
-            // Jira Completed Statuses: Design Completed, Quality Check, Client Sent, Client Approved, Posted, Analytics
-            function isDone(s) { 
-                const completed = ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Quality Check', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Shoot Completed', 'Shoot Cancelled'];
-                return completed.includes(s);
+            // ═══════════════════════════════════════════════════════════════════
+            // CENTRALIZED TASK STATUS HELPERS - Single source of truth
+            // ═══════════════════════════════════════════════════════════════════
+
+            // JIRA Completed Statuses: Design Completed, Thumbnail Waiting, Quality Check, Client Sent, Client Approved, Posted, Analytics, Done
+            // INTERNAL Completed Statuses: Completed, Shoot Completed
+            function isCompletedTask(status) {
+                if (!status) return false;
+                const s = (status || '').trim().toLowerCase();
+                // Jira completed statuses
+                const jiraCompleted = ['done', 'resolved', 'closed', 'completed', 'design completed', 'thumbnail waiting', 'quality check', 'client sent', 'client approved', 'posted', 'analytics'];
+                // Internal completed statuses
+                const internalCompleted = ['completed', 'shoot completed'];
+                // Terminal statuses
+                const terminal = ['shoot cancelled'];
+                
+                const allCompleted = [...jiraCompleted, ...internalCompleted, ...terminal];
+                return allCompleted.includes(s);
             }
+
+            // Legacy aliases for backward compatibility - all route to isCompletedTask
+            function isDone(status) {
+                return isCompletedTask(status);
+            }
+
+            function isTaskCompletedStatus(status) {
+                return isCompletedTask(status);
+            }
+
+            function isInternalDone(status) {
+                if (!status) return false;
+                const s = (status || '').trim().toLowerCase();
+                return ['completed', 'done', 'shoot completed'].includes(s);
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // Status classification helpers
+            // ═══════════════════════════════════════════════════════════════════
             
             // In Progress: Only "In Progress" status - Quality Check, Client Sent, Analytics are now COMPLETED
             function isInProgress(s) { 
@@ -11950,8 +11982,6 @@
             function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
             // Internal In Progress: Only "In Progress"
             function isInternalInProgress(s) { return ['In Progress'].includes(s); }
-            // Internal Completed: Done, Completed, Shoot Completed
-            function isInternalDone(s) { return ['Completed', 'Done', 'Shoot Completed'].includes(s); }
 
             async function getAllUsers() {
                 const snap = await get(ref(db, 'worksync/users'));
@@ -20107,11 +20137,7 @@
                 return `${year}-${month}-${day}`;
             }
 
-            function isTaskCompletedStatus(status) {
-                if (!status) return false;
-                const s = status.trim().toLowerCase();
-                return ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done', 'completed', 'resolved', 'closed', 'shoot completed', 'shoot cancelled'].includes(s);
-            }
+
 
             function linkify(text, isMe) {
                 if (!text) return '';
