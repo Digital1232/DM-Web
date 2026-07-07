@@ -19101,8 +19101,84 @@
 
                 title.textContent = `${displayName} - ${typeLabel}`;
 
+                let matchedTasks = [];
                 const userStats = window.indivPerfTaskStats && window.indivPerfTaskStats[email];
-                const matchedTasks = (userStats && userStats[type]) || [];
+                
+                if (userStats && userStats[type]) {
+                    // Stats already computed (user was viewed in performance report)
+                    matchedTasks = userStats[type];
+                } else {
+                    // Stats not computed yet - compute on-demand for this specific request
+                    // This handles clicking on completed tasks before viewing the user in the report
+                    const isExcludedTask = (t) => {
+                        if (!t) return false;
+                        const client = (t.client || '').toLowerCase().trim();
+                        const status = (t.status || '').toLowerCase().trim();
+                        const id = (t.id || '').toLowerCase().trim();
+                        return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
+                            status === 'learnings' || status === 'discussion' ||
+                            id.startsWith('learn-') || id.startsWith('disc-');
+                    };
+
+                    const isInternalOnlyUser = [
+                        'alexvilpower@gmail.com',
+                        'alex@vilpower.com',
+                        'snehavilpower@gmail.com'
+                    ].includes(email.toLowerCase());
+
+                    const isDailyPlanUser = [
+                        'barathvilpower@gmail.com',
+                        'immanuelvilpower@gmail.com',
+                        'karthikavilpower@gmail.com'
+                    ].includes(email.toLowerCase());
+
+                    // Filter tasks for this user (no time-period filtering for on-demand lookup)
+                    const userTasks = tasks.filter(t => {
+                        if (isExcludedTask(t)) return false;
+                        if (isInternalOnlyUser) return isInternalTask(t);
+                        return true;
+                    });
+
+                    // Get tasks assigned to this user
+                    const assignedTasks = userTasks.filter(t => assigneeMatches(t, email));
+
+                    // Get tasks for this user via daily plan
+                    let allUserTasks = [...assignedTasks];
+                    if (isDailyPlanUser) {
+                        const userPlans = dailyPlans[eKey(email)] || {};
+                        Object.keys(userPlans).forEach(taskId => {
+                            if (!allUserTasks.some(t => t.id === taskId)) {
+                                const t = tasks.find(tk => tk.id === taskId);
+                                if (t && !isExcludedTask(t)) {
+                                    allUserTasks.push(t);
+                                }
+                            }
+                        });
+                    }
+
+                    // Filter by requested type
+                    if (type === 'completed') {
+                        matchedTasks = allUserTasks.filter(t => isTaskCompletedStatus(t.status));
+                    } else if (type === 'assigned') {
+                        matchedTasks = allUserTasks.filter(t =>
+                            assigneeMatches(t, email) &&
+                            !isTaskCompletedStatus(t.status) &&
+                            !['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) &&
+                            !(t.status || '').trim().toLowerCase().includes('rework')
+                        );
+                    } else if (type === 'allAssigned') {
+                        matchedTasks = allUserTasks.filter(t => assigneeMatches(t, email));
+                    } else if (type === 'hold') {
+                        matchedTasks = allUserTasks.filter(t =>
+                            ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
+                        );
+                    } else if (type === 'rework') {
+                        matchedTasks = allUserTasks.filter(t =>
+                            (t.status || '').trim().toLowerCase().includes('rework') ||
+                            ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase())
+                        );
+                    }
+                }
 
                 if (!matchedTasks.length) {
                     container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No tasks in this category.</p>`;
