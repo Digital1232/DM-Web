@@ -17431,6 +17431,21 @@
                 // For internal task, update status to 'In Progress' (except recurring morning learning)
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                     await updateInternalTaskStatus(id, startStatus);
+                } else if (task && !isInternalTask(task)) {
+                    // For Jira tasks, update to "Design In Progress" or appropriate status
+                    const currentStatus = (task.status || '').toLowerCase();
+                    const isDesignTask = currentStatus.includes('design');
+                    const newJiraStatus = isDesignTask ? 'Design In Progress' : 'In Progress';
+                    
+                    // Only update if not already in progress
+                    if (!currentStatus.includes('in progress')) {
+                        try {
+                            await updateTaskStatus(id, newJiraStatus);
+                        } catch (err) {
+                            console.error('Failed to update Jira task status on start:', err);
+                            // Don't fail task start if status update fails
+                        }
+                    }
                 }
 
                 startTaskTimer();
