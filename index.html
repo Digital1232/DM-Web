@@ -19127,7 +19127,8 @@
                             assignedCount: 0,
                             inProgressCount: 0,
                             completedCount: 0,
-                            correctionsCount: 0
+                            correctionsCount: 0,
+                            holdCount: 0
                         });
                     }
                     return rows.get(key);
@@ -19176,10 +19177,12 @@
 
                     const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
                     const isCorrections = (s) => ['Quality Check', 'Quality check', 'Rework Designs', 'Rework designs'].includes(s);
+                    const isHold = (s) => ['Hold', 'Design Hold', 'On Hold'].includes(s);
                     row.assignedCount = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status))).length;
                     row.inProgressCount = ut.filter(t => (isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))) && !isCorrections(t.status)).length;
                     row.completedCount = ut.filter(t => isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))).length;
                     row.correctionsCount = ut.filter(t => isCorrections(t.status)).length;
+                    row.holdCount = ut.filter(t => isHold(t.status)).length;
                 });
 
                 // Also include all employees from allUsersMap to ensure everyone appears in Daily Summary
@@ -19192,13 +19195,15 @@
                         row.role = u.role || row.role;
                         
                         // Only calculate tasks if not already done above
-                        if (!row.assignedCount && !row.inProgressCount && !row.completedCount && !row.correctionsCount) {
+                        if (!row.assignedCount && !row.inProgressCount && !row.completedCount && !row.correctionsCount && !row.holdCount) {
                             const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
                             const isCorrections = (s) => ['Quality Check', 'Quality check', 'Rework Designs', 'Rework designs'].includes(s);
+                            const isHold = (s) => ['Hold', 'Design Hold', 'On Hold'].includes(s);
                             row.assignedCount = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status))).length;
                             row.inProgressCount = ut.filter(t => (isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))) && !isCorrections(t.status)).length;
                             row.completedCount = ut.filter(t => isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))).length;
                             row.correctionsCount = ut.filter(t => isCorrections(t.status)).length;
+                            row.holdCount = ut.filter(t => isHold(t.status)).length;
                         }
                     });
                 }
@@ -19387,8 +19392,12 @@
                                 <p class="text-[9px] font-bold text-amber-500 uppercase">Progress</p>
                                 <p class="text-xs font-black text-amber-600">${row.inProgressCount}</p>
                             </div>
+                            <div class="bg-orange-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-orange-500 uppercase truncate">Hold</p>
+                                <p class="text-xs font-black text-orange-600">${row.holdCount}</p>
+                            </div>
                             <div class="bg-rose-50 rounded-xl px-3 py-2">
-                                <p class="text-[9px] font-bold text-rose-500 uppercase truncate">Corrections Designs</p>
+                                <p class="text-[9px] font-bold text-rose-500 uppercase truncate">Corrections</p>
                                 <p class="text-xs font-black text-rose-600">${row.correctionsCount}</p>
                             </div>
                             <div class="bg-emerald-50 rounded-xl px-3 py-2">
@@ -19402,15 +19411,6 @@
                             <div class="bg-indigo-50/50 rounded-xl px-3 py-2">
                                 <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
                                 <p class="text-xs font-black text-indigo-600 font-mono">${row.activeTask ? formatTime(row.activeSeconds) : 'Idle'}</p>
-                            </div>
-                            <div class="bg-orange-50 rounded-xl px-3 py-2">
-                                <div class="flex items-center gap-1">
-                                    <iconify-icon icon="solar:coffee-bold" width="14" class="text-orange-500"></iconify-icon>
-                                    <div class="min-w-0">
-                                        <p class="text-[9px] font-bold text-orange-500 uppercase">Break</p>
-                                        <p class="text-xs font-black text-orange-600 font-mono">${row.breakSeconds ? formatTime(row.breakSeconds) : '00:00'}</p>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>`;
