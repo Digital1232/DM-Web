@@ -3066,7 +3066,7 @@
                     </div>
 
                     <!-- Main Calendar Section -->
-                    <div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 items-start">
+                    <div class="grid grid-cols-1 gap-6 items-start">
                         <!-- Calendar Board Grid -->
                         <div
                             class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
@@ -3099,17 +3099,7 @@
                             </div>
                         </div>
 
-                        <!-- Sidebar details / upcoming campaigns -->
-                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-6">
-                            <div>
-                                <h4 class="text-sm font-black text-slate-900">Campaigns this Month</h4>
-                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Quick
-                                    overview of scheduled strategies</p>
-                            </div>
-                            <div id="strategy-sidebar-list" class="space-y-4 max-h-[520px] overflow-y-auto pr-1">
-                                <!-- Populated dynamically by JS -->
-                            </div>
-                        </div>
+
                     </div>
                 </div>
                 <!-- ════ PRODUCTION CONTROL CENTER VIEW ════ -->
@@ -7884,6 +7874,43 @@
                     <textarea id="et-description" rows="3" placeholder="Learning notes, topics covered, reflections..."
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"></textarea>
                 </div>
+
+                <!-- Task Attachments Section -->
+                <div class="border-t border-slate-200 pt-5 mt-5">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                        <iconify-icon icon="solar:cloud-upload-bold" width="14"></iconify-icon>
+                        Attachments (Posters, Videos, etc.)
+                    </label>
+                    
+                    <!-- Upload Area with Drag & Drop -->
+                    <div id="et-upload-area" 
+                        class="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-all"
+                        ondragover="event.preventDefault(); this.classList.add('border-indigo-400', 'bg-indigo-50')"
+                        ondragleave="this.classList.remove('border-indigo-400', 'bg-indigo-50')"
+                        ondrop="event.preventDefault(); this.classList.remove('border-indigo-400', 'bg-indigo-50'); handleTaskFileUpload(event)">
+                        
+                        <!-- Hidden File Input -->
+                        <input type="file" id="et-file-input" class="hidden" multiple 
+                            onchange="handleTaskFileUpload(event)"
+                            accept="image/*,video/*,.pdf">
+                        
+                        <!-- Upload Prompt -->
+                        <div class="flex flex-col items-center gap-2">
+                            <iconify-icon icon="solar:cloud-upload-bold" width="32" class="text-slate-300"></iconify-icon>
+                            <p class="text-sm font-bold text-slate-600">
+                                Drop files here or <span class="text-indigo-600">click to upload</span>
+                            </p>
+                            <p class="text-xs text-slate-400">
+                                Images, Videos, PDFs • Max 100 MB each
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Attachments List -->
+                    <div id="et-attachments-list" class="mt-4 space-y-2">
+                        <!-- Populated by renderTaskAttachments() -->
+                    </div>
+                </div>
             </div>
             <div class="flex items-center gap-4 mt-8">
                 <button onclick="deleteManualTask()" type="button"
@@ -11017,6 +11044,194 @@
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════════
+            // TASK FILE UPLOAD FUNCTIONS - Upload to Hostinger Server
+            // ═══════════════════════════════════════════════════════════════
+
+            const HOSTINGER_UPLOAD_URL = 'https://onedesk.vilpower.com/api/upload-task-file.php';
+            const MAX_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB
+
+            async function uploadTaskFile(file) {
+                if (file.size > MAX_UPLOAD_SIZE) {
+                    throw new Error(`File too large. Max: 100 MB, Got: ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch(HOSTINGER_UPLOAD_URL, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || `Upload failed (${response.status})`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.success) {
+                        throw new Error(data.error || 'Upload failed');
+                    }
+
+                    return {
+                        url: data.file_url,
+                        name: data.file_name,
+                        size: data.file_size,
+                        uploadedAt: data.uploaded_at,
+                        type: file.type
+                    };
+                } catch (err) {
+                    console.error('Upload to Hostinger failed:', err);
+                    throw err;
+                }
+            }
+
+            function getTaskFileIcon(fileName) {
+                const ext = fileName.split('.').pop().toLowerCase();
+                
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                    return { icon: 'solar:image-bold', color: '#ec4899', label: 'Image' };
+                }
+                if (['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) {
+                    return { icon: 'solar:video-bold', color: '#f59e0b', label: 'Video' };
+                }
+                if (ext === 'pdf') {
+                    return { icon: 'solar:file-text-bold', color: '#ef4444', label: 'PDF' };
+                }
+                
+                return { icon: 'solar:file-download-bold', color: '#6366f1', label: 'File' };
+            }
+
+            function formatTaskFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            async function handleTaskFileUpload(event) {
+                const files = event.target.files || event.dataTransfer.files;
+                if (!files.length) return;
+
+                const uploadArea = document.getElementById('et-upload-area');
+                if (!uploadArea) return;
+
+                try {
+                    for (let file of files) {
+                        uploadArea.innerHTML = `
+                            <div class="flex items-center justify-center gap-2 text-slate-500">
+                                <iconify-icon icon="svg-spinners:ring-resize" width="24"></iconify-icon>
+                                <span class="text-sm">Uploading ${file.name}...</span>
+                            </div>
+                        `;
+
+                        const uploaded = await uploadTaskFile(file);
+                        
+                        // Add to task attachments
+                        if (!window.currentTaskAttachments) {
+                            window.currentTaskAttachments = [];
+                        }
+                        window.currentTaskAttachments.push(uploaded);
+                        
+                        renderTaskAttachments();
+                    }
+                    
+                    toast('File uploaded successfully', 'success');
+                    if (document.getElementById('et-file-input')) {
+                        document.getElementById('et-file-input').value = '';
+                    }
+                } catch (err) {
+                    console.error('Upload failed:', err);
+                    toast('Upload failed: ' + err.message, 'error');
+                } finally {
+                    // Reset upload area
+                    if (uploadArea) {
+                        uploadArea.innerHTML = `
+                            <div class="flex flex-col items-center gap-2">
+                                <iconify-icon icon="solar:cloud-upload-bold" width="32" class="text-slate-300"></iconify-icon>
+                                <p class="text-sm font-bold text-slate-600">
+                                    Drop files here or <span class="text-indigo-600">click to upload</span>
+                                </p>
+                                <p class="text-xs text-slate-400">
+                                    Images, Videos, PDFs up to 100 MB each
+                                </p>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            function renderTaskAttachments() {
+                const list = document.getElementById('et-attachments-list');
+                if (!list) return;
+
+                const attachments = window.currentTaskAttachments || [];
+                
+                if (attachments.length === 0) {
+                    list.innerHTML = '';
+                    return;
+                }
+
+                list.innerHTML = attachments.map((att, idx) => {
+                    const icon = getTaskFileIcon(att.name);
+                    return `
+                        <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <iconify-icon icon="${icon.icon}" width="20" style="color: ${icon.color}"></iconify-icon>
+                            
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-700 truncate">${escapeHtml(att.name)}</p>
+                                <p class="text-[9px] text-slate-400">${formatTaskFileSize(att.size)}</p>
+                            </div>
+                            
+                            <a href="${att.url}" target="_blank" 
+                                class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
+                                title="Open file">
+                                <iconify-icon icon="solar:link-circle-bold" width="18"></iconify-icon>
+                            </a>
+                            
+                            <button type="button" onclick="removeTaskAttachment(${idx})"
+                                class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg"
+                                title="Remove">
+                                <iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function removeTaskAttachment(index) {
+                if (!window.currentTaskAttachments) return;
+                window.currentTaskAttachments.splice(index, 1);
+                renderTaskAttachments();
+                toast('Attachment removed', 'info');
+            }
+
+            function renderTaskAttachmentsPreview(task) {
+                const attachments = task.attachments || [];
+                if (!attachments.length) return '';
+
+                return `
+                    <div class="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase">Attachments (${attachments.length})</p>
+                        <div class="flex flex-wrap gap-2">
+                            ${attachments.map(att => {
+                                const icon = getTaskFileIcon(att.name);
+                                return `
+                                    <a href="${att.url}" target="_blank" 
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-[9px] font-bold text-indigo-700">
+                                        <iconify-icon icon="${icon.icon}" width="14"></iconify-icon>
+                                        ${escapeHtml(att.name)}
+                                    </a>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             async function saveProfile() {
                 if (!currentUser) return;
                 currentUser.name = document.getElementById('p-name').value.trim() || currentUser.name;
@@ -12354,71 +12569,41 @@
             }
 
             function getStrategyStatusColor(statusName, format = 'solid') {
-                const normalized = (statusName || 'Planned').toLowerCase();
+                const normalized = (statusName || '').toLowerCase().trim();
+
+                // Status Categorization (3-color system)
+                // NOT COMPLETED (Amber) - Statuses: 'To Do','Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Design Hold'
+                // COMPLETED (Green) - Statuses: 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved'
+                // POSTED (Blue) - Statuses: 'Posted', 'Analytics', 'Done'
+
+                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
+                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
+                const postedStatuses = ['posted', 'analytics', 'done'];
+
                 let colorObj = {
                     solid: 'bg-slate-500 text-white',
                     pill: 'bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-800'
                 };
 
-                if (normalized === 'in progress' || normalized.includes('progress')) {
-                    // In Progress → Blue
-                    colorObj = {
-                        solid: 'bg-blue-500 text-white',
-                        pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50'
-                    };
-                } else if (normalized === 'in review' || normalized.includes('review')) {
-                    // In Review → Violet
-                    colorObj = {
-                        solid: 'bg-violet-500 text-white',
-                        pill: 'bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/50'
-                    };
-                } else if (normalized === 'completed' || normalized === 'done' || normalized.includes('completed') || normalized.includes('done')) {
-                    // Completed / Done → Emerald
-                    colorObj = {
-                        solid: 'bg-emerald-500 text-white',
-                        pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50'
-                    };
-                } else if (normalized === 'client sent' || normalized.includes('client sent')) {
-                    // Client Sent → Teal
-                    colorObj = {
-                        solid: 'bg-teal-500 text-white',
-                        pill: 'bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/50'
-                    };
-                } else if (normalized === 'on hold' || normalized.includes('hold') || normalized.includes('blocked')) {
-                    // Hold / Blocked → Rose
-                    colorObj = {
-                        solid: 'bg-rose-500 text-white',
-                        pill: 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50'
-                    };
-                } else if (normalized.includes('wait') || normalized.includes('pending')) {
-                    // Waiting / Pending → Amber
+                // Check if status matches any of the NOT COMPLETED statuses (Amber)
+                if (notCompletedStatuses.some(s => normalized === s || normalized.includes(s))) {
                     colorObj = {
                         solid: 'bg-amber-500 text-white',
                         pill: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50'
                     };
-                } else if (normalized === 'cancelled' || normalized.includes('cancel')) {
-                    // Cancelled → Dark Red
+                }
+                // Check if status matches any of the COMPLETED statuses (Green)
+                else if (completedStatuses.some(s => normalized === s || normalized.includes(s))) {
                     colorObj = {
-                        solid: 'bg-red-700 text-white',
-                        pill: 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50'
+                        solid: 'bg-emerald-500 text-white',
+                        pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50'
                     };
-                } else if (normalized === 'to do' || normalized === 'todo' || normalized.includes('plan') || normalized.includes('to do')) {
-                    // To Do / Planned → Orange
+                }
+                // Check if status matches any of the POSTED statuses (Blue)
+                else if (postedStatuses.some(s => normalized === s || normalized.includes(s))) {
                     colorObj = {
-                        solid: 'bg-orange-500 text-white',
-                        pill: 'bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/50'
-                    };
-                } else if (normalized === 'design') {
-                    // Design → Fuchsia
-                    colorObj = {
-                        solid: 'bg-fuchsia-500 text-white',
-                        pill: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/50'
-                    };
-                } else {
-                    // Other → Indigo
-                    colorObj = {
-                        solid: 'bg-indigo-500 text-white',
-                        pill: 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50'
+                        solid: 'bg-blue-500 text-white',
+                        pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50'
                     };
                 }
 
@@ -29120,6 +29305,10 @@
                 const deleteBtn = document.querySelector('#editTaskModal button[onclick="deleteManualTask()"]');
                 if (deleteBtn) deleteBtn.classList.toggle('hidden', isMorningLearningTask(task));
 
+                // Load existing attachments
+                window.currentTaskAttachments = task.attachments || [];
+                renderTaskAttachments();
+
                 document.getElementById('editTaskModal').showModal();
             }
 
@@ -29140,6 +29329,7 @@
                     duedate: document.getElementById('et-duedate').value || null,
                     assignee: newAssignee,
                     assigneeEmail: newAssigneeEmail,
+                    attachments: window.currentTaskAttachments || []
                 };
                 if (isInternalTask(originalTask)) {
                     updates.description = document.getElementById('et-description')?.value.trim() || '';
@@ -37658,6 +37848,232 @@
 
             window.showDailyVibePopup = showDailyVibePopup; // export for testing
         })();
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════
+        TASK FILE UPLOAD FUNCTIONALITY
+        Upload files (images, videos) to Hostinger server
+        Domain: https://onedesk.vilpower.com
+    ═══════════════════════════════════════════════════════ -->
+    <script>
+        // Configuration
+        const HOSTINGER_UPLOAD_URL = 'https://onedesk.vilpower.com/api/upload-task-file.php';
+        const MAX_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB
+
+        /**
+         * Upload file to Hostinger server
+         * @param {File} file - File object from input
+         * @returns {Promise} Upload result with URL, name, size
+         */
+        async function uploadTaskFile(file) {
+            if (file.size > MAX_UPLOAD_SIZE) {
+                throw new Error(`File too large. Max: 100 MB, Got: ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch(HOSTINGER_UPLOAD_URL, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(error.error || `Upload failed (${response.status})`);
+            }
+
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            return {
+                url: data.file_url,
+                name: data.file_name,
+                size: data.file_size,
+                uploadedAt: data.uploaded_at,
+                type: file.type
+            };
+        }
+
+        /**
+         * Get icon and color for file type
+         * @param {string} fileName - Name of file
+         * @returns {Object} Icon, color, label for display
+         */
+        function getFileIcon(fileName) {
+            const ext = fileName.split('.').pop().toLowerCase();
+            
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                return { icon: 'solar:image-bold', color: '#ec4899', label: 'Image' };
+            }
+            if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) {
+                return { icon: 'solar:video-bold', color: '#f59e0b', label: 'Video' };
+            }
+            if (ext === 'pdf') {
+                return { icon: 'solar:file-text-bold', color: '#ef4444', label: 'PDF' };
+            }
+            
+            return { icon: 'solar:file-download-bold', color: '#6366f1', label: 'File' };
+        }
+
+        /**
+         * Format bytes to human readable format
+         * @param {number} bytes - File size in bytes
+         * @returns {string} Formatted size
+         */
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        /**
+         * Handle file upload from input or drag-drop
+         * @param {Event} event - Change or drop event
+         */
+        async function handleTaskFileUpload(event) {
+            const files = event.target?.files || event.dataTransfer?.files;
+            if (!files || !files.length) return;
+
+            try {
+                for (let file of files) {
+                    // Show uploading state
+                    const uploadArea = document.getElementById('et-upload-area');
+                    if (uploadArea) {
+                        uploadArea.innerHTML = `
+                            <div class="flex items-center justify-center gap-2 text-slate-500">
+                                <iconify-icon icon="svg-spinners:ring-resize" width="24"></iconify-icon>
+                                <span class="text-sm">Uploading ${file.name}...</span>
+                            </div>
+                        `;
+                    }
+
+                    // Upload file
+                    const uploaded = await uploadTaskFile(file);
+                    
+                    // Add to attachments array
+                    if (!window.currentTaskAttachments) {
+                        window.currentTaskAttachments = [];
+                    }
+                    window.currentTaskAttachments.push(uploaded);
+                    
+                    // Refresh display
+                    renderTaskAttachments();
+                }
+                
+                toast('File uploaded successfully', 'success');
+                
+                // Reset file input
+                const fileInput = document.getElementById('et-file-input');
+                if (fileInput) fileInput.value = '';
+                
+            } catch (err) {
+                console.error('Upload failed:', err);
+                toast('Upload failed: ' + err.message, 'error');
+                
+            } finally {
+                // Reset upload area display
+                const uploadArea = document.getElementById('et-upload-area');
+                if (uploadArea) {
+                    uploadArea.innerHTML = `
+                        <div class="flex flex-col items-center gap-2">
+                            <iconify-icon icon="solar:cloud-upload-bold" width="32" class="text-slate-300"></iconify-icon>
+                            <p class="text-sm font-bold text-slate-600">
+                                Drop files here or <span class="text-indigo-600">click to upload</span>
+                            </p>
+                            <p class="text-xs text-slate-400">
+                                Images, Videos, PDFs • Max 100 MB each
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        /**
+         * Render list of uploaded attachments
+         */
+        function renderTaskAttachments() {
+            const list = document.getElementById('et-attachments-list');
+            if (!list) return;
+
+            const attachments = window.currentTaskAttachments || [];
+            
+            if (attachments.length === 0) {
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = attachments.map((att, idx) => {
+                const icon = getFileIcon(att.name);
+                return `
+                    <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <iconify-icon icon="${icon.icon}" width="20" style="color: ${icon.color}"></iconify-icon>
+                        
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-bold text-slate-700 truncate">${att.name}</p>
+                            <p class="text-[9px] text-slate-400">${formatFileSize(att.size)}</p>
+                        </div>
+                        
+                        <a href="${att.url}" target="_blank" rel="noopener noreferrer"
+                            class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
+                            title="Open file">
+                            <iconify-icon icon="solar:link-circle-bold" width="18"></iconify-icon>
+                        </a>
+                        
+                        <button type="button" onclick="removeTaskAttachment(${idx})"
+                            class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg"
+                            title="Remove">
+                            <iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Remove attachment from list
+         * @param {number} index - Index of attachment to remove
+         */
+        function removeTaskAttachment(index) {
+            if (!window.currentTaskAttachments) return;
+            const removed = window.currentTaskAttachments.splice(index, 1)[0];
+            renderTaskAttachments();
+            toast(`Removed: ${removed.name}`, 'info');
+        }
+
+        /**
+         * Render attachments preview for task display
+         * @param {Object} task - Task object
+         * @returns {string} HTML string of attachments preview
+         */
+        function renderTaskAttachmentsPreview(task) {
+            const attachments = task.attachments || [];
+            if (!attachments.length) return '';
+
+            return `
+                <div class="mt-3 space-y-2 border-t pt-3">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">Attachments</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${attachments.map(att => {
+                            const icon = getFileIcon(att.name);
+                            return `
+                                <a href="${att.url}" target="_blank" rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-[9px] font-bold text-indigo-700 truncate max-w-xs"
+                                    title="${att.name}">
+                                    <iconify-icon icon="${icon.icon}" width="14"></iconify-icon>
+                                    <span class="truncate">${att.name}</span>
+                                </a>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
     </script>
 
 </body>
