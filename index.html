@@ -33241,23 +33241,75 @@
 
                 // Blank days before month starts
                 for (let i = 0; i < firstDay; i++) {
-                    html += `<div class="bg-slate-50/30 min-h-[100px]"></div>`;
+                    html += `<div class="bg-slate-50/30 min-h-[100px] border-r border-b border-slate-100"></div>`;
                 }
+
+                // Build tasks by date for filtering
+                const tasksByDate = {};
+                const dprByDate = {};
+
+                // Collect JIRA tasks
+                tasks.forEach(task => {
+                    if (task.duedate && (!monthlyPlanTeamFilter || monthlyPlanTeamFilter === 'All' || task.assigneeEmail === monthlyPlanTeamFilter)) {
+                        if (!tasksByDate[task.duedate]) tasksByDate[task.duedate] = [];
+                        tasksByDate[task.duedate].push(task);
+                    }
+                });
+
+                // Collect Karthika's DPR entries
+                dprEntries.forEach(entry => {
+                    const entryDate = entry.date;
+                    if (entry.userId && entryDate && (monthlyPlanTeamFilter === 'All' || monthlyPlanTeamFilter === entry.userId)) {
+                        if (!dprByDate[entryDate]) dprByDate[entryDate] = [];
+                        dprByDate[entryDate].push(entry);
+                    }
+                });
 
                 // Days of month
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     const isToday = dateStr === today;
-                    const dayOfWeek = new Date(year, month - 1, d).getDay();
+                    const dayTasks = tasksByDate[dateStr] || [];
+                    const dayDpr = dprByDate[dateStr] || [];
+
+                    // Render task badges
+                    let tasksHtml = dayTasks.map(task => {
+                        const statusColor = getTaskStatusColor(task.status || 'To Do');
+                        const taskStatus = (task.status || 'To Do').substring(0, 12); // Shorten for space
+                        return `
+                            <div class="${statusColor} px-2 py-1 rounded-lg text-[8px] font-bold shadow-sm truncate mb-1 cursor-pointer hover:shadow-md transition-all"
+                                onclick="event.stopPropagation(); expandMonthlyPlanDay('${dateStr}')"
+                                title="${escapeHtml(task.id)} - ${escapeHtml(task.desc || task.id)}">
+                                ${escapeHtml(task.id)}
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Render DPR badges for Karthika
+                    let dprHtml = dayDpr.map(entry => {
+                        const category = entry.category || 'DPR';
+                        const categoryColor = entry.category === 'Posters' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                           entry.category === 'Thumbnails' ? 'bg-pink-50 text-pink-700 border border-pink-200' :
+                                           'bg-slate-50 text-slate-700 border border-slate-200';
+                        const count = entry.count || 0;
+                        return `
+                            <div class="${categoryColor} px-2 py-1 rounded-lg text-[8px] font-bold shadow-sm mb-1 cursor-pointer hover:shadow-md transition-all"
+                                title="${category}: ${count} items - ${entry.status || 'pending'}">
+                                ${category}: ${count}
+                            </div>
+                        `;
+                    }).join('');
 
                     html += `
-                        <div class="bg-white border border-slate-200 min-h-[100px] p-3 hover:bg-slate-50/50 transition-colors cursor-pointer group relative"
+                        <div class="relative p-3 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer"
                             onclick="expandMonthlyPlanDay('${dateStr}')">
-                            <div class="text-xs font-black ${isToday ? 'text-indigo-600 bg-indigo-50 w-fit px-2 py-1 rounded' : 'text-slate-600'}">
+                            <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
                                 ${d}
-                            </div>
-                            <div class="mt-2 text-[9px] text-slate-400 group-hover:text-indigo-500 transition-colors">
-                                Click to view/edit
+                            </span>
+                            <div class="mt-2 flex-1 overflow-y-auto">
+                                ${tasksHtml}
+                                ${dprHtml}
+                                ${dayTasks.length === 0 && dayDpr.length === 0 ? '<p class="text-[8px] text-slate-400 italic">No tasks</p>' : ''}
                             </div>
                         </div>
                     `;
@@ -33267,7 +33319,7 @@
                 const totalCells = firstDay + daysInMonth;
                 const remainingCells = (7 - (totalCells % 7)) % 7;
                 for (let i = 0; i < remainingCells; i++) {
-                    html += `<div class="bg-slate-50/30 min-h-[100px]"></div>`;
+                    html += `<div class="bg-slate-50/30 min-h-[100px] border-r border-b border-slate-100"></div>`;
                 }
 
                 grid.innerHTML = html;
