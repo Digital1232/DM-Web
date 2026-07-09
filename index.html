@@ -33155,6 +33155,11 @@
                                 <div id="mp-calendar-grid" class="contents"></div>
                             </div>
                         </div>
+
+                        <!-- Day Detail Panel (Hidden by default, shown on day click) -->
+                        <div id="mp-day-detail-panel" class="hidden bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-6">
+                            <!-- Will be populated dynamically -->
+                        </div>
                     </div>
                 `;
 
@@ -33258,8 +33263,153 @@
             }
 
             function expandMonthlyPlanDay(dateStr) {
-                toast('Day expansion coming soon! Selected: ' + dateStr, 'info');
-                // To be implemented in Phase 2
+                const panel = document.getElementById('mp-day-detail-panel');
+                if (!panel) return;
+
+                // Parse the date
+                const [year, month, day] = dateStr.split('-').map(Number);
+                const dateObj = new Date(year, month - 1, day);
+                const dateLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+                // Get tasks for this date
+                const tasksForDay = getTasksForMonthlyPlanDay(dateStr);
+
+                // Separate into new and carry-forward
+                const newTasks = tasksForDay.filter(t => !t.isCarryForward);
+                const carryForwardTasks = tasksForDay.filter(t => t.isCarryForward);
+
+                // Build HTML
+                let html = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900">${dateLabel}</h3>
+                            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Total: <strong>${tasksForDay.length}</strong> tasks</p>
+                        </div>
+                        <button onclick="closeMonthlyPlanDayDetail()" class="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                            <iconify-icon icon="solar:close-circle-linear" width="20"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <!-- New Tasks Section -->
+                    <div>
+                        <h4 class="text-sm font-black text-slate-900 mb-3">New Tasks (${newTasks.length})</h4>
+                        ${newTasks.length === 0 ? 
+                            '<p class="text-xs text-slate-400 italic">No new tasks assigned for this day</p>' 
+                            : renderMonthlyPlanTaskRows(newTasks, false)
+                        }
+                    </div>
+                `;
+
+                // Carry-forward section if there are any
+                if (carryForwardTasks.length > 0) {
+                    html += `
+                        <div>
+                            <h4 class="text-sm font-black text-slate-900 mb-3 flex items-center gap-2">
+                                <iconify-icon icon="solar:arrow-right-down-linear" width="18" class="text-amber-500"></iconify-icon>
+                                Carry Forward (${carryForwardTasks.length})
+                            </h4>
+                            ${renderMonthlyPlanTaskRows(carryForwardTasks, true)}
+                        </div>
+                    `;
+                }
+
+                panel.innerHTML = html;
+                panel.classList.remove('hidden');
+
+                // Scroll to detail panel
+                setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+            }
+
+            function closeMonthlyPlanDayDetail() {
+                const panel = document.getElementById('mp-day-detail-panel');
+                if (panel) panel.classList.add('hidden');
+            }
+
+            function getTasksForMonthlyPlanDay(dateStr) {
+                // Filter tasks for specific date
+                const filteredTasks = [];
+
+                tasks.forEach(task => {
+                    // Check if task is assigned to this date in daily plan
+                    if (task.id && currentUser) {
+                        const planKey = `${eKey(task.assigneeEmail || '')}/${task.id}`;
+                        // For now, return empty - will be populated from Firebase in Phase 3
+                        // This is a placeholder that will be replaced with actual daily plan data
+                    }
+                });
+
+                // For now, return sample data structure
+                return [];
+            }
+
+            function renderMonthlyPlanTaskRows(taskList, isCarryForward = false) {
+                if (!taskList || taskList.length === 0) return '';
+
+                return `<div class="space-y-2">` + 
+                    taskList.map(t => renderMonthlyPlanTaskRow(t, isCarryForward)).join('') +
+                    `</div>`;
+            }
+
+            function renderMonthlyPlanTaskRow(task, isCarryForward = false) {
+                const statusColor = getTaskStatusColor(task.status || 'To Do');
+                const carryInfo = isCarryForward ? 
+                    `<span class="text-[8px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100">Carried ${task.carryCount || 1}x</span>` : 
+                    '';
+
+                const assigneeUser = allUsersMap.get((task.assigneeEmail || '').toLowerCase());
+                const assigneeName = assigneeUser?.name || (task.assigneeEmail?.split('@')[0] || 'Unassigned');
+
+                return `
+                    <div class="p-4 bg-white border ${isCarryForward ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} rounded-xl hover:shadow-md transition-all flex justify-between items-start gap-3 group">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(task.id)}</span>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${statusColor}">${escapeHtml(task.status || 'To Do')}</span>
+                                ${carryInfo}
+                            </div>
+                            <h5 class="text-xs font-bold text-slate-900 mb-1 line-clamp-1">${escapeHtml(task.desc || task.id)}</h5>
+                            <div class="flex items-center gap-2 text-[9px] text-slate-500">
+                                <span>${escapeHtml(task.client || 'General')}</span>
+                                <span>•</span>
+                                <span>${escapeHtml(assigneeName)}</span>
+                            </div>
+                        </div>
+                        <button class="p-2 rounded-lg hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-all" 
+                            onclick="openMonthlyPlanTaskMenu(event, '${task.id}')" title="Actions">
+                            <iconify-icon icon="solar:menu-dots-bold" width="16"></iconify-icon>
+                        </button>
+                    </div>
+                `;
+            }
+
+            function openMonthlyPlanTaskMenu(event, taskId) {
+                event.stopPropagation();
+                toast('Task actions menu coming in Phase 5 (Bulk Operations)', 'info');
+            }
+
+            function getTaskStatusColor(status) {
+                // Use 3-color system from spec
+                const normalizedStatus = (status || '').toLowerCase().trim();
+
+                // NOT COMPLETED (Red)
+                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
+                if (notCompletedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
+                    return 'bg-red-50 text-red-700 border border-red-200';
+                }
+
+                // COMPLETED (Green)
+                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
+                if (completedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
+                    return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                }
+
+                // POSTED (Blue)
+                const postedStatuses = ['posted', 'analytics', 'done'];
+                if (postedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
+                    return 'bg-blue-50 text-blue-700 border border-blue-200';
+                }
+
+                return 'bg-slate-50 text-slate-700 border border-slate-200';
             }
 
             // ── Daily Plan Edit Modal ─────────────────────────────────────────────
@@ -33616,6 +33766,12 @@
             window.saveStrategyEvent = saveStrategyEvent;
             window.deleteStrategyEvent = deleteStrategyEvent;
             window.setStrategyClientFilter = setStrategyClientFilter;
+            window.initMonthlyPlan = initMonthlyPlan;
+            window.navigateMonthlyPlan = navigateMonthlyPlan;
+            window.filterMonthlyPlanByTeamMember = filterMonthlyPlanByTeamMember;
+            window.expandMonthlyPlanDay = expandMonthlyPlanDay;
+            window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
+            window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
             window.initSocialAnalytics = initSocialAnalytics;
             window.filterSocialAnalytics = filterSocialAnalytics;
             window.renderSaDashboard = renderSaDashboard;
