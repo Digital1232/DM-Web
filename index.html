@@ -33272,44 +33272,36 @@
                     const dayTasks = tasksByDate[dateStr] || [];
                     const dayDpr = dprByDate[dateStr] || [];
 
-                    // Render task badges
+                    // Render task badges with name and assignee
                     let tasksHtml = dayTasks.map(task => {
                         const statusColor = getTaskStatusColor(task.status || 'To Do');
-                        const taskStatus = (task.status || 'To Do').substring(0, 12); // Shorten for space
+                        const assigneeUser = allUsersMap.get((task.assigneeEmail || '').toLowerCase());
+                        const assigneeName = assigneeUser?.name?.split(' ')[0] || (task.assigneeEmail?.split('@')[0] || 'Unassigned'); // First name only
+                        const taskTitle = task.desc || task.id;
+                        
                         return `
-                            <div class="${statusColor} px-2 py-1 rounded-lg text-[8px] font-bold shadow-sm truncate mb-1 cursor-pointer hover:shadow-md transition-all"
+                            <div class="${statusColor} px-2 py-1.5 rounded-lg text-[8px] font-bold shadow-sm mb-1 cursor-pointer hover:shadow-md transition-all"
                                 onclick="event.stopPropagation(); expandMonthlyPlanDay('${dateStr}')"
-                                title="${escapeHtml(task.id)} - ${escapeHtml(task.desc || task.id)}">
-                                ${escapeHtml(task.id)}
+                                title="${escapeHtml(task.id)} - ${escapeHtml(taskTitle)} [${escapeHtml(assigneeName)}]">
+                                <div class="font-bold">${escapeHtml(task.id)}</div>
+                                <div class="line-clamp-1 text-[7px]">${escapeHtml(taskTitle.substring(0, 20))}</div>
+                                <div class="text-[7px] opacity-80">${escapeHtml(assigneeName)}</div>
                             </div>
                         `;
                     }).join('');
 
-                    // Render DPR badges for Karthika
-                    let dprHtml = dayDpr.map(entry => {
-                        const category = entry.category || 'DPR';
-                        const categoryColor = entry.category === 'Posters' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                                           entry.category === 'Thumbnails' ? 'bg-pink-50 text-pink-700 border border-pink-200' :
-                                           'bg-slate-50 text-slate-700 border border-slate-200';
-                        const count = entry.count || 0;
-                        return `
-                            <div class="${categoryColor} px-2 py-1 rounded-lg text-[8px] font-bold shadow-sm mb-1 cursor-pointer hover:shadow-md transition-all"
-                                title="${category}: ${count} items - ${entry.status || 'pending'}">
-                                ${category}: ${count}
-                            </div>
-                        `;
-                    }).join('');
+                    // Remove DPR display - only show JIRA tasks
+                    let dprHtml = '';
 
                     html += `
-                        <div class="relative p-3 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer"
+                        <div class="relative p-2 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer overflow-hidden"
                             onclick="expandMonthlyPlanDay('${dateStr}')">
                             <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
                                 ${d}
                             </span>
-                            <div class="mt-2 flex-1 overflow-y-auto">
+                            <div class="mt-2 flex-1 overflow-y-auto text-[8px]">
                                 ${tasksHtml}
-                                ${dprHtml}
-                                ${dayTasks.length === 0 && dayDpr.length === 0 ? '<p class="text-[8px] text-slate-400 italic">No tasks</p>' : ''}
+                                ${dayTasks.length === 0 ? '<p class="text-[8px] text-slate-400 italic">-</p>' : ''}
                             </div>
                         </div>
                     `;
