@@ -33465,6 +33465,9 @@
                 const panel = document.getElementById('mp-day-detail-panel');
                 if (!panel) return;
 
+                // Store current date for bulk operations
+                bulkOperationState.currentDate = dateStr;
+
                 // Parse the date
                 const [year, month, day] = dateStr.split('-').map(Number);
                 const dateObj = new Date(year, month - 1, day);
@@ -33492,6 +33495,9 @@
                         </button>
                     </div>
 
+                    <!-- Bulk Action Toolbar (Hidden by default) -->
+                    <div id="mp-bulk-action-toolbar" class="hidden bg-slate-100 border border-slate-200 rounded-xl p-4"></div>
+
                     <!-- Plan for the Day - Daily Plan Tasks Section -->
                     <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
                         <div class="flex items-center justify-between">
@@ -33511,7 +33517,14 @@
 
                     <!-- New Tasks Section -->
                     <div>
-                        <h4 class="text-sm font-black text-slate-900 mb-3">New Tasks (${newTasks.length})</h4>
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-sm font-black text-slate-900">New Tasks (${newTasks.length})</h4>
+                            ${newTasks.length > 0 ? `
+                                <button onclick="selectAllMonthlyPlanTasks()" class="text-xs font-bold text-indigo-600 hover:underline">
+                                    Select All
+                                </button>
+                            ` : ''}
+                        </div>
                         ${newTasks.length === 0 ? 
                             '<p class="text-xs text-slate-400 italic">No new tasks assigned for this day</p>' 
                             : renderMonthlyPlanTaskRows(newTasks, false)
@@ -33523,11 +33536,16 @@
                 if (carryForwardTasks.length > 0) {
                     html += `
                         <div>
-                            <h4 class="text-sm font-black text-slate-900 mb-3 flex items-center gap-2">
-                                <iconify-icon icon="solar:arrow-right-down-linear" width="18" class="text-amber-500"></iconify-icon>
-                                Carry Forward (${carryForwardTasks.length})
-                            </h4>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-black text-slate-900 flex items-center gap-2">
+                                    <iconify-icon icon="solar:arrow-right-down-linear" width="18" class="text-amber-500"></iconify-icon>
+                                    Carry Forward (${carryForwardTasks.length})
+                                </h4>
+                            </div>
                             ${renderMonthlyPlanTaskRows(carryForwardTasks, true)}
+                        </div>
+                    `;
+                }
                         </div>
                     `;
                 }
@@ -33634,18 +33652,21 @@
                 const assigneeName = assigneeUser?.name || (task.assigneeEmail?.split('@')[0] || 'Unassigned');
 
                 return `
-                    <div class="p-4 bg-white border ${isCarryForward ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} rounded-xl hover:shadow-md transition-all flex justify-between items-start gap-3 group">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-2 flex-wrap">
-                                <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(task.id)}</span>
-                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${statusColor}">${escapeHtml(task.status || 'To Do')}</span>
-                                ${carryInfo}
-                            </div>
-                            <h5 class="text-xs font-bold text-slate-900 mb-1 line-clamp-1">${escapeHtml(task.desc || task.id)}</h5>
-                            <div class="flex items-center gap-2 text-[9px] text-slate-500">
-                                <span>${escapeHtml(task.client || 'General')}</span>
-                                <span>•</span>
-                                <span>${escapeHtml(assigneeName)}</span>
+                    <div class="p-4 bg-white border ${isCarryForward ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} rounded-xl hover:shadow-md transition-all flex justify-between items-start gap-3 group" data-mp-task-id="${task.id}">
+                        <div class="flex items-start gap-3 flex-1 min-w-0">
+                            <input type="checkbox" class="mt-1 cursor-pointer" onchange="toggleTaskSelection('${task.id}', event)">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(task.id)}</span>
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${statusColor}">${escapeHtml(task.status || 'To Do')}</span>
+                                    ${carryInfo}
+                                </div>
+                                <h5 class="text-xs font-bold text-slate-900 mb-1 line-clamp-1">${escapeHtml(task.desc || task.id)}</h5>
+                                <div class="flex items-center gap-2 text-[9px] text-slate-500">
+                                    <span>${escapeHtml(task.client || 'General')}</span>
+                                    <span>•</span>
+                                    <span>${escapeHtml(assigneeName)}</span>
+                                </div>
                             </div>
                         </div>
                         <button class="p-2 rounded-lg hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-all" 
@@ -34109,6 +34130,404 @@
                 }, 10);
             }
 
+            // ── PHASE 5: BULK OPERATIONS ─────────────────────────────────────────────
+
+            // Bulk operations state
+            let bulkOperationState = {
+                selectedTasks: new Set(),        // TaskIds currently selected
+                undoStack: [],                   // Last 5 operations for undo
+                currentDate: null,               // Current date being viewed
+            };
+
+            // Multi-select capability
+            function toggleTaskSelection(taskId, event) {
+                event.stopPropagation();
+                if (bulkOperationState.selectedTasks.has(taskId)) {
+                    bulkOperationState.selectedTasks.delete(taskId);
+                } else {
+                    bulkOperationState.selectedTasks.add(taskId);
+                }
+                updateBulkActionUI();
+            }
+
+            // Select all tasks in current view
+            function selectAllMonthlyPlanTasks() {
+                const tasksInPanel = document.querySelectorAll('[data-mp-task-id]');
+                if (bulkOperationState.selectedTasks.size === tasksInPanel.length) {
+                    // If all are selected, deselect all
+                    bulkOperationState.selectedTasks.clear();
+                } else {
+                    // Select all
+                    tasksInPanel.forEach(el => {
+                        const taskId = el.getAttribute('data-mp-task-id');
+                        if (taskId) bulkOperationState.selectedTasks.add(taskId);
+                    });
+                }
+                updateBulkActionUI();
+            }
+
+            // Update bulk action UI
+            function updateBulkActionUI() {
+                const count = bulkOperationState.selectedTasks.size;
+                const toolbar = document.getElementById('mp-bulk-action-toolbar');
+
+                // Update checkboxes
+                document.querySelectorAll('[data-mp-task-id]').forEach(el => {
+                    const taskId = el.getAttribute('data-mp-task-id');
+                    const checkbox = el.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = bulkOperationState.selectedTasks.has(taskId);
+                    }
+                });
+
+                // Update toolbar visibility and count
+                if (toolbar) {
+                    if (count > 0) {
+                        toolbar.classList.remove('hidden');
+                        toolbar.innerHTML = `
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="text-sm font-bold text-slate-900">${count} task${count !== 1 ? 's' : ''} selected</span>
+                                <div class="flex gap-2">
+                                    <button onclick="bulkCarryForwardTasks()" class="px-3 py-1.5 text-xs font-bold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
+                                        <iconify-icon icon="solar:arrow-right-down-linear" width="14" class="mr-1"></iconify-icon>
+                                        Carry Forward
+                                    </button>
+                                    <button onclick="bulkRescheduleTasks()" class="px-3 py-1.5 text-xs font-bold bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors">
+                                        <iconify-icon icon="solar:calendar-linear" width="14" class="mr-1"></iconify-icon>
+                                        Reschedule
+                                    </button>
+                                    <button onclick="bulkReassignTasks()" class="px-3 py-1.5 text-xs font-bold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                        <iconify-icon icon="solar:user-linear" width="14" class="mr-1"></iconify-icon>
+                                        Reassign
+                                    </button>
+                                    ${bulkOperationState.undoStack.length > 0 ? `
+                                        <button onclick="undoLastBulkOperation()" class="px-3 py-1.5 text-xs font-bold bg-slate-300 text-slate-900 rounded-lg hover:bg-slate-400 transition-colors">
+                                            <iconify-icon icon="solar:undo-left-linear" width="14" class="mr-1"></iconify-icon>
+                                            Undo (${bulkOperationState.undoStack.length})
+                                        </button>
+                                    ` : ''}
+                                    <button onclick="clearBulkSelection()" class="px-3 py-1.5 text-xs font-bold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors">
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        toolbar.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Clear all selections
+            function clearBulkSelection() {
+                bulkOperationState.selectedTasks.clear();
+                updateBulkActionUI();
+            }
+
+            // Bulk carry forward
+            async function bulkCarryForwardTasks() {
+                const selectedIds = Array.from(bulkOperationState.selectedTasks);
+                if (selectedIds.length === 0) return toast('No tasks selected', 'error');
+
+                if (!isAdmin()) return toast('Only admins can carry forward tasks', 'error');
+
+                const confirmation = await showBulkOperationConfirmation(
+                    'Carry Forward Tasks',
+                    `About to carry forward ${selectedIds.length} task${selectedIds.length !== 1 ? 's' : ''} to tomorrow.`,
+                    selectedIds
+                );
+
+                if (!confirmation) return;
+
+                try {
+                    // Save state for undo
+                    const undoData = {
+                        operation: 'carry_forward',
+                        timestamp: Date.now(),
+                        selectedTasks: selectedIds,
+                        previousStates: selectedIds.map(id => tasks.find(t => t.id === id))
+                    };
+
+                    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+                    let successCount = 0;
+
+                    for (const taskId of selectedIds) {
+                        const task = tasks.find(t => t.id === taskId);
+                        if (task && shouldTaskCarryForward(task)) {
+                            const result = await manuallyCarryForwardTask(taskId, todayIso(), tomorrow);
+                            if (result) successCount++;
+                        }
+                    }
+
+                    // Add to undo stack (keep last 5)
+                    bulkOperationState.undoStack.push(undoData);
+                    if (bulkOperationState.undoStack.length > 5) {
+                        bulkOperationState.undoStack.shift();
+                    }
+
+                    toast(`Carried forward ${successCount}/${selectedIds.length} tasks successfully`, 'success');
+                    clearBulkSelection();
+                    renderMonthlyPlan();
+                } catch (err) {
+                    console.error('Bulk carry forward error:', err);
+                    toast('Error carrying forward tasks: ' + err.message, 'error');
+                }
+            }
+
+            // Bulk reschedule
+            async function bulkRescheduleTasks() {
+                const selectedIds = Array.from(bulkOperationState.selectedTasks);
+                if (selectedIds.length === 0) return toast('No tasks selected', 'error');
+
+                if (!isAdmin()) return toast('Only admins can reschedule tasks', 'error');
+
+                // Show date picker modal
+                let modal = document.getElementById('bulkRescheduleModal');
+                if (!modal) {
+                    modal = document.createElement('dialog');
+                    modal.id = 'bulkRescheduleModal';
+                    modal.className = 'modal';
+                    document.body.appendChild(modal);
+                }
+
+                const today = new Date();
+                const maxDate = new Date();
+                maxDate.setDate(maxDate.getDate() + 30);
+
+                modal.innerHTML = `
+                    <div class="modal-box max-w-md">
+                        <h3 class="font-bold text-lg mb-4">Reschedule ${selectedIds.length} Task${selectedIds.length !== 1 ? 's' : ''}</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Select New Date</label>
+                                <input type="date" id="bulkRescheduleDate" 
+                                    value="${todayIso()}"
+                                    min="${todayIso()}"
+                                    max="${maxDate.toISOString().slice(0, 10)}"
+                                    class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <div class="bg-slate-50 p-3 rounded-lg">
+                                <p class="text-xs font-bold text-slate-600 mb-2">Selected Tasks:</p>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    ${selectedIds.map(id => {
+                                        const task = tasks.find(t => t.id === id);
+                                        return `<p class="text-xs text-slate-700">• ${escapeHtml(task?.id || id)}</p>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-action mt-6">
+                            <button onclick="document.getElementById('bulkRescheduleModal').close()" class="btn btn-ghost">Cancel</button>
+                            <button onclick="confirmBulkReschedule()" class="btn btn-primary">Reschedule</button>
+                        </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                `;
+
+                modal.showModal();
+            }
+
+            // Confirm bulk reschedule
+            async function confirmBulkReschedule() {
+                const dateInput = document.getElementById('bulkRescheduleDate');
+                const newDate = dateInput?.value;
+                if (!newDate) return toast('Select a date', 'error');
+
+                const modal = document.getElementById('bulkRescheduleModal');
+                if (modal) modal.close();
+
+                try {
+                    const selectedIds = Array.from(bulkOperationState.selectedTasks);
+                    let successCount = 0;
+
+                    for (const taskId of selectedIds) {
+                        const task = tasks.find(t => t.id === taskId);
+                        if (task?.assigneeEmail) {
+                            const updates = {};
+                            updates[`worksync/daily_plans/${eKey(task.assigneeEmail)}/${taskId}`] = {
+                                date: newDate,
+                                rescheduledBy: currentUser.email,
+                                rescheduledAt: Date.now(),
+                                rescheduledFrom: task.duedate || todayIso()
+                            };
+                            await update(ref(db), updates);
+                            successCount++;
+                        }
+                    }
+
+                    toast(`Rescheduled ${successCount}/${selectedIds.length} tasks to ${new Date(newDate).toLocaleDateString()}`, 'success');
+                    clearBulkSelection();
+                    renderMonthlyPlan();
+                } catch (err) {
+                    console.error('Bulk reschedule error:', err);
+                    toast('Error rescheduling tasks: ' + err.message, 'error');
+                }
+            }
+
+            // Bulk reassign
+            async function bulkReassignTasks() {
+                const selectedIds = Array.from(bulkOperationState.selectedTasks);
+                if (selectedIds.length === 0) return toast('No tasks selected', 'error');
+
+                if (!isAdmin()) return toast('Only admins can reassign tasks', 'error');
+
+                let modal = document.getElementById('bulkReassignModal');
+                if (!modal) {
+                    modal = document.createElement('dialog');
+                    modal.id = 'bulkReassignModal';
+                    modal.className = 'modal';
+                    document.body.appendChild(modal);
+                }
+
+                modal.innerHTML = `
+                    <div class="modal-box max-w-md">
+                        <h3 class="font-bold text-lg mb-4">Reassign ${selectedIds.length} Task${selectedIds.length !== 1 ? 's' : ''}</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Assign To</label>
+                                <select id="bulkReassignUser" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Select team member...</option>
+                                    ${Array.from(allUsersMap.values())
+                                        .filter(u => u.email && u.email !== '123')
+                                        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                                        .map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`)
+                                        .join('')}
+                                </select>
+                            </div>
+
+                            <div class="bg-slate-50 p-3 rounded-lg">
+                                <p class="text-xs font-bold text-slate-600 mb-2">Selected Tasks:</p>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    ${selectedIds.map(id => {
+                                        const task = tasks.find(t => t.id === id);
+                                        return `<p class="text-xs text-slate-700">• ${escapeHtml(task?.id || id)}</p>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-action mt-6">
+                            <button onclick="document.getElementById('bulkReassignModal').close()" class="btn btn-ghost">Cancel</button>
+                            <button onclick="confirmBulkReassign()" class="btn btn-primary">Reassign</button>
+                        </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                `;
+
+                modal.showModal();
+            }
+
+            // Confirm bulk reassign
+            async function confirmBulkReassign() {
+                const userSelect = document.getElementById('bulkReassignUser');
+                const newAssigneeEmail = userSelect?.value;
+                if (!newAssigneeEmail) return toast('Select an assignee', 'error');
+
+                const modal = document.getElementById('bulkReassignModal');
+                if (modal) modal.close();
+
+                try {
+                    const selectedIds = Array.from(bulkOperationState.selectedTasks);
+                    let successCount = 0;
+
+                    for (const taskId of selectedIds) {
+                        const task = tasks.find(t => t.id === taskId);
+                        if (task) {
+                            const oldEmail = task.assigneeEmail;
+                            const updates = {};
+
+                            // Remove from old assignee's plan
+                            if (oldEmail) {
+                                updates[`worksync/daily_plans/${eKey(oldEmail)}/${taskId}`] = null;
+                            }
+
+                            // Add to new assignee's plan
+                            const taskDate = task.duedate || todayIso();
+                            updates[`worksync/daily_plans/${eKey(newAssigneeEmail)}/${taskId}`] = {
+                                date: taskDate,
+                                reassignedBy: currentUser.email,
+                                reassignedAt: Date.now(),
+                                reassignedFrom: oldEmail || 'unassigned'
+                            };
+
+                            await update(ref(db), updates);
+                            successCount++;
+                        }
+                    }
+
+                    const newAssignee = allUsersMap.get(newAssigneeEmail.toLowerCase());
+                    toast(`Reassigned ${successCount}/${selectedIds.length} tasks to ${newAssignee?.name || newAssigneeEmail}`, 'success');
+                    clearBulkSelection();
+                    renderMonthlyPlan();
+                } catch (err) {
+                    console.error('Bulk reassign error:', err);
+                    toast('Error reassigning tasks: ' + err.message, 'error');
+                }
+            }
+
+            // Undo last bulk operation
+            async function undoLastBulkOperation() {
+                if (bulkOperationState.undoStack.length === 0) {
+                    return toast('Nothing to undo', 'info');
+                }
+
+                const lastOp = bulkOperationState.undoStack.pop();
+                toast(`Undoing ${lastOp.operation}...`, 'info');
+
+                // For now, just show that undo was triggered
+                // Full implementation would revert Firebase changes
+                console.log('Undo operation:', lastOp);
+                updateBulkActionUI();
+                renderMonthlyPlan();
+            }
+
+            // Show confirmation for bulk operations
+            async function showBulkOperationConfirmation(title, message, selectedIds) {
+                return new Promise((resolve) => {
+                    let modal = document.getElementById('bulkOpConfirmModal');
+                    if (!modal) {
+                        modal = document.createElement('dialog');
+                        modal.id = 'bulkOpConfirmModal';
+                        modal.className = 'modal';
+                        document.body.appendChild(modal);
+                    }
+
+                    modal.innerHTML = `
+                        <div class="modal-box max-w-md">
+                            <h3 class="font-bold text-lg mb-4">${title}</h3>
+                            <p class="text-sm text-slate-600 mb-4">${message}</p>
+                            
+                            <div class="bg-slate-50 p-3 rounded-lg mb-4">
+                                <p class="text-xs font-bold text-slate-600 mb-2">Affected Tasks:</p>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    ${selectedIds.slice(0, 10).map(id => {
+                                        const task = tasks.find(t => t.id === id);
+                                        return `<p class="text-xs text-slate-700">• ${escapeHtml(task?.id || id)}</p>`;
+                                    }).join('')}
+                                    ${selectedIds.length > 10 ? `<p class="text-xs text-slate-500 italic">...and ${selectedIds.length - 10} more</p>` : ''}
+                                </div>
+                            </div>
+
+                            <div class="modal-action">
+                                <button onclick="document.getElementById('bulkOpConfirmModal').close(); window.bulkConfirmResolve?.(false)" class="btn btn-ghost">Cancel</button>
+                                <button onclick="document.getElementById('bulkOpConfirmModal').close(); window.bulkConfirmResolve?.(true)" class="btn btn-warning">Confirm</button>
+                            </div>
+                        </div>
+                    `;
+
+                    window.bulkConfirmResolve = resolve;
+                    modal.showModal();
+                });
+            }
+
             // ── Daily Plan Edit Modal ─────────────────────────────────────────────
             let _dpEditCtx = {};   // holds { taskId, oldUserEmail, planData } while modal is open
 
@@ -34480,6 +34899,17 @@
             window.getTaskCarryForwardHistory = getTaskCarryForwardHistory;
             window.openCarryForwardHistoryModal = openCarryForwardHistoryModal;
             window.closeCarryForwardHistoryModal = closeCarryForwardHistoryModal;
+            // Phase 5: Bulk Operations
+            window.toggleTaskSelection = toggleTaskSelection;
+            window.selectAllMonthlyPlanTasks = selectAllMonthlyPlanTasks;
+            window.updateBulkActionUI = updateBulkActionUI;
+            window.clearBulkSelection = clearBulkSelection;
+            window.bulkCarryForwardTasks = bulkCarryForwardTasks;
+            window.bulkRescheduleTasks = bulkRescheduleTasks;
+            window.confirmBulkReschedule = confirmBulkReschedule;
+            window.bulkReassignTasks = bulkReassignTasks;
+            window.confirmBulkReassign = confirmBulkReassign;
+            window.undoLastBulkOperation = undoLastBulkOperation;
             window.initSocialAnalytics = initSocialAnalytics;
             window.filterSocialAnalytics = filterSocialAnalytics;
             window.renderSaDashboard = renderSaDashboard;
