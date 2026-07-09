@@ -33244,63 +33244,19 @@
                     html += `<div class="bg-slate-50/30 min-h-[100px] border-r border-b border-slate-100"></div>`;
                 }
 
-                // Build tasks by date for filtering
-                const tasksByDate = {};
-                const dprByDate = {};
-
-                // Collect JIRA tasks
-                tasks.forEach(task => {
-                    if (task.duedate && (!monthlyPlanTeamFilter || monthlyPlanTeamFilter === 'All' || task.assigneeEmail === monthlyPlanTeamFilter)) {
-                        if (!tasksByDate[task.duedate]) tasksByDate[task.duedate] = [];
-                        tasksByDate[task.duedate].push(task);
-                    }
-                });
-
-                // Collect Karthika's DPR entries
-                dprEntries.forEach(entry => {
-                    const entryDate = entry.date;
-                    if (entry.userId && entryDate && (monthlyPlanTeamFilter === 'All' || monthlyPlanTeamFilter === entry.userId)) {
-                        if (!dprByDate[entryDate]) dprByDate[entryDate] = [];
-                        dprByDate[entryDate].push(entry);
-                    }
-                });
-
-                // Days of month
+                // Days of month - empty calendar ready for planning
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     const isToday = dateStr === today;
-                    const dayTasks = tasksByDate[dateStr] || [];
-                    const dayDpr = dprByDate[dateStr] || [];
-
-                    // Render task badges with name and assignee
-                    let tasksHtml = dayTasks.map(task => {
-                        const statusColor = getTaskStatusColor(task.status || 'To Do');
-                        const assigneeUser = allUsersMap.get((task.assigneeEmail || '').toLowerCase());
-                        const assigneeName = assigneeUser?.name?.split(' ')[0] || (task.assigneeEmail?.split('@')[0] || 'Unassigned'); // First name only
-                        const taskTitle = task.desc || task.id;
-                        
-                        return `
-                            <div class="${statusColor} px-2 py-1.5 rounded-lg text-[8px] font-bold shadow-sm mb-1 cursor-pointer hover:shadow-md transition-all"
-                                onclick="event.stopPropagation(); expandMonthlyPlanDay('${dateStr}')"
-                                title="${escapeHtml(task.id)} - ${escapeHtml(taskTitle)} [${escapeHtml(assigneeName)}]">
-                                <div class="line-clamp-2 text-[7px]">${escapeHtml(taskTitle.substring(0, 25))}</div>
-                                <div class="text-[7px] opacity-80 font-normal">${escapeHtml(assigneeName)}</div>
-                            </div>
-                        `;
-                    }).join('');
-
-                    // Remove DPR display - only show JIRA tasks
-                    let dprHtml = '';
 
                     html += `
-                        <div class="relative p-2 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer overflow-hidden"
-                            onclick="expandMonthlyPlanDay('${dateStr}')">
+                        <div class="relative p-2 border-r border-b border-slate-100 min-h-[100px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : 'bg-white'} hover:bg-slate-50/50 transition-colors cursor-pointer overflow-hidden"
+                            onclick="openPlanDayModal('${dateStr}')">
                             <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
                                 ${d}
                             </span>
-                            <div class="mt-2 flex-1 overflow-y-auto text-[8px]">
-                                ${tasksHtml}
-                                ${dayTasks.length === 0 ? '<p class="text-[8px] text-slate-400 italic">-</p>' : ''}
+                            <div class="mt-2 flex-1 flex items-center justify-center text-slate-300">
+                                <iconify-icon icon="solar:add-circle-linear" width="24"></iconify-icon>
                             </div>
                         </div>
                     `;
@@ -33315,8 +33271,141 @@
 
                 grid.innerHTML = html;
 
-                // Render workload dashboard
-                renderMonthlyPlanWorkloadDashboard();
+                // Don't render workload dashboard for now
+                const dashboard = document.getElementById('mp-workload-dashboard');
+                if (dashboard) dashboard.classList.add('hidden');
+            }
+
+            // Open modal to plan tasks for a specific day
+            async function openPlanDayModal(dateStr) {
+                const dateObj = new Date(dateStr);
+                const dateLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+                let modal = document.getElementById('planDayModal');
+                if (!modal) {
+                    modal = document.createElement('dialog');
+                    modal.id = 'planDayModal';
+                    modal.className = 'modal';
+                    document.body.appendChild(modal);
+                }
+
+                modal.innerHTML = `
+                    <div class="modal-box max-w-2xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg">Plan for ${dateLabel}</h3>
+                            <button onclick="document.getElementById('planDayModal').close()" class="btn btn-sm btn-circle btn-ghost">✕</button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <!-- Task Name -->
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Task Name/Description</label>
+                                <input type="text" id="plan-task-name" placeholder="Enter task description..."
+                                    class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <!-- Assignee -->
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Assign To</label>
+                                <select id="plan-task-assignee" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Select team member...</option>
+                                    ${Array.from(allUsersMap.values())
+                                        .filter(u => u.email && u.email !== '123')
+                                        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                                        .map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`)
+                                        .join('')}
+                                </select>
+                            </div>
+
+                            <!-- Status -->
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Status</label>
+                                <select id="plan-task-status" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="To Do">To Do</option>
+                                    <option value="Shoot Needed">Shoot Needed</option>
+                                    <option value="Content In Progress">Content In Progress</option>
+                                    <option value="Design To Do">Design To Do</option>
+                                    <option value="Design In Progress">Design In Progress</option>
+                                </select>
+                            </div>
+
+                            <!-- Client -->
+                            <div>
+                                <label class="text-sm font-bold text-slate-900 block mb-2">Client (Optional)</label>
+                                <input type="text" id="plan-task-client" placeholder="Enter client name..."
+                                    class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+
+                        <div class="modal-action mt-6">
+                            <button onclick="document.getElementById('planDayModal').close()" class="btn btn-ghost">Cancel</button>
+                            <button onclick="savePlannedTask('${dateStr}')" class="btn btn-primary">Add to Plan</button>
+                        </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                `;
+
+                modal.showModal();
+            }
+
+            // Save planned task and sync to Firebase
+            async function savePlannedTask(dateStr) {
+                const taskName = document.getElementById('plan-task-name')?.value?.trim();
+                const assigneeEmail = document.getElementById('plan-task-assignee')?.value?.trim();
+                const status = document.getElementById('plan-task-status')?.value || 'To Do';
+                const client = document.getElementById('plan-task-client')?.value?.trim();
+
+                if (!taskName) return toast('Enter task name', 'error');
+                if (!assigneeEmail) return toast('Select assignee', 'error');
+
+                try {
+                    const modal = document.getElementById('planDayModal');
+                    const btn = modal?.querySelector('button[onclick*="savePlannedTask"]');
+                    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+                    const assigneeUser = allUsersMap.get(assigneeEmail.toLowerCase());
+
+                    // Create task object
+                    const newTask = {
+                        id: `MP-${Date.now()}`,
+                        desc: taskName,
+                        status: status,
+                        assignee: assigneeUser?.name || assigneeEmail,
+                        assigneeEmail: assigneeEmail,
+                        client: client || 'General',
+                        duedate: dateStr,
+                        manual: true,
+                        createdAt: Date.now(),
+                        createdBy: currentUser.email
+                    };
+
+                    // Save to Firebase monthly_plans collection
+                    if (db) {
+                        const [year, month, day] = dateStr.split('-');
+                        const monthYear = `${year}-${month}`;
+                        const planKey = `${eKey(assigneeEmail)}/${monthYear}`;
+                        
+                        await push(ref(db, `worksync/monthly_plans/${planKey}/tasks`), newTask);
+
+                        // Also add to local tasks array
+                        tasks.push(newTask);
+
+                        // Close modal
+                        if (modal) modal.close();
+
+                        toast(`Task "${taskName}" planned for ${new Date(dateStr).toLocaleDateString()} and assigned to ${assigneeUser?.name}`, 'success');
+                        renderMonthlyPlan();
+                    }
+                } catch (err) {
+                    console.error('Error saving planned task:', err);
+                    toast('Failed to save task: ' + err.message, 'error');
+                } finally {
+                    const modal = document.getElementById('planDayModal');
+                    const btn = modal?.querySelector('button[onclick*="savePlannedTask"]');
+                    if (btn) { btn.disabled = false; btn.textContent = 'Add to Plan'; }
+                }
             }
 
             function toggleMonthlyPlanWorkloadDashboard() {
@@ -34929,6 +35018,8 @@
             window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
             window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
             window.toggleMonthlyPlanWorkloadDashboard = toggleMonthlyPlanWorkloadDashboard;
+            window.openPlanDayModal = openPlanDayModal;
+            window.savePlannedTask = savePlannedTask;
             // Phase 4: Carry-Forward Automation
             window.shouldTaskCarryForward = shouldTaskCarryForward;
             window.getTaskCarryForwardCount = getTaskCarryForwardCount;
