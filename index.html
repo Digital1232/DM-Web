@@ -1606,6 +1606,12 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Daily Plan
                     </button>
+                    <button onclick="switchView('monthly-plan')" id="nav-monthly-plan" data-label="Monthly Plan"
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:calendar-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Monthly Plan
+                    </button>
 
                     <!-- Divider: Operations & QC -->
                     <div class="h-px bg-slate-100 my-2 mx-3"></div>
@@ -2768,6 +2774,11 @@
 
                 </div><!-- /view-tasks-panel -->
                 <div id="view-dailyplan-panel" class="hidden"></div>
+
+                <!-- ════ MONTHLY PLAN VIEW ════ -->
+                <div id="view-monthly-plan-panel" class="hidden space-y-6 fade-in">
+                    <!-- Monthly Plan will be rendered here -->
+                </div>
 
                 <!-- ════ QC PORTAL VIEW ════ -->
                 <div id="view-qc-panel" class="hidden space-y-8 fade-in">
@@ -9169,6 +9180,7 @@
             function canViewReports() { return true; }
             function canViewDailySummary() { return isAdmin() || isManager(); }
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
+            function canViewMonthlyPlan() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
             function canViewMetaAds() {
                 if (!currentUser) return false;
@@ -10498,7 +10510,7 @@
                     document.getElementById('loading-view')?.classList.add('hidden');
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
-                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements'];
+                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements'];
                     if (canViewProjects()) validViews.push('projects');
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
@@ -10768,6 +10780,7 @@
                 document.getElementById('nav-social-analytics')?.classList.toggle('hidden', !canViewAllAnalytics());
                 document.getElementById('nav-meta-ads')?.classList.toggle('hidden', !canViewMetaAds());
                 document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
+                document.getElementById('nav-monthly-plan')?.classList.toggle('hidden', !canViewMonthlyPlan());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
@@ -12009,6 +12022,7 @@
                 if (view === 'reports' && !canViewReports()) view = 'dashboard';
                 if (view === 'social-analytics' && !canViewAllAnalytics()) view = 'dashboard';
                 if (view === 'daily-summary' && !canViewDailySummary()) view = 'dashboard';
+                if (view === 'monthly-plan' && !canViewMonthlyPlan()) view = 'dashboard';
                 if (view === 'projects' && !canViewProjects()) view = 'dashboard';
                 if (view === 'users' && !isAdmin()) view = 'dashboard';
                 if (view === 'qc' && !canViewQcPortal()) view = 'dashboard';
@@ -12025,7 +12039,7 @@
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
+                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
                     document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                     const navEl = document.getElementById(`nav-${v}`);
                     if (navEl) navEl.classList.remove('nav-active');
@@ -12039,6 +12053,7 @@
                     tasks: 'Tasks Hub',
                     'internal-tasks': 'Internal Tasks',
                     dailyplan: 'Daily Plan',
+                    'monthly-plan': 'Monthly Team Plan',
                     projects: 'Project Overview',
                     shoots: 'Client Shoot Calendar',
                     qc: 'Quality Check Portal',
@@ -12073,6 +12088,7 @@
                     onProjectPeriodModeChange();
                 }
                 else if (view === 'dailyplan') { renderDailyPlan(); }
+                else if (view === 'monthly-plan') { initMonthlyPlan(); }
                 else if (view === 'qc') { renderQcTasks(); loadQcReports(); }
                 else if (view === 'reports') {
                     if (!reportDateFrom) initReportFilters();
@@ -33080,6 +33096,170 @@
                 } catch (err) {
                     toast('Failed to remove: ' + err.message, 'error');
                 }
+            }
+
+            // ── MONTHLY TEAM PLAN FUNCTIONS ─────────────────────────────────────────
+
+            let monthlyPlanCurrentDate = new Date();
+            let monthlyPlanTeamFilter = 'All';
+            let monthlyPlanData = {};
+            let monthlyPlanMetrics = {};
+
+            async function initMonthlyPlan() {
+                const panel = document.getElementById('view-monthly-plan-panel');
+                if (!panel) return;
+
+                // Clear existing content
+                panel.innerHTML = '';
+
+                // Build the Monthly Plan UI
+                panel.innerHTML = `
+                    <div class="space-y-6">
+                        <!-- Header with Controls -->
+                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
+                            <div class="flex items-center justify-between flex-wrap gap-4">
+                                <div class="flex items-center gap-4">
+                                    <input type="month" id="mp-month-picker" onchange="renderMonthlyPlan()" 
+                                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+                                    <button onclick="navigateMonthlyPlan(-1)" class="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                                        <iconify-icon icon="solar:alt-arrow-left-linear" width="20"></iconify-icon>
+                                    </button>
+                                    <span id="mp-month-title" class="text-sm font-bold text-slate-600 min-w-[150px]">Month Year</span>
+                                    <button onclick="navigateMonthlyPlan(1)" class="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                                        <iconify-icon icon="solar:alt-arrow-right-linear" width="20"></iconify-icon>
+                                    </button>
+                                    <button onclick="navigateMonthlyPlan(0)" class="text-xs font-bold text-indigo-600 hover:underline">Today</button>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <select id="mp-team-filter" onchange="filterMonthlyPlanByTeamMember()" 
+                                        class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="All">All Team Members</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Calendar Grid -->
+                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 overflow-hidden">
+                            <div class="grid grid-cols-7 gap-px bg-slate-200">
+                                <!-- Week Days Header -->
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sun</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Mon</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Tue</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Wed</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Thu</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Fri</div>
+                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sat</div>
+                                
+                                <!-- Day Cells -->
+                                <div id="mp-calendar-grid" class="contents"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Set month picker to current month
+                const now = new Date();
+                const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const picker = document.getElementById('mp-month-picker');
+                if (picker) picker.value = monthStr;
+
+                // Populate team member filter
+                await populateMonthlyPlanTeamFilter();
+
+                // Render the calendar
+                renderMonthlyPlan();
+            }
+
+            async function populateMonthlyPlanTeamFilter() {
+                const select = document.getElementById('mp-team-filter');
+                if (!select) return;
+
+                const teamMembers = Array.from(allUsersMap.values())
+                    .filter(u => u.email && u.email !== '123')
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+                select.innerHTML = '<option value="All">All Team Members</option>' +
+                    teamMembers.map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`).join('');
+            }
+
+            function navigateMonthlyPlan(direction) {
+                if (direction === 0) {
+                    monthlyPlanCurrentDate = new Date();
+                } else {
+                    monthlyPlanCurrentDate.setMonth(monthlyPlanCurrentDate.getMonth() + direction);
+                }
+                const monthStr = `${monthlyPlanCurrentDate.getFullYear()}-${String(monthlyPlanCurrentDate.getMonth() + 1).padStart(2, '0')}`;
+                const picker = document.getElementById('mp-month-picker');
+                if (picker) picker.value = monthStr;
+                renderMonthlyPlan();
+            }
+
+            function filterMonthlyPlanByTeamMember() {
+                const select = document.getElementById('mp-team-filter');
+                if (select) monthlyPlanTeamFilter = select.value;
+                renderMonthlyPlan();
+            }
+
+            function renderMonthlyPlan() {
+                const picker = document.getElementById('mp-month-picker');
+                if (!picker || !picker.value) return;
+
+                const [year, month] = picker.value.split('-').map(Number);
+                monthlyPlanCurrentDate = new Date(year, month - 1, 1);
+
+                const grid = document.getElementById('mp-calendar-grid');
+                if (!grid) return;
+
+                // Update month title
+                const titleEl = document.getElementById('mp-month-title');
+                if (titleEl) {
+                    titleEl.textContent = monthlyPlanCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+                }
+
+                const firstDay = new Date(year, month - 1, 1).getDay();
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const today = todayIso();
+
+                let html = '';
+
+                // Blank days before month starts
+                for (let i = 0; i < firstDay; i++) {
+                    html += `<div class="bg-slate-50/30 min-h-[100px]"></div>`;
+                }
+
+                // Days of month
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const isToday = dateStr === today;
+                    const dayOfWeek = new Date(year, month - 1, d).getDay();
+
+                    html += `
+                        <div class="bg-white border border-slate-200 min-h-[100px] p-3 hover:bg-slate-50/50 transition-colors cursor-pointer group relative"
+                            onclick="expandMonthlyPlanDay('${dateStr}')">
+                            <div class="text-xs font-black ${isToday ? 'text-indigo-600 bg-indigo-50 w-fit px-2 py-1 rounded' : 'text-slate-600'}">
+                                ${d}
+                            </div>
+                            <div class="mt-2 text-[9px] text-slate-400 group-hover:text-indigo-500 transition-colors">
+                                Click to view/edit
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Blank days after month ends
+                const totalCells = firstDay + daysInMonth;
+                const remainingCells = (7 - (totalCells % 7)) % 7;
+                for (let i = 0; i < remainingCells; i++) {
+                    html += `<div class="bg-slate-50/30 min-h-[100px]"></div>`;
+                }
+
+                grid.innerHTML = html;
+            }
+
+            function expandMonthlyPlanDay(dateStr) {
+                toast('Day expansion coming soon! Selected: ' + dateStr, 'info');
+                // To be implemented in Phase 2
             }
 
             // ── Daily Plan Edit Modal ─────────────────────────────────────────────
