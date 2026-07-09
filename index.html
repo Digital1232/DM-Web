@@ -33477,6 +33477,9 @@
                 const newTasks = tasksForDay.filter(t => !t.isCarryForward);
                 const carryForwardTasks = tasksForDay.filter(t => t.isCarryForward);
 
+                // Get Daily Plan tasks for this date
+                const dailyPlanTasks = getDailyPlanTasksForDate(dateStr);
+
                 // Build HTML
                 let html = `
                     <div class="flex items-center justify-between">
@@ -33489,21 +33492,20 @@
                         </button>
                     </div>
 
-                    <!-- Plan for the Day Section -->
+                    <!-- Plan for the Day - Daily Plan Tasks Section -->
                     <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
-                        <h4 class="text-sm font-black text-indigo-900">📋 Plan for the Day</h4>
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-3">
-                                <input type="text" placeholder="Add a plan or note for this day..." 
-                                    id="mp-day-plan-input" 
-                                    class="flex-1 bg-white border border-indigo-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                <button onclick="saveMonthlyPlanDayNote('${dateStr}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors">
-                                    Save
-                                </button>
-                            </div>
-                            <div id="mp-day-plan-display" class="text-xs text-slate-600 italic min-h-[20px]">
-                                No plan added for this day yet
-                            </div>
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-sm font-black text-indigo-900">📋 Plan for the Day</h4>
+                            <a href="javascript:switchView('tasks'); switchTasksTab('dailyplan');" 
+                                class="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                                Edit in Daily Plan →
+                            </a>
+                        </div>
+                        <div id="mp-daily-plan-tasks" class="space-y-2">
+                            ${dailyPlanTasks.length === 0 ? 
+                                '<p class="text-xs text-indigo-600 italic">No tasks planned for this day in Daily Plan</p>' 
+                                : renderDailyPlanTasksForMonthly(dailyPlanTasks)
+                            }
                         </div>
                     </div>
 
@@ -33533,47 +33535,63 @@
                 panel.innerHTML = html;
                 panel.classList.remove('hidden');
 
-                // Load and display existing day plan
-                loadMonthlyPlanDayNote(dateStr);
-
                 // Scroll to detail panel
                 setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
             }
 
-            function saveMonthlyPlanDayNote(dateStr) {
-                const input = document.getElementById('mp-day-plan-input');
-                if (!input) return;
+            function getDailyPlanTasksForDate(dateStr) {
+                if (!db || !currentUser) return [];
 
-                const note = input.value.trim();
-                if (!note) return toast('Please enter a plan or note', 'info');
+                // Get all team members who can be viewed
+                const teamEmails = canViewDailyPlanTeamAccess() 
+                    ? Array.from(allUsersMap.values())
+                        .filter(u => u.email && u.email !== '123')
+                        .map(u => u.email)
+                    : [currentUser.email];
 
-                // Save to localStorage for now (will be replaced with Firebase in Phase 4)
-                const notesKey = `mp_day_notes_${dateStr}`;
-                localStorage.setItem(notesKey, note);
+                let allPlanTasks = [];
 
-                // Update display
-                loadMonthlyPlanDayNote(dateStr);
-                toast('Day plan saved', 'success');
-                input.value = '';
+                // Collect daily plan tasks for all viewable users for this date
+                teamEmails.forEach(email => {
+                    const userPlanTasks = collectDailyPlanTasksForUser(email, dateStr);
+                    allPlanTasks = allPlanTasks.concat(userPlanTasks);
+                });
+
+                return allPlanTasks;
             }
 
-            function loadMonthlyPlanDayNote(dateStr) {
-                const notesKey = `mp_day_notes_${dateStr}`;
-                const savedNote = localStorage.getItem(notesKey);
-                const display = document.getElementById('mp-day-plan-display');
-                const input = document.getElementById('mp-day-plan-input');
+            function renderDailyPlanTasksForMonthly(planTasks) {
+                if (!planTasks || planTasks.length === 0) return '';
 
-                if (display) {
-                    if (savedNote) {
-                        display.innerHTML = `<span class="text-slate-700 font-semibold">${escapeHtml(savedNote)}</span>`;
-                    } else {
-                        display.innerHTML = 'No plan added for this day yet';
-                    }
-                }
+                return `<div class="space-y-2">` + 
+                    planTasks.map(t => {
+                        const statusColor = getTaskStatusColor(t.status || 'To Do');
+                        const assigneeUser = allUsersMap.get((t.assigneeEmail || '').toLowerCase());
+                        const assigneeName = assigneeUser?.name || (t.assigneeEmail?.split('@')[0] || 'Unassigned');
 
-                if (input && savedNote) {
-                    input.value = '';
-                }
+                        return `
+                            <div class="p-3 bg-white border border-indigo-100 rounded-lg hover:shadow-md transition-all flex justify-between items-start gap-2 group">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-900">${escapeHtml(t.id)}</span>
+                                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${statusColor}">${escapeHtml(t.status || 'To Do')}</span>
+                                    </div>
+                                    <h6 class="text-xs font-bold text-slate-900 line-clamp-1 mb-1">${escapeHtml(t.desc || t.id)}</h6>
+                                    <div class="flex items-center gap-2 text-[9px] text-slate-500">
+                                        <span>${escapeHtml(t.client || 'General')}</span>
+                                        <span>•</span>
+                                        <span>${escapeHtml(assigneeName)}</span>
+                                    </div>
+                                </div>
+                                <a href="javascript:switchView('tasks'); switchTasksTab('dailyplan');" 
+                                    class="p-1.5 rounded-lg hover:bg-indigo-100 opacity-0 group-hover:opacity-100 transition-all text-indigo-600" 
+                                    title="Open in Daily Plan">
+                                    <iconify-icon icon="solar:arrow-up-right-square-bold" width="14"></iconify-icon>
+                                </a>
+                            </div>
+                        `;
+                    }).join('') +
+                    `</div>`;
             }
 
             function closeMonthlyPlanDayDetail() {
@@ -33666,6 +33684,434 @@
                 }
 
                 return 'bg-slate-50 text-slate-700 border border-slate-200';
+            }
+
+            // ── PHASE 4: CARRY-FORWARD AUTOMATION ─────────────────────────────────────
+
+            // Firebase collections for carry-forward tracking
+            const CARRY_FORWARD_CONFIG = {
+                maxCarryCount: 5,              // Max times a task can be carried
+                transitionTime: '18:00',       // 6 PM - end of day for transition
+                notCompletedStatuses: ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'],
+                completedStatuses: ['quality check', 'design completed', 'client sent', 'client approved'],
+                postedStatuses: ['posted', 'analytics', 'done']
+            };
+
+            // Determine if a task should carry forward based on status and hold flag
+            function shouldTaskCarryForward(task) {
+                if (!task) return false;
+
+                const normalizedStatus = (task.status || '').toLowerCase().trim();
+
+                // "Shoot Needed" always carries forward
+                if (normalizedStatus === 'shoot needed') {
+                    return true;
+                }
+
+                // "Design Hold" or marked "On Hold" - do NOT carry forward
+                if (normalizedStatus === 'design hold' || task.onHold === true) {
+                    return false;
+                }
+
+                // Other NOT_COMPLETED statuses - carry forward
+                if (CARRY_FORWARD_CONFIG.notCompletedStatuses.some(s => normalizedStatus === s)) {
+                    return true;
+                }
+
+                // Completed or Posted - do NOT carry
+                if (CARRY_FORWARD_CONFIG.completedStatuses.some(s => normalizedStatus === s) ||
+                    CARRY_FORWARD_CONFIG.postedStatuses.some(s => normalizedStatus === s)) {
+                    return false;
+                }
+
+                return false;
+            }
+
+            // Get carry-forward count for a task
+            async function getTaskCarryForwardCount(taskId) {
+                if (!db) return 0;
+                try {
+                    const snap = await get(query(ref(db, 'worksync/carry_forward_log'), 
+                        orderByChild('taskId'), equalTo(taskId)));
+                    if (snap.exists()) {
+                        const entries = Object.values(snap.val());
+                        // Count only active entries
+                        return entries.filter(e => e.status === 'active').length;
+                    }
+                } catch (err) {
+                    console.error('Error getting carry count:', err);
+                }
+                return 0;
+            }
+
+            // Create a carry-forward log entry
+            async function createCarryForwardLogEntry(taskId, fromDate, toDate, reason, carryCount) {
+                if (!db || !currentUser) return;
+
+                const logId = `CF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const entry = {
+                    id: logId,
+                    taskId: taskId,
+                    fromDate: fromDate,
+                    toDate: toDate,
+                    reason: reason,  // 'shoot_needed', 'pending', 'incomplete'
+                    carryCount: carryCount,
+                    createdBy: currentUser.email,
+                    createdAt: Date.now(),
+                    status: 'active'
+                };
+
+                try {
+                    await set(ref(db, `worksync/carry_forward_log/${logId}`), entry);
+                    console.log('Created carry-forward log:', logId);
+                    return entry;
+                } catch (err) {
+                    console.error('Error creating carry-forward log:', err);
+                }
+            }
+
+            // Perform automated daily transition (run at end of day)
+            async function performDailyTransition(dateStr) {
+                if (!db || !currentUser || !isAdmin()) {
+                    console.warn('Daily transition requires admin access');
+                    return;
+                }
+
+                const date = new Date(dateStr);
+                const nextDate = new Date(date);
+                nextDate.setDate(nextDate.getDate() + 1);
+                const nextDateStr = nextDate.toISOString().slice(0, 10);
+
+                console.log(`Starting daily transition from ${dateStr} to ${nextDateStr}`);
+
+                try {
+                    // Get all tasks (simulated from current tasks array)
+                    let transitionCount = 0;
+                    const affectedTasks = [];
+
+                    // Check each task
+                    for (const task of tasks) {
+                        if (!task.id || !task.assigneeEmail) continue;
+
+                        // Check if task was assigned to today in daily plan
+                        const planKey = `${eKey(task.assigneeEmail)}/${task.id}`;
+                        // In a real scenario, we'd query Firebase daily_plans collection
+                        // For now, we'll check if task has duedate of today
+                        
+                        if (task.duedate === dateStr && shouldTaskCarryForward(task)) {
+                            // Get current carry count
+                            const currentCarryCount = await getTaskCarryForwardCount(task.id);
+                            
+                            // Check if under max carry limit
+                            if (currentCarryCount < CARRY_FORWARD_CONFIG.maxCarryCount) {
+                                // Determine reason
+                                let reason = 'incomplete';
+                                const status = (task.status || '').toLowerCase().trim();
+                                if (status === 'shoot needed') {
+                                    reason = 'shoot_needed';
+                                } else if (status === 'design hold') {
+                                    reason = 'on_hold';
+                                }
+
+                                // Create carry-forward log entry
+                                await createCarryForwardLogEntry(task.id, dateStr, nextDateStr, reason, currentCarryCount + 1);
+
+                                // Update daily plan for next date
+                                const updates = {};
+                                updates[`worksync/daily_plans/${eKey(task.assigneeEmail)}/${task.id}`] = {
+                                    date: nextDateStr,
+                                    carriedFrom: dateStr,
+                                    reason: reason,
+                                    carryCount: currentCarryCount + 1,
+                                    carryTimestamp: Date.now()
+                                };
+                                await update(ref(db), updates);
+
+                                transitionCount++;
+                                affectedTasks.push({
+                                    taskId: task.id,
+                                    assignee: task.assigneeEmail,
+                                    reason: reason
+                                });
+                            }
+                        }
+                    }
+
+                    console.log(`Daily transition complete: ${transitionCount} tasks carried forward`);
+
+                    // Send notifications for affected tasks
+                    if (affectedTasks.length > 0) {
+                        await sendCarryForwardNotifications(affectedTasks, dateStr, nextDateStr);
+                    }
+
+                    return { success: true, transitionCount, affectedTasks };
+                } catch (err) {
+                    console.error('Error in daily transition:', err);
+                    return { success: false, error: err.message };
+                }
+            }
+
+            // Send carry-forward notifications to affected team members
+            async function sendCarryForwardNotifications(affectedTasks, fromDate, toDate) {
+                if (!db) return;
+
+                // Group tasks by assignee
+                const tasksByAssignee = {};
+                affectedTasks.forEach(t => {
+                    if (!tasksByAssignee[t.assignee]) {
+                        tasksByAssignee[t.assignee] = [];
+                    }
+                    tasksByAssignee[t.assignee].push(t);
+                });
+
+                // Create notification for each assignee
+                const fromDateObj = new Date(fromDate);
+                const toDateObj = new Date(toDate);
+
+                for (const [email, tasksForUser] of Object.entries(tasksByAssignee)) {
+                    const user = allUsersMap.get(email.toLowerCase());
+                    const userName = user?.name || email.split('@')[0];
+
+                    const notificationText = `${tasksForUser.length} task${tasksForUser.length > 1 ? 's' : ''} carried forward from ${fromDateObj.toLocaleDateString()} to ${toDateObj.toLocaleDateString()}`;
+
+                    try {
+                        const notifId = `CF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                        await set(ref(db, `worksync/notifications/${eKey(email)}/${notifId}`), {
+                            id: notifId,
+                            type: 'carry_forward',
+                            message: notificationText,
+                            fromDate: fromDate,
+                            toDate: toDate,
+                            taskCount: tasksForUser.length,
+                            createdAt: Date.now(),
+                            read: false
+                        });
+                    } catch (err) {
+                        console.error(`Error sending notification to ${email}:`, err);
+                    }
+                }
+            }
+
+            // Manual carry-forward trigger for managers
+            async function manuallyCarryForwardTask(taskId, fromDate, toDate) {
+                if (!db || !currentUser || !isAdmin()) {
+                    toast('Only admins can manually carry forward tasks', 'error');
+                    return false;
+                }
+
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) {
+                    toast('Task not found', 'error');
+                    return false;
+                }
+
+                // Validate dates
+                const from = new Date(fromDate);
+                const to = new Date(toDate);
+                if (to <= from) {
+                    toast('Target date must be in the future', 'error');
+                    return false;
+                }
+
+                // Check if task should carry forward
+                if (!shouldTaskCarryForward(task)) {
+                    toast('This task cannot be carried forward (status does not permit carry-forward)', 'error');
+                    return false;
+                }
+
+                try {
+                    // Get current carry count
+                    const currentCarryCount = await getTaskCarryForwardCount(taskId);
+                    
+                    // Check max carry limit
+                    if (currentCarryCount >= CARRY_FORWARD_CONFIG.maxCarryCount) {
+                        toast(`Task has reached max carry-forward limit (${CARRY_FORWARD_CONFIG.maxCarryCount})`, 'error');
+                        return false;
+                    }
+
+                    // Create carry-forward log entry
+                    const logEntry = await createCarryForwardLogEntry(taskId, fromDate, toDate, 'manual', currentCarryCount + 1);
+
+                    if (!logEntry) {
+                        toast('Failed to create carry-forward log', 'error');
+                        return false;
+                    }
+
+                    // Update daily plan for target date
+                    const updates = {};
+                    updates[`worksync/daily_plans/${eKey(task.assigneeEmail)}/${taskId}`] = {
+                        date: toDate,
+                        carriedFrom: fromDate,
+                        reason: 'manual_carry',
+                        carryCount: currentCarryCount + 1,
+                        carryTimestamp: Date.now()
+                    };
+                    await update(ref(db), updates);
+
+                    // Send notification
+                    const user = allUsersMap.get(task.assigneeEmail.toLowerCase());
+                    const userName = user?.name || task.assigneeEmail.split('@')[0];
+                    toast(`Task carried forward to ${new Date(toDate).toLocaleDateString()} for ${userName}`, 'success');
+
+                    // Refresh monthly plan view if open
+                    if (document.getElementById('view-monthly-plan-panel').style.display !== 'none') {
+                        renderMonthlyPlan();
+                    }
+
+                    return true;
+                } catch (err) {
+                    console.error('Error in manual carry-forward:', err);
+                    toast('Failed to carry forward task: ' + err.message, 'error');
+                    return false;
+                }
+            }
+
+            // Get carry-forward history for a task
+            async function getTaskCarryForwardHistory(taskId) {
+                if (!db) return [];
+
+                try {
+                    const snap = await get(query(ref(db, 'worksync/carry_forward_log'), 
+                        orderByChild('taskId'), equalTo(taskId)));
+                    if (snap.exists()) {
+                        const entries = Object.values(snap.val());
+                        // Sort by createdAt descending (newest first)
+                        return entries.sort((a, b) => b.createdAt - a.createdAt);
+                    }
+                } catch (err) {
+                    console.error('Error getting carry-forward history:', err);
+                }
+                return [];
+            }
+
+            // Display carry-forward history modal
+            async function openCarryForwardHistoryModal(taskId) {
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                const history = await getTaskCarryForwardHistory(taskId);
+
+                let html = `
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-xs text-slate-400 uppercase font-bold tracking-widest">Task Details</p>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-sm font-bold text-slate-900">${escapeHtml(task.id)}</p>
+                                <p class="text-xs text-slate-600">${escapeHtml(task.desc || task.id)}</p>
+                                <p class="text-xs text-slate-500">Assigned to: ${escapeHtml(task.assignee || task.assigneeEmail)}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="text-xs text-slate-400 uppercase font-bold tracking-widest mb-2">Carry-Forward History</p>
+                            ${history.length === 0 ? 
+                                '<p class="text-xs text-slate-400 italic">No carry-forward history</p>' :
+                                `<div class="space-y-2 max-h-[300px] overflow-y-auto">
+                                    ${history.map((entry, idx) => `
+                                        <div class="border border-slate-200 rounded-lg p-2 bg-slate-50">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-[9px] font-bold text-slate-900">#${history.length - idx}</span>
+                                                <span class="text-[8px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">${entry.reason}</span>
+                                            </div>
+                                            <div class="text-[8px] text-slate-600 space-y-0.5">
+                                                <p>From: <strong>${new Date(entry.fromDate).toLocaleDateString()}</strong></p>
+                                                <p>To: <strong>${new Date(entry.toDate).toLocaleDateString()}</strong></p>
+                                                <p>By: <strong>${escapeHtml(entry.createdBy)}</strong></p>
+                                                <p class="text-slate-500">${new Date(entry.createdAt).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>`
+                            }
+                        </div>
+
+                        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                            <p class="text-xs text-indigo-900 mb-2 font-bold">Current Status</p>
+                            <p class="text-xs text-indigo-700 mb-3">This task has been carried forward <strong>${history.length}</strong> time${history.length !== 1 ? 's' : ''}</p>
+                            ${isAdmin() ? `
+                                <button onclick="closeCarryForwardHistoryModal(); manuallyCarryForwardTask('${taskId}', '${new Date().toISOString().split('T')[0]}', '${new Date(Date.now() + 86400000).toISOString().split('T')[0]}')"
+                                    class="text-xs font-bold bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors">
+                                    Carry Forward to Tomorrow
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+
+                // Create or update modal
+                let modal = document.getElementById('carryForwardHistoryModal');
+                if (!modal) {
+                    modal = document.createElement('dialog');
+                    modal.id = 'carryForwardHistoryModal';
+                    modal.className = 'modal';
+                    document.body.appendChild(modal);
+                }
+
+                modal.innerHTML = `
+                    <div class="modal-box max-w-lg">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg">Carry-Forward History</h3>
+                            <button onclick="closeCarryForwardHistoryModal()" class="btn btn-sm btn-circle btn-ghost">✕</button>
+                        </div>
+                        ${html}
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                    </form>
+                `;
+
+                modal.showModal();
+            }
+
+            function closeCarryForwardHistoryModal() {
+                const modal = document.getElementById('carryForwardHistoryModal');
+                if (modal) modal.close();
+            }
+
+            // Add carry-forward button to task context menu (called from renderMonthlyPlanTaskRow)
+            function openMonthlyPlanTaskMenu(event, taskId) {
+                event.stopPropagation();
+                
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                const fromDate = todayIso();
+                const toDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10); // Tomorrow
+
+                let menuHtml = `
+                    <div class="fixed bg-white rounded-lg shadow-xl border border-slate-200 py-2 z-50" 
+                        style="top: ${event.clientY}px; left: ${event.clientX}px;">
+                        ${isAdmin() ? `
+                            <button onclick="manuallyCarryForwardTask('${task.id}', '${fromDate}', '${toDate}'); this.parentElement.remove();"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 text-slate-900 font-medium">
+                                <span class="mr-2">→</span> Carry Forward to Tomorrow
+                            </button>
+                        ` : ''}
+                        <button onclick="openCarryForwardHistoryModal('${task.id}'); this.parentElement.remove();"
+                            class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 text-slate-900 font-medium">
+                            <span class="mr-2">📋</span> View History
+                        </button>
+                        <div class="border-t border-slate-100 my-1"></div>
+                        <button onclick="this.parentElement.remove();"
+                            class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-100 text-slate-600 font-medium">
+                            <span class="mr-2">✕</span> Close
+                        </button>
+                    </div>
+                `;
+
+                const menu = document.createElement('div');
+                menu.innerHTML = menuHtml;
+                document.body.appendChild(menu.firstElementChild);
+
+                // Remove menu when clicking outside
+                setTimeout(() => {
+                    document.addEventListener('click', function removeMenu(e) {
+                        if (!e.target.closest('.modal-box') && e.target !== event.target && !event.target.closest('button')) {
+                            menu.firstElementChild?.remove();
+                            document.removeEventListener('click', removeMenu);
+                        }
+                    });
+                }, 10);
             }
 
             // ── Daily Plan Edit Modal ─────────────────────────────────────────────
@@ -34029,8 +34475,16 @@
             window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
             window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
             window.toggleMonthlyPlanWorkloadDashboard = toggleMonthlyPlanWorkloadDashboard;
-            window.saveMonthlyPlanDayNote = saveMonthlyPlanDayNote;
-            window.loadMonthlyPlanDayNote = loadMonthlyPlanDayNote;
+            // Phase 4: Carry-Forward Automation
+            window.shouldTaskCarryForward = shouldTaskCarryForward;
+            window.getTaskCarryForwardCount = getTaskCarryForwardCount;
+            window.createCarryForwardLogEntry = createCarryForwardLogEntry;
+            window.performDailyTransition = performDailyTransition;
+            window.sendCarryForwardNotifications = sendCarryForwardNotifications;
+            window.manuallyCarryForwardTask = manuallyCarryForwardTask;
+            window.getTaskCarryForwardHistory = getTaskCarryForwardHistory;
+            window.openCarryForwardHistoryModal = openCarryForwardHistoryModal;
+            window.closeCarryForwardHistoryModal = closeCarryForwardHistoryModal;
             window.initSocialAnalytics = initSocialAnalytics;
             window.filterSocialAnalytics = filterSocialAnalytics;
             window.renderSaDashboard = renderSaDashboard;
