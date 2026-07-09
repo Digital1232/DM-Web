@@ -33112,7 +33112,7 @@
                 // Clear existing content
                 panel.innerHTML = '';
 
-                // Build the Monthly Plan UI
+                // Build the Monthly Plan UI with 2-column layout
                 panel.innerHTML = `
                     <div class="space-y-6">
                         <!-- Header with Controls -->
@@ -33135,24 +33135,35 @@
                                         class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
                                         <option value="All">All Team Members</option>
                                     </select>
+                                    <button onclick="toggleMonthlyPlanWorkloadDashboard()" class="p-2 rounded-lg hover:bg-slate-100 transition-colors" title="Toggle workload dashboard">
+                                        <iconify-icon icon="solar:chart-bold" width="20"></iconify-icon>
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Calendar Grid -->
-                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 overflow-hidden">
-                            <div class="grid grid-cols-7 gap-px bg-slate-200">
-                                <!-- Week Days Header -->
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sun</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Mon</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Tue</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Wed</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Thu</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Fri</div>
-                                <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sat</div>
-                                
-                                <!-- Day Cells -->
-                                <div id="mp-calendar-grid" class="contents"></div>
+                        <!-- 2-Column Layout: Calendar + Workload Dashboard -->
+                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+                            <!-- Calendar Grid -->
+                            <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 overflow-hidden">
+                                <div class="grid grid-cols-7 gap-px bg-slate-200">
+                                    <!-- Week Days Header -->
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sun</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Mon</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Tue</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Wed</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Thu</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Fri</div>
+                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sat</div>
+                                    
+                                    <!-- Day Cells -->
+                                    <div id="mp-calendar-grid" class="contents"></div>
+                                </div>
+                            </div>
+
+                            <!-- Workload Dashboard Sidebar -->
+                            <div id="mp-workload-dashboard" class="hidden lg:flex flex-col gap-4">
+                                <!-- Will be populated by renderMonthlyPlanWorkloadDashboard() -->
                             </div>
                         </div>
 
@@ -33260,6 +33271,171 @@
                 }
 
                 grid.innerHTML = html;
+
+                // Render workload dashboard
+                renderMonthlyPlanWorkloadDashboard();
+            }
+
+            function toggleMonthlyPlanWorkloadDashboard() {
+                const dashboard = document.getElementById('mp-workload-dashboard');
+                if (dashboard) {
+                    dashboard.classList.toggle('hidden');
+                    dashboard.classList.toggle('lg:flex');
+                }
+            }
+
+            function renderMonthlyPlanWorkloadDashboard() {
+                const dashboard = document.getElementById('mp-workload-dashboard');
+                if (!dashboard) return;
+
+                // Get metrics for current month
+                const picker = document.getElementById('mp-month-picker');
+                if (!picker || !picker.value) return;
+                const [year, month] = picker.value.split('-').map(Number);
+
+                // Calculate metrics
+                const metrics = calculateMonthlyPlanMetrics(year, month);
+
+                let html = `
+                    <!-- Total Tasks Card -->
+                    <div class="bg-white rounded-2xl p-4 shadow-md border border-slate-100">
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-2">Total Tasks</p>
+                        <p class="text-2xl font-black text-slate-900">${metrics.totalTasks}</p>
+                        <p class="text-[9px] text-slate-500 mt-1">Assigned for month</p>
+                    </div>
+
+                    <!-- Task Breakdown by Status -->
+                    <div class="bg-white rounded-2xl p-4 shadow-md border border-slate-100 space-y-2">
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-3">Status Breakdown</p>
+                        <div class="flex items-center justify-between text-[9px]">
+                            <span class="text-slate-600">Not Completed</span>
+                            <span class="font-bold px-2 py-0.5 rounded bg-red-50 text-red-700">${metrics.notCompletedCount}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px]">
+                            <span class="text-slate-600">Completed</span>
+                            <span class="font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">${metrics.completedCount}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px]">
+                            <span class="text-slate-600">Posted</span>
+                            <span class="font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">${metrics.postedCount}</span>
+                        </div>
+                    </div>
+
+                    <!-- Team Members Stats -->
+                    <div class="bg-white rounded-2xl p-4 shadow-md border border-slate-100 space-y-3 max-h-[500px] overflow-y-auto">
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest sticky top-0 bg-white py-2">Team Allocation</p>
+                        ${renderMonthlyPlanTeamStats(metrics.teamStats)}
+                    </div>
+                `;
+
+                dashboard.innerHTML = html;
+                // Show by default on desktop
+                dashboard.classList.remove('hidden');
+                dashboard.classList.add('lg:flex');
+            }
+
+            function calculateMonthlyPlanMetrics(year, month) {
+                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
+                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
+                const postedStatuses = ['posted', 'analytics', 'done'];
+
+                let totalTasks = 0;
+                let notCompletedCount = 0;
+                let completedCount = 0;
+                let postedCount = 0;
+                let teamStats = {};
+
+                // Build team stats structure
+                Array.from(allUsersMap.values())
+                    .filter(u => u.email && u.email !== '123')
+                    .forEach(user => {
+                        teamStats[user.email] = {
+                            name: user.name,
+                            totalTasks: 0,
+                            notCompletedTasks: 0,
+                            completedTasks: 0,
+                            postedTasks: 0,
+                            capacityUtilization: 0
+                        };
+                    });
+
+                // Count tasks (placeholder - will use actual daily plan data in Phase 4)
+                tasks.forEach(task => {
+                    if (task.duedate) {
+                        const dueDate = new Date(task.duedate);
+                        if (dueDate.getFullYear() === year && (dueDate.getMonth() + 1) === month) {
+                            totalTasks++;
+                            const status = (task.status || '').toLowerCase();
+
+                            if (notCompletedStatuses.some(s => status === s)) {
+                                notCompletedCount++;
+                            } else if (completedStatuses.some(s => status === s)) {
+                                completedCount++;
+                            } else if (postedStatuses.some(s => status === s)) {
+                                postedCount++;
+                            }
+
+                            // Add to team member stats
+                            if (task.assigneeEmail && teamStats[task.assigneeEmail]) {
+                                teamStats[task.assigneeEmail].totalTasks++;
+                                if (notCompletedStatuses.some(s => status === s)) {
+                                    teamStats[task.assigneeEmail].notCompletedTasks++;
+                                } else if (completedStatuses.some(s => status === s)) {
+                                    teamStats[task.assigneeEmail].completedTasks++;
+                                } else if (postedStatuses.some(s => status === s)) {
+                                    teamStats[task.assigneeEmail].postedTasks++;
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Calculate capacity utilization
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const avgCapacityPerDay = 8; // Average tasks per day per person
+                Object.values(teamStats).forEach(stats => {
+                    stats.capacityUtilization = Math.round((stats.totalTasks / (daysInMonth * avgCapacityPerDay)) * 100);
+                });
+
+                return {
+                    totalTasks,
+                    notCompletedCount,
+                    completedCount,
+                    postedCount,
+                    teamStats
+                };
+            }
+
+            function renderMonthlyPlanTeamStats(teamStats) {
+                if (!teamStats || Object.keys(teamStats).length === 0) {
+                    return '<p class="text-xs text-slate-400 italic">No team members assigned</p>';
+                }
+
+                return Object.entries(teamStats)
+                    .filter(([email, stats]) => stats.totalTasks > 0)
+                    .sort((a, b) => b[1].totalTasks - a[1].totalTasks)
+                    .map(([email, stats]) => {
+                        const utilColor = stats.capacityUtilization > 100 ? 'bg-red-50 text-red-700' :
+                                        stats.capacityUtilization > 80 ? 'bg-amber-50 text-amber-700' :
+                                        'bg-emerald-50 text-emerald-700';
+
+                        return `
+                            <div class="border border-slate-200 rounded-lg p-2.5 space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[9px] font-bold text-slate-900">${escapeHtml(stats.name)}</span>
+                                    <span class="text-[8px] font-bold px-1.5 py-0.5 rounded ${utilColor}">${stats.capacityUtilization}%</span>
+                                </div>
+                                <div class="text-[8px] text-slate-500 space-y-0.5">
+                                    <div>Assigned: <strong>${stats.totalTasks}</strong> tasks</div>
+                                    <div class="flex gap-1">
+                                        <span class="px-1 py-0.5 bg-red-50 text-red-600 rounded">${stats.notCompletedTasks}</span>
+                                        <span class="px-1 py-0.5 bg-emerald-50 text-emerald-600 rounded">${stats.completedTasks}</span>
+                                        <span class="px-1 py-0.5 bg-blue-50 text-blue-600 rounded">${stats.postedTasks}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
             }
 
             function expandMonthlyPlanDay(dateStr) {
@@ -33772,6 +33948,7 @@
             window.expandMonthlyPlanDay = expandMonthlyPlanDay;
             window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
             window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
+            window.toggleMonthlyPlanWorkloadDashboard = toggleMonthlyPlanWorkloadDashboard;
             window.initSocialAnalytics = initSocialAnalytics;
             window.filterSocialAnalytics = filterSocialAnalytics;
             window.renderSaDashboard = renderSaDashboard;
