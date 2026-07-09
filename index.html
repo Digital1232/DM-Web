@@ -33319,6 +33319,16 @@
                             <span class="text-slate-600">Posted</span>
                             <span class="font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">${metrics.postedCount}</span>
                         </div>
+                        <div class="border-t border-slate-100 pt-2 mt-2 space-y-1">
+                            <div class="flex items-center justify-between text-[9px]">
+                                <span class="text-slate-600">Pending Poster</span>
+                                <span class="font-bold px-2 py-0.5 rounded bg-slate-50 text-slate-700">${metrics.pendingPosterCount}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[9px]">
+                                <span class="text-slate-600">Pending Video</span>
+                                <span class="font-bold px-2 py-0.5 rounded bg-slate-50 text-slate-700">${metrics.pendingVideoCount}</span>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Team Members Stats -->
@@ -33343,6 +33353,8 @@
                 let notCompletedCount = 0;
                 let completedCount = 0;
                 let postedCount = 0;
+                let pendingPosterCount = 0;
+                let pendingVideoCount = 0;
                 let teamStats = {};
 
                 // Build team stats structure
@@ -33359,7 +33371,7 @@
                         };
                     });
 
-                // Count tasks (placeholder - will use actual daily plan data in Phase 4)
+                // Count tasks
                 tasks.forEach(task => {
                     if (task.duedate) {
                         const dueDate = new Date(task.duedate);
@@ -33373,6 +33385,15 @@
                                 completedCount++;
                             } else if (postedStatuses.some(s => status === s)) {
                                 postedCount++;
+                            }
+
+                            // Count Pending Posters and Videos (not completed format tasks)
+                            if (notCompletedStatuses.some(s => status === s)) {
+                                if (task.format === 'Poster') {
+                                    pendingPosterCount++;
+                                } else if (task.format === 'Video') {
+                                    pendingVideoCount++;
+                                }
                             }
 
                             // Add to team member stats
@@ -33402,6 +33423,8 @@
                     notCompletedCount,
                     completedCount,
                     postedCount,
+                    pendingPosterCount,
+                    pendingVideoCount,
                     teamStats
                 };
             }
@@ -33466,6 +33489,24 @@
                         </button>
                     </div>
 
+                    <!-- Plan for the Day Section -->
+                    <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+                        <h4 class="text-sm font-black text-indigo-900">📋 Plan for the Day</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-3">
+                                <input type="text" placeholder="Add a plan or note for this day..." 
+                                    id="mp-day-plan-input" 
+                                    class="flex-1 bg-white border border-indigo-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <button onclick="saveMonthlyPlanDayNote('${dateStr}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors">
+                                    Save
+                                </button>
+                            </div>
+                            <div id="mp-day-plan-display" class="text-xs text-slate-600 italic min-h-[20px]">
+                                No plan added for this day yet
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- New Tasks Section -->
                     <div>
                         <h4 class="text-sm font-black text-slate-900 mb-3">New Tasks (${newTasks.length})</h4>
@@ -33492,8 +33533,47 @@
                 panel.innerHTML = html;
                 panel.classList.remove('hidden');
 
+                // Load and display existing day plan
+                loadMonthlyPlanDayNote(dateStr);
+
                 // Scroll to detail panel
                 setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+            }
+
+            function saveMonthlyPlanDayNote(dateStr) {
+                const input = document.getElementById('mp-day-plan-input');
+                if (!input) return;
+
+                const note = input.value.trim();
+                if (!note) return toast('Please enter a plan or note', 'info');
+
+                // Save to localStorage for now (will be replaced with Firebase in Phase 4)
+                const notesKey = `mp_day_notes_${dateStr}`;
+                localStorage.setItem(notesKey, note);
+
+                // Update display
+                loadMonthlyPlanDayNote(dateStr);
+                toast('Day plan saved', 'success');
+                input.value = '';
+            }
+
+            function loadMonthlyPlanDayNote(dateStr) {
+                const notesKey = `mp_day_notes_${dateStr}`;
+                const savedNote = localStorage.getItem(notesKey);
+                const display = document.getElementById('mp-day-plan-display');
+                const input = document.getElementById('mp-day-plan-input');
+
+                if (display) {
+                    if (savedNote) {
+                        display.innerHTML = `<span class="text-slate-700 font-semibold">${escapeHtml(savedNote)}</span>`;
+                    } else {
+                        display.innerHTML = 'No plan added for this day yet';
+                    }
+                }
+
+                if (input && savedNote) {
+                    input.value = '';
+                }
             }
 
             function closeMonthlyPlanDayDetail() {
@@ -33949,6 +34029,8 @@
             window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
             window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
             window.toggleMonthlyPlanWorkloadDashboard = toggleMonthlyPlanWorkloadDashboard;
+            window.saveMonthlyPlanDayNote = saveMonthlyPlanDayNote;
+            window.loadMonthlyPlanDayNote = loadMonthlyPlanDayNote;
             window.initSocialAnalytics = initSocialAnalytics;
             window.filterSocialAnalytics = filterSocialAnalytics;
             window.renderSaDashboard = renderSaDashboard;
