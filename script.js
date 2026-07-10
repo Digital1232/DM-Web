@@ -37,6 +37,7 @@ if (initializeApp) {
     window.auth = auth;
     window.db = db;
     window.storage = storage;
+    window.firebaseAuth = auth; // Alias for shim compatibility
 
     /**
      * Get Firebase ID Token for API authentication
