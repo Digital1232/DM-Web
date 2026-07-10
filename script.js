@@ -38,6 +38,27 @@ if (initializeApp) {
     window.db = db;
     window.storage = storage;
 
+    /**
+     * Get Firebase ID Token for API authentication
+     * Used by Meta OAuth, Marketing Hub, and other services
+     * @returns {Promise<string|null>} Firebase ID token or null if not authenticated
+     */
+    window.getFirebaseIdToken = async function getFirebaseIdToken() {
+        try {
+            // Try to get auth from the IIFE scope first, then from window
+            const authObj = auth || (typeof window.auth !== 'undefined' ? window.auth : null);
+            
+            if (!authObj || !authObj.currentUser) {
+                console.warn('Firebase auth not ready or user not logged in');
+                return null;
+            }
+            return await authObj.currentUser.getIdToken();
+        } catch (error) {
+            console.error('Failed to get Firebase ID token:', error);
+            return null;
+        }
+    };
+
     const ADMIN_ROLES = ['System Admin', 'Administrator'];
     const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
     const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
@@ -10401,43 +10422,6 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
 
     window.handleLogin = handleLogin; window.logout = logout; window.switchView = switchView; window.toggleSidebar = toggleSidebar;
-    
-    // ════════════════════════════════════════════════════════════════════
-    // Expose currentUser via getter so other modules can access it
-    // ════════════════════════════════════════════════════════════════════
-    Object.defineProperty(window, 'currentUser', {
-        get: function() {
-            return currentUser;
-        },
-        set: function(value) {
-            currentUser = value;
-        }
-    });
-    
-    // ════════════════════════════════════════════════════════════════════
-    // Firebase Token Helper (for OAuth and other API calls)
-    // ════════════════════════════════════════════════════════════════════
-    
-    /**
-     * Get Firebase ID Token for API authentication
-     * Used by Meta OAuth, Marketing Hub, and other services
-     * @returns {Promise<string|null>} Firebase ID token or null if not authenticated
-     */
-    window.getFirebaseIdToken = async function getFirebaseIdToken() {
-        try {
-            // Try to get auth from the IIFE scope first, then from window
-            const authObj = auth || (typeof window.auth !== 'undefined' ? window.auth : null);
-            
-            if (!authObj || !authObj.currentUser) {
-                console.warn('Firebase auth not ready or user not logged in');
-                return null;
-            }
-            return await authObj.currentUser.getIdToken();
-        } catch (error) {
-            console.error('Failed to get Firebase ID token:', error);
-            return null;
-        }
-    };
     
     window.doCheckIn = doCheckIn; window.doBreak = doBreak; window.doResume = doResume; window.confirmCheckOut = confirmCheckOut;
     window.syncTasks = syncTasks; window.toggleActiveTask = toggleActiveTask;
