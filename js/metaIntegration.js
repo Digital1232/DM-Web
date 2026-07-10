@@ -50,8 +50,11 @@ async function initMetaIntegration() {
 
 async function loadMetaConnectionData() {
     try {
+        // Get currentUser from window scope
+        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        
         // Check if user is logged in
-        if (!currentUser || !currentUser.uid) {
+        if (!user || !user.uid) {
             metaConnectionState.connected = false;
             return;
         }
@@ -466,16 +469,28 @@ function renderSyncCard(lastSync) {
 
 async function startMetaOAuth() {
     try {
-        // Check if user is logged in
-        if (!currentUser || !currentUser.uid) {
-            toast('Please login first', 'error');
+        // Try to get currentUser from window scope
+        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        
+        if (!user || !user.uid) {
+            // Try using window.showToast or alert if toast not available
+            if (typeof window.toast === 'function') {
+                window.toast('Please login first', 'error');
+            } else if (typeof window.showToast === 'function') {
+                window.showToast('Please login first', 'error');
+            } else {
+                alert('Please login first');
+            }
             return;
         }
 
         // Get Firebase ID token from window global function
         const idToken = await window.getFirebaseIdToken();
         if (!idToken) {
-            toast('Authentication error. Please try logging in again.', 'error');
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => alert('Authentication error');
+            toastFn('Authentication error. Please try logging in again.', 'error');
             return;
         }
 
@@ -489,13 +504,17 @@ async function startMetaOAuth() {
         });
 
         if (!connectResponse.ok) {
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => alert('Error');
+            
             if (connectResponse.status === 401) {
-                toast('Authentication failed. Please login again.', 'error');
+                toastFn('Authentication failed. Please login again.', 'error');
             } else if (connectResponse.status === 503) {
-                toast('Meta integration backend not ready. Please contact administrator.', 'error');
+                toastFn('Meta integration backend not ready. Please contact administrator.', 'error');
             } else {
                 const errorData = await connectResponse.json().catch(() => ({}));
-                toast(errorData.message || 'Failed to initiate OAuth flow', 'error');
+                toastFn(errorData.message || 'Failed to initiate OAuth flow', 'error');
             }
             return;
         }
@@ -505,11 +524,17 @@ async function startMetaOAuth() {
             // Redirect to Facebook OAuth login
             window.location.href = data.oauthUrl;
         } else {
-            toast('Failed to get authorization URL from server', 'error');
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => alert('Error');
+            toastFn('Failed to get authorization URL from server', 'error');
         }
     } catch (error) {
         console.error('OAuth start error:', error);
-        toast(`Error: ${error.message}`, 'error');
+        const toastFn = typeof window.toast === 'function' ? window.toast : 
+                       typeof window.showToast === 'function' ? window.showToast : 
+                       () => alert('Error');
+        toastFn(`Error: ${error.message}`, 'error');
     }
 }
 
@@ -566,7 +591,10 @@ async function disconnectMeta() {
             // Get Firebase ID token
             const idToken = await window.getFirebaseIdToken();
             if (!idToken) {
-                toast('Authentication error. Please try logging in again.', 'error');
+                const toastFn = typeof window.toast === 'function' ? window.toast : 
+                               typeof window.showToast === 'function' ? window.showToast : 
+                               () => alert('Error');
+                toastFn('Authentication error. Please try logging in again.', 'error');
                 return;
             }
             
@@ -592,10 +620,17 @@ async function disconnectMeta() {
             };
 
             renderMetaIntegrationView();
-            toast('Meta account disconnected successfully', 'success');
+            
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => {};
+            toastFn('Meta account disconnected successfully', 'success');
         } catch (error) {
             console.error('Disconnect error:', error);
-            toast('Failed to disconnect Meta account', 'error');
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => alert('Error');
+            toastFn('Failed to disconnect Meta account', 'error');
         } finally {
             metaConnectionState.loading = false;
         }
@@ -623,7 +658,10 @@ async function syncMetaData() {
         // Get Firebase ID token
         const idToken = await window.getFirebaseIdToken();
         if (!idToken) {
-            toast('Authentication error. Please try logging in again.', 'error');
+            const toastFn = typeof window.toast === 'function' ? window.toast : 
+                           typeof window.showToast === 'function' ? window.showToast : 
+                           () => alert('Error');
+            toastFn('Authentication error. Please try logging in again.', 'error');
             return;
         }
         
@@ -639,10 +677,17 @@ async function syncMetaData() {
 
         await loadMetaConnectionData();
         renderMetaIntegrationView();
-        toast('Data synced successfully', 'success');
+        
+        const toastFn = typeof window.toast === 'function' ? window.toast : 
+                       typeof window.showToast === 'function' ? window.showToast : 
+                       () => {};
+        toastFn('Data synced successfully', 'success');
     } catch (error) {
         console.error('Sync error:', error);
-        toast('Failed to sync data', 'error');
+        const toastFn = typeof window.toast === 'function' ? window.toast : 
+                       typeof window.showToast === 'function' ? window.showToast : 
+                       () => alert('Error');
+        toastFn('Failed to sync data', 'error');
     } finally {
         metaConnectionState.loading = false;
     }
