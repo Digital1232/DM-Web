@@ -266,6 +266,50 @@
             color: #f1f5f9;
         }
 
+        /* ── DARK MODE: Marketing Hub ── */
+        html.dark #view-marketing-hub-panel .mh-tab-btn.mh-tab-active {
+            border-bottom-color: #4f46e5 !important;
+            color: #818cf8 !important;
+        }
+
+        html.dark #view-marketing-hub-panel .mh-tab-btn {
+            color: #94a3b8 !important;
+        }
+
+        html.dark #view-marketing-hub-panel .mh-tab-btn:hover {
+            border-bottom-color: #cbd5e1 !important;
+        }
+
+        html.dark .mh-platform-card {
+            background-color: #1a2236 !important;
+            border-color: #253347 !important;
+        }
+
+        html.dark .mh-hero-card {
+            background: linear-gradient(135deg, rgba(79,70,229,0.1), rgba(79,70,229,0.05)) !important;
+            border-color: #253347 !important;
+        }
+
+        /* ── DARK MODE: Plan Modals Headers ── */
+        html.dark #assignPlanModal .bg-gradient-to-r.from-indigo-500,
+        html.dark #shootPlanModal .bg-gradient-to-r.from-amber-500 {
+            background: linear-gradient(to right, #4f46e5, #4c1d95) !important;
+        }
+
+        html.dark #shootPlanModal .bg-gradient-to-r.from-amber-500 {
+            background: linear-gradient(to right, #d97706, #b45309) !important;
+        }
+
+        html.dark #assignPlanModal h3,
+        html.dark #shootPlanModal h3 {
+            color: #f1f5f9 !important;
+        }
+
+        html.dark #assignPlanModal p,
+        html.dark #shootPlanModal p {
+            color: #f1f5f9 !important;
+        }
+
         html.dark #loading-view {
             background-color: #0f1117;
         }
@@ -1688,6 +1732,12 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Social Analytics
                     </button>
+                    <button onclick="switchView('marketing-hub')" id="nav-marketing-hub" data-label="Marketing Hub"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:target-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Marketing Hub
+                    </button>
                     <button onclick="switchView('meta-ads')" id="nav-meta-ads" data-label="Meta Ads"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left hidden">
                         <iconify-icon icon="solar:target-linear" width="20"
@@ -2699,13 +2749,17 @@
                                             class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Text
                                             Report</button>
                                     </div>
-                                    <div class="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
+                                    <div class="flex bg-slate-50 p-1 rounded-xl border border-slate-100 flex-wrap gap-1">
                                         <button onclick="filterDailyPlan('all')" id="dp-filter-all"
                                             class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-indigo-600 shadow-sm transition-all">All
                                             Tasks</button>
                                         <button onclick="filterDailyPlan('carryover')" id="dp-filter-carry"
                                             class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Carry
                                             Forward Only</button>
+                                        <button onclick="filterDailyPlan('thumbnails')" id="dp-filter-thumbnails"
+                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Thumbnails</button>
+                                        <button onclick="filterDailyPlan('posters')" id="dp-filter-posters"
+                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Posters</button>
                                     </div>
                                 </div>
                                 <span id="dp-task-count"
@@ -5938,6 +5992,96 @@
                                             </div>
                                         </div>
 
+                <!-- ════ MARKETING HUB VIEW ════ -->
+                <div id="view-marketing-hub-panel" class="hidden space-y-6 fade-in overflow-y-auto">
+
+                    <!-- Header -->
+                    <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <iconify-icon icon="solar:target-bold-duotone" width="26"></iconify-icon>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-slate-800">Marketing Hub</h2>
+                                <p class="text-sm text-slate-500">Central management for digital marketing integrations</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="syncMarketingData()" title="Refresh Data"
+                                class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-indigo-600 transition-all">
+                                <iconify-icon icon="solar:restart-bold-duotone" width="20"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Navigation -->
+                    <div id="mh-tabs-container" class="flex gap-2 border-b border-slate-100 overflow-x-auto pb-2 px-1">
+                        <button data-mh-tab="overview" onclick="switchMarketingTab('overview')" 
+                            class="mh-tab-btn mh-tab-active px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 whitespace-nowrap">
+                            Overview
+                        </button>
+                        <button data-mh-tab="connections" onclick="switchMarketingTab('connections')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Connections
+                        </button>
+                        <button data-mh-tab="facebook" onclick="switchMarketingTab('facebook')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Facebook
+                        </button>
+                        <button data-mh-tab="instagram" onclick="switchMarketingTab('instagram')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Instagram
+                        </button>
+                        <button data-mh-tab="meta-ads" onclick="switchMarketingTab('meta-ads')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Meta Ads
+                        </button>
+                        <button data-mh-tab="analytics" onclick="switchMarketingTab('analytics')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Analytics
+                        </button>
+                        <button data-mh-tab="reports" onclick="switchMarketingTab('reports')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Reports
+                        </button>
+                        <button data-mh-tab="ai-insights" onclick="switchMarketingTab('ai-insights')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            AI Insights
+                        </button>
+                        <button data-mh-tab="settings" onclick="switchMarketingTab('settings')" 
+                            class="mh-tab-btn px-4 py-2 text-sm font-bold text-slate-600 border-b-2 border-transparent hover:border-slate-300 whitespace-nowrap">
+                            Settings
+                        </button>
+                    </div>
+
+                    <!-- Tab Content Areas -->
+                    <div id="mh-tab-overview" class="mh-tab-content space-y-6">
+                        <div class="flex items-center justify-center py-12">
+                            <div class="text-center">
+                                <iconify-icon icon="solar:loading-bold" class="animate-spin text-indigo-600" width="32"></iconify-icon>
+                                <p class="text-slate-500 text-sm mt-2">Loading platforms...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="mh-tab-connections" class="mh-tab-content hidden space-y-6">
+                        <div class="flex items-center justify-center py-12">
+                            <div class="text-center">
+                                <iconify-icon icon="solar:loading-bold" class="animate-spin text-indigo-600" width="32"></iconify-icon>
+                                <p class="text-slate-500 text-sm mt-2">Loading connections...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="mh-tab-facebook" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-instagram" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-meta-ads" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-analytics" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-reports" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-ai-insights" class="mh-tab-content hidden space-y-6"></div>
+                    <div id="mh-tab-settings" class="mh-tab-content hidden space-y-6"></div>
+
+                </div><!-- /view-marketing-hub-panel -->
 
                 <!-- ════ REPORTS VIEW ════ -->
                 <div id="view-reports-panel" class="hidden fade-in">
@@ -7717,87 +7861,106 @@
 
     <!-- Modal: Assign Task to Daily Plan -->
     <dialog id="assignPlanModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden">
-        <div class="p-8">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight">Assign Task to Daily Plan</h3>
-                <button onclick="this.closest('dialog').close()"
-                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
-                </button>
+        <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 px-8 py-6 flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-black text-white">Assign Task to Daily Plan</h3>
+                <p class="text-sm text-indigo-100 mt-1">Select a task and assign it to a team member's schedule</p>
             </div>
-            <div class="space-y-5">
+            <button onclick="this.closest('dialog').close()"
+                class="p-2 text-white/60 hover:text-white transition-colors">
+                <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+            </button>
+        </div>
+        <div class="p-8 max-h-[70vh] overflow-y-auto">
+            <div class="space-y-6">
+                <!-- Task Selection Section -->
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Select
-                        Task</label>
-                    <div class="relative mb-2">
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:checklist-minimalistic-bold" class="text-indigo-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Select Task</h4>
+                    </div>
+                    
+                    <!-- Search Bar -->
+                    <div class="relative mb-4">
                         <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-3 text-slate-400"
                             width="16"></iconify-icon>
                         <input type="text" class="hidden" style="display: none;" name="prevent-autofill-ap-task-search" autocomplete="off" aria-hidden="true" />
-                        <input id="ap-task-search" type="search" placeholder="Search tasks..."
+                        <input id="ap-task-search" type="search" placeholder="Search tasks by name..."
                             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                             data-lpignore="true" data-1p-ignore="true" data-form-type="other"
                             name="assign-plan-task-search-field"
                             oninput="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
+                    
+                    <!-- Compact Filters Row -->
+                    <div class="grid grid-cols-3 gap-2 mb-4">
                         <select id="ap-client-filter" onchange="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-600">
                             <option value="">All Clients</option>
                         </select>
                         <select id="ap-status-filter" onchange="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
-                            <option value="">All Statuses</option>
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-600">
+                            <option value="">All Status</option>
                         </select>
-                    </div>
-                    <!-- Due Date Range Filter -->
-                    <div class="flex items-end gap-2 mb-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl">
-                        <iconify-icon icon="solar:calendar-date-bold" class="text-indigo-400 shrink-0 mb-0.5"
-                            width="16"></iconify-icon>
-                        <div class="flex-1">
-                            <label class="block text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Due
-                                Date — From</label>
-                            <input id="ap-due-from" type="date" onchange="filterAssignPlanTasks()"
-                                class="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
-                        </div>
-                        <span class="text-slate-300 font-bold pb-1.5 shrink-0">→</span>
-                        <div class="flex-1">
-                            <label
-                                class="block text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">To</label>
-                            <input id="ap-due-to" type="date" onchange="filterAssignPlanTasks()"
-                                class="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
-                        </div>
-                        <button type="button"
-                            onclick="document.getElementById('ap-due-from').value='';document.getElementById('ap-due-to').value='';filterAssignPlanTasks();"
-                            title="Clear date range"
-                            class="shrink-0 p-1.5 rounded-lg text-indigo-300 hover:text-rose-500 hover:bg-rose-50 transition-all mb-0.5">
-                            <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon>
+                        <button type="button" onclick="document.getElementById('ap-due-from').value='';document.getElementById('ap-due-to').value='';filterAssignPlanTasks();"
+                            title="Clear all filters"
+                            class="bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all flex items-center justify-center gap-1">
+                            <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon> Clear
                         </button>
                     </div>
+                    
+                    <!-- Date Range Filter - Compact -->
+                    <div class="flex items-end gap-2 mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div class="flex-1 flex items-end gap-2">
+                            <div class="flex-1">
+                                <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-1">From</label>
+                                <input id="ap-due-from" type="date" onchange="filterAssignPlanTasks()"
+                                    class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                            </div>
+                            <span class="text-slate-300 font-bold pb-1.5 shrink-0">→</span>
+                            <div class="flex-1">
+                                <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-1">To</label>
+                                <input id="ap-due-to" type="date" onchange="filterAssignPlanTasks()"
+                                    class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Task List -->
                     <div id="ap-task-list"
-                        class="bg-white border border-slate-200 rounded-xl max-h-72 overflow-y-auto space-y-1 p-2">
+                        class="bg-white border border-slate-200 rounded-lg max-h-56 overflow-y-auto space-y-1 p-2">
                         <!-- Populated JS -->
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assign
-                            To</label>
-                        <select id="ap-user" onchange="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
-                        </select>
+
+                <!-- Assignment Section -->
+                <div class="border-t border-slate-200 pt-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:user-circle-bold" class="text-indigo-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Assignment Details</h4>
                     </div>
-                    <div>
-                        <label
-                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Date</label>
-                        <input id="ap-date" type="date"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Assign To</label>
+                            <select id="ap-user" onchange="filterAssignPlanTasks()"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Plan Date</label>
+                            <input id="ap-date" type="date"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Action Button -->
             <button onclick="submitAssignPlan()"
-                class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all">Assign
-                to Plan</button>
+                class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
+                <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon> Assign to Plan
+            </button>
         </div>
     </dialog>
 
@@ -7930,64 +8093,90 @@
 
     <!-- Modal: Shoot Plan -->
     <dialog id="shootPlanModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
-        <div class="p-8">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight">Plan a New Shoot</h3>
-                <button onclick="this.closest('dialog').close()"
-                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
-                </button>
+        <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-8 py-6 flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-black text-white">Plan a New Shoot</h3>
+                <p class="text-sm text-amber-100 mt-1">Schedule a photoshoot and assign team members</p>
             </div>
-            <form id="shoot-plan-form" onsubmit="event.preventDefault(); saveShootPlan();" class="space-y-5">
+            <button onclick="this.closest('dialog').close()"
+                class="p-2 text-white/60 hover:text-white transition-colors">
+                <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+            </button>
+        </div>
+        <form id="shoot-plan-form" onsubmit="event.preventDefault(); saveShootPlan();" class="p-8 max-h-[70vh] overflow-y-auto">
+            <div class="space-y-6">
+                <!-- Basic Info Section -->
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Shoot
-                        Title</label>
-                    <input id="sp-title" type="text" placeholder="e.g., Product Photoshoot" required
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:document-text-bold" class="text-amber-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Shoot Details</h4>
+                    </div>
                     <div>
-                        <label
-                            class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Client</label>
-                        <select id="sp-client" required
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"></select>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Shoot Title</label>
+                        <input id="sp-title" type="text" placeholder="e.g., Product Photoshoot" required
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all">
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
+                </div>
+
+                <!-- Client & Date/Time Section -->
+                <div>
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:calendar-date-bold" class="text-amber-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Scheduling</h4>
+                    </div>
+                    <div class="space-y-4">
                         <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Date</label>
-                            <input id="sp-date" type="date" required
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Client</label>
+                            <select id="sp-client" required
+                                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"></select>
                         </div>
-                        <div>
-                            <label
-                                class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Time</label>
-                            <input id="sp-time" type="time" required
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Date</label>
+                                <input id="sp-date" type="date" required
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Time</label>
+                                <input id="sp-time" type="time" required
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all">
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Assignees Section -->
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assignees
-                        <span class="text-rose-500">*</span></label>
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:users-group-rounded-bold" class="text-amber-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Team Members</h4>
+                    </div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Assignees <span class="text-amber-600">*</span></label>
                     <div id="sp-assignees"
-                        class="space-y-1 max-h-44 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50">
+                        class="space-y-1 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50">
                         <!-- Populated in JS -->
                     </div>
-                    <p class="text-[9px] text-slate-400 mt-1.5">A separate shoot task is created for each person
-                        selected.</p>
+                    <p class="text-[9px] text-slate-500 mt-2.5 leading-relaxed">A separate shoot task is created for each person selected.</p>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Notes /
-                        Requirements</label>
+
+                <!-- Notes Section -->
+                <div class="border-t border-slate-200 pt-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <iconify-icon icon="solar:note-bold" class="text-amber-600" width="18"></iconify-icon>
+                        <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Additional Info</h4>
+                    </div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Notes / Requirements</label>
                     <textarea id="sp-notes" rows="3" placeholder="e.g., Location, required props, contact person..."
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"></textarea>
+                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all resize-none"></textarea>
                 </div>
-                <button type="submit"
-                    class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all">Create
-                    Shoot Plan</button>
-            </form>
-        </div>
+            </div>
+
+            <!-- Action Button -->
+            <button type="submit"
+                class="w-full mt-8 bg-amber-600 hover:bg-amber-700 text-white rounded-lg py-3.5 text-sm font-bold shadow-lg shadow-amber-100 transition-all flex items-center justify-center gap-2">
+                <iconify-icon icon="solar:camera-bold" width="18"></iconify-icon> Create Shoot Plan
+            </button>
+        </form>
     </dialog>
 
     <!-- Modal: Emergency Leave -->
@@ -30788,13 +30977,29 @@
                 dpFilter = type;
                 const allBtn = document.getElementById('dp-filter-all');
                 const carryBtn = document.getElementById('dp-filter-carry');
+                const thumbnailBtn = document.getElementById('dp-filter-thumbnails');
+                const posterBtn = document.getElementById('dp-filter-posters');
+                
+                // Reset all buttons to inactive state
+                const inactiveClass = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all';
+                const activeClass = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white shadow-sm transition-all';
+                
+                allBtn.className = inactiveClass;
+                carryBtn.className = inactiveClass;
+                thumbnailBtn.className = inactiveClass;
+                posterBtn.className = inactiveClass;
+                
+                // Set active button with appropriate color
                 if (type === 'all') {
-                    allBtn.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-indigo-600 shadow-sm transition-all';
-                    carryBtn.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all';
-                } else {
-                    allBtn.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all';
-                    carryBtn.className = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-amber-600 shadow-sm transition-all';
+                    allBtn.className = activeClass + ' text-indigo-600';
+                } else if (type === 'carryover') {
+                    carryBtn.className = activeClass + ' text-amber-600';
+                } else if (type === 'thumbnails') {
+                    thumbnailBtn.className = activeClass + ' text-purple-600';
+                } else if (type === 'posters') {
+                    posterBtn.className = activeClass + ' text-blue-600';
                 }
+                
                 renderDailyPlan();
             }
 
@@ -30845,8 +31050,24 @@
                     return !isCompleted;
                 });
                 
+                // Apply filter based on dpFilter value
                 if (dpFilter === 'carryover') {
                     uniquePlans = uniquePlans.filter(t => t.isCarryOver);
+                } else if (dpFilter === 'thumbnails') {
+                    uniquePlans = uniquePlans.filter(t => {
+                        const status = (t.status || '').toLowerCase().trim();
+                        const desc = (t.desc || '').toLowerCase();
+                        return status.includes('thumbnail') || desc.includes('thumbnail');
+                    });
+                } else if (dpFilter === 'posters') {
+                    uniquePlans = uniquePlans.filter(t => {
+                        const status = (t.status || '').toLowerCase().trim();
+                        const desc = (t.desc || '').toLowerCase();
+                        return status.includes('poster') || desc.includes('poster') || 
+                               (!status.includes('thumbnail') && !status.includes('video') && 
+                                !desc.includes('thumbnail') && !desc.includes('video') && 
+                                !desc.includes('reel') && desc.includes('design'));
+                    });
                 }
                 return uniquePlans;
             }
@@ -30858,7 +31079,14 @@
                 });
                 const line = '========================================';
                 const subLine = '----------------------------------------';
-                const filterLabel = dpFilter === 'carryover' ? 'Carry Forward Only' : 'All Tasks';
+                let filterLabel = 'All Tasks';
+                if (dpFilter === 'carryover') {
+                    filterLabel = 'Carry Forward Only';
+                } else if (dpFilter === 'thumbnails') {
+                    filterLabel = 'Thumbnails Only';
+                } else if (dpFilter === 'posters') {
+                    filterLabel = 'Posters Only';
+                }
                 const scopeLabel = getDailyPlanScopeLabel();
                 const allRows = collectDailyPlanRowsForView();
 
@@ -30982,8 +31210,16 @@
                 const dateLabel = new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-GB', {
                     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
                 });
+                let filterLabel = 'All tasks';
+                if (dpFilter === 'carryover') {
+                    filterLabel = 'Carry forward only';
+                } else if (dpFilter === 'thumbnails') {
+                    filterLabel = 'Thumbnails only';
+                } else if (dpFilter === 'posters') {
+                    filterLabel = 'Posters only';
+                }
                 if (meta) {
-                    meta.textContent = `${dateLabel} · ${getDailyPlanScopeLabel()} · ${dpFilter === 'carryover' ? 'Carry forward only' : 'All tasks'}`;
+                    meta.textContent = `${dateLabel} · ${getDailyPlanScopeLabel()} · ${filterLabel}`;
                 }
                 if (content) content.textContent = buildDailyPlanTextReport();
             }
@@ -39767,6 +40003,9 @@
             `;
         }
     </script>
+
+    <!-- Marketing Hub Module -->
+    <script src="js/marketingHub.js"></script>
 
 </body>
 
