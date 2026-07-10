@@ -1743,6 +1743,7 @@ if (initializeApp) {
         if (view === 'daily-summary' && !canViewDailySummary()) view = 'dashboard';
         if (view === 'projects' && !canViewProjects()) view = 'dashboard';
         if (view === 'users' && !isAdmin()) view = 'dashboard';
+        if (view === 'meta-integration' && !isAdmin()) view = 'dashboard';
         if (view === 'qc' && !canViewQcPortal()) view = 'dashboard';
         if (view === 'leave-org' && !isLeaveOrganiser() && !isAdmin()) view = 'dashboard';
         if (view === 'organisers-admin' && !isAdmin()) view = 'dashboard';
@@ -1750,7 +1751,7 @@ if (initializeApp) {
 
         activeView = view;
         localStorage.setItem('worksync_activeView', view);
-        ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar'].forEach(v => {
+        ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'marketing-hub', 'meta-integration'].forEach(v => {
             document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
             const navEl = document.getElementById(`nav-${v}`);
             if (navEl) navEl.classList.remove('nav-active');
@@ -1781,7 +1782,9 @@ if (initializeApp) {
             'workplace-org': 'Workplace Suggestions',
             'organisers-admin': 'Monthly Organisers & Activity',
             'dm-content-org': 'DM Content Organiser Board',
-            'strategy-calendar': 'Strategy Calendar'
+            'strategy-calendar': 'Strategy Calendar',
+            'marketing-hub': 'Marketing Hub',
+            'meta-integration': 'Meta Business Integration'
         };
         document.getElementById('view-title').textContent = titles[view] || 'WorkSync';
 
@@ -1808,6 +1811,11 @@ if (initializeApp) {
         else if (view === 'users') { loadUsersList(); }
         else if (view === 'notes') { loadNotes(); }
         else if (view === 'daily-summary') { loadTodayWorkSummary(); renderDailySummary(); }
+        else if (view === 'marketing-hub') { 
+            const tab = localStorage.getItem('mh_currentTab') || 'overview';
+            switchMarketingTab(tab);
+        }
+        else if (view === 'meta-integration') { initMetaIntegration(); }
         else if (view === 'event-org') { renderEventOrgPanel(); }
         else if (view === 'leave-org') { renderLeaveOrgPanel(); }
         else if (view === 'learnings-org') { renderLearningsOrgPanel(); }

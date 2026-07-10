@@ -34,7 +34,7 @@ try {
     const end = Math.min(lines.length, e.loc.line + 5);
     for (let i = start; i < end; i++) {
         const marker = i === e.loc.line - 1 ? '>>>' : '   ';
-        console.error(marker + ' ' + (i+1) + ': ' + lines[i].substring(0, 120));
+        console.error(marker + ' ' + (i + 1) + ': ' + lines[i].substring(0, 120));
     }
     process.exit(1);
 }
