@@ -40215,26 +40215,30 @@
     <script>
         // Create a temporary placeholder that will be replaced by the real function
         window.getFirebaseIdToken = async function() {
-            // This will be replaced by script.js module
-            // For now, wait for it to be available
+            // Wait for Firebase to be initialized (up to 10 seconds)
             let attempts = 0;
-            while (typeof window.auth === 'undefined' && attempts < 50) {
+            const maxAttempts = 100; // 100 * 100ms = 10 seconds
+            
+            while (attempts < maxAttempts) {
+                if (window.auth && window.auth.currentUser) {
+                    try {
+                        const token = await window.auth.currentUser.getIdToken();
+                        console.log('Got Firebase token from shim');
+                        return token;
+                    } catch (error) {
+                        console.error('Error getting token from shim:', error);
+                        return null;
+                    }
+                }
                 await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
             
-            if (!window.auth || !window.auth.currentUser) {
-                console.warn('Firebase auth not ready');
-                return null;
-            }
-            
-            try {
-                return await window.auth.currentUser.getIdToken();
-            } catch (error) {
-                console.error('Failed to get Firebase ID token:', error);
-                return null;
-            }
+            console.warn('Firebase auth not ready after waiting');
+            return null;
         };
+        
+        console.log('Firebase token shim initialized');
     </script>
 
     <!-- Meta Integration Module -->

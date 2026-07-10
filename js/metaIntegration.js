@@ -546,8 +546,17 @@ async function startMetaOAuth() {
         console.log('User authenticated, uid:', user.uid);
 
         // Get Firebase ID token from window global function
+        console.log('Calling window.getFirebaseIdToken...');
+        console.log('window.auth available:', !!window.auth);
+        console.log('window.auth.currentUser:', !!window.auth?.currentUser);
+        
         const idToken = await window.getFirebaseIdToken();
+        console.log('Got ID token:', !!idToken);
+        
         if (!idToken) {
+            console.error('Failed to get Firebase ID token');
+            console.log('window.auth:', window.auth);
+            console.log('window.auth.currentUser:', window.auth?.currentUser);
             alert('Authentication error. Please try logging in again.');
             return;
         }
