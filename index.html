@@ -25149,18 +25149,15 @@
                             // Must not be excluded
                             if (isExcludedTask(t)) return false;
                             
-                            // Check if in today's daily plan AND completed today
-                            const planData = userPlans[t.id];
-                            if (planData && planData.date === todayIso) {
-                                // Must also be completed in today's time range
-                                const ts = getTaskTs(t);
-                                if (ts >= todayStartTsVal && ts <= Date.now()) return true;
-                            }
+                            // Must be assigned to this user
+                            if (!assigneeMatches(t, userEmail)) return false;
                             
-                            // Or directly assigned and completed today (backup check)
-                            if (assigneeMatches(t, userEmail)) {
-                                const ts = getTaskTs(t);
-                                if (ts >= todayStartTsVal && ts <= Date.now()) return true;
+                            // Must be completed in today's time range
+                            const ts = getTaskTs(t);
+                            if (ts >= todayStartTsVal && ts <= Date.now()) {
+                                // Include the task regardless of daily plan
+                                // This handles tasks completed today even if not formally in daily plan
+                                return true;
                             }
                             
                             return false;
