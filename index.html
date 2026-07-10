@@ -40217,68 +40217,55 @@
         window.getFirebaseIdToken = async function() {
             console.log('[Shim] getFirebaseIdToken called');
             
-            // Check if window.auth is available (set by module script)
-            if (window.auth && window.auth.currentUser) {
-                try {
-                    console.log('[Shim] Using window.auth.currentUser');
-                    const token = await window.auth.currentUser.getIdToken();
-                    console.log('[Shim] Got token from window.auth');
-                    return token;
-                } catch (error) {
-                    console.error('[Shim] Error getting token from window.auth:', error);
-                    return null;
-                }
-            }
-            
-            // If window.auth not available, try to access window.firebaseAuth (alternative)
-            if (window.firebaseAuth && window.firebaseAuth.currentUser) {
-                try {
-                    console.log('[Shim] Using window.firebaseAuth.currentUser');
-                    const token = await window.firebaseAuth.currentUser.getIdToken();
-                    console.log('[Shim] Got token from window.firebaseAuth');
-                    return token;
-                } catch (error) {
-                    console.error('[Shim] Error getting token from window.firebaseAuth:', error);
-                    return null;
-                }
-            }
-            
-            // Wait briefly for Firebase to initialize
-            console.log('[Shim] Waiting for Firebase auth...');
-            for (let i = 0; i < 50; i++) {
-                await new Promise(r => setTimeout(r, 100));
+            try {
+                // Try to get current Firebase user directly from the page
+                // Firebase SDK stores the current auth state in window
                 
+                // Method 1: Check window.auth (set by script.js module)
                 if (window.auth && window.auth.currentUser) {
-                    try {
-                        console.log('[Shim] Got window.auth after waiting');
-                        const token = await window.auth.currentUser.getIdToken();
-                        console.log('[Shim] Got token after wait');
-                        return token;
-                    } catch (error) {
-                        console.error('[Shim] Error after wait:', error);
-                        return null;
+                    console.log('[Shim] Using window.auth.currentUser');
+                    return await window.auth.currentUser.getIdToken();
+                }
+                
+                // Method 2: Check if we can access Firebase from window
+                if (window.firebase && window.firebase.auth()) {
+                    const fbAuth = window.firebase.auth();
+                    if (fbAuth.currentUser) {
+                        console.log('[Shim] Using window.firebase.auth().currentUser');
+                        return await fbAuth.currentUser.getIdToken();
                     }
                 }
                 
-                if (window.firebaseAuth && window.firebaseAuth.currentUser) {
-                    try {
-                        console.log('[Shim] Got window.firebaseAuth after waiting');
-                        const token = await window.firebaseAuth.currentUser.getIdToken();
-                        console.log('[Shim] Got token after wait');
-                        return token;
-                    } catch (error) {
-                        console.error('[Shim] Error after wait:', error);
-                        return null;
+                // Method 3: Wait a bit for module to load
+                console.log('[Shim] Waiting for Firebase initialization...');
+                for (let i = 0; i < 100; i++) {
+                    await new Promise(r => setTimeout(r, 50));
+                    
+                    if (window.auth && window.auth.currentUser) {
+                        console.log('[Shim] Got window.auth after waiting');
+                        return await window.auth.currentUser.getIdToken();
+                    }
+                    
+                    if (window.firebase && window.firebase.auth()) {
+                        const fbAuth = window.firebase.auth();
+                        if (fbAuth.currentUser) {
+                            console.log('[Shim] Got firebase.auth() after waiting');
+                            return await fbAuth.currentUser.getIdToken();
+                        }
                     }
                 }
+                
+                console.warn('[Shim] No Firebase auth available');
+                console.log('[Shim] window.firebase:', !!window.firebase);
+                console.log('[Shim] window.auth:', !!window.auth);
+                return null;
+            } catch (error) {
+                console.error('[Shim] Error getting token:', error);
+                return null;
             }
-            
-            console.warn('[Shim] Firebase auth not ready after waiting');
-            console.log('[Shim] Available globals: window.auth=', !!window.auth, 'window.firebaseAuth=', !!window.firebaseAuth);
-            return null;
         };
         
-        console.log('Firebase token shim initialized');
+        console.log('Firebase token shim initialized - waiting for auth');
     </script>
 
     <!-- Meta Integration Module -->
