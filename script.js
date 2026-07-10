@@ -10391,6 +10391,18 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.handleLogin = handleLogin; window.logout = logout; window.switchView = switchView; window.toggleSidebar = toggleSidebar;
     
     // ════════════════════════════════════════════════════════════════════
+    // Expose currentUser via getter so other modules can access it
+    // ════════════════════════════════════════════════════════════════════
+    Object.defineProperty(window, 'currentUser', {
+        get: function() {
+            return currentUser;
+        },
+        set: function(value) {
+            currentUser = value;
+        }
+    });
+    
+    // ════════════════════════════════════════════════════════════════════
     // Firebase Token Helper (for OAuth and other API calls)
     // ════════════════════════════════════════════════════════════════════
     
