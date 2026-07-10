@@ -469,30 +469,39 @@ function renderSyncCard(lastSync) {
 
 async function startMetaOAuth() {
     try {
-        // Try to get currentUser from window scope
-        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        // Debug: Log what we're checking
+        console.log('startMetaOAuth called');
+        console.log('window.currentUser:', window.currentUser);
+        console.log('typeof currentUser:', typeof currentUser);
+        
+        // Get user - try multiple ways
+        let user = null;
+        if (typeof window.currentUser !== 'undefined') {
+            user = window.currentUser;
+            console.log('Got user from window.currentUser');
+        } else if (typeof currentUser !== 'undefined') {
+            user = currentUser;
+            console.log('Got user from local currentUser');
+        }
+        
+        console.log('Final user object:', user);
         
         if (!user || !user.uid) {
-            // Try using window.showToast or alert if toast not available
-            if (typeof window.toast === 'function') {
-                window.toast('Please login first', 'error');
-            } else if (typeof window.showToast === 'function') {
-                window.showToast('Please login first', 'error');
-            } else {
-                alert('Please login first');
-            }
+            console.warn('User not logged in - user:', user);
+            alert('Please login first');
             return;
         }
+
+        console.log('User authenticated, uid:', user.uid);
 
         // Get Firebase ID token from window global function
         const idToken = await window.getFirebaseIdToken();
         if (!idToken) {
-            const toastFn = typeof window.toast === 'function' ? window.toast : 
-                           typeof window.showToast === 'function' ? window.showToast : 
-                           () => alert('Authentication error');
-            toastFn('Authentication error. Please try logging in again.', 'error');
+            alert('Authentication error. Please try logging in again.');
             return;
         }
+
+        console.log('Got Firebase ID token');
 
         // Call backend to initiate OAuth
         const connectResponse = await fetch('/api/meta/connect', {
@@ -503,38 +512,33 @@ async function startMetaOAuth() {
             }
         });
 
+        console.log('Backend response status:', connectResponse.status);
+
         if (!connectResponse.ok) {
-            const toastFn = typeof window.toast === 'function' ? window.toast : 
-                           typeof window.showToast === 'function' ? window.showToast : 
-                           () => alert('Error');
-            
             if (connectResponse.status === 401) {
-                toastFn('Authentication failed. Please login again.', 'error');
+                alert('Authentication failed. Please login again.');
             } else if (connectResponse.status === 503) {
-                toastFn('Meta integration backend not ready. Please contact administrator.', 'error');
+                alert('Meta integration backend not ready. Please contact administrator.');
             } else {
                 const errorData = await connectResponse.json().catch(() => ({}));
-                toastFn(errorData.message || 'Failed to initiate OAuth flow', 'error');
+                alert(errorData.message || 'Failed to initiate OAuth flow');
             }
             return;
         }
 
         const data = await connectResponse.json();
+        console.log('Backend response data:', data);
+        
         if (data.success && data.oauthUrl) {
             // Redirect to Facebook OAuth login
+            console.log('Redirecting to:', data.oauthUrl);
             window.location.href = data.oauthUrl;
         } else {
-            const toastFn = typeof window.toast === 'function' ? window.toast : 
-                           typeof window.showToast === 'function' ? window.showToast : 
-                           () => alert('Error');
-            toastFn('Failed to get authorization URL from server', 'error');
+            alert('Failed to get authorization URL from server');
         }
     } catch (error) {
         console.error('OAuth start error:', error);
-        const toastFn = typeof window.toast === 'function' ? window.toast : 
-                       typeof window.showToast === 'function' ? window.showToast : 
-                       () => alert('Error');
-        toastFn(`Error: ${error.message}`, 'error');
+        alert(`Error: ${error.message}`);
     }
 }
 
