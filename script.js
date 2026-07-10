@@ -899,6 +899,7 @@ if (initializeApp) {
                 currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : { email: fbUser.email, name: fbUser.email.split('@')[0], role: 'User', uid: fbUser.uid };
                 await set(ref(db, `worksync/users/${eKey(fbUser.email)}`), currentUser);
             }
+            window.currentUser = currentUser; // Expose to window for metaIntegration.js
             localStorage.setItem('worksync_user', JSON.stringify(currentUser));
             errEl.classList.add('hidden');
             await finishLogin();
@@ -1090,7 +1091,9 @@ if (initializeApp) {
         syncIntervalRef = null;
         currentWorkFilterKey = '';
         convListeners = {};
-        currentUser = null; tasks = []; dprEntries = []; attendanceEvents = []; activeTaskId = null; isCheckedIn = false;
+        currentUser = null;
+        window.currentUser = null; // Clear from window for metaIntegration.js
+        tasks = []; dprEntries = []; attendanceEvents = []; activeTaskId = null; isCheckedIn = false;
         clearInterval(timerRef); seconds = 0; activeConvId = null; unreadCounts = {}; unreadAnnouncements = 0;
         localStorage.removeItem('worksync_user');
         localStorage.removeItem('worksync_timerState');
@@ -10311,6 +10314,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 const snap = await get(ref(db, `worksync/users/${eKey(fbUser.email)}`)); // Fetch user data from Firebase
                 if (snap.exists()) {
                     currentUser = { ...snap.val(), ...(knownUserByEmail(fbUser.email) || {}), uid: fbUser.uid };
+                    window.currentUser = currentUser; // Expose to window for metaIntegration.js
                     localStorage.setItem('worksync_user', JSON.stringify(currentUser));
                     document.documentElement.classList.add('has-user');
                     await finishLogin();
