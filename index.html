@@ -40211,6 +40211,32 @@
     <!-- Marketing Hub Module -->
     <script src="js/marketingHub.js"></script>
 
+    <!-- Firebase Token Helper - Must be before Meta Integration Module -->
+    <script>
+        // Create a temporary placeholder that will be replaced by the real function
+        window.getFirebaseIdToken = async function() {
+            // This will be replaced by script.js module
+            // For now, wait for it to be available
+            let attempts = 0;
+            while (typeof window.auth === 'undefined' && attempts < 50) {
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }
+            
+            if (!window.auth || !window.auth.currentUser) {
+                console.warn('Firebase auth not ready');
+                return null;
+            }
+            
+            try {
+                return await window.auth.currentUser.getIdToken();
+            } catch (error) {
+                console.error('Failed to get Firebase ID token:', error);
+                return null;
+            }
+        };
+    </script>
+
     <!-- Meta Integration Module -->
     <script src="js/metaIntegration.js"></script>
 
