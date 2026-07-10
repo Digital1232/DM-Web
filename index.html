@@ -25088,6 +25088,12 @@
 
                 const isAdminView = isAdmin();
 
+                console.log('=== 5:30 Popup Debug ===');
+                console.log('currentUser:', currentUser?.email);
+                console.log('isAdminView:', isAdminView);
+                console.log('Total tasks available:', tasks.length);
+                console.log('Today date range:', new Date(todayStartTsVal), 'to', new Date());
+
                 let snehaSelections = [];
                 let qcReports = [];
                 try {
@@ -25106,6 +25112,7 @@
                 }
 
                 const buildUserTodayItems = (userEmail) => {
+                    console.log(`\n--- Building items for ${userEmail} ---`);
                     const itemMap = new Map();
 
                     const addItem = (taskId, task, extraLabel, displayStatus) => {
@@ -25136,13 +25143,18 @@
                         'karthikavilpower@gmail.com'
                     ].includes(userEmail.toLowerCase());
 
+                    console.log(`isDailyPlanUser: ${isDailyPlanUser}`);
+
                     // For daily-plan users, check daily plan date for today's tasks
                     // For others, check task's own timestamp
                     if (isDailyPlanUser) {
                         const userPlans = dailyPlans[eKey(userEmail)] || {};
                         const todayIso = new Date(todayStartTsVal).toISOString().slice(0, 10);
                         
-                        tasks.filter(t => {
+                        console.log(`Daily plans for ${userEmail}:`, Object.keys(userPlans).length, 'items');
+                        console.log(`Today ISO date: ${todayIso}`);
+
+                        const completedTasks = tasks.filter(t => {
                             // Must be completed
                             if (!isTaskCompletedStatus(t.status)) return false;
                             
@@ -25161,7 +25173,36 @@
                             }
                             
                             return false;
-                        }).forEach(t => addItem(t.id, t, '', t.status));
+                        });
+
+                        console.log(`Completed tasks for ${userEmail}:`, completedTasks.length);
+                        completedTasks.forEach(t => {
+                            console.log(`  - Task: ${t.id} (${t.status}) assigned to ${t.assignee}`);
+                        });
+
+                        completedTasks.forEach(t => addItem(t.id, t, '', t.status));
+                    } else {
+                        // For non-daily-plan users, use task timestamp
+                        const completedTasks = tasks.filter(t => {
+                            // Must be completed
+                            if (!isTaskCompletedStatus(t.status)) return false;
+                            
+                            // Must be directly assigned
+                            if (!assigneeMatches(t, userEmail)) return false;
+                            
+                            // Must be in today's time window
+                            const ts = getTaskTs(t);
+                            if (ts < todayStartTsVal || ts > Date.now()) return false;
+                            
+                            // Must not be excluded
+                            if (isExcludedTask(t)) return false;
+                            
+                            return true;
+                        });
+
+                        console.log(`Completed tasks for ${userEmail}:`, completedTasks.length);
+                        completedTasks.forEach(t => addItem(t.id, t, '', t.status));
+                    }
                     } else {
                         // For non-daily-plan users, use task timestamp
                         tasks.filter(t => {
