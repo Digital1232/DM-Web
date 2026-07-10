@@ -10387,7 +10387,31 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         });
     });
 
+
     window.handleLogin = handleLogin; window.logout = logout; window.switchView = switchView; window.toggleSidebar = toggleSidebar;
+    
+    // ════════════════════════════════════════════════════════════════════
+    // Firebase Token Helper (for OAuth and other API calls)
+    // ════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Get Firebase ID Token for API authentication
+     * Used by Meta OAuth, Marketing Hub, and other services
+     * @returns {Promise<string|null>} Firebase ID token or null if not authenticated
+     */
+    window.getFirebaseIdToken = async function getFirebaseIdToken() {
+        try {
+            if (!auth || !auth.currentUser) {
+                console.warn('Firebase auth not ready or user not logged in');
+                return null;
+            }
+            return await auth.currentUser.getIdToken();
+        } catch (error) {
+            console.error('Failed to get Firebase ID token:', error);
+            return null;
+        }
+    };
+    
     window.doCheckIn = doCheckIn; window.doBreak = doBreak; window.doResume = doResume; window.confirmCheckOut = confirmCheckOut;
     window.syncTasks = syncTasks; window.toggleActiveTask = toggleActiveTask;
     window.saveBoardSettings = saveBoardSettings;

@@ -50,9 +50,25 @@ async function initMetaIntegration() {
 
 async function loadMetaConnectionData() {
     try {
+        // Check if user is logged in
+        if (!currentUser || !currentUser.uid) {
+            metaConnectionState.connected = false;
+            return;
+        }
+        
+        // Get Firebase ID token
+        const idToken = await window.getFirebaseIdToken();
+        if (!idToken) {
+            metaConnectionState.connected = false;
+            return;
+        }
+        
         // Check if backend is available
         const response = await fetch('/api/meta/profile', {
-            headers: { 'Authorization': `Bearer ${currentUser.uid}` }
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            }
         });
         
         if (!response.ok) {
@@ -60,7 +76,7 @@ async function loadMetaConnectionData() {
         }
 
         const data = await response.json();
-        if (data.data) {
+        if (data.success && data.data) {
             metaConnectionState = {
                 ...metaConnectionState,
                 connected: true,
@@ -450,32 +466,50 @@ function renderSyncCard(lastSync) {
 
 async function startMetaOAuth() {
     try {
-        // Check if backend is ready
+        // Check if user is logged in
+        if (!currentUser || !currentUser.uid) {
+            toast('Please login first', 'error');
+            return;
+        }
+
+        // Get Firebase ID token from window global function
+        const idToken = await window.getFirebaseIdToken();
+        if (!idToken) {
+            toast('Authentication error. Please try logging in again.', 'error');
+            return;
+        }
+
+        // Call backend to initiate OAuth
         const connectResponse = await fetch('/api/meta/connect', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            }
         });
 
         if (!connectResponse.ok) {
             if (connectResponse.status === 401) {
-                toast('Please login first', 'error');
+                toast('Authentication failed. Please login again.', 'error');
             } else if (connectResponse.status === 503) {
                 toast('Meta integration backend not ready. Please contact administrator.', 'error');
             } else {
-                toast('Failed to initiate OAuth flow', 'error');
+                const errorData = await connectResponse.json().catch(() => ({}));
+                toast(errorData.message || 'Failed to initiate OAuth flow', 'error');
             }
             return;
         }
 
         const data = await connectResponse.json();
-        if (data.authUrl) {
-            window.location.href = data.authUrl;
+        if (data.success && data.oauthUrl) {
+            // Redirect to Facebook OAuth login
+            window.location.href = data.oauthUrl;
         } else {
-            toast('Failed to get authorization URL', 'error');
+            toast('Failed to get authorization URL from server', 'error');
         }
     } catch (error) {
         console.error('OAuth start error:', error);
-        toast('Meta integration backend is not yet configured. Implementation guide available in documentation.', 'info');
+        toast(`Error: ${error.message}`, 'error');
     }
 }
 
@@ -528,9 +562,20 @@ async function disconnectMeta() {
     if (confirm('Are you sure? This will disconnect your Meta account from One Desk.')) {
         try {
             metaConnectionState.loading = true;
+            
+            // Get Firebase ID token
+            const idToken = await window.getFirebaseIdToken();
+            if (!idToken) {
+                toast('Authentication error. Please try logging in again.', 'error');
+                return;
+            }
+            
             const response = await fetch('/api/meta/disconnect', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${currentUser.uid}` }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                }
             });
 
             if (!response.ok) throw new Error('Disconnect failed');
@@ -574,9 +619,20 @@ async function refreshMetaConnection() {
 async function syncMetaData() {
     try {
         metaConnectionState.loading = true;
+        
+        // Get Firebase ID token
+        const idToken = await window.getFirebaseIdToken();
+        if (!idToken) {
+            toast('Authentication error. Please try logging in again.', 'error');
+            return;
+        }
+        
         const response = await fetch('/api/meta/sync', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${currentUser.uid}` }
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            }
         });
 
         if (!response.ok) throw new Error('Sync failed');
