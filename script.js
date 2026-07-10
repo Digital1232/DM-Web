@@ -33,6 +33,11 @@ if (initializeApp) {
     const auth = getAuth(app);
     const storage = getStorage(app);
 
+    // Expose Firebase objects to window for cross-module access (Meta Integration, etc.)
+    window.auth = auth;
+    window.db = db;
+    window.storage = storage;
+
     const ADMIN_ROLES = ['System Admin', 'Administrator'];
     const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
     const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
@@ -8682,6 +8687,9 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         }, 3000);
     }
 
+    // Expose toast to window for cross-module access
+    window.toast = toast;
+
     function updateSystemStatus(ok, message, isAutoSync = false) {
         const dot = document.getElementById('system-status-dot');
         const text = document.getElementById('system-status-text');
@@ -10417,11 +10425,14 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
      */
     window.getFirebaseIdToken = async function getFirebaseIdToken() {
         try {
-            if (!auth || !auth.currentUser) {
+            // Try to get auth from the IIFE scope first, then from window
+            const authObj = auth || (typeof window.auth !== 'undefined' ? window.auth : null);
+            
+            if (!authObj || !authObj.currentUser) {
                 console.warn('Firebase auth not ready or user not logged in');
                 return null;
             }
-            return await auth.currentUser.getIdToken();
+            return await authObj.currentUser.getIdToken();
         } catch (error) {
             console.error('Failed to get Firebase ID token:', error);
             return null;

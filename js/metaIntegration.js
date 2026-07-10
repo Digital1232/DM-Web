@@ -50,8 +50,28 @@ async function initMetaIntegration() {
 
 async function loadMetaConnectionData() {
     try {
-        // Get currentUser from window scope
-        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        // Get currentUser from window scope or Firebase auth
+        let user = window.currentUser;
+        
+        // If not available, try localStorage
+        if (!user) {
+            try {
+                const storedUser = localStorage.getItem('worksync_user');
+                if (storedUser) {
+                    user = JSON.parse(storedUser);
+                }
+            } catch (e) {
+                console.warn('Failed to parse localStorage user:', e);
+            }
+        }
+        
+        // If still no user, try Firebase auth directly
+        if (!user && window.auth && window.auth.currentUser) {
+            user = {
+                uid: window.auth.currentUser.uid,
+                email: window.auth.currentUser.email
+            };
+        }
         
         // Check if user is logged in
         if (!user || !user.uid) {
@@ -472,16 +492,47 @@ async function startMetaOAuth() {
         // Debug: Log what we're checking
         console.log('startMetaOAuth called');
         console.log('window.currentUser:', window.currentUser);
-        console.log('typeof currentUser:', typeof currentUser);
+        console.log('window.auth:', typeof window.auth);
+        // Skip checking local currentUser as it's in IIFE scope
         
         // Get user - try multiple ways
         let user = null;
-        if (typeof window.currentUser !== 'undefined') {
+        
+        // First try window.currentUser
+        if (typeof window.currentUser !== 'undefined' && window.currentUser) {
             user = window.currentUser;
             console.log('Got user from window.currentUser');
-        } else if (typeof currentUser !== 'undefined') {
-            user = currentUser;
-            console.log('Got user from local currentUser');
+        } 
+        // Then try localStorage (fallback)
+        else {
+            try {
+                const storedUser = localStorage.getItem('worksync_user');
+                if (storedUser) {
+                    user = JSON.parse(storedUser);
+                    console.log('Got user from localStorage');
+                }
+            } catch (e) {
+                console.warn('Failed to parse localStorage user:', e);
+            }
+        }
+        
+        // If still no user, try to get from Firebase auth directly
+        if (!user || !user.uid) {
+            console.log('Attempting to get user from Firebase auth...');
+            try {
+                // Access auth from window (it should be exposed by script.js)
+                const auth = window.auth;
+                if (auth && auth.currentUser) {
+                    console.log('Got Firebase auth.currentUser:', auth.currentUser.email);
+                    user = {
+                        uid: auth.currentUser.uid,
+                        email: auth.currentUser.email
+                    };
+                    console.log('Got user from Firebase auth.currentUser');
+                }
+            } catch (e) {
+                console.warn('Failed to get user from Firebase auth:', e);
+            }
         }
         
         console.log('Final user object:', user);
@@ -646,10 +697,18 @@ async function refreshMetaConnection() {
         metaConnectionState.loading = true;
         await loadMetaConnectionData();
         renderMetaIntegrationView();
-        toast('Connection refreshed', 'success');
+        
+        // Try to show success toast if available
+        if (typeof window.toast === 'function') {
+            window.toast('Connection refreshed', 'success');
+        }
     } catch (error) {
         console.error('Refresh error:', error);
-        toast('Failed to refresh connection', 'error');
+        
+        // Try to show error toast if available
+        if (typeof window.toast === 'function') {
+            window.toast('Failed to refresh connection', 'error');
+        }
     } finally {
         metaConnectionState.loading = false;
     }
