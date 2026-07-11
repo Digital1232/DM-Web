@@ -9284,6 +9284,7 @@
     </dialog>
 
     <script type="module">
+        console.log('[Module] Firebase module script starting...');
         let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get;
         let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
         let getStorage, sRef, uploadBytes, getDownloadURL;
@@ -9293,7 +9294,9 @@
             ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"));
             ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"));
             ({ getStorage, ref: sRef, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js"));
+            console.log('[Module] Firebase imports complete');
         } catch (err) {
+            console.error('[Module] Firebase import failed:', err);
             document.documentElement.classList.remove('auth-pending');
             document.getElementById('loading-view')?.classList.add('hidden');
             document.getElementById('login-view')?.classList.remove('hidden');
@@ -9436,6 +9439,7 @@
             window.db = db;
             window.storage = storage;
             window.firebaseAuth = auth; // Alias for shim compatibility
+            console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage');
 
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
             const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
@@ -40224,46 +40228,26 @@
             console.log('[Shim] getFirebaseIdToken called');
             
             try {
-                // Try to get current Firebase user directly from the page
-                // Firebase SDK stores the current auth state in window
-                
-                // Method 1: Check window.auth (set by script.js module)
+                // Method 1: Check window.auth (set by HTML module script at line 9434)
                 if (window.auth && window.auth.currentUser) {
                     console.log('[Shim] Using window.auth.currentUser');
                     return await window.auth.currentUser.getIdToken();
                 }
                 
-                // Method 2: Check if we can access Firebase from window
-                if (window.firebase && window.firebase.auth()) {
-                    const fbAuth = window.firebase.auth();
-                    if (fbAuth.currentUser) {
-                        console.log('[Shim] Using window.firebase.auth().currentUser');
-                        return await fbAuth.currentUser.getIdToken();
-                    }
-                }
-                
-                // Method 3: Wait a bit for module to load
-                console.log('[Shim] Waiting for Firebase initialization...');
-                for (let i = 0; i < 100; i++) {
-                    await new Promise(r => setTimeout(r, 50));
+                // Method 2: Wait for module script to set window.auth
+                console.log('[Shim] Waiting for Firebase module initialization...');
+                for (let i = 0; i < 200; i++) {
+                    await new Promise(r => setTimeout(r, 100)); // Wait 100ms per iteration
                     
                     if (window.auth && window.auth.currentUser) {
-                        console.log('[Shim] Got window.auth after waiting');
+                        console.log('[Shim] Got window.auth after', i * 100, 'ms');
                         return await window.auth.currentUser.getIdToken();
-                    }
-                    
-                    if (window.firebase && window.firebase.auth()) {
-                        const fbAuth = window.firebase.auth();
-                        if (fbAuth.currentUser) {
-                            console.log('[Shim] Got firebase.auth() after waiting');
-                            return await fbAuth.currentUser.getIdToken();
-                        }
                     }
                 }
                 
-                console.warn('[Shim] No Firebase auth available');
-                console.log('[Shim] window.firebase:', !!window.firebase);
+                console.error('[Shim] Firebase auth still not available after 20 seconds');
                 console.log('[Shim] window.auth:', !!window.auth);
+                console.log('[Shim] window.firebase:', !!window.firebase);
                 return null;
             } catch (error) {
                 console.error('[Shim] Error getting token:', error);
@@ -40271,7 +40255,7 @@
             }
         };
         
-        console.log('Firebase token shim initialized - waiting for auth');
+        console.log('[Shim] Token getter initialized, waiting for module script to set window.auth');
     </script>
 
     <!-- Meta Integration Module -->
