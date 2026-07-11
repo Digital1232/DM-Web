@@ -9924,7 +9924,6 @@
             let activeMissedLearningNotifId = null;
             let chatGalleryIndex = 0;
             let activeView = 'dashboard';
-            let activeTasksTab = 'jira';
             let boardColumnOrder = null;
             let projectCalendarDate = new Date();
             let shownTaskNotifIds = new Set(JSON.parse(localStorage.getItem('worksync_toasted_notifs') || '[]'));
@@ -21599,12 +21598,28 @@
                     const base64Data = await fileToBase64(file);
                     const base64String = base64Data.split(',')[1]; // Remove data:mime;base64, prefix
 
+                    // Get Firebase ID token
+                    let idToken = null;
+                    try {
+                        // Try to get from Firebase user
+                        const firebaseUser = firebase.auth().currentUser;
+                        if (firebaseUser) {
+                            idToken = await firebaseUser.getIdToken();
+                        } else {
+                            throw new Error('No Firebase user');
+                        }
+                    } catch (err) {
+                        console.warn('Could not get Firebase token:', err);
+                        toast('Authentication required for file upload', 'error');
+                        throw new Error('Authentication failed');
+                    }
+
                     // Call Google Drive API
                     const response = await fetch('/api/google-drive/upload', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${await currentUser.getIdToken()}`
+                            'Authorization': `Bearer ${idToken}`
                         },
                         body: JSON.stringify({
                             fileName: file.name,
@@ -40727,31 +40742,45 @@
                 const container = document.getElementById('cr-tasks-container');
                 container.innerHTML = '<p class="text-sm text-slate-400">Loading completed tasks...</p>';
 
+                console.log('[CompletedTasks] Starting load, tasks array:', tasks ? tasks.length : 0);
+
                 let tasksToShow = [];
                 
                 // Get tasks from the global tasks array (already loaded from Jira)
                 if (isAdmin() && completedTasksSelectedEmployee !== 'all') {
                     // Admin viewing specific employee - filter from all tasks
                     tasksToShow = (tasks || []).filter(t => t.assigneeEmail === completedTasksSelectedEmployee);
+                    console.log('[CompletedTasks] Admin filtering by employee:', completedTasksSelectedEmployee, 'found:', tasksToShow.length);
                 } else if (isAdmin() && completedTasksSelectedEmployee === 'all') {
                     // Admin viewing all employees - use all tasks
                     tasksToShow = tasks || [];
+                    console.log('[CompletedTasks] Admin viewing all tasks:', tasksToShow.length);
                 } else {
                     // Non-admin viewing own tasks
-                    tasksToShow = (tasks || []).filter(t => t.assigneeEmail === currentUser?.email || t.assignee === currentUser?.email);
+                    const userEmail = currentUser?.email;
+                    tasksToShow = (tasks || []).filter(t => t.assigneeEmail === userEmail || t.assignee === userEmail);
+                    console.log('[CompletedTasks] User tasks for', userEmail, ':', tasksToShow.length);
                 }
+
+                console.log('[CompletedTasks] Sample task:', tasksToShow[0]);
 
                 // Filter for completed tasks in date range
                 const completedTasks = tasksToShow.filter(t => {
-                    if (!t.completedAt && !t.completionTime) return false;
-                    const completedDate = new Date(t.completedAt || t.completionTime);
-                    return completedDate >= dateRange.from && completedDate < dateRange.to && isCompletedTaskStatus(t.status);
+                    const hasCompletionTime = t.completedAt || t.completionTime || t.resolved;
+                    if (!hasCompletionTime) return false;
+                    const completedDate = new Date(t.completedAt || t.completionTime || t.resolved);
+                    const inRange = completedDate >= dateRange.from && completedDate < dateRange.to;
+                    const isCompleted = isCompletedTaskStatus(t.status);
+                    console.log('[CompletedTasks] Task', t.id || t.desc, 'completed:', isCompleted, 'inRange:', inRange);
+                    return inRange && isCompleted;
                 });
+
+                console.log('[CompletedTasks] Found completed tasks:', completedTasks.length);
 
                 // Sort by completion time (newest first)
                 completedTasks.sort((a, b) => {
-                    const timeA = new Date(a.completedAt || a.completionTime || 0);
-                    const timeB = new Date(b.completedAt || b.completionTime || 0);
+                    const timeA = new Date(a.completedAt || a.completionTime || a.resolved || 0);
+                    const timeB = new Date(b.completedAt || b.completionTime || b.resolved || 0);
                     return timeB - timeA;
                 });
 
@@ -40763,9 +40792,9 @@
                 updateCompletedTasksKPIs(completedTasks);
 
             } catch (error) {
-                console.error('Error loading completed tasks:', error);
+                console.error('[CompletedTasks] Error:', error);
                 document.getElementById('cr-tasks-container').innerHTML = 
-                    '<p class="text-sm text-red-500">Error loading tasks. Please try again.</p>';
+                    '<p class="text-sm text-red-500">Error: ' + error.message + '</p>';
             }
         }
 
@@ -40784,11 +40813,11 @@
         function renderCompletedTasksList(tasks) {
             const container = document.getElementById('cr-tasks-container');
             
-            if (tasks.length === 0) {
+            if (!tasks || tasks.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12">
                         <iconify-icon icon="solar:inbox-bold" width="48" class="text-slate-300 mb-3 block mx-auto"></iconify-icon>
-                        <p class="text-slate-400 text-sm">No completed tasks found</p>
+                        <p class="text-slate-400 text-sm">No completed tasks found for this date range</p>
                     </div>
                 `;
                 return;
@@ -40817,16 +40846,18 @@
                         <div class="divide-y divide-slate-50">
 `;
                 clientTasks.forEach(task => {
-                    const completedTime = new Date(task.completedAt);
+                    const completedTime = new Date(task.completedAt || task.completionTime || task.resolved || new Date());
                     const duration = task.duration || 0;
                     const durationStr = duration >= 60 ? `${Math.floor(duration/60)}h ${duration%60}m` : `${duration}m`;
+                    const taskName = task.desc || task.summary || task.title || 'Unnamed Task';
+                    const taskId = task.id || task.key || 'N/A';
                     
                     html += `
                             <div class="p-4 hover:bg-slate-50 transition-all">
                                 <div class="flex items-start justify-between gap-4 mb-2">
                                     <div class="flex-1">
-                                        <p class="font-bold text-slate-900 text-sm line-clamp-1">${escapeHtml(task.desc)}</p>
-                                        <p class="text-xs text-slate-500 mt-1">ID: ${escapeHtml(task.id)}</p>
+                                        <p class="font-bold text-slate-900 text-sm line-clamp-1">${escapeHtml(taskName)}</p>
+                                        <p class="text-xs text-slate-500 mt-1">ID: ${escapeHtml(taskId)}</p>
                                     </div>
                                     <span class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1 rounded-lg whitespace-nowrap">✓ Done</span>
                                 </div>
