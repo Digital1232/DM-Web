@@ -933,6 +933,65 @@
             scrollbar-color: #334155 transparent;
         }
 
+        /* ════ COMPREHENSIVE HIDDEN PANEL STYLES ════ */
+        /* Ensures ALL hidden panels are completely removed from layout and interaction */
+        .hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            z-index: -9999 !important;
+            opacity: 0 !important;
+            transform: scale(0) !important;
+        }
+
+        /* Additional safeguard for view panels */
+        [id^="view-"][id$="-panel"].hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            z-index: -9999 !important;
+            height: 0 !important;
+            width: 0 !important;
+            min-height: 0 !important;
+            min-width: 0 !important;
+            max-height: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            overflow: hidden !important;
+            position: absolute !important;
+            left: -9999px !important;
+            top: -9999px !important;
+        }
+
+        /* Ensure visible panels are properly shown */
+        [id^="view-"][id$="-panel"]:not(.hidden) {
+            display: block !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+            z-index: 1 !important;
+            opacity: 1 !important;
+            transform: scale(1) !important;
+            height: auto !important;
+            width: 100% !important;
+            position: relative !important;
+            left: 0 !important;
+            top: 0 !important;
+        }
+
+        /* Floating chat panel must also be hidden when not active */
+        #float-chat-panel {
+            z-index: 9998 !important;
+        }
+
+        #float-chat-panel.hidden-chat {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            z-index: -9998 !important;
+        }
+
         .toast {
             position: fixed;
             margin: 0;
@@ -12659,14 +12718,47 @@
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads', 'marketing-hub', 'meta-integration'].forEach(v => {
-                    document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
-                    const navEl = document.getElementById(`nav-${v}`);
-                    if (navEl) navEl.classList.remove('nav-active');
+                
+                // ════ STEP 1: Hide ALL panels with BOTH CSS class AND inline styles ════
+                const allPanelIds = [
+                    'dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'projects', 
+                    'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 
+                    'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 
+                    'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 
+                    'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads', 
+                    'marketing-hub', 'meta-integration'
+                ];
+                
+                allPanelIds.forEach(id => {
+                    const panel = document.getElementById(`view-${id}-panel`);
+                    if (panel) {
+                        panel.classList.add('hidden');
+                        panel.style.display = 'none';
+                        panel.style.visibility = 'hidden';
+                        panel.style.pointerEvents = 'none';
+                    }
+                    
+                    // Remove nav active state
+                    const nav = document.getElementById(`nav-${id}`);
+                    if (nav) nav.classList.remove('nav-active');
                 });
-                document.getElementById(`view-${view}-panel`)?.classList.remove('hidden');
+                
+                // ════ STEP 2: Show ONLY the selected panel ════
+                const selectedPanel = document.getElementById(`view-${view}-panel`);
+                if (selectedPanel) {
+                    selectedPanel.classList.remove('hidden');
+                    selectedPanel.style.display = '';
+                    selectedPanel.style.visibility = 'visible';
+                    selectedPanel.style.pointerEvents = 'auto';
+                }
+                
+                // ════ STEP 3: Update nav active state ════
                 const targetNav = document.getElementById(`nav-${view}`);
                 if (targetNav) targetNav.classList.add('nav-active');
+                
+                // ════ STEP 4: Scroll to top ════
+                const contentArea = document.getElementById('content-area');
+                if (contentArea) contentArea.scrollTop = 0;
 
                 const titles = {
                     dashboard: 'Dashboard Overview',
@@ -21601,55 +21693,77 @@
                     // Get Firebase ID token
                     let idToken = null;
                     try {
-                        // Try to get from Firebase user
-                        const firebaseUser = firebase.auth().currentUser;
-                        if (firebaseUser) {
-                            idToken = await firebaseUser.getIdToken();
+                        // Get from window.auth (exposed from Firebase module)
+                        if (window.auth && window.auth.currentUser) {
+                            idToken = await window.auth.currentUser.getIdToken();
                         } else {
-                            throw new Error('No Firebase user');
+                            // Fallback: try to get from window.firebaseAuth
+                            if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+                                idToken = await window.firebaseAuth.currentUser.getIdToken();
+                            } else {
+                                throw new Error('No authenticated user found');
+                            }
                         }
                     } catch (err) {
                         console.warn('Could not get Firebase token:', err);
-                        toast('Authentication required for file upload', 'error');
-                        throw new Error('Authentication failed');
+                        toast('Please log in to upload files', 'error');
+                        throw new Error('Authentication required');
                     }
 
-                    // Call Google Drive API
-                    const response = await fetch('/api/google-drive/upload', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${idToken}`
-                        },
-                        body: JSON.stringify({
-                            fileName: file.name,
-                            fileBuffer: base64String,
-                            mimeType: file.type || 'application/octet-stream',
-                            conversationId: activeConvId
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Upload failed');
+                    if (!idToken) {
+                        throw new Error('Could not obtain authentication token');
                     }
 
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.message);
-                    }
+                    // Try Google Drive API first
+                    try {
+                        const response = await fetch('/api/google-drive/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${idToken}`
+                            },
+                            body: JSON.stringify({
+                                fileName: file.name,
+                                fileBuffer: base64String,
+                                mimeType: file.type || 'application/octet-stream',
+                                conversationId: activeConvId
+                            }),
+                            timeout: 30000
+                        });
 
-                    return {
-                        url: result.data.webViewLink,
-                        downloadUrl: result.data.webContentLink,
-                        type: file.type,
-                        name: file.name,
-                        driveFileId: result.data.driveFileId,
-                        isGoogleDriveFile: true
-                    };
-                } catch (error) {
-                    console.error('Google Drive upload failed:', error);
-                    throw error;
+                        if (!response.ok) {
+                            throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                        }
+
+                        const text = await response.text();
+                        if (!text) {
+                            throw new Error('Empty response from server');
+                        }
+
+                        const result = JSON.parse(text);
+                        if (!result.success) {
+                            throw new Error(result.message || 'Upload failed');
+                        }
+
+                        return {
+                            url: result.data.webViewLink,
+                            downloadUrl: result.data.webContentLink,
+                            type: file.type,
+                            name: file.name,
+                            driveFileId: result.data.driveFileId,
+                            isGoogleDriveFile: true
+                        };
+                    } catch (googleDriveErr) {
+                        console.warn('Google Drive upload failed, falling back to Cloudinary:', googleDriveErr);
+                        
+                        // Fallback to Cloudinary
+                        console.log('Attempting Cloudinary upload as fallback...');
+                        const uploaded = await uploadToCloudinary(file);
+                        return uploaded;
+                    }
+                } catch (err) {
+                    console.error('File upload error:', err);
+                    throw err;
                 }
             }
 
@@ -37940,6 +38054,14 @@
             window.taskRowDragEnter = taskRowDragEnter;
             window.taskRowDragLeave = taskRowDragLeave;
             window.taskRowDrop = taskRowDrop;
+            
+            // Completed Tasks exports
+            window.initCompletedTasksTab = initCompletedTasksTab;
+            window.switchCompletedDateRange = switchCompletedDateRange;
+            window.filterCompletedTasks = filterCompletedTasks;
+            window.changeCompletedEmployee = changeCompletedEmployee;
+            window.exportCompletedTasksPDF = exportCompletedTasksPDF;
+            window.exportCompletedTasksExcel = exportCompletedTasksExcel;
             // -- Floating Chat Popup: expose shared state & helpers --
             // The floating chat lives in a separate script tag and cannot access
             // block-scoped (let/const) variables from this closure directly.
@@ -40743,6 +40865,7 @@
                 container.innerHTML = '<p class="text-sm text-slate-400">Loading completed tasks...</p>';
 
                 console.log('[CompletedTasks] Starting load, tasks array:', tasks ? tasks.length : 0);
+                console.log('[CompletedTasks] Date range:', dateRange.from, 'to', dateRange.to);
 
                 let tasksToShow = [];
                 
@@ -40762,25 +40885,57 @@
                     console.log('[CompletedTasks] User tasks for', userEmail, ':', tasksToShow.length);
                 }
 
-                console.log('[CompletedTasks] Sample task:', tasksToShow[0]);
+                if (tasksToShow.length > 0) {
+                    console.log('[CompletedTasks] Sample task:', JSON.stringify(tasksToShow[0]).slice(0, 200));
+                }
 
                 // Filter for completed tasks in date range
                 const completedTasks = tasksToShow.filter(t => {
-                    const hasCompletionTime = t.completedAt || t.completionTime || t.resolved;
-                    if (!hasCompletionTime) return false;
-                    const completedDate = new Date(t.completedAt || t.completionTime || t.resolved);
-                    const inRange = completedDate >= dateRange.from && completedDate < dateRange.to;
+                    // Check if task is completed by status
                     const isCompleted = isCompletedTaskStatus(t.status);
-                    console.log('[CompletedTasks] Task', t.id || t.desc, 'completed:', isCompleted, 'inRange:', inRange);
-                    return inRange && isCompleted;
+                    
+                    if (!isCompleted) {
+                        console.log('[CompletedTasks] Task', t.id || t.desc, 'status:', t.status, '- NOT completed');
+                        return false;
+                    }
+                    
+                    // Try to find a completion date
+                    // Priority: completedAt > updatedAt > duedate > createdAt
+                    let completedDate = null;
+                    if (t.completedAt) {
+                        completedDate = new Date(t.completedAt);
+                    } else if (t.updatedAt) {
+                        completedDate = new Date(t.updatedAt);
+                    } else if (t.duedate) {
+                        // Parse duedate format (YYYY-MM-DD)
+                        completedDate = new Date(t.duedate + 'T23:59:59Z');
+                    } else if (t.createdAt) {
+                        completedDate = new Date(t.createdAt);
+                    }
+                    
+                    if (!completedDate || isNaN(completedDate.getTime())) {
+                        console.log('[CompletedTasks] Task', t.id || t.desc, '- NO valid date found');
+                        return false;
+                    }
+                    
+                    const inRange = completedDate >= dateRange.from && completedDate < dateRange.to;
+                    console.log('[CompletedTasks] Task', t.id || t.desc, 'date:', completedDate.toISOString(), 'inRange:', inRange);
+                    return inRange;
                 });
 
                 console.log('[CompletedTasks] Found completed tasks:', completedTasks.length);
 
-                // Sort by completion time (newest first)
+                // Sort by completion date (newest first)
                 completedTasks.sort((a, b) => {
-                    const timeA = new Date(a.completedAt || a.completionTime || a.resolved || 0);
-                    const timeB = new Date(b.completedAt || b.completionTime || b.resolved || 0);
+                    const getDate = (t) => {
+                        if (t.completedAt) return new Date(t.completedAt);
+                        if (t.updatedAt) return new Date(t.updatedAt);
+                        if (t.duedate) return new Date(t.duedate + 'T23:59:59Z');
+                        if (t.createdAt) return new Date(t.createdAt);
+                        return new Date(0);
+                    };
+                    const timeA = getDate(a);
+                    const timeB = getDate(b);
                     return timeB - timeA;
                 });
 
@@ -40793,6 +40948,7 @@
 
             } catch (error) {
                 console.error('[CompletedTasks] Error:', error);
+                console.error('[CompletedTasks] Error stack:', error.stack);
                 document.getElementById('cr-tasks-container').innerHTML = 
                     '<p class="text-sm text-red-500">Error: ' + error.message + '</p>';
             }
@@ -40846,9 +41002,23 @@
                         <div class="divide-y divide-slate-50">
 `;
                 clientTasks.forEach(task => {
-                    const completedTime = new Date(task.completedAt || task.completionTime || task.resolved || new Date());
-                    const duration = task.duration || 0;
-                    const durationStr = duration >= 60 ? `${Math.floor(duration/60)}h ${duration%60}m` : `${duration}m`;
+                    // Get completion time (try multiple fields)
+                    let completedTime;
+                    if (task.completedAt) {
+                        completedTime = new Date(task.completedAt);
+                    } else if (task.updatedAt) {
+                        completedTime = new Date(task.updatedAt);
+                    } else if (task.duedate) {
+                        completedTime = new Date(task.duedate + 'T23:59:59Z');
+                    } else if (task.createdAt) {
+                        completedTime = new Date(task.createdAt);
+                    } else {
+                        completedTime = new Date();
+                    }
+                    
+                    const duration = task.duration || task.estimatedHours || 0;
+                    const durationMinutes = typeof duration === 'number' ? duration : 0;
+                    const durationStr = durationMinutes >= 60 ? `${Math.floor(durationMinutes/60)}h ${durationMinutes%60}m` : durationMinutes > 0 ? `${durationMinutes}m` : 'No duration';
                     const taskName = task.desc || task.summary || task.title || 'Unnamed Task';
                     const taskId = task.id || task.key || 'N/A';
                     
@@ -40879,8 +41049,11 @@
 
         function updateCompletedTasksKPIs(tasks) {
             const totalTasks = tasks.length;
-            const uniqueClients = new Set(tasks.map(t => t.client)).size;
-            const totalDuration = tasks.reduce((sum, t) => sum + (t.duration || 0), 0);
+            const uniqueClients = new Set(tasks.map(t => t.client).filter(Boolean)).size;
+            const totalDuration = tasks.reduce((sum, t) => {
+                const dur = t.duration || t.estimatedHours || 0;
+                return sum + (typeof dur === 'number' ? dur : 0);
+            }, 0);
             const avgDuration = totalTasks > 0 ? Math.round(totalDuration / totalTasks) : 0;
 
             document.getElementById('cr-kpi-completed').textContent = totalTasks;
@@ -40920,9 +41093,8 @@
         }
 
         function isCompletedTaskStatus(status) {
-            if (!status) return false;
-            const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done'];
-            return completedStatuses.some(s => status.toLowerCase().includes(s));
+            // Use the same logic as isCompletedTask for consistency
+            return isCompletedTask(status);
         }
     </script>
 
