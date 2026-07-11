@@ -40729,42 +40729,31 @@
 
                 let tasksToShow = [];
                 
-                // Collect tasks from current user or all users based on admin status
+                // Get tasks from the global tasks array (already loaded from Jira)
                 if (isAdmin() && completedTasksSelectedEmployee !== 'all') {
-                    // Admin viewing specific employee
-                    const userRef = ref(db, `worksync/tasks/${completedTasksSelectedEmployee}`);
-                    const userTasksSnap = await get(userRef);
-                    if (userTasksSnap.exists()) {
-                        tasksToShow = Object.values(userTasksSnap.val() || {});
-                    }
+                    // Admin viewing specific employee - filter from all tasks
+                    tasksToShow = (tasks || []).filter(t => t.assigneeEmail === completedTasksSelectedEmployee);
                 } else if (isAdmin() && completedTasksSelectedEmployee === 'all') {
-                    // Admin viewing all employees
-                    for (const user of USERS) {
-                        const userRef = ref(db, `worksync/tasks/${user.email}`);
-                        const userTasksSnap = await get(userRef);
-                        if (userTasksSnap.exists()) {
-                            const userTasks = Object.values(userTasksSnap.val() || {});
-                            tasksToShow.push(...userTasks.map(t => ({ ...t, assigneeEmail: user.email })));
-                        }
-                    }
+                    // Admin viewing all employees - use all tasks
+                    tasksToShow = tasks || [];
                 } else {
                     // Non-admin viewing own tasks
-                    const userRef = ref(db, `worksync/tasks/${currentUser.email}`);
-                    const userTasksSnap = await get(userRef);
-                    if (userTasksSnap.exists()) {
-                        tasksToShow = Object.values(userTasksSnap.val() || {});
-                    }
+                    tasksToShow = (tasks || []).filter(t => t.assigneeEmail === currentUser?.email || t.assignee === currentUser?.email);
                 }
 
                 // Filter for completed tasks in date range
                 const completedTasks = tasksToShow.filter(t => {
-                    if (!t.completedAt) return false;
-                    const completedDate = new Date(t.completedAt);
-                    return completedDate >= dateRange.from && completedDate < dateRange.to && isCompletedTask(t.status);
+                    if (!t.completedAt && !t.completionTime) return false;
+                    const completedDate = new Date(t.completedAt || t.completionTime);
+                    return completedDate >= dateRange.from && completedDate < dateRange.to && isCompletedTaskStatus(t.status);
                 });
 
                 // Sort by completion time (newest first)
-                completedTasks.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+                completedTasks.sort((a, b) => {
+                    const timeA = new Date(a.completedAt || a.completionTime || 0);
+                    const timeB = new Date(b.completedAt || b.completionTime || 0);
+                    return timeB - timeA;
+                });
 
                 // Apply search filter
                 completedTasksFilteredList = completedTasks;
@@ -40899,7 +40888,7 @@
             alert('Excel export coming soon');
         }
 
-        function isCompletedTask(status) {
+        function isCompletedTaskStatus(status) {
             if (!status) return false;
             const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done'];
             return completedStatuses.some(s => status.toLowerCase().includes(s));
