@@ -282,14 +282,12 @@
 
         /* ── MARKETING HUB PANEL FIX: Prevent Overlap ── */
         #view-marketing-hub-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 10;
+            position: relative;
+            z-index: 1;
             max-height: calc(100vh - 80px);
             overflow-y: auto;
-            background: white;
+            background: transparent;
+            width: 100%;
         }
 
         /* Ensure hidden panels don't appear */
@@ -298,7 +296,6 @@
             visibility: hidden !important;
             pointer-events: none !important;
             z-index: -1 !important;
-            position: absolute !important;
         }
 
         #view-marketing-hub-panel:not(.hidden) {
@@ -341,14 +338,12 @@
 
         /* ── META INTEGRATION PANEL FIX: Prevent Overlap ── */
         #view-meta-integration-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 10;
+            position: relative;
+            z-index: 1;
             max-height: calc(100vh - 80px);
             overflow-y: auto;
-            background: white;
+            background: transparent;
+            width: 100%;
         }
 
         /* Ensure hidden panels don't appear */
@@ -357,7 +352,6 @@
             visibility: hidden !important;
             pointer-events: none !important;
             z-index: -1 !important;
-            position: absolute !important;
         }
 
         #view-meta-integration-panel:not(.hidden) {
@@ -12447,7 +12441,7 @@
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
-                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads'].forEach(v => {
+                ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads', 'marketing-hub', 'meta-integration'].forEach(v => {
                     document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
                     const navEl = document.getElementById(`nav-${v}`);
                     if (navEl) navEl.classList.remove('nav-active');
@@ -12525,6 +12519,8 @@
                 else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
                 else if (view === 'discussions') { renderDiscussionsView(); }
                 else if (view === 'meta-ads') { loadMetaAdsData(); }
+                else if (view === 'marketing-hub') { initMarketingHub(); }
+                else if (view === 'meta-integration') { initMetaIntegration(); }
 
                 // Manage Live Board Timers for Admin
                 if ((view === 'dashboard' || view === 'dailyplan') && isAdmin()) {
@@ -39064,8 +39060,13 @@
                 }
 
                 // Add explicitly completed/worked tasks if they aren't tracked via timelogs
+                // Define getTaskTs helper if not already defined
+                if (!window.getTaskTs) {
+                    window.getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
+                }
+                
                 completed.forEach(t => {
-                    const updatedTs = window.getTaskTs ? window.getTaskTs(t) : 0;
+                    const updatedTs = window.getTaskTs(t);
                     if (updatedTs >= startOfDay && updatedTs <= endOfDay) {
                         workedTaskIds.add(t.id);
                     }
