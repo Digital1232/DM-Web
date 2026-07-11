@@ -59,6 +59,8 @@ async function logAudit(userId, action, details) {
 }
 
 module.exports = async (req, res) => {
+    console.log('[META/CONNECT] Request received:', { method: req.method, path: req.url });
+    
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -66,26 +68,33 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization');
 
     if (req.method === 'OPTIONS') {
+        console.log('[META/CONNECT] OPTIONS request, returning 200');
         res.status(200).end();
         return;
     }
 
     if (req.method !== 'POST') {
+        console.log('[META/CONNECT] Invalid method:', req.method);
         return res.status(405).json({ success: false, message: 'Method not allowed' });
     }
 
     try {
+        console.log('[META/CONNECT] Verifying auth token...');
         // Verify authentication
         const decodedToken = await verifyAuth(req);
+        console.log('[META/CONNECT] Auth verified for user:', decodedToken.uid);
 
         // Generate and store CSRF state
         const state = generateState();
+        console.log('[META/CONNECT] Generated state token');
+        
         await db.collection('meta_oauth_state').add({
             userId: decodedToken.uid,
             state,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)), // 10 min expiry
         });
+        console.log('[META/CONNECT] Stored state in Firestore');
 
         const scope = [
             'pages_read_user_content',
@@ -98,6 +107,9 @@ module.exports = async (req, res) => {
         ];
 
         const redirectUri = `${process.env.APP_URL || 'https://onedesk.vilpower.com'}/api/meta/callback`;
+        console.log('[META/CONNECT] Redirect URI:', redirectUri);
+        console.log('[META/CONNECT] FB App ID:', process.env.FACEBOOK_APP_ID ? 'SET' : 'MISSING');
+        
         const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
             `client_id=${process.env.FACEBOOK_APP_ID}` +
             `&redirect_uri=${encodeURIComponent(redirectUri)}` +
@@ -105,14 +117,17 @@ module.exports = async (req, res) => {
             `&state=${state}` +
             `&response_type=code`;
 
+        console.log('[META/CONNECT] OAuth URL generated');
+
         await logAudit(decodedToken.uid, 'oauth_initiated', { redirectUrl: oauthUrl });
 
+        console.log('[META/CONNECT] Returning success response');
         return res.status(200).json({
             success: true,
             oauthUrl,
         });
     } catch (error) {
-        console.error('Connect error:', error);
+        console.error('[META/CONNECT] Error:', error);
         return res.status(error.message.includes('Unauthorized') ? 401 : 500).json({
             success: false,
             message: error.message,
