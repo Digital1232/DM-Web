@@ -972,6 +972,8 @@ if (initializeApp) {
             initDailyPlan();
             registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
             restoreTimerState();
+            restoreHeaderPreference(); // Restore user's header preference
+            initProdHeaderListeners(); // Initialize productivity header
             initDailyReportScheduler();
             restoreActiveTask();
             initTaskNotifications();
@@ -1512,6 +1514,9 @@ if (initializeApp) {
         if (state === 'idle') { ci.classList.remove('hidden'); }
         if (state === 'running') { co.disabled = false; br.disabled = false; br.classList.remove('hidden'); }
         if (state === 'paused') { co.disabled = false; rs.classList.remove('hidden'); br.classList.add('hidden'); }
+        
+        // Update productivity header buttons
+        updateProdHeaderButtons();
     }
 
     function autoCheckOut() {
@@ -1716,12 +1721,14 @@ if (initializeApp) {
         }
     }
 
+
     function tickTimer() {
         if (!checkInTime) return;
         const elapsedMs = Date.now() - checkInTime;
         const workMs = elapsedMs - totalBreakDuration;
         seconds = Math.floor(Math.max(0, workMs / 1000));
         document.getElementById('timer-display').textContent = formatTime(seconds);
+        updateProdHeaderTimer(); // Update productivity header timer
         updateStats();
     }
     function formatTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return [h, m, sc].map(v => v.toString().padStart(2, '0')).join(':'); }
@@ -1764,6 +1771,225 @@ if (initializeApp) {
 
             // Restore break popup state
             openBreakPopup();
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // PRODUCTIVITY HEADER FUNCTIONS
+    // ════════════════════════════════════════════════════════════════════
+
+    // Update productivity header timer display
+    function updateProdHeaderTimer() {
+        const display = document.getElementById('prod-timer-display');
+        const status = document.getElementById('prod-timer-status');
+        const pulse = document.getElementById('prod-timer-pulse');
+        
+        if (!display) return;
+
+        if (isCheckedIn) {
+            display.textContent = formatTime(seconds);
+            
+            if (breakStartTime) {
+                status.textContent = 'BREAK';
+                pulse.className = 'relative inline-flex rounded-full h-2 w-2 bg-rose-500';
+            } else {
+                status.textContent = 'WORKING';
+                pulse.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500 animate-pulse';
+            }
+        } else {
+            display.textContent = '00:00:00';
+            status.textContent = 'OFFLINE';
+            pulse.className = 'relative inline-flex rounded-full h-2 w-2 bg-slate-400';
+        }
+    }
+
+    // Update productivity header buttons state
+    function updateProdHeaderButtons() {
+        const btnCheckin = document.getElementById('prod-btn-checkin');
+        const btnBreak = document.getElementById('prod-btn-break');
+        const btnResume = document.getElementById('prod-btn-resume');
+        const btnEndtask = document.getElementById('prod-btn-endtask');
+
+        if (!btnCheckin) return;
+
+        // Reset all
+        btnCheckin.classList.add('hidden');
+        btnBreak.classList.add('hidden');
+        btnResume.classList.add('hidden');
+        btnEndtask.classList.add('hidden');
+
+        if (isCheckedIn) {
+            if (breakStartTime) {
+                // On Break: Show Resume & End Task
+                btnResume.classList.remove('hidden');
+                btnEndtask.classList.remove('hidden');
+            } else {
+                // Working: Show Break & End Task
+                btnBreak.classList.remove('hidden');
+                btnEndtask.classList.remove('hidden');
+            }
+        } else {
+            // Offline: Show Check In
+            btnCheckin.classList.remove('hidden');
+        }
+    }
+
+    // Update sync status badge with last sync time
+    function updateSyncStatusBadge() {
+        const badge = document.getElementById('prod-sync-badge');
+        const timeEl = document.getElementById('prod-sync-time');
+        
+        if (!badge || !timeEl) return;
+
+        const lastSync = localStorage.getItem('worksync_lastSyncTime');
+        if (lastSync) {
+            const syncDate = new Date(parseInt(lastSync));
+            const now = new Date();
+            const diffMs = now - syncDate;
+            const diffMins = Math.floor(diffMs / 60000);
+
+            if (diffMins === 0) {
+                timeEl.textContent = 'Synced now';
+            } else if (diffMins < 60) {
+                timeEl.textContent = `Synced ${diffMins}m ago`;
+            } else {
+                const hours = Math.floor(diffMins / 60);
+                timeEl.textContent = `Synced ${hours}h ago`;
+            }
+        }
+
+        badge.classList.remove('hidden');
+    }
+
+    // Record sync time to Firebase
+    function recordSyncTime() {
+        const now = Date.now();
+        localStorage.setItem('worksync_lastSyncTime', String(now));
+        updateSyncStatusBadge();
+    }
+
+    // Trigger manual sync
+    async function triggerManualSync() {
+        const badge = document.getElementById('prod-sync-badge');
+        if (badge.hasAttribute('data-syncing')) return;
+
+        badge.setAttribute('data-syncing', 'true');
+        badge.style.opacity = '0.6';
+        toast('Syncing tasks...', 'info');
+
+        try {
+            await syncTasks();
+            recordSyncTime();
+            toast('Sync complete!', 'success');
+        } catch (err) {
+            console.error('Manual sync failed:', err);
+            toast('Sync failed - check connection', 'error');
+        } finally {
+            badge.removeAttribute('data-syncing');
+            badge.style.opacity = '1';
+        }
+    }
+
+    // Open current session details popup
+    function openCurrentSessionPopup() {
+        const modal = document.getElementById('current-session-modal');
+        if (!modal) return;
+
+        // Update current task
+        const currentTaskEl = document.getElementById('session-current-task');
+        if (activeTaskId) {
+            const task = tasks.find(t => t.id === activeTaskId);
+            currentTaskEl.textContent = task?.summary || task?.title || 'Unknown Task';
+        } else {
+            currentTaskEl.textContent = 'No active task';
+        }
+
+        // Update started time
+        const startedAtEl = document.getElementById('session-started-at');
+        if (checkInTime) {
+            const startDate = new Date(checkInTime);
+            startedAtEl.textContent = startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        } else {
+            startedAtEl.textContent = '--:--';
+        }
+
+        // Update status
+        const statusEl = document.getElementById('session-status');
+        if (breakStartTime) {
+            statusEl.textContent = 'On Break';
+            statusEl.className = 'text-sm font-semibold text-rose-600';
+        } else if (isCheckedIn) {
+            statusEl.textContent = 'Working';
+            statusEl.className = 'text-sm font-semibold text-emerald-600';
+        } else {
+            statusEl.textContent = 'Offline';
+            statusEl.className = 'text-sm font-semibold text-slate-600';
+        }
+
+        // Update work time
+        const workTimeEl = document.getElementById('session-work-time');
+        workTimeEl.textContent = formatTime(seconds);
+
+        // Update break time (estimate from break start time)
+        const breakTimeEl = document.getElementById('session-break-time');
+        if (breakStartTime) {
+            const currentBreakMs = Date.now() - breakStartTime;
+            const currentBreakSecs = Math.floor(currentBreakMs / 1000);
+            breakTimeEl.textContent = formatTime(currentBreakSecs);
+        } else {
+            breakTimeEl.textContent = formatTime(Math.floor(totalBreakDuration / 1000));
+        }
+
+        // Hold time (placeholder - implement if tracking hold time separately)
+        const holdTimeEl = document.getElementById('session-hold-time');
+        holdTimeEl.textContent = '00:00:00'; // TODO: Implement hold time tracking if needed
+
+        modal.showModal();
+    }
+
+    // Initialize productivity header listeners
+    function initProdHeaderListeners() {
+        // Initial setup
+        updateProdHeaderTimer();
+        updateProdHeaderButtons();
+        updateSyncStatusBadge();
+
+        // Update sync badge periodically
+        setInterval(updateSyncStatusBadge, 60000); // Every minute
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // HEADER TOGGLER - Switch between Productivity and Legacy Headers
+    // ════════════════════════════════════════════════════════════════════
+    
+    function toggleBetweenHeaders() {
+        const prodHeader = document.querySelector('header:not(#legacy-global-header)');
+        const legacyHeader = document.getElementById('legacy-global-header');
+        
+        if (legacyHeader.classList.contains('hidden')) {
+            // Switch to legacy
+            prodHeader.classList.add('hidden');
+            legacyHeader.classList.remove('hidden');
+            localStorage.setItem('headerMode', 'legacy');
+            console.log('✅ Switched to Legacy Header');
+        } else {
+            // Switch to productivity
+            prodHeader.classList.remove('hidden');
+            legacyHeader.classList.add('hidden');
+            localStorage.setItem('headerMode', 'productivity');
+            console.log('✅ Switched to Productivity Header');
+        }
+    }
+    
+    // Load header preference on page load
+    function restoreHeaderPreference() {
+        const mode = localStorage.getItem('headerMode') || 'productivity';
+        const prodHeader = document.querySelector('header:not(#legacy-global-header)');
+        const legacyHeader = document.getElementById('legacy-global-header');
+        
+        if (mode === 'legacy') {
+            prodHeader.classList.add('hidden');
+            legacyHeader.classList.remove('hidden');
         }
     }
 
@@ -2697,8 +2923,10 @@ if (initializeApp) {
             if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
             if (!isAuto) {
                 toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}`, jiraTasks.length ? 'success' : 'info');
+                recordSyncTime(); // Update productivity header sync badge
             } else {
                 updateSystemStatus(true, `Synced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, true);
+                recordSyncTime(); // Update productivity header sync badge
             }
         } catch (e) {
             console.error('🔴 Sync exception:', e);
@@ -10435,6 +10663,17 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.setInternalAssigneeFilter = setInternalAssigneeFilter;
     window.setClientFilter = setClientFilter;
     window.setInternalClientFilter = setInternalClientFilter;
+
+    // Productivity Header Functions
+    window.updateProdHeaderTimer = updateProdHeaderTimer;
+    window.updateProdHeaderButtons = updateProdHeaderButtons;
+    window.updateSyncStatusBadge = updateSyncStatusBadge;
+    window.recordSyncTime = recordSyncTime;
+    window.triggerManualSync = triggerManualSync;
+    window.openCurrentSessionPopup = openCurrentSessionPopup;
+    window.initProdHeaderListeners = initProdHeaderListeners;
+    window.toggleBetweenHeaders = toggleBetweenHeaders;
+    window.restoreHeaderPreference = restoreHeaderPreference;
     window.setDueDateFilter = setDueDateFilter;
     window.setInternalDueDateFilter = setInternalDueDateFilter;
     window.searchTasks = searchTasks;
