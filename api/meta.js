@@ -451,6 +451,8 @@ async function handleDisconnect(req, res, decodedToken) {
 // ════════════════════════════════════════════════════════════════════
 
 module.exports = async (req, res) => {
+    console.log('[META] Request:', { method: req.method, url: req.url });
+    
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -458,40 +460,56 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization');
 
     if (req.method === 'OPTIONS') {
+        console.log('[META] OPTIONS request');
         res.status(200).end();
         return;
     }
 
     try {
-        const [, , path] = req.url.split('/').slice(0, 4);
-        const fullPath = `/${path}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
-
-        // Public routes (no auth required)
-        if (req.method === 'GET' && req.url.includes('/api/meta/callback')) {
+        // Parse the URL path correctly
+        // req.url could be: /connect, /callback, /profile, /sync, /disconnect, or with query params
+        const urlPath = req.url.split('?')[0]; // Remove query string
+        const pathParts = urlPath.split('/').filter(Boolean); // Remove empty strings
+        console.log('[META] Parsed path parts:', pathParts);
+        
+        // Handle callback first (no auth required)
+        if (req.method === 'GET' && pathParts[pathParts.length - 1] === 'callback') {
+            console.log('[META] Routing to callback');
             return handleCallback(req, res);
         }
 
-        // Protected routes (auth required)
+        // All other routes require authentication
+        console.log('[META] Verifying auth...');
         const decodedToken = await verifyAuth(req);
+        console.log('[META] Auth verified for user:', decodedToken.uid);
 
-        if (req.method === 'POST' && fullPath.startsWith('/connect')) {
+        const endpoint = pathParts[pathParts.length - 1]; // Get the last part of the path
+        console.log('[META] Routing to endpoint:', endpoint);
+
+        if (req.method === 'POST' && endpoint === 'connect') {
+            console.log('[META] Routing to connect');
             return handleConnect(req, res, decodedToken);
-        } else if (req.method === 'GET' && fullPath.startsWith('/profile')) {
+        } else if (req.method === 'GET' && endpoint === 'profile') {
+            console.log('[META] Routing to profile');
             return handleProfile(req, res, decodedToken);
-        } else if (req.method === 'POST' && fullPath.startsWith('/refresh')) {
+        } else if (req.method === 'POST' && endpoint === 'refresh') {
+            console.log('[META] Routing to refresh');
             return handleRefresh(req, res, decodedToken);
-        } else if (req.method === 'POST' && fullPath.startsWith('/sync')) {
+        } else if (req.method === 'POST' && endpoint === 'sync') {
+            console.log('[META] Routing to sync');
             return handleSync(req, res, decodedToken);
-        } else if (req.method === 'POST' && fullPath.startsWith('/disconnect')) {
+        } else if (req.method === 'POST' && endpoint === 'disconnect') {
+            console.log('[META] Routing to disconnect');
             return handleDisconnect(req, res, decodedToken);
         }
 
+        console.log('[META] No route matched for endpoint:', endpoint);
         return res.status(404).json({
             success: false,
-            message: 'Endpoint not found',
+            message: 'Endpoint not found: ' + endpoint,
         });
     } catch (error) {
-        console.error('Handler error:', error);
+        console.error('[META] Handler error:', error);
         return res.status(error.message.includes('Unauthorized') ? 401 : 500).json({
             success: false,
             message: error.message,
