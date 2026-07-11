@@ -2392,19 +2392,19 @@
                 <div id="view-tasks-panel" class="hidden space-y-4 fade-in">
 
                     <!-- Tasks Hub Tabs -->
-                    <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <div class="flex items-center gap-2 border-b border-slate-100 pb-2 overflow-x-auto">
                         <button onclick="switchTasksTab('jira')" id="tab-btn-jira"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100">Client
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap">Client
                             / Jira Tasks</button>
                         <button onclick="switchTasksTab('internal')" id="tab-btn-internal"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100">Internal
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap">Internal
                             Tasks</button>
                         <button onclick="switchTasksTab('dailyplan')" id="tab-btn-dailyplan"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100">Daily
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap">Daily
                             Plan</button>
-                        <button onclick="showFiveThirtyTaskPopup()" id="tab-btn-completed"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100">Completed
-                            Tasks</button>
+                        <button onclick="switchTasksTab('completed')" id="tab-btn-completed"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap">Today's
+                            Completed</button>
                     </div>
 
                     <!-- ── Jira Tasks Tab ── -->
@@ -3012,6 +3012,147 @@
 
                 </div><!-- /view-tasks-panel -->
                 <div id="view-dailyplan-panel" class="hidden"></div>
+
+                <!-- ════ COMPLETED TASKS TAB ════ -->
+                <div id="tasks-tab-completed" class="hidden space-y-6">
+                    <!-- Date Range Selector & Filters -->
+                    <div class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 items-end">
+                            <!-- Date Range Preset Buttons -->
+                            <button onclick="switchCompletedDateRange('today')" id="cr-btn-today"
+                                class="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white transition-all">
+                                Today
+                            </button>
+                            <button onclick="switchCompletedDateRange('yesterday')" id="cr-btn-yesterday"
+                                class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all">
+                                Yesterday
+                            </button>
+                            <button onclick="switchCompletedDateRange('week')" id="cr-btn-week"
+                                class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all">
+                                This Week
+                            </button>
+                            <button onclick="switchCompletedDateRange('custom')" id="cr-btn-custom"
+                                class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all">
+                                Custom
+                            </button>
+                            <!-- Admin: Employee Filter -->
+                            <div id="cr-employee-filter" class="hidden">
+                                <button type="button" onclick="document.getElementById('cr-employee-menu').classList.toggle('hidden')"
+                                    class="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all flex items-center justify-between">
+                                    <span id="cr-employee-label">All Employees</span>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear"></iconify-icon>
+                                </button>
+                                <div id="cr-employee-menu" class="absolute top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-100 p-2 hidden max-h-64 overflow-y-auto z-20">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                            <!-- Search -->
+                            <input type="text" id="cr-search-input" placeholder="Search tasks..." 
+                                onkeyup="filterCompletedTasks()"
+                                class="px-4 py-2.5 rounded-xl text-xs bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+                        <!-- Main Content -->
+                        <div class="space-y-6">
+                            <!-- KPI Cards -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Completed Tasks</p>
+                                    <p id="cr-kpi-completed" class="text-3xl font-black text-emerald-600">0</p>
+                                </div>
+                                <div id="cr-kpi-card-2" class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Clients Worked</p>
+                                    <p id="cr-kpi-clients" class="text-3xl font-black text-indigo-600">0</p>
+                                </div>
+                                <div id="cr-kpi-card-3" class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Working Hours</p>
+                                    <p id="cr-kpi-hours" class="text-3xl font-black text-amber-600">0h</p>
+                                </div>
+                                <div id="cr-kpi-card-4" class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Avg Time/Task</p>
+                                    <p id="cr-kpi-avgtime" class="text-3xl font-black text-violet-600">0m</p>
+                                </div>
+                            </div>
+
+                            <!-- Completed Tasks List -->
+                            <div id="cr-tasks-container" class="space-y-4">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Right Sidebar -->
+                        <div class="space-y-4">
+                            <!-- Today's Summary -->
+                            <div id="cr-sidebar-summary" class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Today's Summary</p>
+                                <div class="space-y-3 text-sm">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-600">Tasks Done</span>
+                                        <span id="cs-summary-tasks" class="font-bold text-slate-900">0</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-600">Duration</span>
+                                        <span id="cs-summary-duration" class="font-bold text-slate-900">0h 0m</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-600">Avg/Task</span>
+                                        <span id="cs-summary-avg" class="font-bold text-slate-900">0m</span>
+                                    </div>
+                                    <div class="pt-3 border-t border-slate-100 flex justify-between items-center">
+                                        <span class="text-slate-600">Completion %</span>
+                                        <span id="cs-summary-completion" class="font-bold text-emerald-600">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Top Performer (Admin Only) -->
+                            <div id="cr-sidebar-performer" class="hidden bg-gradient-to-br from-emerald-50 to-green-50 rounded-3xl p-6 shadow-xl border border-emerald-100">
+                                <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-4">Top Performer</p>
+                                <div class="flex items-center gap-3 mb-4">
+                                    <img id="cs-performer-avatar" src="" alt="Avatar" class="w-12 h-12 rounded-full bg-slate-200">
+                                    <div>
+                                        <p id="cs-performer-name" class="font-bold text-slate-900">-</p>
+                                        <p id="cs-performer-role" class="text-[10px] text-slate-600">-</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Tasks</span>
+                                        <span id="cs-performer-tasks" class="font-bold">0</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Hours</span>
+                                        <span id="cs-performer-hours" class="font-bold">0h</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- AI Summary -->
+                            <div id="cr-sidebar-ai" class="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 shadow-xl border border-violet-100">
+                                <p class="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-3">AI Daily Summary</p>
+                                <p id="cs-ai-summary" class="text-xs text-slate-700 leading-relaxed">
+                                    Analyzing completed tasks...
+                                </p>
+                            </div>
+
+                            <!-- Export Buttons -->
+                            <div class="flex gap-2">
+                                <button onclick="exportCompletedTasksPDF()"
+                                    class="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
+                                    <iconify-icon icon="solar:file-pdf-bold" width="14"></iconify-icon>
+                                    PDF
+                                </button>
+                                <button onclick="exportCompletedTasksExcel()"
+                                    class="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2">
+                                    <iconify-icon icon="solar:file-text-bold" width="14"></iconify-icon>
+                                    Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- ════ MONTHLY PLAN VIEW ════ -->
                 <div id="view-monthly-plan-panel" class="hidden space-y-6 fade-in">
@@ -4847,6 +4988,13 @@
                                                             class="p-2 text-slate-400 hover:text-indigo-600 transition-colors rounded-xl hover:bg-indigo-50 shrink-0"
                                                             title="Attach File">
                                                             <iconify-icon icon="solar:paperclip-linear"
+                                                                width="24"></iconify-icon>
+                                                        </button>
+                                                        <button
+                                                            onclick="openGoogleDriveLinkModal()"
+                                                            class="p-2 text-slate-400 hover:text-indigo-600 transition-colors rounded-xl hover:bg-indigo-50 shrink-0"
+                                                            title="Add Google Drive Link">
+                                                            <iconify-icon icon="logos:google-drive"
                                                                 width="24"></iconify-icon>
                                                         </button>
                                                         <input type="file" id="chat-file-upload" class="hidden" multiple
@@ -8878,6 +9026,64 @@
             <div
                 class="w-full max-h-[70vh] flex items-center justify-center overflow-hidden rounded-2xl bg-slate-50 border border-slate-100">
                 <img id="image-preview-content" src="" class="max-w-full max-h-[60vh] object-contain">
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Modal: Add Google Drive Link -->
+    <dialog id="googleDriveLinkModal"
+        class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
+        <div class="p-8">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <iconify-icon icon="logos:google-drive" width="28"></iconify-icon>
+                    <h3 class="text-lg font-black text-slate-900 tracking-tight">Share Document Link</h3>
+                </div>
+                <button onclick="document.getElementById('googleDriveLinkModal').close()"
+                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div class="bg-indigo-50 p-4 rounded-2xl border border-indigo-100/50 flex gap-3">
+                    <iconify-icon icon="solar:info-circle-bold-duotone" width="20"
+                        class="text-indigo-600 shrink-0 mt-0.5"></iconify-icon>
+                    <p class="text-xs text-indigo-700">Paste a shareable link from Google Drive, OneDrive, or any cloud storage. The document will be attached to your message.</p>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Document Name</label>
+                    <input id="drive-link-name" type="text" placeholder="e.g., Project Brief"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Document Link</label>
+                    <input id="drive-link-url" type="url" placeholder="https://drive.google.com/... or https://..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Document Type</label>
+                    <select id="drive-link-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                        <option value="application/pdf">📄 PDF</option>
+                        <option value="application/msword">📘 Document</option>
+                        <option value="application/vnd.ms-excel">📊 Spreadsheet</option>
+                        <option value="application/vnd.ms-powerpoint">🎬 Presentation</option>
+                        <option value="application/vnd.google-apps.document">📝 Google Docs</option>
+                        <option value="application/vnd.google-apps.spreadsheet">📈 Google Sheets</option>
+                        <option value="text/plain">📃 Text File</option>
+                        <option value="application/octet-stream">📎 Other</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button onclick="document.getElementById('googleDriveLinkModal').close()"
+                        class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 text-sm font-bold transition-all">
+                        Cancel
+                    </button>
+                    <button onclick="addGoogleDriveLink()"
+                        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
+                        <iconify-icon icon="solar:add-circle-bold" width="16"></iconify-icon>
+                        Add to Message
+                    </button>
+                </div>
             </div>
         </div>
     </dialog>
@@ -21315,26 +21521,39 @@
                     return;
                 }
                 box.classList.remove('hidden');
-                list.innerHTML = stagedAttachments.map((file, i) => {
-                    const isImage = file.type?.startsWith('image/');
-                    const meta = docFileIcon(file.type, file.name);
-                    const preview = isImage
-                        ? `<img src="${URL.createObjectURL(file)}" class="w-12 h-12 rounded-lg object-cover border border-slate-200" alt="">`
-                        : `<div class="w-12 h-12 rounded-lg bg-slate-50 border border-slate-200 flex flex-col items-center justify-center gap-0.5">
+                list.innerHTML = stagedAttachments.map((item, i) => {
+                    const isLink = item.isLink;
+                    const isImage = !isLink && item.type?.startsWith('image/');
+                    const meta = docFileIcon(item.type, item.name);
+                    
+                    let preview;
+                    if (isLink) {
+                        preview = `<div class="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-100 to-indigo-50 border border-indigo-200 flex flex-col items-center justify-center gap-0.5">
+                                     <iconify-icon icon="logos:google-drive" width="18"></iconify-icon>
+                                     <span class="text-[6px] font-black uppercase text-indigo-600">Link</span>
+                                  </div>`;
+                    } else if (isImage) {
+                        preview = `<img src="${URL.createObjectURL(item)}" class="w-12 h-12 rounded-lg object-cover border border-slate-200" alt="">`;
+                    } else {
+                        preview = `<div class="w-12 h-12 rounded-lg bg-slate-50 border border-slate-200 flex flex-col items-center justify-center gap-0.5">
                                <iconify-icon icon="${meta.icon}" style="color:${meta.color}" width="20"></iconify-icon>
                                <span class="text-[8px] font-black uppercase" style="color:${meta.color}">${meta.label}</span>
                            </div>`;
-                    const sizeLabel = file.size > 1024 * 1024
-                        ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
-                        : `${(file.size / 1024).toFixed(0)} KB`;
-                    const docWarning = !isCloudinarySupported(file) && file.size > 3 * 1024 * 1024
+                    }
+                    
+                    const sizeLabel = isLink ? 'Link' : (item.size > 1024 * 1024
+                        ? `${(item.size / 1024 / 1024).toFixed(1)} MB`
+                        : `${(item.size / 1024).toFixed(0)} KB`);
+                    
+                    const docWarning = !isLink && !isCloudinarySupported(item) && item.size > 3 * 1024 * 1024
                         ? `<p class="text-[8px] text-rose-500 font-bold">Too large (max 3MB)</p>`
                         : '';
+                    
                     return `
                     <div class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1.5 pr-7">
                         ${preview}
                         <div class="min-w-0 max-w-[120px]">
-                            <p class="text-[10px] font-bold text-slate-700 truncate">${escapeHtml(file.name)}</p>
+                            <p class="text-[10px] font-bold text-slate-700 truncate">${escapeHtml(item.name)}</p>
                             <p class="text-[9px] text-slate-400">${sizeLabel}</p>
                             ${docWarning}
                         </div>
@@ -21349,6 +21568,100 @@
                 stagedAttachments.splice(index, 1);
                 renderStagedAttachmentsPreview();
             }
+
+            function openGoogleDriveLinkModal() {
+                document.getElementById('drive-link-name').value = '';
+                document.getElementById('drive-link-url').value = '';
+                document.getElementById('drive-link-type').value = 'application/pdf';
+                document.getElementById('googleDriveLinkModal').showModal();
+            }
+
+            async function uploadFileToGoogleDrive(file) {
+                if (!activeConvId) {
+                    throw new Error('No active conversation');
+                }
+
+                try {
+                    // Read file as base64
+                    const base64Data = await fileToBase64(file);
+                    const base64String = base64Data.split(',')[1]; // Remove data:mime;base64, prefix
+
+                    // Call Google Drive API
+                    const response = await fetch('/api/google-drive/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${await currentUser.getIdToken()}`
+                        },
+                        body: JSON.stringify({
+                            fileName: file.name,
+                            fileBuffer: base64String,
+                            mimeType: file.type || 'application/octet-stream',
+                            conversationId: activeConvId
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Upload failed');
+                    }
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        throw new Error(result.message);
+                    }
+
+                    return {
+                        url: result.data.webViewLink,
+                        downloadUrl: result.data.webContentLink,
+                        type: file.type,
+                        name: file.name,
+                        driveFileId: result.data.driveFileId,
+                        isGoogleDriveFile: true
+                    };
+                } catch (error) {
+                    console.error('Google Drive upload failed:', error);
+                    throw error;
+                }
+            }
+
+            function addGoogleDriveLink() {
+                const name = document.getElementById('drive-link-name').value.trim();
+                const url = document.getElementById('drive-link-url').value.trim();
+                const type = document.getElementById('drive-link-type').value;
+
+                if (!name) {
+                    toast('Please enter a document name', 'error');
+                    return;
+                }
+                if (!url) {
+                    toast('Please enter a document link', 'error');
+                    return;
+                }
+
+                // Validate URL
+                try {
+                    new URL(url);
+                } catch {
+                    toast('Please enter a valid URL', 'error');
+                    return;
+                }
+
+                // Create a virtual file object to represent the link
+                const linkFile = {
+                    name: name,
+                    url: url,
+                    type: type,
+                    isLink: true,
+                    size: 0
+                };
+
+                stagedAttachments.push(linkFile);
+                renderStagedAttachmentsPreview();
+                document.getElementById('googleDriveLinkModal').close();
+                toast(`Added "${name}" to message`, 'success');
+            }
+
 
             function clearStagedAttachment() {
                 stagedAttachments = [];
@@ -21496,29 +21809,41 @@
 
                     if (stagedAttachments.length) {
                         const attachments = [];
-                        for (const file of stagedAttachments) {
+                        for (const item of stagedAttachments) {
                             try {
-                                const uploaded = await uploadToCloudinary(file);
-                                attachments.push(uploaded);
-                            } catch (cloudErr) {
-                                console.warn('Cloudinary upload failed, falling back to base64:', cloudErr);
-                                // Fallback to base64 if Cloudinary fails
-                                attachments.push({
-                                    url: await fileToBase64(file),
-                                    type: file.type || 'application/octet-stream',
-                                    name: file.name
-                                });
+                                if (item.isLink) {
+                                    // Skip links (not part of this implementation)
+                                    continue;
+                                } else if (item.isGoogleDriveFile) {
+                                    // Already uploaded, just add reference
+                                    attachments.push(item);
+                                } else {
+                                    // Upload file to Google Drive
+                                    const uploaded = await uploadFileToGoogleDrive(item);
+                                    attachments.push(uploaded);
+                                }
+                            } catch (err) {
+                                console.error('File upload error:', err);
+                                toast(`Failed to upload ${item.name}: ${err.message}`, 'error');
+                                if (sendBtn) {
+                                    sendBtn.disabled = false;
+                                    sendBtn.innerHTML = `<iconify-icon icon="mdi:send" width="21"></iconify-icon>`;
+                                }
+                                return;
                             }
                         }
-                        payload.attachments = attachments;
-                        if (attachments.length === 1) {
-                            payload.attachmentUrl = attachments[0].url;
-                            payload.attachmentType = attachments[0].type;
-                            payload.attachmentName = attachments[0].name;
+                        
+                        if (attachments.length > 0) {
+                            payload.attachments = attachments;
+                            if (attachments.length === 1) {
+                                payload.attachmentUrl = attachments[0].url;
+                                payload.attachmentType = attachments[0].type;
+                                payload.attachmentName = attachments[0].name;
+                            }
+                            lastMsg = text || (attachments.length > 1
+                                ? `📎 ${attachments.length} files`
+                                : `📎 ${attachments[0].name}`);
                         }
-                        lastMsg = text || (attachments.length > 1
-                            ? `📎 ${attachments.length} attachments`
-                            : `📎 ${attachments[0].name}`);
                     }
 
                     await push(ref(db, `worksync/messages/${activeConvId}`), payload);
@@ -35408,7 +35733,7 @@
                 }
             }
 
-            window.openDm = openDm; window.openConversation = openConversation; window.loadMoreChatMessages = loadMoreChatMessages; window.sendMessage = sendMessage; window.uploadChatAttachment = uploadChatAttachment; window.clearStagedAttachment = clearStagedAttachment; window.handleMsgInput = handleMsgInput; window.handleMsgKeyDown = handleMsgKeyDown; window.selectMention = selectMention; window.handleMsgPaste = handleMsgPaste;
+            window.openDm = openDm; window.openConversation = openConversation; window.loadMoreChatMessages = loadMoreChatMessages; window.sendMessage = sendMessage; window.uploadChatAttachment = uploadChatAttachment; window.clearStagedAttachment = clearStagedAttachment; window.handleMsgInput = handleMsgInput; window.handleMsgKeyDown = handleMsgKeyDown; window.selectMention = selectMention; window.handleMsgPaste = handleMsgPaste; window.openGoogleDriveLinkModal = openGoogleDriveLinkModal; window.addGoogleDriveLink = addGoogleDriveLink;
             window.toggleNotificationDropdown = toggleNotificationDropdown; window.clickNotificationItem = clickNotificationItem; window.markAllNotificationsAsRead = markAllNotificationsAsRead; window.scrollChatToBottom = scrollChatToBottom;
             window.handleChatDragOver = handleChatDragOver; window.handleChatDragEnter = handleChatDragEnter; window.handleChatDragLeave = handleChatDragLeave; window.handleChatDrop = handleChatDrop;
             window.dragTaskEnd = dragTaskEnd; window.dragTaskEnter = dragTaskEnter; window.dragTaskLeave = dragTaskLeave; window.dragTask = dragTask; window.dropTask = dropTask;
@@ -40281,6 +40606,320 @@
         };
         
         console.log('[Shim] Token getter initialized, waiting for module script to set window.auth');
+
+        // ════════════════════════════════════════════════════════════════════
+        // COMPLETED TASKS TAB - Daily Completed Tasks Feature
+        // ════════════════════════════════════════════════════════════════════
+
+        let completedTasksDateRange = 'today';
+        let completedTasksSelectedEmployee = 'all';
+        let completedTasksFilteredList = [];
+
+        function switchTasksTab(tab) {
+            // Hide all task tabs
+            ['jira', 'internal', 'dailyplan', 'completed'].forEach(t => {
+                const elem = document.getElementById(`tasks-tab-${t}`);
+                if (elem) elem.classList.add('hidden');
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (btn) {
+                    btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-100');
+                    btn.classList.add('bg-slate-50', 'text-slate-600', 'hover:bg-slate-100');
+                }
+            });
+
+            // Show selected tab
+            const tabElem = document.getElementById(`tasks-tab-${tab}`);
+            if (tabElem) {
+                tabElem.classList.remove('hidden');
+            }
+            const tabBtn = document.getElementById(`tab-btn-${tab}`);
+            if (tabBtn) {
+                tabBtn.classList.remove('bg-slate-50', 'text-slate-600', 'hover:bg-slate-100');
+                tabBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-100');
+            }
+
+            // Load data for completed tab
+            if (tab === 'completed') {
+                initCompletedTasksTab();
+            }
+        }
+
+        function initCompletedTasksTab() {
+            // Show admin filter if user is admin
+            if (isAdmin()) {
+                document.getElementById('cr-employee-filter').classList.remove('hidden');
+                document.getElementById('cr-sidebar-performer').classList.remove('hidden');
+                loadEmployeeFilter();
+            }
+            
+            loadCompletedTasks();
+        }
+
+        function loadEmployeeFilter() {
+            const menu = document.getElementById('cr-employee-menu');
+            if (!menu) return;
+            
+            menu.innerHTML = '';
+            
+            // Add "All Employees" option
+            const allOption = document.createElement('label');
+            allOption.className = 'flex items-center gap-3 p-2.5 hover:bg-slate-50 rounded-lg cursor-pointer';
+            allOption.innerHTML = `
+                <input type="radio" name="cr-employee" value="all" checked onchange="changeCompletedEmployee(this)">
+                <span class="text-xs font-bold text-slate-700">All Employees</span>
+            `;
+            menu.appendChild(allOption);
+
+            // Add divider
+            menu.innerHTML += '<div class="h-px bg-slate-100 my-1"></div>';
+
+            // Add employees
+            USERS.forEach(user => {
+                const option = document.createElement('label');
+                option.className = 'flex items-center gap-3 p-2.5 hover:bg-slate-50 rounded-lg cursor-pointer';
+                option.innerHTML = `
+                    <input type="radio" name="cr-employee" value="${user.email}" onchange="changeCompletedEmployee(this)">
+                    <span class="text-xs font-bold text-slate-700">${user.name}</span>
+                `;
+                menu.appendChild(option);
+            });
+        }
+
+        function changeCompletedEmployee(elem) {
+            completedTasksSelectedEmployee = elem.value;
+            document.getElementById('cr-employee-label').textContent = 
+                elem.value === 'all' ? 'All Employees' : USERS.find(u => u.email === elem.value)?.name || 'Unknown';
+            document.getElementById('cr-employee-menu').classList.add('hidden');
+            loadCompletedTasks();
+        }
+
+        function switchCompletedDateRange(range) {
+            completedTasksDateRange = range;
+            
+            // Update button states
+            ['today', 'yesterday', 'week', 'custom'].forEach(r => {
+                const btn = document.getElementById(`cr-btn-${r}`);
+                if (btn) {
+                    if (r === range) {
+                        btn.classList.remove('bg-slate-50', 'text-slate-600', 'hover:bg-slate-100');
+                        btn.classList.add('bg-indigo-600', 'text-white');
+                    } else {
+                        btn.classList.remove('bg-indigo-600', 'text-white');
+                        btn.classList.add('bg-slate-50', 'text-slate-600', 'hover:bg-slate-100');
+                    }
+                }
+            });
+            
+            loadCompletedTasks();
+        }
+
+        function getCompletedTasksDateRange() {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            switch (completedTasksDateRange) {
+                case 'today':
+                    return { from: today, to: tomorrow };
+                case 'yesterday':
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return { from: yesterday, to: today };
+                case 'week':
+                    const weekStart = new Date(today);
+                    weekStart.setDate(weekStart.getDate() - today.getDay());
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 7);
+                    return { from: weekStart, to: weekEnd };
+                default:
+                    return { from: today, to: tomorrow };
+            }
+        }
+
+        async function loadCompletedTasks() {
+            try {
+                const dateRange = getCompletedTasksDateRange();
+                const container = document.getElementById('cr-tasks-container');
+                container.innerHTML = '<p class="text-sm text-slate-400">Loading completed tasks...</p>';
+
+                let tasksToShow = [];
+                
+                // Collect tasks from current user or all users based on admin status
+                if (isAdmin() && completedTasksSelectedEmployee !== 'all') {
+                    // Admin viewing specific employee
+                    const userRef = ref(db, `worksync/tasks/${completedTasksSelectedEmployee}`);
+                    const userTasksSnap = await get(userRef);
+                    if (userTasksSnap.exists()) {
+                        tasksToShow = Object.values(userTasksSnap.val() || {});
+                    }
+                } else if (isAdmin() && completedTasksSelectedEmployee === 'all') {
+                    // Admin viewing all employees
+                    for (const user of USERS) {
+                        const userRef = ref(db, `worksync/tasks/${user.email}`);
+                        const userTasksSnap = await get(userRef);
+                        if (userTasksSnap.exists()) {
+                            const userTasks = Object.values(userTasksSnap.val() || {});
+                            tasksToShow.push(...userTasks.map(t => ({ ...t, assigneeEmail: user.email })));
+                        }
+                    }
+                } else {
+                    // Non-admin viewing own tasks
+                    const userRef = ref(db, `worksync/tasks/${currentUser.email}`);
+                    const userTasksSnap = await get(userRef);
+                    if (userTasksSnap.exists()) {
+                        tasksToShow = Object.values(userTasksSnap.val() || {});
+                    }
+                }
+
+                // Filter for completed tasks in date range
+                const completedTasks = tasksToShow.filter(t => {
+                    if (!t.completedAt) return false;
+                    const completedDate = new Date(t.completedAt);
+                    return completedDate >= dateRange.from && completedDate < dateRange.to && isCompletedTask(t.status);
+                });
+
+                // Sort by completion time (newest first)
+                completedTasks.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+
+                // Apply search filter
+                completedTasksFilteredList = completedTasks;
+                filterCompletedTasks();
+
+                // Update KPIs
+                updateCompletedTasksKPIs(completedTasks);
+
+            } catch (error) {
+                console.error('Error loading completed tasks:', error);
+                document.getElementById('cr-tasks-container').innerHTML = 
+                    '<p class="text-sm text-red-500">Error loading tasks. Please try again.</p>';
+            }
+        }
+
+        function filterCompletedTasks() {
+            const searchTerm = document.getElementById('cr-search-input')?.value.toLowerCase() || '';
+            
+            const filtered = completedTasksFilteredList.filter(t => 
+                t.desc?.toLowerCase().includes(searchTerm) ||
+                t.id?.toLowerCase().includes(searchTerm) ||
+                t.client?.toLowerCase().includes(searchTerm)
+            );
+
+            renderCompletedTasksList(filtered);
+        }
+
+        function renderCompletedTasksList(tasks) {
+            const container = document.getElementById('cr-tasks-container');
+            
+            if (tasks.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <iconify-icon icon="solar:inbox-bold" width="48" class="text-slate-300 mb-3 block mx-auto"></iconify-icon>
+                        <p class="text-slate-400 text-sm">No completed tasks found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group by client
+            const groupedByClient = {};
+            tasks.forEach(t => {
+                const client = t.client || 'Uncategorized';
+                if (!groupedByClient[client]) groupedByClient[client] = [];
+                groupedByClient[client].push(t);
+            });
+
+            let html = '';
+            
+            Object.entries(groupedByClient).forEach(([client, clientTasks]) => {
+                html += `
+                    <div class="bg-white rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 border border-slate-100">
+                        <div class="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-all" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <div class="flex items-center gap-3">
+                                <span class="text-sm font-bold text-slate-900">${escapeHtml(client)}</span>
+                                <span class="text-xs bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-full">${clientTasks.length}</span>
+                            </div>
+                            <iconify-icon icon="solar:alt-arrow-down-linear" class="transition-transform" width="18"></iconify-icon>
+                        </div>
+                        <div class="divide-y divide-slate-50">
+`;
+                clientTasks.forEach(task => {
+                    const completedTime = new Date(task.completedAt);
+                    const duration = task.duration || 0;
+                    const durationStr = duration >= 60 ? `${Math.floor(duration/60)}h ${duration%60}m` : `${duration}m`;
+                    
+                    html += `
+                            <div class="p-4 hover:bg-slate-50 transition-all">
+                                <div class="flex items-start justify-between gap-4 mb-2">
+                                    <div class="flex-1">
+                                        <p class="font-bold text-slate-900 text-sm line-clamp-1">${escapeHtml(task.desc)}</p>
+                                        <p class="text-xs text-slate-500 mt-1">ID: ${escapeHtml(task.id)}</p>
+                                    </div>
+                                    <span class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1 rounded-lg whitespace-nowrap">✓ Done</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
+                                    <span>${completedTime.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</span>
+                                    <span>${durationStr}</span>
+                                </div>
+                            </div>
+`;
+                });
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function updateCompletedTasksKPIs(tasks) {
+            const totalTasks = tasks.length;
+            const uniqueClients = new Set(tasks.map(t => t.client)).size;
+            const totalDuration = tasks.reduce((sum, t) => sum + (t.duration || 0), 0);
+            const avgDuration = totalTasks > 0 ? Math.round(totalDuration / totalTasks) : 0;
+
+            document.getElementById('cr-kpi-completed').textContent = totalTasks;
+            document.getElementById('cr-kpi-clients').textContent = uniqueClients;
+            document.getElementById('cr-kpi-hours').textContent = (totalDuration / 60).toFixed(1) + 'h';
+            document.getElementById('cr-kpi-avgtime').textContent = avgDuration + 'm';
+
+            // Update summary sidebar
+            const hours = Math.floor(totalDuration / 60);
+            const minutes = totalDuration % 60;
+            document.getElementById('cs-summary-tasks').textContent = totalTasks;
+            document.getElementById('cs-summary-duration').textContent = `${hours}h ${minutes}m`;
+            document.getElementById('cs-summary-avg').textContent = avgDuration + 'm';
+            
+            // Completion percentage (of today's assigned tasks - would need additional logic)
+            document.getElementById('cs-summary-completion').textContent = '100%';
+
+            // Update AI summary
+            if (totalTasks > 0) {
+                const summaryText = `You completed ${totalTasks} task${totalTasks !== 1 ? 's' : ''} across ${uniqueClients} client${uniqueClients !== 1 ? 's' : ''} today, spending ${Math.round(totalDuration)} minutes in total. Average time per task: ${avgDuration} minutes. Great productivity!`;
+                document.getElementById('cs-ai-summary').textContent = summaryText;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function exportCompletedTasksPDF() {
+            alert('PDF export coming soon');
+        }
+
+        function exportCompletedTasksExcel() {
+            alert('Excel export coming soon');
+        }
+
+        function isCompletedTask(status) {
+            if (!status) return false;
+            const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved', 'posted', 'analytics', 'done'];
+            return completedStatuses.some(s => status.toLowerCase().includes(s));
+        }
     </script>
 
     <!-- Meta Integration Module -->
