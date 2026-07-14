@@ -1,449 +1,358 @@
-# Employee Self Performance Dashboard - Implementation Notes
+# Client Delivery Dashboard - Implementation Notes
 
-## Overview
-The Employee Self Performance Dashboard has been successfully implemented as a completely independent, production-ready module. This document provides technical implementation details and architectural decisions.
+## Changes Made
+
+### 1. Strategy Event Modal - Added Input Fields
+**File**: `index.html`  
+**Lines**: ~9932-9941
+
+Added two new input fields to strategy event form:
+```html
+<div class="grid grid-cols-2 gap-3">
+    <div>
+        <label>Videos Count</label>
+        <input id="strategy-videos-count" type="number" min="0" value="0" />
+    </div>
+    <div>
+        <label>Posters Count</label>
+        <input id="strategy-posters-count" type="number" min="0" value="0" />
+    </div>
+</div>
+```
+
+Users can now enter planned video and poster counts when creating/editing strategy events.
 
 ---
 
-## Architecture Decision: Independent Module
+### 2. Form Population - Load Existing Values
+**File**: `index.html`  
+**Lines**: ~14172-14173
 
-### Why Completely Separate?
-1. **Zero Impact Risk** - Any issues only affect new dashboard
-2. **Easy Maintenance** - Single file contains all logic
-3. **Simple Integration** - Just add tab, panel, and script
-4. **Easy Removal** - If needed, simple rollback
-5. **Clear Responsibility** - Dashboard = one file
-
-### Design Pattern: Module Isolation
-```
-employee-dashboard.js (Self-contained)
-  ├── Filter Management
-  ├── Data Aggregation
-  ├── Rendering Functions
-  ├── AI Insights
-  ├── Export Logic
-  └── Utility Functions (Local scope)
-```
-
-No global state modifications. No Firebase changes. No task system changes.
-
----
-
-## Integration Points
-
-### 1. HTML Tab Button
-**Location:** Line 5755-5761 in index.html
-**Action:** `onclick="switchReportTab('employee-dashboard')"`
-**Purpose:** Route to dashboard when clicked
-
-### 2. HTML Panel
-**Location:** Line 6273-6309 in index.html
-**Containers:**
-- `employee-dashboard-header` - Employee info
-- `employee-dashboard-summary` - 4 KPI cards
-- `employee-dashboard-distribution` - Work type chart
-- `employee-dashboard-clients` - Client metrics
-- `employee-dashboard-tasks` - Top tasks list
-- `employee-dashboard-hourly` - Hourly heatmap
-- `employee-dashboard-trend` - Weekly chart
-- `employee-dashboard-ai` - AI insights
-
-### 3. JavaScript Handler
-**Location:** Line 20321-20323 in index.html
-**Code:**
+When editing existing events, populate the count fields:
 ```javascript
-} else if (tab === 'employee-dashboard') {
-    populateEmployeeDashboardFilters();
-    renderEmployeeSelfPerformanceDashboard();
+document.getElementById('strategy-videos-count').value = ev.videosCount || 0;
+document.getElementById('strategy-posters-count').value = ev.postersCount || 0;
+```
+
+---
+
+### 3. Form Submission - Save Counts
+**File**: `index.html`  
+**Lines**: ~14232-14233, 14257-14258
+
+Read values from inputs and save to database:
+```javascript
+const videosCount = parseInt(document.getElementById('strategy-videos-count').value) || 0;
+const postersCount = parseInt(document.getElementById('strategy-posters-count').value) || 0;
+
+const evPayload = {
+    // ... other fields
+    videosCount,
+    postersCount,
+    // ... timestamp fields
+};
+```
+
+---
+
+### 4. Reports Panel - Data Loading
+**File**: `index.html`  
+**Lines**: ~22924-22942
+
+Set up Firebase listeners when Reports view initializes:
+
+```javascript
+function initReportFilters() {
+    if (db && !strategyEventsUnsub) {
+        // Initial fetch for immediate data
+        get(ref(db, 'worksync/strategy_events')).then(snap => {
+            strategyEvents = snap.val() || {};
+            console.log('[initReportFilters] Initial fetch - Strategy events loaded:', Object.keys(strategyEvents).length, 'events');
+            if (activeView === 'reports' && currentReportTab === 'client-delivery') {
+                renderClientDeliveryDashboard();
+            }
+        }).catch(err => console.error('[initReportFilters] Failed to load strategy events:', err));
+        
+        // Live listener for updates
+        strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
+            strategyEvents = snap.val() || {};
+            console.log('[Firebase Listener] Strategy events updated:', Object.keys(strategyEvents).length, 'events');
+            if (activeView === 'reports' && currentReportTab === 'client-delivery') {
+                renderClientDeliveryDashboard();
+            }
+        });
+    }
 }
 ```
 
-### 4. Script Import
-**Location:** Line 33465 in index.html
-**Code:** `<script src="employee-dashboard.js"></script>`
+**Why two approaches?**
+- `get()`: Loads existing data immediately (solves initial zero count issue)
+- `onValue()`: Keeps data in sync with live updates from other users
 
 ---
 
-## Data Flow Architecture
+### 5. Dashboard Rendering - Aggregate & Display
+**File**: `index.html`  
+**Lines**: ~36499-36593
 
-### Input Data (Read-Only)
-```
-allTimeLogs ──┐
-              ├─→ Aggregation Engine ──→ Dashboard Rendering
-tasks ────────┤
-currentUser ──┤
-attendanceEvents (optional)
-```
+The `renderClientDeliveryDashboard()` function:
 
-### Processing Pipeline
-```
-1. Get Filters (Employee, Time Range)
-2. Filter Logs (Date Range + Employee)
-3. Build Metadata Maps
-4. Aggregate Data:
-   - By Client
-   - By Type
-   - By Priority
-   - By Date
-   - By Hour
-5. Calculate Metrics
-6. Generate AI Insights
-7. Render 8 Sections
-```
+**Step 1: Initialize**
+- Check permissions (Admin/Manager only)
+- Validate date range is set
+- Log debug info to console
 
-### Output
-- DOM-based visualization
-- CSV file on export
-- No data persistence
-
----
-
-## Key Functions
-
-### Filter Management
+**Step 2: Parse Date Range**
 ```javascript
-populateEmployeeDashboardFilters()     // Load employee dropdown
-getEmployeeDashboardFilters()          // Get current filter values
-handleEmployeeDashboardFilterChange()  // Re-render on change
-getSelectedEmployeeForDashboard()      // Determine displayed employee
+const fromTs = new Date(reportDateFrom).getTime();
+const toTs = new Date(reportDateTo).getTime() + 86400000; // +1 day to include end date
 ```
 
-### Data Aggregation
+**Step 3: First Pass - Aggregate Strategy Events**
 ```javascript
-getEmployeeDashboardData(employee, daysBack)
-  └─ Returns: { employee, totalSeconds, totalSessions, 
-                completedCount, taskData, clientData, 
-                typeData, dailyData, hourlyData, ... }
-```
-
-### Main Orchestrator
-```javascript
-renderEmployeeSelfPerformanceDashboard()
-  ├─ Calls: renderEmployeeDashboardHeader()
-  ├─ Calls: renderEmployeeDashboardSummaryCards()
-  ├─ Calls: renderEmployeeDashboardWorkDistribution()
-  ├─ Calls: renderEmployeeDashboardClientMetrics()
-  ├─ Calls: renderEmployeeDashboardTaskPerformance()
-  ├─ Calls: renderEmployeeDashboardHourlyHeatmap()
-  ├─ Calls: renderEmployeeDashboardWeeklyTrend()
-  └─ Calls: renderEmployeeDashboardAiSummary()
-```
-
-### Export Function
-```javascript
-exportEmployeeDashboard()
-  └─ Generates CSV with columns:
-     Date, Time, Duration, Task ID, Description, Client, Type, Status
-```
-
----
-
-## Efficiency Score Formula
-
-### Calculation
-```javascript
-Efficiency = (CompletionRate × 0.6) + ((100 - StressRatio) × 0.4)
-```
-
-### Components
-- **Completion Rate (60% weight)** - Percentage of completed tasks (0-100)
-- **Stress Ratio (40% weight)** - Work intensity (based on hours worked)
-
-### Interpretation
-- 80%+ = Excellent
-- 60-80% = Good
-- 40-60% = Average
-- <40% = Needs Improvement
-
----
-
-## Permission Implementation
-
-### Check Pattern
-```javascript
-function getSelectedEmployeeForDashboard() {
-    const currentUser = currentUser?.email || currentUser?.name;
+Object.entries(strategyEvents || {}).forEach(([eventId, event]) => {
+    if (!event || !event.date || !event.client) return;
     
-    if (filters.user === 'current' || (!isManager() && !isAdmin())) {
-        return currentUser;  // Non-managers see themselves
+    const eventTs = new Date(event.date).getTime();
+    if (eventTs < fromTs || eventTs >= toTs) return; // Filter by date
+    
+    const client = event.client;
+    if (!clientMetrics[client]) {
+        clientMetrics[client] = { 
+            videosCount: 0, 
+            postersCount: 0, 
+            completed: 0, 
+            posted: 0, 
+            pending: 0, 
+            hours: 0 
+        };
     }
     
-    return filters.user;    // Managers see selected employee
-}
-```
-
-### Filter Visibility
-```javascript
-function populateEmployeeDashboardFilters() {
-    if (!isManager() && !isAdmin()) {
-        document.getElementById('employee-dashboard-user-filter')
-            ?.classList.add('hidden');
-        return;
-    }
-    // Load employees for dropdown...
-}
-```
-
-### Result
-- Employees: Employee filter hidden, see only themselves
-- Team Leads/Managers: Employee filter visible, can switch
-- Admins: Full access to all employees
-
----
-
-## Performance Optimization Techniques
-
-### 1. Single-Pass Aggregation
-```javascript
-// Process all logs once, accumulate all needed data
-logs.forEach(log => {
-    // Update client data
-    // Update type data
-    // Update priority data
-    // Update daily data
-    // Update hourly data
-    // All in one pass
+    // Accumulate counts
+    clientMetrics[client].videosCount += Number(event.videosCount) || 0;
+    clientMetrics[client].postersCount += Number(event.postersCount) || 0;
 });
 ```
 
-### 2. Map-Based Lookups
+**Step 4: Second Pass - Track Task Completion**
 ```javascript
-// O(1) lookup instead of O(n) search
-const taskClientMap = {};
-tasks.forEach(t => { 
-    if (t.client) taskClientMap[t.id] = t.client; 
+// Count tasks by client and status
+// Only includes tasks matching date range and video criteria
+tasks.forEach(task => {
+    const client = task.client || 'Other';
+    // ... check if video task
+    // ... check date range
+    // ... increment completion counters
 });
-// Later: taskClientMap[taskId] // O(1)
 ```
 
-### 3. Lazy Rendering
-- Only render visible sections initially
-- Charts rendered on demand
-- No pre-calculation of unused data
-
-### 4. Efficient Data Structures
-- Maps for lookups (O(1))
-- Arrays for ordered data (O(n) iteration)
-- Primitives for counts/totals
-
----
-
-## Testing Strategy
-
-### Unit Testing (Manual)
-- Individual rendering functions
-- Data aggregation accuracy
-- Filter application correctness
-- Permission enforcement
-
-### Integration Testing
-- Filter changes trigger re-render
-- Export generates valid CSV
-- Multiple date ranges work
-- Permission levels enforced
-
-### System Testing
-- Dashboard doesn't break existing reports
-- No Firebase modifications
-- No data corruption
-- No memory leaks
-- Performance remains acceptable
-
-### Scalability Testing
-- Tested with 50,000 time logs
-- Tested with 500+ tasks
-- Tested with 100+ clients
-- Tested with 50+ employees
-- All performed within acceptable time limits
-
----
-
-## Backward Compatibility Analysis
-
-### Code Changes
-- **Added:** 47 lines in index.html
-- **Deleted:** 0 lines from existing code
-- **Modified:** 0 lines in existing logic
-- **New Files:** 1 JavaScript module
-
-### Data Changes
-- **Firebase Collections:** 0 modified, 0 created
-- **Data Format:** 0 changes
-- **Permissions:** 0 changes
-- **Exports:** 0 modifications
-
-### User Impact
-- **Existing Reports:** No changes
-- **Task Hub:** No changes
-- **Time Tracking:** No changes
-- **User Permissions:** No changes
-- **Menu:** 1 new item added
-
-### Risk Assessment
-**Breaking Change Risk:** NONE ✅
-**Data Integrity Risk:** NONE ✅
-**Performance Impact:** MINIMAL (~0.5% overhead on shared functions) ✅
-
----
-
-## Maintenance & Support
-
-### Code Maintenance
-- All functions documented
-- Clear variable names
-- Modular structure
-- No code duplication
-
-### Documentation
-- `EMPLOYEE_DASHBOARD.md` - Complete guide (400+ lines)
-- `EMPLOYEE_DASHBOARD_QUICKSTART.md` - User guide
-- `EMPLOYEE_DASHBOARD_DELIVERY.md` - Delivery summary
-- This file - Implementation notes
-
-### Common Maintenance Tasks
-
-#### Add New Metric
-1. Add to aggregation in `getEmployeeDashboardData()`
-2. Create render function
-3. Call from main orchestrator
-4. Update documentation
-
-#### Modify Efficiency Formula
-1. Update calculation in `renderEmployeeDashboardSummaryCards()`
-2. Document new formula
-3. Test with sample data
-4. Verify permitting levels still work
-
-#### Change Export Format
-1. Modify `exportEmployeeDashboard()`
-2. Update CSV headers
-3. Test export file
-4. Document changes
-
----
-
-## Future Enhancement Opportunities
-
-### Short Term (1-2 sprints)
-- Benchmarking against team averages
-- Productivity trend analysis
-- Goal setting and tracking
-- Performance alerts
-
-### Medium Term (2-4 sprints)
-- Scheduled email reports
-- Slack integration
-- Custom metrics
-- Advanced filtering
-
-### Long Term (4+ sprints)
-- Machine learning insights
-- Predictive analytics
-- Peer benchmarking
-- Career development recommendations
-
----
-
-## Security Considerations
-
-### Data Access
-- ✅ No direct database access
-- ✅ Only reads Firebase data
-- ✅ Permission enforcement
-- ✅ No data modifications
-
-### Information Disclosure
-- ✅ Employees see only themselves
-- ✅ Managers see only permitted employees
-- ✅ No cross-permission data leakage
-- ✅ Audit trail maintained by existing system
-
-### Code Security
-- ✅ No eval() or dynamic code execution
-- ✅ HTML escaping on all user input
-- ✅ No SQL injection (no database queries)
-- ✅ CSRF protection inherited from parent app
-
----
-
-## Deployment Checklist
-
-- [ ] `employee-dashboard.js` copied to root
-- [ ] index.html updated with tab, panel, script import
-- [ ] Browser cache cleared
-- [ ] Dashboard appears in menu
-- [ ] Data loads correctly
-- [ ] Filters work properly
-- [ ] Export generates CSV
-- [ ] Different permission levels tested
-- [ ] Performance verified
-- [ ] Documentation reviewed
-- [ ] Team trained on new feature
-
----
-
-## Rollback Plan
-
-If issues occur:
-
-1. **Remove tab from menu**
-   - Edit index.html, remove lines 5755-5761
-   
-2. **Remove panel from DOM**
-   - Edit index.html, remove lines 6273-6309
-
-3. **Remove script import**
-   - Edit index.html, remove line 33465
-
-4. **Remove script file** (optional)
-   - Delete employee-dashboard.js
-
-5. **Remove function handler** (optional)
-   - Remove lines 20321-20323 from switchReportTab
-
-All existing functionality remains intact.
-
----
-
-## Version Control
-
-### Current Version: 1.0.0
-
-### File Manifest
-```
-Files Created:
-- employee-dashboard.js (NEW)
-- EMPLOYEE_DASHBOARD.md (NEW)
-- EMPLOYEE_DASHBOARD_DELIVERY.md (NEW)
-- EMPLOYEE_DASHBOARD_QUICKSTART.md (NEW)
-- IMPLEMENTATION_NOTES.md (NEW - this file)
-
-Files Modified:
-- index.html (47 lines added, 0 deleted)
-
-Files Unchanged:
-- All other existing files
+**Step 5: Render Table**
+```javascript
+// For each client, render row with:
+// - Client name
+// - Videos Count (from strategy events)
+// - Posters Count (from strategy events)  
+// - Completed, Posted, Pending (from task tracking)
+// - Completion % (calculated)
+// - Avg Hours (placeholder)
 ```
 
 ---
 
-## Conclusion
+### 6. Table Structure
+**File**: `index.html`  
+**Lines**: ~7650-7658
 
-The Employee Self Performance Dashboard has been implemented as a robust, production-ready feature that:
+Removed "Videos Total" column, added "Videos Count" and "Posters Count":
 
-✅ Integrates seamlessly with existing code
-✅ Maintains 100% backward compatibility
-✅ Follows architectural best practices
-✅ Provides comprehensive documentation
-✅ Is well-tested and optimized
-✅ Is ready for immediate production deployment
-
-**Status:** Production Ready
+```html
+<thead>
+    <tr>
+        <th>Client</th>
+        <th>Videos Count</th>        <!-- NEW -->
+        <th>Posters Count</th>       <!-- NEW -->
+        <th>Completed</th>
+        <th>Posted</th>
+        <th>Pending</th>
+        <th>Completion %</th>
+        <th>Avg Hours</th>
+    </tr>
+</thead>
+```
 
 ---
 
-**Created:** June 30, 2026
-**Implemented By:** Development Team
-**Reviewed:** Architecture & QA
-**Approved For Production:** Yes ✅
+### 7. Filter Integration
+**File**: `index.html`  
+**Lines**: ~23055-23056
+
+Added client-delivery tab to filter change handler:
+
+```javascript
+function handleReportFilterChange() {
+    // ... date filter logic ...
+    
+    switch (currentReportTab) {
+        // ... other tabs ...
+        case 'client-delivery': renderClientDeliveryDashboard(); break;
+    }
+}
+```
+
+Ensures dashboard re-renders when date range changes.
+
+---
+
+### 8. CSS Styling
+**File**: `index.html`  
+**Lines**: ~1956-2052
+
+**Light Mode**:
+- Videos Count badge: Blue (`bg-blue-100 text-blue-700`)
+- Posters Count badge: Purple (`bg-purple-100 text-purple-700`)
+- Table responsive with horizontal scroll on mobile
+- Clean borders and hover states
+
+**Dark Mode**:
+- Background: Dark slate (#1a2236)
+- Text: Light (#f1f5f9)
+- Badges: Adjusted colors for readability
+- Hover: Dark slate (#253347)
+
+---
+
+## Data Flow Diagram
+
+```
+┌─────────────────────────────────────┐
+│   Strategy Calendar (Manual Entry)  │
+│  - User creates events              │
+│  - Sets Videos Count: 5             │
+│  - Sets Posters Count: 3            │
+│  - Selects Client: "Acme"           │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│      Firebase Database              │
+│  worksync/strategy_events/{id}      │
+│  - videosCount: 5                   │
+│  - postersCount: 3                  │
+│  - client: "Acme"                   │
+│  - date: "2026-07-20"               │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Reports View → initReportFilters() │
+│  - Firebase listener set up         │
+│  - Load: worksync/strategy_events   │
+│  - strategyEvents object populated  │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  User clicks "Client Delivery" Tab  │
+│  - switchReportTab('client-delivery')
+│  - renderClientDeliveryDashboard()  │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Aggregation Logic                  │
+│  For each event in date range:      │
+│  - Group by client                  │
+│  - Sum videosCount                  │
+│  - Sum postersCount                 │
+│  - Track task completion status     │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Client Delivery Dashboard          │
+│  Acme:                              │
+│  - Videos Count: 5                  │
+│  - Posters Count: 3                 │
+│  - Completed: 2                     │
+│  - Completion %: 40%                │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Console Debugging Output
+
+### Successful Load:
+```
+[initReportFilters] Initial fetch - Strategy events loaded: 3 events
+[Firebase Listener] Strategy events updated: 3 events
+[Client Delivery Dashboard] Data Sources: {
+  strategyEventsCount: 3,
+  strategyEventsKeys: ['event1', 'event2', 'event3'],
+  tasksCount: 45,
+  dateRange: "2026-07-01 to 2026-07-31"
+}
+[Client Delivery] Event: Summer Campaign (Acme) - Videos: 5, Posters: 3
+[Client Delivery] Event: Fall Launch (TechCorp) - Videos: 2, Posters: 4
+[Client Delivery] Final metrics: {
+  "Acme": {videosCount: 5, postersCount: 3, completed: 2, ...},
+  "TechCorp": {videosCount: 2, postersCount: 4, completed: 1, ...}
+}
+[Client Delivery] Render complete. Rows: populated
+```
+
+### No Data:
+```
+[initReportFilters] Initial fetch - Strategy events loaded: 0 events
+[Client Delivery Dashboard] Data Sources: {
+  strategyEventsCount: 0,
+  tasksCount: 45,
+  dateRange: "2026-07-01 to 2026-07-31"
+}
+[Client Delivery] Final metrics: {}
+[Client Delivery] Render complete. Rows: empty
+```
+
+---
+
+## Testing Checklist
+
+- [ ] Create strategy event with Videos Count: 5, Posters Count: 3
+- [ ] Verify fields save to Firebase (check `worksync/strategy_events`)
+- [ ] Go to Reports → Client Delivery Dashboard
+- [ ] Set date range to include event date
+- [ ] Verify counts display correctly (5 videos, 3 posters)
+- [ ] Create another event for same client, verify counts accumulate
+- [ ] Test with different clients
+- [ ] Test date filtering (outside range should show 0)
+- [ ] Test in dark mode
+- [ ] Test responsive layout (mobile/tablet/desktop)
+- [ ] Check console logs for no errors
+
+---
+
+## Potential Issues & Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Counts show 0 | No events created | Create events in Strategy Calendar |
+| Counts show 0 | Events lack counts | Edit events, set Videos/Posters Count |
+| Counts show 0 | Date mismatch | Verify event date matches report date range |
+| Dashboard empty | No events for date range | Expand date range or create new events |
+| Data not updating | Listener not set | Switch Reports tab away, then back |
+| Alignment issues | CSS conflict | Check console for errors, refresh page |
+| Console shows errors | Firebase permission | Verify user has `worksync` read/write access |
+
+---
+
+## Future Enhancements
+
+- [ ] Add chart view (currently placeholder)
+- [ ] Export to CSV
+- [ ] Average hours calculation (currently shows 0)
+- [ ] Filters by client, format (videos/posters)
+- [ ] Comparison with previous periods
+- [ ] Trend analysis
+- [ ] Team member assignment tracking
+- [ ] Budget tracking per event
 
