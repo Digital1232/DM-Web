@@ -20875,13 +20875,22 @@
                 const list = document.getElementById('admin-current-work-list');
                 const countEl = document.getElementById('admin-current-work-count');
                 if (!list || !countEl) return;
-                const activeCount = currentWorkUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
+                
+                // Filter users based on current user's role
+                let filteredUsers = currentWorkUsers;
+                if (!isAdmin() && currentUser?.email?.toLowerCase() !== 'murugeshvilpower@gmail.com') {
+                    // Non-admin and non-Murugesh users see only their own task
+                    filteredUsers = currentWorkUsers.filter(u => u.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+                }
+                // Admin and Murugesh see all users
+                
+                const activeCount = filteredUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
                 countEl.textContent = `${activeCount} Active`;
-                if (!currentWorkUsers.length) {
+                if (!filteredUsers.length) {
                     list.innerHTML = `<p class="xl:col-span-2 p-5 text-center text-xs text-slate-400 italic">No employees found.</p>`;
                     return;
                 }
-                list.innerHTML = currentWorkUsers.map(u => {
+                list.innerHTML = filteredUsers.map(u => {
                     const task = u.currentTask;
                     const online = !!u.online;
                     const elapsed = task?.startedAt ? formatTime(Math.max(Math.floor((Date.now() - task.startedAt) / 1000), 0)) : '00:00:00';
