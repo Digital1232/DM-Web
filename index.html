@@ -11988,65 +11988,123 @@
             } */
 
             async function logout() {
-                if (db && currentUser) {
-                    await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false);
-                    // Save the latest task timer state before signing out so it can be
-                    // restored accurately on next login.
-                    if (activeTaskId) {
-                        await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => { });
+                try {
+                    // Mark user as offline in Firebase
+                    if (db && currentUser) {
+                        try {
+                            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false).catch(e => console.warn('[logout] Failed to mark offline:', e));
+                        } catch (e) {
+                            console.warn('[logout] Error marking offline:', e);
+                        }
+                        
+                        // Save the latest task timer state before signing out
+                        if (activeTaskId) {
+                            try {
+                                await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => { });
+                            } catch (e) {
+                                console.warn('[logout] Error saving task state:', e);
+                            }
+                        }
                     }
-                    // NOTE: Do NOT clear currentTask or timer state here —
-                    // they are preserved so the user can resume exactly where they left off after re-login.
+                    
+                    // Sign out from Firebase
+                    if (auth) {
+                        try {
+                            await signOut(auth);
+                            console.log('[logout] Successfully signed out from Firebase');
+                        } catch (e) {
+                            console.error('[logout] Error signing out:', e);
+                            // Continue with cleanup even if signOut fails
+                        }
+                    } else {
+                        console.warn('[logout] Auth object not available');
+                    }
+                    
+                    // Clean up all listeners and timers
+                    try {
+                        Object.values(convListeners).forEach(off => off && off());
+                        if (checkoutReasonsUnsub) { checkoutReasonsUnsub(); checkoutReasonsUnsub = null; }
+                        if (currentWorkUnsub) currentWorkUnsub();
+                        if (todayReportUnsub) todayReportUnsub();
+                        if (announcementsUnsub) announcementsUnsub();
+                        if (announcementNotifyUnsub) announcementNotifyUnsub();
+                        if (dprUnsub) dprUnsub();
+                        if (notesUnsub) notesUnsub();
+                        if (attendanceUnsub) attendanceUnsub();
+                        if (allTimeLogsUnsub) allTimeLogsUnsub();
+                        if (organisersListenerUnsub) { organisersListenerUnsub(); organisersListenerUnsub = null; }
+                        if (dailyPlansUnsub) dailyPlansUnsub();
+                        if (dailyReportSchedulerRef) clearInterval(dailyReportSchedulerRef);
+                        dailyReportSchedulerRef = null;
+                        if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
+                        liveBoardTimerRef = null;
+                        if (morningLearningAutoCompleteRef) { clearInterval(morningLearningAutoCompleteRef); morningLearningAutoCompleteRef = null; }
+                        dailyPlansUnsub = null; dailyPlans = {};
+                        if (syncIntervalRef) clearInterval(syncIntervalRef);
+                        clearInterval(currentWorkRefreshRef);
+                    } catch (e) {
+                        console.warn('[logout] Error cleaning up listeners:', e);
+                    }
+                    
+                    // Reset state variables
+                    currentWorkUnsub = null;
+                    todayReportUnsub = null;
+                    announcementsUnsub = null;
+                    announcementNotifyUnsub = null;
+                    dprUnsub = null;
+                    notesUnsub = null;
+                    attendanceUnsub = null;
+                    allTimeLogsUnsub = null;
+                    currentWorkRefreshRef = null;
+                    syncIntervalRef = null;
+                    currentWorkFilterKey = '';
+                    convListeners = {};
+                    currentUser = null;
+                    currentOrganisers = null;
+                    tasks = [];
+                    dprEntries = [];
+                    attendanceEvents = [];
+                    activeTaskId = null;
+                    isCheckedIn = false;
+                    shownTaskNotifIds = new Set();
+                    clearInterval(timerRef);
+                    seconds = 0;
+                    activeConvId = null;
+                    unreadCounts = {};
+                    unreadAnnouncements = 0;
+                    
+                    // Clear stored data
+                    localStorage.removeItem('worksync_toasted_notifs');
+                    localStorage.removeItem('worksync_user');
+                    
+                    // Update UI
+                    updateOrganiserNavVisibility();
+                    resetTimerUI();
+                    setTimerState('idle');
+                    
+                    if (typeof hideFloatBtn === 'function') hideFloatBtn();
+                    if (typeof hideWaterWidget === 'function') hideWaterWidget();
+                    
+                    // Switch views
+                    appInitialized = false;
+                    document.documentElement.classList.remove('has-user');
+                    document.documentElement.classList.remove('auth-pending');
+                    
+                    // Show login, hide dashboard
+                    const dashboardView = document.getElementById('dashboard-view');
+                    const loginView = document.getElementById('login-view');
+                    if (dashboardView) dashboardView.classList.add('hidden');
+                    if (loginView) loginView.classList.remove('hidden');
+                    
+                    console.log('[logout] Logout complete');
+                } catch (e) {
+                    console.error('[logout] Unexpected error during logout:', e);
+                    // Force UI reset even if something goes wrong
+                    const dashboardView = document.getElementById('dashboard-view');
+                    const loginView = document.getElementById('login-view');
+                    if (dashboardView) dashboardView.classList.add('hidden');
+                    if (loginView) loginView.classList.remove('hidden');
                 }
-                await signOut(auth);
-                Object.values(convListeners).forEach(off => off && off());
-                if (checkoutReasonsUnsub) { checkoutReasonsUnsub(); checkoutReasonsUnsub = null; }
-                if (currentWorkUnsub) currentWorkUnsub();
-                if (todayReportUnsub) todayReportUnsub();
-                if (announcementsUnsub) announcementsUnsub();
-                if (announcementNotifyUnsub) announcementNotifyUnsub();
-                if (dprUnsub) dprUnsub();
-                if (notesUnsub) notesUnsub();
-                if (attendanceUnsub) attendanceUnsub();
-                if (allTimeLogsUnsub) allTimeLogsUnsub();
-                if (organisersListenerUnsub) { organisersListenerUnsub(); organisersListenerUnsub = null; }
-                if (dailyPlansUnsub) dailyPlansUnsub();
-                if (dailyReportSchedulerRef) clearInterval(dailyReportSchedulerRef);
-                dailyReportSchedulerRef = null;
-                if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
-                liveBoardTimerRef = null;
-                if (morningLearningAutoCompleteRef) { clearInterval(morningLearningAutoCompleteRef); morningLearningAutoCompleteRef = null; }
-                dailyPlansUnsub = null; dailyPlans = {};
-                if (syncIntervalRef) clearInterval(syncIntervalRef);
-                clearInterval(currentWorkRefreshRef);
-                currentWorkUnsub = null;
-                todayReportUnsub = null;
-                announcementsUnsub = null;
-                announcementNotifyUnsub = null;
-                dprUnsub = null;
-                notesUnsub = null;
-                attendanceUnsub = null;
-                allTimeLogsUnsub = null;
-                currentWorkRefreshRef = null;
-                syncIntervalRef = null;
-                currentWorkFilterKey = '';
-                convListeners = {};
-                currentUser = null; currentOrganisers = null; tasks = []; dprEntries = []; attendanceEvents = []; activeTaskId = null; isCheckedIn = false;
-                shownTaskNotifIds = new Set();
-                localStorage.removeItem('worksync_toasted_notifs');
-                updateOrganiserNavVisibility();
-                clearInterval(timerRef); seconds = 0; activeConvId = null; unreadCounts = {}; unreadAnnouncements = 0;
-                localStorage.removeItem('worksync_user');
-                // Timer & check-in keys are intentionally kept in localStorage so state
-                // is restored immediately on the next login on the same device.
-                appInitialized = false;
-                document.documentElement.classList.remove('has-user');
-                document.documentElement.classList.remove('auth-pending');
-                resetTimerUI(); setTimerState('idle');
-                if (typeof hideFloatBtn === 'function') hideFloatBtn();
-                if (typeof hideWaterWidget === 'function') hideWaterWidget();
-                document.getElementById('dashboard-view').classList.add('hidden');
-                document.getElementById('login-view').classList.remove('hidden');
             }
 
             function loadTasksFromCache() {
@@ -12152,7 +12210,7 @@
                     document.getElementById('manager-nav')?.classList.add('hidden');
                 }
                 if (isAdmin()) {
-                    document.getElementById('admin-nav').classList.remove('hidden');
+                    document.getElementById('admin-nav')?.classList.remove('hidden');
                     document.getElementById('group-create-btn')?.classList.remove('hidden');
                     document.getElementById('announcement-compose-card')?.classList.remove('hidden');
                     document.getElementById('dpr-tab-team')?.classList.remove('hidden');
@@ -12162,6 +12220,10 @@
                     // Managers can see employee performance reports
                     document.getElementById('report-tab-performance')?.classList.remove('hidden');
                     document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
+                    document.getElementById('admin-nav')?.classList.add('hidden');
+                    document.getElementById('group-create-btn')?.classList.add('hidden');
+                    document.getElementById('announcement-compose-card')?.classList.add('hidden');
+                    document.getElementById('dpr-tab-team')?.classList.add('hidden');
                 } else { // Non-admin, non-manager users (regular employees)
                     document.getElementById('admin-nav')?.classList.add('hidden');
                     document.getElementById('group-create-btn')?.classList.add('hidden');
