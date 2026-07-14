@@ -118,7 +118,7 @@ if (initializeApp) {
     const JIRA = {
         domain: 'vilpowerdigitalmarketing.atlassian.net',
         projectKey: 'JULY',
-        projectKeys: ['MAY', 'JUN', 'JULY'],
+        projectKeys: ['JULY'],
         apiUrl: '/api/jira',
         gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
         useLocalApi: false
@@ -1232,6 +1232,8 @@ if (initializeApp) {
             document.getElementById('admin-current-work-card')?.classList.add('hidden');
             document.getElementById('admin-workload-card')?.classList.add('hidden');
             document.getElementById('admin-report-card')?.classList.add('hidden');
+            // But allow regular users to see their own data on the dashboard
+            loadTodayWorkSummary();
         }
     }
 
@@ -1983,14 +1985,14 @@ if (initializeApp) {
     
     // Load header preference on page load
     function restoreHeaderPreference() {
-        const mode = localStorage.getItem('headerMode') || 'productivity';
         const prodHeader = document.querySelector('header:not(#legacy-global-header)');
         const legacyHeader = document.getElementById('legacy-global-header');
         
-        if (mode === 'legacy') {
-            prodHeader.classList.add('hidden');
-            legacyHeader.classList.remove('hidden');
-        }
+        if (prodHeader) prodHeader.classList.add('hidden');
+        if (legacyHeader) legacyHeader.classList.remove('hidden');
+        
+        // Ensure user preference is saved as legacy
+        localStorage.setItem('headerMode', 'legacy');
     }
 
     // VIEW NAVIGATION
@@ -2158,7 +2160,14 @@ if (initializeApp) {
             grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/50"></div>`;
         }
 
-        const shootTasks = tasks.filter(t => t.status === 'Shoot Needed' && t.duedate);
+        // Include shoots that are either "Shoot Needed" OR have shootStorage (completed)
+        const shootTasks = tasks.filter(t => {
+            if (!t.duedate) return false;
+            const isShootNeeded = t.status === 'Shoot Needed';
+            const hasShootStorage = !!t.shootStorage;
+            return isShootNeeded || hasShootStorage;
+        });
+        
         const tasksByDate = shootTasks.reduce((acc, task) => {
             const date = task.duedate.slice(0, 10);
             if (!acc[date]) acc[date] = [];
@@ -2175,7 +2184,20 @@ if (initializeApp) {
             const isToday = dateStr === todayStr;
 
             let dayHtml = `<div onclick="openShootPlanModal('${dateStr}')" class="relative p-3 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/50' : ''} hover:bg-slate-100/50 transition-colors cursor-pointer"><time datetime="${dateStr}" class="font-black text-sm ${isToday ? 'text-indigo-600' : 'text-slate-700'}">${day}</time><div class="mt-2 space-y-1 overflow-y-auto flex-1">`;
-            dayTasks.forEach(task => { dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" class="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow hover:border-indigo-300"><p class="text-[10px] font-bold text-slate-800 truncate">${escapeHtml(task.desc)}</p><p class="text-[9px] text-slate-500 font-medium">${escapeHtml(task.client || 'No Client')}</p></div>`; });
+            
+            dayTasks.forEach(task => { 
+                // Check if shoot is completed by checking for shootStorage
+                const isCompleted = !!task.shootStorage;
+                const bgClass = isCompleted ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200';
+                const textClass = isCompleted ? 'text-emerald-800' : 'text-slate-800';
+                const hoverClass = isCompleted ? 'hover:border-emerald-400' : 'hover:border-indigo-300';
+                
+                // Show storage info if available
+                const storageHtml = isCompleted && task.shootStorage ? `<div class="mt-1 pt-1 border-t border-emerald-100"><p class="text-[9px] font-bold text-emerald-600 truncate">💾 ${escapeHtml(task.shootStorage.nodeName || 'Storage')}</p></div>` : '';
+                
+                dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" class="${bgClass} p-1.5 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${hoverClass}"><p class="text-[10px] font-bold ${textClass} truncate">${escapeHtml(task.desc)}</p><p class="text-[9px] text-slate-500 font-medium">${escapeHtml(task.client || 'No Client')}</p>${storageHtml}</div>`; 
+            });
+            
             dayHtml += `</div></div>`;
             grid.innerHTML += dayHtml;
         }
@@ -2314,11 +2336,13 @@ if (initializeApp) {
             let eventsHtml = '';
             dayEvents.forEach(ev => {
                 const badgeClass = platformStyles[ev.platform] || 'bg-slate-500 text-white';
+                const jiraLink = ev.jiraTaskId ? `<a href="${generateJiraLink(ev.jiraTaskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="absolute top-1 right-1 text-white hover:bg-white/20 rounded-full p-0.5 transition-all" title="Open in Jira">🔗</a>` : '';
                 eventsHtml += `
                         <div onclick="event.stopPropagation(); openEditStrategyEventModal('${ev.id}')" 
-                             class="${badgeClass} px-2 py-1 rounded-lg text-[9px] font-black truncate shadow-sm transition-all hover:scale-105 active:scale-95" 
-                             title="${escapeHtml(ev.title)} [${escapeHtml(ev.platform)}]">
+                             class="relative ${badgeClass} px-2 py-1 rounded-lg text-[9px] font-black truncate shadow-sm transition-all hover:scale-105 active:scale-95" 
+                             title="${escapeHtml(ev.title)} ${ev.jiraTaskId ? ' [' + ev.jiraTaskId + ']' : ''} [${escapeHtml(ev.platform)}]">
                             ${escapeHtml(ev.title)}
+                            ${jiraLink}
                         </div>
                     `;
             });
@@ -2361,6 +2385,14 @@ if (initializeApp) {
             })
             .sort((a, b) => a.date.localeCompare(b.date));
 
+        // ── Auto-calculate Video & Poster counts from the format field ──
+        const videoCount = activeMonthEvents.filter(ev => ev.format === 'Video').length;
+        const posterCount = activeMonthEvents.filter(ev => ev.format === 'Poster' || !ev.format).length;
+        const videoEl = document.getElementById('strategy-video-count');
+        const posterEl = document.getElementById('strategy-poster-count');
+        if (videoEl) videoEl.textContent = videoCount;
+        if (posterEl) posterEl.textContent = posterCount;
+
         if (activeMonthEvents.length === 0) {
             listEl.innerHTML = `
                     <div class="text-center py-8">
@@ -2383,14 +2415,22 @@ if (initializeApp) {
         listEl.innerHTML = activeMonthEvents.map(ev => {
             const ownerName = allUsersMap.get(ev.owner?.toLowerCase())?.name || ev.owner || 'Unassigned';
             const pillColor = platformPillColors[ev.platform] || 'bg-slate-50 text-slate-700';
+            const jiraLink = ev.jiraTaskId ? `<a href="${generateJiraLink(ev.jiraTaskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-indigo-600 hover:text-indigo-800 hover:underline" title="View in Jira">${ev.jiraTaskId}</a>` : '';
+            const formatBadge = ev.format
+                ? `<span class="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${ev.format === 'Video' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}">${ev.format === 'Video' ? '🎬' : '🖼️'} ${ev.format}</span>`
+                : '';
 
             return `
                     <div onclick="openEditStrategyEventModal('${ev.id}')" 
                          class="p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${new Date(ev.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+                            ${formatBadge}
                         </div>
-                        <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(ev.title)}</h5>
+                        <div class="flex items-center justify-between gap-2">
+                            <h5 class="text-xs font-black text-slate-900 truncate flex-1">${escapeHtml(ev.title)}</h5>
+                            ${jiraLink ? `<span class="text-[10px] font-bold text-indigo-600 flex-shrink-0">${jiraLink}</span>` : ''}
+                        </div>
                         <p class="text-[10px] text-slate-500 line-clamp-2">${escapeHtml(ev.desc || 'No goal described.')}</p>
                         <div class="flex items-center justify-between pt-1 border-t border-slate-100/50 text-[9px] text-slate-400 font-bold uppercase">
                             <span class="text-slate-600">Assignee: ${escapeHtml(ownerName)}</span>
@@ -2449,6 +2489,7 @@ if (initializeApp) {
         document.getElementById('strategy-modal-title').textContent = canWrite ? 'Edit Strategy Event' : 'View Strategy Event';
         document.getElementById('strategy-event-id').value = eventId;
         document.getElementById('strategy-title').value = ev.title || '';
+        document.getElementById('strategy-jira-id').value = ev.jiraTaskId || '';
         document.getElementById('strategy-date').value = ev.date || '';
         document.getElementById('strategy-owner').value = ev.owner || '';
         document.getElementById('strategy-desc').value = ev.desc || '';
@@ -2457,7 +2498,7 @@ if (initializeApp) {
         selectStrategyFormat(ev.format || 'Poster');
 
         // Toggle readonly/disabled state depending on permissions
-        const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc'];
+        const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-jira-search'];
         fields.forEach(f => {
             const el = document.getElementById(f);
             if (el) {
@@ -2492,6 +2533,9 @@ if (initializeApp) {
             delBtn.classList.toggle('hidden', !canWrite);
         }
 
+        // Load Jira display when modal opens
+        loadStrategyJiraDisplay();
+
         document.getElementById('strategyEventModal').showModal();
     }
 
@@ -2504,6 +2548,7 @@ if (initializeApp) {
 
         const id = document.getElementById('strategy-event-id').value;
         const title = document.getElementById('strategy-title').value.trim();
+        const jiraId = document.getElementById('strategy-jira-id').value.trim();
         const date = document.getElementById('strategy-date').value;
         let owner = document.getElementById('strategy-owner').value;
         const desc = document.getElementById('strategy-desc').value.trim();
@@ -2534,6 +2579,11 @@ if (initializeApp) {
                 updatedAt: Date.now()
             };
 
+            // Include Jira ID if provided
+            if (jiraId) {
+                evPayload.jiraTaskId = jiraId;
+            }
+
             if (id) {
                 // Update
                 await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
@@ -2552,9 +2602,7 @@ if (initializeApp) {
                     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 };
                 const taskDueDate = addDays(date, -4);
-                const isJuly = date && date.split('-')[1] === '07';
-                const isJune = date && date.split('-')[1] === '06';
-                const projectKey = isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey);
+                const projectKey = 'JULY';
                 const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                 const jiraPayload = {
                     fields: {
@@ -2672,7 +2720,243 @@ if (initializeApp) {
         }
     }
 
-    async function jiraRequest(jiraUrl, method = 'get', payload = null) {
+    // Generate Jira link for task ID
+function generateJiraLink(taskId) {
+    if (!taskId) return '#';
+    // Extract Jira key (e.g., "JULY-123" from full ID)
+    const jiraKey = taskId.split('-').length > 1 
+        ? taskId.substring(0, taskId.lastIndexOf('-')) + '-' + taskId.split('-').pop()
+        : taskId;
+    
+    return `https://worksync.atlassian.net/browse/${encodeURIComponent(jiraKey)}`;
+}
+
+// Populate Top Performer widget
+function populateTopPerformer() {
+    if (!isAdmin()) return; // Only for admins
+
+    const performerDiv = document.getElementById('cr-sidebar-performer');
+    if (!performerDiv) return;
+
+    try {
+        // Calculate top performer based on completed tasks and hours worked
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStart = today.getTime();
+        const todayEnd = todayStart + 86400000;
+
+        // Count tasks completed today per user
+        const userTaskCount = {};
+        const userHoursMap = {};
+
+        // Count completed tasks
+        tasks.filter(t => isDone(t.status)).forEach(t => {
+            const ts = t.updatedAt || t.completedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt;
+            if (ts >= todayStart && ts < todayEnd) {
+                const assignee = assigneeName(t) || 'Unknown';
+                userTaskCount[assignee] = (userTaskCount[assignee] || 0) + 1;
+            }
+        });
+
+        // Sum hours from timelogs
+        allTimeLogs.forEach(log => {
+            if ((log.endTime || log.startTime || 0) >= todayStart && (log.endTime || log.startTime || 0) < todayEnd) {
+                const userName = log.userName || log.userId || 'Unknown';
+                userHoursMap[userName] = (userHoursMap[userName] || 0) + (log.durationSeconds || 0);
+            }
+        });
+
+        // Find top performer (by task count, then by hours)
+        let topPerformer = null;
+        let maxTasks = 0;
+
+        Object.entries(userTaskCount).forEach(([name, count]) => {
+            if (count > maxTasks) {
+                maxTasks = count;
+                topPerformer = name;
+            }
+        });
+
+        if (!topPerformer) {
+            performerDiv.classList.add('hidden');
+            return;
+        }
+
+        // Find user data
+        const userEmail = Array.from(allUsersMap.values()).find(u => u.name === topPerformer)?.email || topPerformer;
+        const userData = allUsersMap.get(userEmail.toLowerCase());
+        const fallbackAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(topPerformer)}`;
+        const avatar = userData?.profilePicture && userData.profilePicture.trim() !== '' ? userData.profilePicture : fallbackAvatar;
+        const hours = userHoursMap[topPerformer] || 0;
+        const hoursFormatted = Math.round(hours / 3600);
+
+        // Update widget
+        const avatarImg = document.getElementById('cs-performer-avatar');
+        avatarImg.src = avatar;
+        avatarImg.onerror = function() {
+            this.src = fallbackAvatar;
+            this.onerror = null; // Prevent infinite loop
+        };
+        document.getElementById('cs-performer-name').textContent = topPerformer;
+        document.getElementById('cs-performer-role').textContent = userData?.role || 'Team Member';
+        document.getElementById('cs-performer-tasks').textContent = userTaskCount[topPerformer] || 0;
+        document.getElementById('cs-performer-hours').textContent = hoursFormatted + 'h';
+
+        performerDiv.classList.remove('hidden');
+    } catch (err) {
+        console.error('Failed to populate top performer widget:', err);
+    }
+}
+
+// Fetch Jira tasks for strategy event modal
+async function fetchJiraTasksForStrategy() {
+    try {
+        const searchField = document.getElementById('strategy-jira-search');
+        const dropdown = document.getElementById('strategy-jira-dropdown');
+        
+        // Get current title as search term
+        const title = document.getElementById('strategy-title').value.trim();
+        const searchTerm = searchField.value.trim() || title;
+        
+        if (!searchTerm) {
+            toast('Enter a search term or task title', 'warning');
+            return;
+        }
+
+        // Show loading state
+        dropdown.innerHTML = '<div class="p-3 text-center"><iconify-icon icon="svg-spinners:ring-resize" width="20" class="text-indigo-400"></iconify-icon><p class="text-xs text-slate-500 mt-1">Searching Jira...</p></div>';
+        dropdown.classList.remove('hidden');
+
+        // Build JQL query to search for matching tasks safely
+        let jql;
+        if (/^[A-Za-z0-9]+-\d+$/i.test(searchTerm)) {
+            const escapedKey = escapeJqlValue(searchTerm);
+            jql = `key = "${escapedKey}" OR summary ~ "${escapedKey}" OR description ~ "${escapedKey}" ORDER BY updated DESC`;
+        } else {
+            // Replace JQL special characters with spaces to prevent parser syntax errors on text search
+            const sanitized = searchTerm.replace(/[\\+\-&|!(){}\[\]^~*?:"]/g, ' ').trim().replace(/\s+/g, ' ');
+            const escapedTerm = escapeJqlValue(sanitized);
+            
+            if (!escapedTerm) {
+                dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No search term after sanitization</div>';
+                return;
+            }
+            
+            jql = `summary ~ "${escapedTerm}" OR description ~ "${escapedTerm}" ORDER BY updated DESC`;
+        }
+        const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=20&fields=key,summary,status,assignee`;
+        
+        const res = await jiraRequest(url, 'get');
+        
+        if (res.success && res.data?.issues) {
+            const issues = res.data.issues;
+            
+            if (issues.length === 0) {
+                dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No matching Jira tasks found</div>';
+                return;
+            }
+
+            // Build dropdown HTML
+            let html = '';
+            issues.forEach(issue => {
+                const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
+                const status = issue.fields?.status?.name || 'Unknown';
+                html += `
+                    <div onclick="selectJiraTaskForStrategy('${issue.key}', '${issue.fields.summary.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" 
+                         class="p-3 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-indigo-50 transition-colors">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-[10px] font-bold text-indigo-600">${issue.key}</p>
+                                <p class="text-xs text-slate-800 truncate">${escapeHtml(issue.fields.summary)}</p>
+                                <div class="flex gap-2 mt-1">
+                                    <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">📌 ${status}</span>
+                                    <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">👤 ${escapeHtml(assignee)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            dropdown.innerHTML = html;
+        } else {
+            const errMsg = jiraErrorMessage(res);
+            dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Error: ${escapeHtml(errMsg)}</div>`;
+        }
+    } catch (err) {
+        console.error('Failed to fetch Jira tasks:', err);
+        dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Failed to search Jira: ${escapeHtml(err.message || err)}</div>`;
+    }
+}
+
+// Search Jira tasks as user types
+function searchJiraTasksForStrategy() {
+    const searchField = document.getElementById('strategy-jira-search');
+    const searchTerm = searchField.value.trim();
+    
+    // Auto-trigger search after 2 characters
+    if (searchTerm.length >= 2) {
+        fetchJiraTasksForStrategy();
+    } else {
+        document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    }
+}
+
+// Select a Jira task from dropdown
+function selectJiraTaskForStrategy(taskId, taskSummary) {
+    document.getElementById('strategy-jira-id').value = taskId;
+    document.getElementById('strategy-jira-search').value = `${taskId}: ${taskSummary}`;
+    document.getElementById('strategy-jira-selected').innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
+    document.getElementById('strategy-jira-clear-btn').classList.remove('hidden');
+    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    
+    toast(`✅ Linked to Jira task ${taskId}`, 'success');
+}
+
+// Update Jira ID display when loading event
+function loadStrategyJiraDisplay() {
+    const jiraId = document.getElementById('strategy-jira-id').value;
+    const jiraSearch = document.getElementById('strategy-jira-search');
+    const jiraSelected = document.getElementById('strategy-jira-selected');
+    const clearBtn = document.getElementById('strategy-jira-clear-btn');
+    
+    if (jiraId) {
+        jiraSearch.value = jiraId;
+        jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>`;
+        if (clearBtn) clearBtn.classList.remove('hidden');
+    } else {
+        jiraSearch.value = '';
+        jiraSelected.innerHTML = 'No task selected';
+        if (clearBtn) clearBtn.classList.add('hidden');
+    }
+    
+    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+}
+
+// Clear Jira selection
+function clearStrategyJiraSelection() {
+    document.getElementById('strategy-jira-id').value = '';
+    document.getElementById('strategy-jira-search').value = '';
+    document.getElementById('strategy-jira-selected').innerHTML = 'No task selected';
+    document.getElementById('strategy-jira-clear-btn').classList.add('hidden');
+    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    toast('Jira task selection cleared', 'info');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('strategy-jira-dropdown');
+    const searchInput = document.getElementById('strategy-jira-search');
+    const searchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
+    
+    if (dropdown && searchInput && searchBtn) {
+        if (!dropdown.contains(e.target) && !searchInput.contains(e.target) && !searchBtn.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    }
+});
+
+async function jiraRequest(jiraUrl, method = 'get', payload = null) {
         const body = { jiraUrl, method };
         if (payload !== null) body.payload = payload;
         console.log('🎯 Target URL:', jiraUrl);
@@ -4347,7 +4631,7 @@ if (initializeApp) {
     }
 
     function loadTodayWorkSummary() {
-        if (!canViewDailySummary()) return;
+        // Allow all users to load their own data
         loadDprEntries();
         if (todayReportUnsub) return; // Only load once
         const dbRef = ref(db, 'worksync/timelogs');
@@ -4458,16 +4742,26 @@ if (initializeApp) {
             }
         });
 
-        const todayDprSums = new Map();
-        dprEntries.forEach(entry => {
-            if (entry.date === todayIso() && entry.userId) {
-                const emailKey = entry.userId.toLowerCase();
-                todayDprSums.set(emailKey, (todayDprSums.get(emailKey) || 0) + Number(entry.count || 0));
-            }
+        // ── Strategy Calendar planned counts (replaces manual DPR) ──
+        const now = new Date();
+        const curMonth = now.getMonth();
+        const curYear = now.getFullYear();
+        const stratMap = new Map(); // email → { videos, posters }
+        Object.values(strategyEvents || {}).forEach(ev => {
+            if (!ev.date || !ev.owner) return;
+            const d = new Date(ev.date);
+            if (d.getMonth() !== curMonth || d.getFullYear() !== curYear) return;
+            const key = ev.owner.toLowerCase();
+            if (!stratMap.has(key)) stratMap.set(key, { videos: 0, posters: 0 });
+            const entry = stratMap.get(key);
+            if (ev.format === 'Video') entry.videos++;
+            else entry.posters++; // Poster or unset
         });
 
         for (const row of rows.values()) {
-            row.dprCount = todayDprSums.get(row.email.toLowerCase()) || 0;
+            const sc = stratMap.get(row.email.toLowerCase()) || { videos: 0, posters: 0 };
+            row.stratPlanVideos = sc.videos;
+            row.stratPlanPosters = sc.posters;
         }
 
         return [...rows.values()].sort((a, b) => {
@@ -4581,16 +4875,28 @@ if (initializeApp) {
         const list = document.getElementById('daily-summary-list');
         const card = document.getElementById('admin-daily-summary-card');
         const exportBtn = document.getElementById('export-daily-report-btn');
-        if (!list || !canViewDailySummary()) return;
+        if (!list) return;
 
-        if (!canViewDailySummary() && activeView !== 'daily-summary') {
-            card?.classList.add('hidden');
-            return;
+        // Show admin/manager full view, but allow regular users to see their own data on dashboard
+        if (!canViewDailySummary()) {
+            // For non-admin users on dashboard, show only their own data
+            if (activeView === 'dashboard') {
+                card?.classList.remove('hidden');
+            } else {
+                card?.classList.add('hidden');
+                return;
+            }
         } else {
             card?.classList.remove('hidden');
         }
 
         let rows = buildDailySummaryRows();
+        
+        // For non-admin users, filter to only show their own data on the dashboard
+        if (!canViewDailySummary()) {
+            rows = rows.filter(row => row.email === currentUser.email);
+        }
+
         const totalSeconds = rows.reduce((sum, row) => sum + row.loggedSeconds + row.activeSeconds, 0);
         const loggedTasks = rows.reduce((sum, row) => sum + row.completedTasks, 0);
         const activeCount = rows.filter(row => row.activeTask).length;
@@ -4621,7 +4927,7 @@ if (initializeApp) {
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${row.role || row.email}</p>
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3 flex-1">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-11 gap-3 flex-1">
                             <div class="bg-slate-50 rounded-xl px-3 py-2">
                                 <p class="text-[9px] font-bold text-slate-400 uppercase">Total</p>
                                 <p class="text-xs font-black text-slate-900 font-mono">${formatTime(total)}</p>
@@ -4646,14 +4952,19 @@ if (initializeApp) {
                                 <p class="text-[9px] font-bold text-emerald-500 uppercase">Done</p>
                                 <p class="text-xs font-black text-emerald-600">${row.completedCount}</p>
                             </div>
+                            <div class="bg-rose-50 rounded-xl px-3 py-2" title="Strategy Calendar: Videos planned this month">
+                                 <p class="text-[9px] font-bold text-rose-500 uppercase">🎬 Plan Vid</p>
+                                 <p class="text-xs font-black text-rose-600">${row.stratPlanVideos}</p>
+                             </div>
+                             <div class="bg-violet-50 rounded-xl px-3 py-2" title="Strategy Calendar: Posters planned this month">
+                                 <p class="text-[9px] font-bold text-violet-500 uppercase">🖼️ Plan Pos</p>
+                                 <p class="text-xs font-black text-violet-600">${row.stratPlanPosters}</p>
+                             </div>
                             <div class="bg-slate-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-slate-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'logs')">
                                 <p class="text-[9px] font-bold text-slate-400 uppercase">Logs</p>
                                 <p class="text-xs font-black text-slate-600">${row.completedTasks}</p>
                             </div>
-                            <div class="bg-indigo-50 rounded-xl px-3 py-2 cursor-pointer hover:bg-indigo-100 hover:scale-105 transition-all duration-200" onclick="showDailySummaryTasks('${row.email}', 'dpr')">
-                                <p class="text-[9px] font-bold text-indigo-500 uppercase">DPR</p>
-                                <p class="text-xs font-black text-indigo-600">${row.dprCount}</p>
-                            </div>
+
                             <div class="bg-indigo-50/50 rounded-xl px-3 py-2">
                                 <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
                                 <p class="text-xs font-black text-indigo-600 font-mono">${row.activeTask ? formatTime(row.activeSeconds) : 'Idle'}</p>
@@ -7345,7 +7656,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         toast('Report exported to CSV', 'success');
     }
 
-    function renderClientReport() {
+        function renderClientReport() {
         const list = document.getElementById('client-report-list');
         const summaryDiv = document.getElementById('client-report-summary');
         if (!list || !summaryDiv) return;
@@ -7432,6 +7743,9 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 </tr>
                 `;
         }).join('');
+
+        // Populate Top Performer widget
+        populateTopPerformer();
     }
 
     function renderClientWideReport() {
@@ -7932,8 +8246,6 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     }
 
     function renderPerformanceReport() {
-        if (!isAdmin()) return;
-
         const list = document.getElementById('performance-report-list');
         if (!list) return;
         list.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">Calculating performance metrics...</p>`;
@@ -7951,8 +8263,14 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         }
 
         let usersToReport = currentWorkUsers;
-        if (reportSelectedUser !== 'all') {
-            usersToReport = currentWorkUsers.filter(u => u.email === reportSelectedUser);
+        if (isAdmin()) {
+            // Admins can see all users or filtered user
+            if (reportSelectedUser !== 'all') {
+                usersToReport = currentWorkUsers.filter(u => u.email === reportSelectedUser);
+            }
+        } else {
+            // Non-admin users can only see their own data
+            usersToReport = currentWorkUsers.filter(u => u.email === currentUser.email);
         }
 
         const performanceData = usersToReport.map(user => {
@@ -8621,7 +8939,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         internalFields.classList.toggle('hidden', taskType !== 'internal');
     }
 
-    async function submitManualTask() {
+    async function submitManualTask(startNow = false) {
         const platform = document.getElementById('mt-platform').value;
         const taskType = document.getElementById('mt-task-type').value;
         const title = document.getElementById('mt-title').value.trim();
@@ -8633,15 +8951,16 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
         if (!title) return toast('Enter a task title', 'error');
 
-        const btn = document.getElementById('mt-submit-btn');
+        const btn = startNow ? document.getElementById('mt-start-now-btn') : document.getElementById('mt-submit-btn');
         const originalText = btn.textContent;
         btn.disabled = true;
-        btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Creating...`;
+        btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> ${startNow ? 'Starting...' : 'Creating...'}`;
 
         try {
+            let createdTaskId = null;
+
             if (platform === 'jira') {
-                const curMonth = new Date().getMonth(); // 6 is July, 5 is June
-                const projectKey = curMonth === 6 ? 'JULY' : (curMonth === 5 ? 'JUN' : JIRA.projectKey);
+                const projectKey = 'JULY';
                 const url = `https://${JIRA.domain}/rest/api/3/issue`;
                 const payload = {
                     fields: {
@@ -8661,7 +8980,8 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
                 const res = await jiraRequest(url, 'post', payload);
                 if (res.success && (res.data?.key || res.key)) {
-                    toast(`Jira task ${(res.data?.key || res.key)} created!`, 'success');
+                    createdTaskId = res.data?.key || res.key;
+                    toast(`Jira task ${createdTaskId} created!`, 'success');
                     await syncTasks(true); // Auto-sync to show the new task in the list
                 } else {
                     throw new Error(jiraErrorMessage(res));
@@ -8669,13 +8989,33 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             } else {
                 if (!client) { toast('Select a client', 'error'); btn.disabled = false; btn.textContent = originalText; return; }
                 const taskId = 'M-' + Date.now();
+                createdTaskId = taskId;
                 const task = { id: taskId, desc: title, client, status, priority, assignee: assigneeNameVal, assigneeEmail: assigneeEmail, manual: true, taskType, userId: assigneeEmail || currentUser.email, createdAt: Date.now() };
                 await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail || currentUser.email)}/${taskId}`), task);
                 tasks = mergeTasksById([task, ...tasks]);
                 renderTasks(); renderInternalTasks(); updateStats();
                 toast('Task added to WorkSync', 'success');
             }
-            document.getElementById('addTaskModal').close();
+
+            // If Start Now button was clicked, auto-start the task
+            if (startNow && createdTaskId) {
+                document.getElementById('addTaskModal').close();
+                
+                // Find the task in the tasks list and start it
+                const taskToStart = tasks.find(t => t.id === createdTaskId);
+                if (taskToStart) {
+                    // Wait a moment for the task list to refresh
+                    setTimeout(async () => {
+                        await doStartTask(createdTaskId);
+                        toast(`✅ Task started!`, 'success');
+                    }, 500);
+                } else {
+                    toast(`Task created, but couldn't auto-start. Start it manually.`, 'warning');
+                }
+            } else {
+                document.getElementById('addTaskModal').close();
+            }
+
             populateClientFilter();
             populateInternalClientFilter();
             populateInternalAssigneeFilter();
@@ -9849,7 +10189,19 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             const data = snap.val() || {};
             currentOrganisers = data;
 
-            document.getElementById('nav-leave-org')?.classList.toggle('hidden', !isLeaveOrganiser() && !isAdmin());
+            // For admins, always show organizer buttons
+            // For regular users, show only if they're assigned to that role
+            const isCurrentUserAdmin = isAdmin();
+            
+            if (!isCurrentUserAdmin) {
+                // Hide buttons for non-admins who aren't assigned to those roles
+                document.getElementById('nav-event-org')?.classList.toggle('hidden', !isEventOrganiser());
+                document.getElementById('nav-leave-org')?.classList.toggle('hidden', !isLeaveOrganiser());
+                document.getElementById('nav-learnings-org')?.classList.toggle('hidden', !isLearningsOrganiser());
+                document.getElementById('nav-workplace-org')?.classList.toggle('hidden', !isWorkplaceOrganiser());
+                document.getElementById('nav-dm-content-org')?.classList.toggle('hidden', !isDmContentOrganiser());
+            }
+            // If admin, buttons stay visible (no hidden class applied)
 
             if (activeView === 'event-org') renderEventOrgPanel();
             if (activeView === 'leave-org') renderLeaveOrgPanel();
@@ -10739,3 +11091,245 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.saveStrategyEvent = saveStrategyEvent;
     window.deleteStrategyEvent = deleteStrategyEvent;
 }
+
+
+// ════════════════════════════════════════════════════════════════════
+// COMPLETED TASKS TAB
+// ════════════════════════════════════════════════════════════════════
+
+let completedTasksDateRange = 'today';
+let completedTasksFilter = '';
+let completedTasksClientFilter = 'all';
+let completedTasksEmployeeFilter = 'me'; // For admins, can be 'all' or specific email
+
+function switchCompletedDateRange(range) {
+    completedTasksDateRange = range;
+    
+    // Update button states
+    document.querySelectorAll('#tasks-tab-completed button[onclick*="switchCompletedDateRange"]').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-50', 'text-slate-600');
+    });
+    
+    const activeBtn = document.getElementById(`cr-btn-${range}`);
+    if (activeBtn) {
+        activeBtn.classList.add('bg-indigo-600', 'text-white');
+        activeBtn.classList.remove('bg-slate-50', 'text-slate-600');
+    }
+    
+    populateCompletedTasks();
+}
+
+function filterCompletedTasks() {
+    completedTasksFilter = document.getElementById('cr-search-input')?.value || '';
+    populateCompletedTasks();
+}
+
+function setCompletedTasksClientFilter(clientName) {
+    completedTasksClientFilter = clientName;
+    document.getElementById('cr-client-label').textContent = clientName === 'all' ? 'All Clients' : clientName;
+    document.getElementById('cr-client-menu').classList.add('hidden');
+    populateCompletedTasks();
+}
+
+function setCompletedTasksEmployeeFilter(email, name) {
+    completedTasksEmployeeFilter = email;
+    document.getElementById('cr-employee-label').textContent = name || 'All Employees';
+    document.getElementById('cr-employee-menu').classList.add('hidden');
+    populateCompletedTasks();
+}
+
+function populateCompletedTasks() {
+    const container = document.getElementById('cr-tasks-container');
+    if (!container) return;
+    
+    // Get date range
+    const now = new Date();
+    let fromDate = new Date();
+    
+    switch (completedTasksDateRange) {
+        case 'today':
+            fromDate.setHours(0, 0, 0, 0);
+            break;
+        case 'yesterday':
+            fromDate.setDate(fromDate.getDate() - 1);
+            fromDate.setHours(0, 0, 0, 0);
+            break;
+        case 'week':
+            fromDate.setDate(fromDate.getDate() - fromDate.getDay());
+            fromDate.setHours(0, 0, 0, 0);
+            break;
+    }
+    
+    const toDate = new Date(now);
+    toDate.setHours(23, 59, 59, 999);
+    const fromTs = fromDate.getTime();
+    const toTs = toDate.getTime();
+    
+    // Determine which user(s) to show
+    let userEmails = [];
+    if (isAdmin()) {
+        if (completedTasksEmployeeFilter === 'all') {
+            userEmails = allUsersMap ? Array.from(allUsersMap.keys()) : [currentUser.email];
+        } else {
+            userEmails = [completedTasksEmployeeFilter];
+        }
+    } else {
+        userEmails = [currentUser.email];
+    }
+    
+    // Filter tasks based on criteria
+    let filteredTasks = tasks.filter(t => {
+        // Check if task is done
+        if (!isDone(t.status)) return false;
+        
+        // Check if assigned to selected user(s)
+        const taskEmail = (t.assigneeEmail || t.userId || '').toLowerCase();
+        if (!userEmails.some(e => e.toLowerCase() === taskEmail)) return false;
+        
+        // Check date range - use updatedAt or completedAt
+        const taskTime = t.updatedAt || t.completedAt || t.createdAt || 0;
+        if (taskTime < fromTs || taskTime > toTs) return false;
+        
+        // Check client filter
+        if (completedTasksClientFilter !== 'all' && (t.client || '').toLowerCase() !== completedTasksClientFilter.toLowerCase()) {
+            return false;
+        }
+        
+        // Check search filter
+        if (completedTasksFilter) {
+            const searchLower = completedTasksFilter.toLowerCase();
+            const matchesSearch = (t.id || '').toLowerCase().includes(searchLower) ||
+                                  (t.desc || '').toLowerCase().includes(searchLower) ||
+                                  (t.summary || '').toLowerCase().includes(searchLower) ||
+                                  (t.client || '').toLowerCase().includes(searchLower);
+            if (!matchesSearch) return false;
+        }
+        
+        return true;
+    });
+    
+    // Sort by most recently completed
+    filteredTasks.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    
+    // Calculate KPIs
+    const totalCompleted = filteredTasks.length;
+    const clients = new Set(filteredTasks.map(t => t.client).filter(c => c));
+    const totalHours = allTimeLogs
+        .filter(log => filteredTasks.some(t => t.id === log.taskId) && log.durationSeconds)
+        .reduce((sum, log) => sum + (log.durationSeconds || 0), 0);
+    const avgTimePerTask = totalCompleted > 0 ? Math.round(totalHours / totalCompleted) : 0;
+    
+    // Update KPIs
+    const kpiCompleted = document.getElementById('cr-kpi-completed');
+    const kpiClients = document.getElementById('cr-kpi-clients');
+    const kpiHours = document.getElementById('cr-kpi-hours');
+    const kpiAvgTime = document.getElementById('cr-kpi-avgtime');
+    
+    if (kpiCompleted) kpiCompleted.textContent = totalCompleted;
+    if (kpiClients) kpiClients.textContent = clients.size;
+    if (kpiHours) kpiHours.textContent = Math.round(totalHours / 3600) + 'h';
+    if (kpiAvgTime) kpiAvgTime.textContent = Math.round(avgTimePerTask / 60) + 'm';
+    
+    // Update sidebar summary
+    if (completedTasksDateRange === 'today') {
+        const todayLogs = allTimeLogs.filter(log => {
+            const logTime = log.endTime || log.startTime || 0;
+            return logTime >= fromTs && logTime <= toTs;
+        });
+        const todaySeconds = todayLogs.reduce((sum, log) => sum + (log.durationSeconds || 0), 0);
+        const todayAvg = todayLogs.length > 0 ? Math.round(todaySeconds / todayLogs.length) : 0;
+        
+        const summaryTasks = document.getElementById('cs-summary-tasks');
+        const summaryDuration = document.getElementById('cs-summary-duration');
+        const summaryAvg = document.getElementById('cs-summary-avg');
+        
+        if (summaryTasks) summaryTasks.textContent = totalCompleted;
+        if (summaryDuration) summaryDuration.textContent = formatTime(todaySeconds);
+        if (summaryAvg) summaryAvg.textContent = Math.round(todayAvg / 60) + 'm';
+    }
+    
+    // Render tasks
+    if (!filteredTasks.length) {
+        container.innerHTML = `<div class="text-center py-12"><p class="text-sm text-slate-400 italic">No completed tasks found for this period.</p></div>`;
+        return;
+    }
+    
+    container.innerHTML = filteredTasks.map(t => {
+        const taskLogs = allTimeLogs.filter(log => log.taskId === t.id && log.durationSeconds);
+        const taskSeconds = taskLogs.reduce((sum, log) => sum + (log.durationSeconds || 0), 0);
+        const completedDate = t.updatedAt ? new Date(t.updatedAt) : null;
+        const dateStr = completedDate ? completedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Unknown';
+        
+        return `
+            <div class="bg-white rounded-2xl border border-slate-100 p-4 hover:shadow-md transition-all cursor-pointer" onclick="openEditTaskModal('${t.id}')">
+                <div class="flex items-start justify-between gap-4 mb-3">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-bold text-slate-900 truncate">${escapeHtml(t.desc || t.summary || 'Untitled')}</p>
+                        <p class="text-[11px] text-slate-500 font-medium mt-1">${escapeHtml(t.id || 'N/A')}</p>
+                    </div>
+                    <span class="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap">✓ Done</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 text-xs">
+                    ${t.client ? `<span class="bg-slate-50 text-slate-600 px-2 py-1 rounded-lg">${escapeHtml(t.client)}</span>` : ''}
+                    <span class="text-slate-500">${dateStr}</span>
+                    <span class="text-slate-500 ml-auto">${formatTime(taskSeconds)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Initialize completed tasks UI on view load
+function initCompletedTasksUI() {
+    // Populate client filter menu
+    const clientMenu = document.getElementById('cr-client-menu');
+    if (clientMenu && tasks && tasks.length > 0) {
+        const clients = [...new Set(tasks.map(t => t.client).filter(c => c))].sort();
+        clientMenu.innerHTML = `
+            <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                <input type="radio" name="cr-client" value="all" checked onchange="setCompletedTasksClientFilter('all')" class="w-4 h-4">
+                <span class="text-xs font-bold text-slate-700">All Clients</span>
+            </label>
+            ${clients.map(c => `
+                <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                    <input type="radio" name="cr-client" value="${escapeHtml(c)}" onchange="setCompletedTasksClientFilter('${escapeHtml(c)}')" class="w-4 h-4">
+                    <span class="text-xs font-bold text-slate-700">${escapeHtml(c)}</span>
+                </label>
+            `).join('')}
+        `;
+    }
+    
+    // Populate employee filter menu (admin only)
+    if (isAdmin()) {
+        const employeeFilter = document.getElementById('cr-employee-filter');
+        if (employeeFilter) employeeFilter.classList.remove('hidden');
+        
+        const employeeMenu = document.getElementById('cr-employee-menu');
+        if (employeeMenu && allUsersMap && allUsersMap.size > 0) {
+            const users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            employeeMenu.innerHTML = `
+                <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                    <input type="radio" name="cr-employee" value="all" onchange="setCompletedTasksEmployeeFilter('all', 'All Employees')" class="w-4 h-4">
+                    <span class="text-xs font-bold text-slate-700">All Employees</span>
+                </label>
+                ${users.map(u => `
+                    <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="radio" name="cr-employee" value="${escapeHtml(u.email)}" onchange="setCompletedTasksEmployeeFilter('${escapeHtml(u.email)}', '${escapeHtml(u.name || u.email)}')" class="w-4 h-4">
+                        <span class="text-xs font-bold text-slate-700">${escapeHtml(u.name || u.email)}</span>
+                    </label>
+                `).join('')}
+            `;
+        }
+    }
+    
+    // Load initial data
+    populateCompletedTasks();
+}
+
+// Export functions for global access
+window.switchCompletedDateRange = switchCompletedDateRange;
+window.filterCompletedTasks = filterCompletedTasks;
+window.setCompletedTasksClientFilter = setCompletedTasksClientFilter;
+window.setCompletedTasksEmployeeFilter = setCompletedTasksEmployeeFilter;
+window.initCompletedTasksUI = initCompletedTasksUI;

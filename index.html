@@ -10734,7 +10734,8 @@
             let qcReportDateFrom = null; // New state variable for QC reports filter
             let qcReportDateTo = null;   // New state variable for QC reports filter
             const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
-            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped'];
+            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed'];
+
             const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs'];
             const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
@@ -18646,20 +18647,61 @@
                         return;
                     }
 
-                    // Already completed today — stop checking
-                    if (task.lastCompletedDate === today || isInternalDone(task.status)) {
+                    // Already completed, skipped, or missed today — stop checking
+                    if (task.lastCompletedDate === today || isInternalDone(task.status) || ['skipped', 'missed'].includes((task.status || '').toLowerCase())) {
                         clearInterval(morningLearningAutoCompleteRef);
                         morningLearningAutoCompleteRef = null;
                         return;
                     }
 
-                    // Auto-complete it
-                    console.log('[MorningLearning] Auto-completing task at slot end:', endTime);
-                    try {
-                        await completeMorningLearningTask(task);
-                        toast('Morning Learning session auto-completed ✓', 'success');
-                    } catch (err) {
-                        console.warn('[MorningLearning] Auto-complete failed:', err);
+                    // CHECK IF STARTED TODAY
+                    const started = localStorage.getItem('worksync_learning_started_' + today) === 'true';
+
+                    if (!started) {
+                        // User never started their learning → mark as Missed
+                        console.log('[MorningLearning] User did not start learning. Marking as Missed at slot end:', endTime);
+                        try {
+                            const ownerKey = eKey(currentUser.email);
+
+                            // 1. Update the task status in Firebase
+                            await update(ref(db, `worksync/manual_tasks/${ownerKey}/${task.id}`), {
+                                status: 'Missed',
+                                lastCompletedDate: today,
+                                completedAt: Date.now()
+                            });
+                            task.status = 'Missed';
+                            task.lastCompletedDate = today;
+
+                            // 2. Write a missed_log entry to learning_logs so the
+                            //    Learning Log & Shared Resources calendar shows the red dot.
+                            const userEmail = (currentUser.email || '').toLowerCase();
+                            const missedLogData = {
+                                logType: 'missed',
+                                userId: userEmail,
+                                userName: currentUser.name || currentUser.email,
+                                attendanceDate: today,
+                                missedDate: today,
+                                slot: getMorningLearningSlot(userEmail),
+                                createdAt: Date.now(),
+                                autoMarked: true
+                            };
+                            await push(ref(db, 'worksync/learning_logs'), missedLogData);
+
+                            renderInternalTasks();
+                            renderDailyPlan();
+                            toast('Morning Learning slot ended — marked as Missed', 'error');
+                        } catch (err) {
+                            console.warn('[MorningLearning] Failed to mark as missed:', err);
+                        }
+                    } else {
+                        // User started learning → auto-complete it
+                        console.log('[MorningLearning] Auto-completing learning task at slot end:', endTime);
+                        try {
+                            await completeMorningLearningTask(task);
+                            toast('Morning Learning session auto-completed ✓', 'success');
+                        } catch (err) {
+                            console.warn('[MorningLearning] Auto-complete failed:', err);
+                        }
                     }
                     clearInterval(morningLearningAutoCompleteRef);
                     morningLearningAutoCompleteRef = null;
@@ -19254,6 +19296,26 @@
 
             async function toggleActiveTask(id) {
                 // This function is called when clicking "Start" on a new task.
+
+                // ── CHECK-IN GUARD ──────────────────────────────────────────────
+                // Users must be checked in before starting ANY task.
+                // Exception: the Morning Learning task may be started even without
+                // check-in (it represents an independent learning slot).
+                if (!isCheckedIn) {
+                    const guardTask = tasks.find(t => t.id === id);
+                    const isMorningLearning = guardTask && isMorningLearningTask(guardTask);
+                    if (!isMorningLearning) {
+                        toast('⚠️ Please Check In before starting any task.', 'error');
+                        // Scroll to / highlight the check-in button if visible
+                        const ciBtn = document.getElementById('btn-checkin') || document.getElementById('header-btn-checkin');
+                        if (ciBtn) {
+                            ciBtn.classList.add('ring-2', 'ring-rose-400', 'ring-offset-1');
+                            setTimeout(() => ciBtn.classList.remove('ring-2', 'ring-rose-400', 'ring-offset-1'), 2500);
+                        }
+                        return;
+                    }
+                }
+                // ────────────────────────────────────────────────────────────────
 
                 // Murugesh client selection for specific tasks
                 const task = tasks.find(t => t.id === id);
@@ -33989,17 +34051,20 @@
                     .filter(u => u.email && u.email !== '123' && !MORNING_LEARNING_EXCLUDED_EMAILS.some(e => e.toLowerCase() === u.email.toLowerCase()))
                     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-                // Build attendance map: { 'YYYY-MM-DD': { attended: Set<email>, reasoned: Set<email> } }
+                // Build attendance map: { 'YYYY-MM-DD': { attended: Set<email>, reasoned: Set<email>, autoMissed: Set<email> } }
                 const attendanceByDate = {};
                 entries.forEach(log => {
                     const date = log.attendanceDate || log.missedDate || (log.createdAt ? new Date(log.createdAt).toISOString().slice(0, 10) : null);
                     if (!date) return;
-                    if (!attendanceByDate[date]) attendanceByDate[date] = { attended: new Set(), reasoned: new Set() };
+                    if (!attendanceByDate[date]) attendanceByDate[date] = { attended: new Set(), reasoned: new Set(), autoMissed: new Set() };
 
                     if (log.logType === 'attendance') {
                         attendanceByDate[date].attended.add((log.userId || '').toLowerCase());
                     } else if (log.logType === 'missed_reason') {
                         attendanceByDate[date].reasoned.add((log.userId || '').toLowerCase());
+                    } else if (log.logType === 'missed') {
+                        // Auto-marked missed by the system at slot end
+                        attendanceByDate[date].autoMissed.add((log.userId || '').toLowerCase());
                     }
                 });
 

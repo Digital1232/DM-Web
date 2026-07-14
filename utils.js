@@ -39,19 +39,12 @@ export function toast(msg, type = 'info', duration = 3000) {
     clearTimeout(toastTimeout);
     clearTimeout(toastHideTimeout);
 
-    try { if (t.showPopover) t.showPopover(); } catch (e) { /* ignore */ }
+    // Show the toast by adding the show class
+    t.classList.add('show');
 
-    requestAnimationFrame(() => t.classList.add('show'));
-
-    // Auto‑hide after the specified duration.
+    // Auto-hide after the specified duration.
     toastTimeout = setTimeout(() => {
         t.classList.remove('show');
-        // Small delay to ensure CSS transition finishes before hiding popover.
-        toastHideTimeout = setTimeout(() => {
-            if (!t.classList.contains('show')) {
-                try { if (t.hidePopover) t.hidePopover(); } catch (e) { /* ignore */ }
-            }
-        }, 300);
     }, duration);
 }
 
