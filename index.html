@@ -3325,7 +3325,7 @@
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleTaskSort('client')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Client <iconify-icon
                                                         id="sort-task-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
@@ -3524,7 +3524,7 @@
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleInternalTaskSort('client')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Client <iconify-icon
                                                         id="sort-internal-task-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
@@ -3689,7 +3689,7 @@
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('client')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Client <iconify-icon
                                                         id="sort-dp-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
@@ -8976,6 +8976,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-4 mt-8">
+                <button id="et-end-learning-btn" onclick="endLearningTask()" type="button"
+                    class="hidden bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl px-6 py-3.5 text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon> Mark Completed</button>
                 <button onclick="deleteManualTask()" type="button"
                     class="bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl px-6 py-3.5 text-sm font-bold transition-all flex items-center justify-center gap-2">
                     <iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon> Delete</button>
@@ -9947,21 +9950,6 @@
                 <textarea id="strategy-desc" rows="3"
                     placeholder="Describe the campaign objectives, content theme, links..."
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 resize-none"></textarea>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Videos
-                        Count</label>
-                    <input id="strategy-videos-count" type="number" min="0" value="0" placeholder="0"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Posters
-                        Count</label>
-                    <input id="strategy-posters-count" type="number" min="0" value="0" placeholder="0"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                </div>
             </div>
 
             <div class="flex justify-between items-center pt-2">
@@ -14461,21 +14449,9 @@
                 if (format === 'Poster') {
                     posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
                     videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
-                    if (autoUpdateCounts) {
-                        const vInput = document.getElementById('strategy-videos-count');
-                        const pInput = document.getElementById('strategy-posters-count');
-                        if (vInput) vInput.value = 0;
-                        if (pInput) pInput.value = 1;
-                    }
                 } else {
                     posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
                     videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
-                    if (autoUpdateCounts) {
-                        const vInput = document.getElementById('strategy-videos-count');
-                        const pInput = document.getElementById('strategy-posters-count');
-                        if (vInput) vInput.value = 1;
-                        if (pInput) pInput.value = 0;
-                    }
                 }
             }
 
@@ -14579,14 +14555,76 @@
             window.fetchJiraTasksForStrategy = fetchJiraTasksForStrategy;
 
             // Select a Jira task from dropdown for Strategy Event Creator
-            function selectJiraTaskForStrategy(taskId, taskSummary) {
+            async function selectJiraTaskForStrategy(taskId, taskSummary) {
+                console.log('selectJiraTaskForStrategy called with:', { taskId, taskSummary });
+                
                 document.getElementById('strategy-jira-id').value = taskId;
                 document.getElementById('strategy-jira-search').value = `${taskId}: ${taskSummary}`;
                 document.getElementById('strategy-jira-selected').innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
                 document.getElementById('strategy-jira-clear-btn').classList.remove('hidden');
                 document.getElementById('strategy-jira-dropdown').classList.add('hidden');
                 
-                toast(`✅ Linked to Jira task ${taskId}`, 'success');
+                // Fetch detailed task info to sync with existing Status and Assignee fields
+                try {
+                    const url = `https://${JIRA.domain}/rest/api/3/issue/${taskId}?fields=status,assignee`;
+                    console.log('Fetching Jira task from:', url);
+                    const res = await jiraRequest(url, 'get');
+                    
+                    if (res.success && res.data) {
+                        const status = res.data.fields?.status?.name || 'Unknown';
+                        const assigneeObj = res.data.fields?.assignee;
+                        const assigneeEmail = assigneeObj?.emailAddress || assigneeObj?.displayName || '';
+                        const assigneeName = assigneeObj?.displayName || 'Unassigned';
+                        
+                        console.log('Jira response:', { status, assigneeEmail, assigneeName, allUsersMapSize: allUsersMap.size });
+                        
+                        // Sync with existing Status field
+                        const statusField = document.getElementById('strategy-status');
+                        if (statusField) {
+                            const statusValue = normalizeStrategyStatus(status);
+                            statusField.value = statusValue;
+                            console.log('✅ Status synced to:', statusValue);
+                        } else {
+                            console.error('Status field not found!');
+                        }
+                        
+                        // Sync with existing Assignee dropdown - try to match with team members
+                        const assigneeField = document.getElementById('strategy-owner');
+                        if (assigneeField) {
+                            if (assigneeEmail) {
+                                // First try exact email match
+                                const userByEmail = Array.from(allUsersMap.values()).find(u => 
+                                    u.email.toLowerCase() === assigneeEmail.toLowerCase()
+                                );
+                                if (userByEmail) {
+                                    assigneeField.value = userByEmail.email;
+                                    console.log('✅ Assignee synced by email to:', userByEmail.email);
+                                } else {
+                                    // Try name match
+                                    const userByName = Array.from(allUsersMap.values()).find(u => 
+                                        u.name.toLowerCase() === assigneeName.toLowerCase()
+                                    );
+                                    if (userByName) {
+                                        assigneeField.value = userByName.email;
+                                        console.log('✅ Assignee synced by name to:', userByName.email);
+                                    } else {
+                                        console.log('⚠️ No user match found, users available:', Array.from(allUsersMap.values()).map(u => ({ name: u.name, email: u.email })));
+                                    }
+                                }
+                            }
+                        } else {
+                            console.error('Assignee field not found!');
+                        }
+                    } else {
+                        console.error('Jira request failed:', res);
+                        toast('Failed to fetch Jira task details', 'error');
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch task details:', err);
+                    toast('Failed to sync Jira task details: ' + err.message, 'error');
+                }
+                
+                toast(`✅ Linked to Jira task ${taskId} - Status and Assignee synced!`, 'success');
             }
             window.selectJiraTaskForStrategy = selectJiraTaskForStrategy;
 
@@ -14630,6 +14668,7 @@
                 document.getElementById('strategy-jira-id').value = '';
                 document.getElementById('strategy-jira-search').value = '';
                 document.getElementById('strategy-jira-selected').innerHTML = 'No task selected';
+                
                 const clearBtn = document.getElementById('strategy-jira-clear-btn');
                 if (clearBtn) clearBtn.classList.add('hidden');
                 const dropdown = document.getElementById('strategy-jira-dropdown');
@@ -14643,12 +14682,6 @@
                     videoBtn.removeAttribute('disabled');
                 }
                 selectStrategyFormat('Poster');
-
-                // Reset counts (Poster has 1 poster, 0 videos)
-                const vInput = document.getElementById('strategy-videos-count');
-                const pInput = document.getElementById('strategy-posters-count');
-                if (vInput) vInput.value = 0;
-                if (pInput) pInput.value = 1;
 
                 document.getElementById('strategy-delete-btn').classList.add('hidden');
                 document.getElementById('strategyEventModal').showModal();
@@ -14701,14 +14734,32 @@
 
                 document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
                 document.getElementById('strategy-desc').value = ev.desc || '';
-                document.getElementById('strategy-videos-count').value = ev.videosCount || 0;
-                document.getElementById('strategy-posters-count').value = ev.postersCount || 0;
+                
+                // Sync Jira task Status and Assignee to existing fields if we have a matched task
+                if (matchedTask) {
+                    // Status sync from Jira
+                    const statusValue = normalizeStrategyStatus(matchedTask.status);
+                    document.getElementById('strategy-status').value = statusValue;
+                    console.log('Edit mode - synced status:', statusValue);
+                    
+                    // Assignee sync from Jira
+                    if (matchedTask.assignee) {
+                        const assigneeName = matchedTask.assignee;
+                        const userByName = Array.from(allUsersMap.values()).find(u => 
+                            u.name.toLowerCase() === assigneeName.toLowerCase()
+                        );
+                        if (userByName) {
+                            document.getElementById('strategy-owner').value = userByName.email;
+                            console.log('Edit mode - synced assignee:', userByName.email);
+                        }
+                    }
+                }
 
                 // Restore format value
                 selectStrategyFormat(ev.format || 'Poster');
 
                 // Toggle readonly/disabled state depending on permissions
-                const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status', 'strategy-videos-count', 'strategy-posters-count'];
+                const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status'];
                 fields.forEach(f => {
                     const el = document.getElementById(f);
                     if (el) {
@@ -14761,8 +14812,6 @@
                 const status = document.getElementById('strategy-status').value;
                 const desc = document.getElementById('strategy-desc').value.trim();
                 const format = document.getElementById('strategy-format').value;
-                const videosCount = parseInt(document.getElementById('strategy-videos-count').value) || 0;
-                const postersCount = parseInt(document.getElementById('strategy-posters-count').value) || 0;
                 const jiraId = document.getElementById('strategy-jira-id').value || '';
 
                 if (!title || !date) {
@@ -14787,8 +14836,6 @@
                         status,
                         desc,
                         format, // Save the content format
-                        videosCount,
-                        postersCount,
                         jiraId, // Explicitly save the JIRA Task ID link!
                         updatedBy: currentUser.email,
                         updatedAt: Date.now()
@@ -17641,8 +17688,18 @@
                         <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
                         <td class="px-6 py-4 max-w-sm text-xs text-slate-900 whitespace-normal break-words">${escapeHtml(t.desc)}${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}</td>
                         <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span>${t.isOnHold && activeTaskId !== t.id ? `<span class="ml-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">On Hold</span>` : ''}</td>
-                        <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${t.client || '—'}</td>
-                        <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${assigneeName(t)}</td>
+                        <td class="px-6 py-4 hidden lg:table-cell">
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client</span>
+                                <span class="text-xs text-slate-600 font-medium">${t.client || '—'}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 hidden lg:table-cell">
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assignee</span>
+                                <span class="text-xs text-slate-600 font-medium">${assigneeName(t)}</span>
+                            </div>
+                        </td>
                         <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span></td>
                         <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
                         <td class="px-6 py-4 text-right">
@@ -17981,8 +18038,18 @@
                             ${INTERNAL_TASK_STATUSES.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
                         </select>
                     </td>
-                    <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
-                    <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${escapeHtml(assigneeName(t))}</td>
+                    <td class="px-6 py-4 hidden lg:table-cell">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client</span>
+                            <span class="text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 hidden lg:table-cell">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assignee</span>
+                            <span class="text-xs text-slate-600 font-medium">${escapeHtml(assigneeName(t))}</span>
+                        </div>
+                    </td>
                     <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${escapeHtml(t.priority || 'Medium')}</span></td>
                     <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
                     <td class="px-6 py-4 text-right">
@@ -31486,6 +31553,12 @@
 
                 const deleteBtn = document.querySelector('#editTaskModal button[onclick="deleteManualTask()"]');
                 if (deleteBtn) deleteBtn.classList.toggle('hidden', isMorningLearningTask(task));
+                
+                // Show/hide "End Learning" button for learnings tasks
+                const endLearningBtn = document.getElementById('et-end-learning-btn');
+                if (endLearningBtn) {
+                    endLearningBtn.classList.toggle('hidden', !isMorningLearningTask(task));
+                }
 
                 // Load existing attachments
                 window.currentTaskAttachments = task.attachments || [];
@@ -31571,6 +31644,30 @@
                 document.getElementById('editTaskModal').close();
                 populateClientFilter();
                 toast('Task updated successfully', 'success');
+            }
+
+            async function endLearningTask() {
+                const taskId = document.getElementById('et-id').value;
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return toast('Task not found', 'error');
+                
+                if (!isMorningLearningTask(task)) return toast('This is not a learning task', 'error');
+                
+                // Get the current description/notes
+                const description = document.getElementById('et-description')?.value.trim() || '';
+                
+                // Mark the task as completed
+                try {
+                    await completeMorningLearningTask({ ...task, description, status: 'Completed' });
+                    document.getElementById('editTaskModal').close();
+                    renderTasks();
+                    updateStats();
+                    if (isInternalTabActive()) renderInternalTasks();
+                    toast('✅ Learning completed and marked as done!', 'success');
+                } catch (err) {
+                    console.error('Failed to complete learning task:', err);
+                    toast('Failed to complete learning', 'error');
+                }
             }
 
             async function deleteManualTask() {
@@ -33383,7 +33480,12 @@
                     <td class="px-6 py-4">${statusSelectHtml}</td>
                     <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
                     <td class="px-6 py-4 hidden md:table-cell">${formatTaskDueDateHtml(t.duedate, t.status)}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">
+                        <div class="flex flex-col gap-0.5">
+                            <span>${escapeHtml(assigneeNameStr)}</span>
+                            <span class="text-[10px] text-slate-500">${escapeHtml(t.client || '—')}</span>
+                        </div>
+                    </td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-1">
                             ${activeTaskId === t.id ? `
@@ -37271,7 +37373,7 @@
             window.selectSaturday = (val, btn) => { selectedSaturday = val; document.querySelectorAll('.sat-btn').forEach(b => b.classList.remove('bg-indigo-600', 'text-white')); btn.classList.add('bg-indigo-600', 'text-white'); };
             window.sendReportEmail = sendReportEmail; window.toggleEmailReportSetting = toggleEmailReportSetting;
             window.holdTask = holdTask; window.resumeTaskTimer = resumeTaskTimer; window.endTask = endTask;
-            window.openAddTaskModal = openAddTaskModal; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.deleteManualTask = deleteManualTask;
+            window.openAddTaskModal = openAddTaskModal; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.endLearningTask = endLearningTask; window.deleteManualTask = deleteManualTask;
             window.openScheduleDiscussionModal = openScheduleDiscussionModal; window.submitScheduleDiscussion = submitScheduleDiscussion; window.submitStartLiveDiscussion = submitStartLiveDiscussion; window.submitLogPastDiscussion = submitLogPastDiscussion; window.setDiscussionMode = setDiscussionMode; window.joinDiscussion = joinDiscussion; window.joinDiscussionById = joinDiscussionById; window.dismissDiscussionPopup = dismissDiscussionPopup; window.editScheduledDiscussion = editScheduledDiscussion; window.startScheduledDiscussion = startScheduledDiscussion; window.cancelScheduledDiscussion = cancelScheduledDiscussion;
             window.loadUsersList = loadUsersList; window.openAdminUserModal = openAdminUserModal; window.saveAdminUser = saveAdminUser; window.auUploadPhoto = auUploadPhoto; window.deleteAdminUser = deleteAdminUser;
             window.openClientMapModal = openClientMapModal; window.saveClientMapEntry = saveClientMapEntry; window.deleteClientMapEntry = deleteClientMapEntry;

@@ -1061,7 +1061,7 @@ if (initializeApp) {
         const message = remoteVersion
             ? `New app version detected (${remoteVersion}). Reloading in 5 seconds...`
             : 'New app version detected. Reloading in 5 seconds...';
-        toast(message, 'success', () => window.location.reload());
+        toast(message, 'success', 5000);
         setTimeout(() => window.location.reload(), 5000);
     }
 
