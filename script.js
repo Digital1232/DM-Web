@@ -5517,6 +5517,24 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
         return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     }
 
+    function showNotification(message, type = 'info') {
+        // Create a simple toast notification
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-6 right-6 px-6 py-3 rounded-xl text-white font-bold text-sm shadow-xl transition-all z-50 ${
+            type === 'success' ? 'bg-emerald-600' : 
+            type === 'error' ? 'bg-red-600' :
+            'bg-indigo-600'
+        }`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateY(10px)';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
     function linkify(text, isMe) {
         if (!text) return '';
         const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
@@ -8990,7 +9008,9 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (!client) { toast('Select a client', 'error'); btn.disabled = false; btn.textContent = originalText; return; }
                 const taskId = 'M-' + Date.now();
                 createdTaskId = taskId;
-                const task = { id: taskId, desc: title, client, status, priority, assignee: assigneeNameVal, assigneeEmail: assigneeEmail, manual: true, taskType, userId: assigneeEmail || currentUser.email, createdAt: Date.now() };
+                // If starting now, force status to "In Progress", otherwise use form value
+                const taskStatus = startNow ? 'In Progress' : status;
+                const task = { id: taskId, desc: title, client, status: taskStatus, priority, assignee: assigneeNameVal, assigneeEmail: assigneeEmail, manual: true, taskType, userId: assigneeEmail || currentUser.email, createdAt: Date.now() };
                 await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail || currentUser.email)}/${taskId}`), task);
                 tasks = mergeTasksById([task, ...tasks]);
                 renderTasks(); renderInternalTasks(); updateStats();
@@ -9004,11 +9024,18 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 // Find the task in the tasks list and start it
                 const taskToStart = tasks.find(t => t.id === createdTaskId);
                 if (taskToStart) {
-                    // Wait a moment for the task list to refresh
-                    setTimeout(async () => {
-                        await doStartTask(createdTaskId);
-                        toast(`✅ Task started!`, 'success');
-                    }, 500);
+                    // Update task status to "In Progress" and activate it
+                    taskToStart.status = 'In Progress';
+                    // Activate the task immediately
+                    activeTaskId = createdTaskId;
+                    taskSeconds = 0;
+                    taskOnHold = false;
+                    taskStartTime = Date.now();
+                    startTaskTimer();
+                    renderTasks();
+                    renderInternalTasks();
+                    renderActiveTaskCard();
+                    toast(`✅ Task "${title}" started!`, 'success');
                 } else {
                     toast(`Task created, but couldn't auto-start. Start it manually.`, 'warning');
                 }
@@ -11102,6 +11129,10 @@ let completedTasksFilter = '';
 let completedTasksClientFilter = 'all';
 let completedTasksEmployeeFilter = 'me'; // For admins, can be 'all' or specific email
 
+// Content Type Selection for Today's Completed Work
+let selectedContentTypes = [];
+let contentTypeWorkSummary = {};
+
 function switchCompletedDateRange(range) {
     completedTasksDateRange = range;
     
@@ -11115,6 +11146,16 @@ function switchCompletedDateRange(range) {
     if (activeBtn) {
         activeBtn.classList.add('bg-indigo-600', 'text-white');
         activeBtn.classList.remove('bg-slate-50', 'text-slate-600');
+    }
+    
+    // Show/hide content type selection (only for today's work)
+    const contentTypeSection = document.getElementById('content-type-section');
+    if (contentTypeSection) {
+        if (range === 'today') {
+            contentTypeSection.classList.remove('hidden');
+        } else {
+            contentTypeSection.classList.add('hidden');
+        }
     }
     
     populateCompletedTasks();
@@ -11325,6 +11366,146 @@ function initCompletedTasksUI() {
     
     // Load initial data
     populateCompletedTasks();
+    
+    // Initialize content type selection UI (show for Sneha or current user on today's tab)
+    initContentTypeSelectionUI();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CONTENT TYPE SELECTION FOR TODAY'S WORK
+// ════════════════════════════════════════════════════════════════════
+
+function initContentTypeSelectionUI() {
+    const contentTypeSection = document.getElementById('content-type-section');
+    const checkboxes = document.querySelectorAll('.content-type-checkbox');
+    
+    if (!contentTypeSection) return;
+    
+    // Only show if viewing today's completed work
+    if (completedTasksDateRange === 'today') {
+        contentTypeSection.classList.remove('hidden');
+    } else {
+        contentTypeSection.classList.add('hidden');
+    }
+    
+    // Load saved selections from localStorage if available
+    const saved = localStorage.getItem('contentTypeSelection_' + currentUser.email);
+    if (saved) {
+        try {
+            selectedContentTypes = JSON.parse(saved);
+            checkboxes.forEach(cb => {
+                if (selectedContentTypes.includes(cb.dataset.type)) {
+                    cb.checked = true;
+                }
+            });
+            updateSelectedContentTypesDisplay();
+        } catch (e) {
+            console.error('Error loading saved content types:', e);
+        }
+    }
+    
+    // Add event listeners for real-time updates
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelectedContentTypesDisplay);
+    });
+}
+
+function updateSelectedContentTypesDisplay() {
+    const checkboxes = document.querySelectorAll('.content-type-checkbox:checked');
+    selectedContentTypes = Array.from(checkboxes).map(cb => cb.dataset.type);
+    
+    const displayContainer = document.getElementById('selected-content-types');
+    if (!displayContainer) return;
+    
+    if (selectedContentTypes.length === 0) {
+        displayContainer.innerHTML = '<span class="text-xs text-slate-500 italic">No content types selected</span>';
+    } else {
+        displayContainer.innerHTML = selectedContentTypes.map(type => `
+            <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                ${escapeHtml(type)}
+                <button type="button" onclick="toggleContentType('${escapeHtml(type)}')" class="hover:opacity-70">×</button>
+            </span>
+        `).join('');
+    }
+}
+
+function toggleContentType(type) {
+    const checkbox = document.querySelector(`.content-type-checkbox[data-type="${type}"]`);
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        updateSelectedContentTypesDisplay();
+    }
+}
+
+function saveContentTypeSelection() {
+    if (selectedContentTypes.length === 0) {
+        alert('Please select at least one content type to track.');
+        return;
+    }
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('contentTypeSelection_' + currentUser.email, JSON.stringify(selectedContentTypes));
+    
+    // Create a summary entry in completed tasks or note it in task descriptions
+    const summary = `Today's Completed Work Types: ${selectedContentTypes.join(', ')}`;
+    
+    // Store in contentTypeWorkSummary for this date
+    const today = new Date().toISOString().split('T')[0];
+    contentTypeWorkSummary[today] = {
+        date: today,
+        user: currentUser.email,
+        types: selectedContentTypes,
+        timestamp: new Date().getTime()
+    };
+    
+    // Save to localStorage for future reference
+    localStorage.setItem('contentTypeWorkSummary_' + currentUser.email, JSON.stringify(contentTypeWorkSummary));
+    
+    // Show success feedback
+    showNotification('Work content types saved successfully! ✓', 'success');
+    
+    // Add a note at the top of completed tasks
+    updateCompletedTasksHeader();
+}
+
+function clearContentTypeSelection() {
+    selectedContentTypes = [];
+    document.querySelectorAll('.content-type-checkbox').forEach(cb => cb.checked = false);
+    updateSelectedContentTypesDisplay();
+}
+
+function updateCompletedTasksHeader() {
+    // This adds a visual indicator that work types have been tracked
+    const tasksContainer = document.getElementById('cr-tasks-container');
+    if (!tasksContainer) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const workSummary = contentTypeWorkSummary[today];
+    
+    if (workSummary && workSummary.types.length > 0) {
+        const headerElement = document.createElement('div');
+        headerElement.className = 'bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl border border-emerald-200 p-4 mb-4';
+        headerElement.innerHTML = `
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-bold text-emerald-900 mb-2">Today's Work Summary</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${workSummary.types.map(type => `
+                            <span class="bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">${escapeHtml(type)}</span>
+                        `).join('')}
+                    </div>
+                </div>
+                <button type="button" onclick="this.parentElement.remove()" class="text-emerald-600 hover:text-emerald-700">
+                    <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                </button>
+            </div>
+        `;
+        
+        // Insert at the top of tasks container
+        if (tasksContainer.firstChild && tasksContainer.firstChild.id !== 'work-summary-header') {
+            tasksContainer.insertBefore(headerElement, tasksContainer.firstChild);
+        }
+    }
 }
 
 // Export functions for global access
@@ -11333,3 +11514,10 @@ window.filterCompletedTasks = filterCompletedTasks;
 window.setCompletedTasksClientFilter = setCompletedTasksClientFilter;
 window.setCompletedTasksEmployeeFilter = setCompletedTasksEmployeeFilter;
 window.initCompletedTasksUI = initCompletedTasksUI;
+window.saveContentTypeSelection = saveContentTypeSelection;
+window.clearContentTypeSelection = clearContentTypeSelection;
+window.updateSelectedContentTypesDisplay = updateSelectedContentTypesDisplay;
+window.toggleContentType = toggleContentType;
+window.initContentTypeSelectionUI = initContentTypeSelectionUI;
+window.showNotification = showNotification;
+
