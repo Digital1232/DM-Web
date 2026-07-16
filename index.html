@@ -33606,8 +33606,25 @@
                     }
                 }
 
+                // Collect all plans including completed (for stats calculation)
+                const dateStr = document.getElementById('dp-date')?.value || todayIso();
+                let allPlans = [];
+                getDailyPlanTargetUserEmails().forEach(userEmail => {
+                    allPlans.push(...collectDailyPlanTasksForUser(userEmail, dateStr));
+                });
+                const seen = new Set();
+                allPlans = allPlans.filter(pt => {
+                    const k = `${pt.id}-${pt.plannedForUser}`;
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                });
+                
+                // Render stats from ALL tasks (including completed)
+                renderDailyPlanStats(allPlans);
+                
+                // Now get filtered view (excludes completed tasks) for table rendering
                 const uniquePlans = collectDailyPlanRowsForView();
-                renderDailyPlanStats(uniquePlans);
                 countEl.textContent = `${uniquePlans.length} Task${uniquePlans.length !== 1 ? 's' : ''}`;
 
                 if (dpViewMode === 'text') {
