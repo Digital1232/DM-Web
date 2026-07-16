@@ -12876,6 +12876,7 @@
                 setTimerState('running');
                 timerRef = setInterval(tickTimer, 1000);
                 logAttendanceEvent('check_in');
+                updateSessionStatus();
                 toast('Checked In Successfully', 'success');
                 registerOnline();
                 showCheckInPendingTasksReminder();
@@ -13068,6 +13069,7 @@
                 localStorage.removeItem('worksync_totalBreakDuration');
                 localStorage.removeItem('worksync_breakStartTime');
                 resetTimerUI();
+                updateSessionStatus();
                 toast('Checked Out - Great job today!', 'success');
 
                 // Close break popup and floating reminder
@@ -13383,7 +13385,25 @@
                 document.getElementById('timer-display').textContent = formatted;
                 const headerDisplay = document.getElementById('header-timer-display');
                 if (headerDisplay) headerDisplay.textContent = formatted;
+                updateSessionStatus();
                 updateStats();
+            }
+
+            function updateSessionStatus() {
+                const statusEl = document.getElementById('timer-status');
+                if (!statusEl) return;
+                
+                let statusText = '';
+                if (activeTaskId) {
+                    statusText = taskOnHold 
+                        ? `<iconify-icon icon="solar:pause-circle-bold" width="16"></iconify-icon> Current task is paused`
+                        : `<iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Current task is running`;
+                } else {
+                    statusText = isCheckedIn 
+                        ? `<iconify-icon icon="solar:info-circle-linear" width="16"></iconify-icon> You are checked in for today`
+                        : `<iconify-icon icon="solar:info-circle-linear" width="16"></iconify-icon> Not checked in for today`;
+                }
+                statusEl.innerHTML = statusText;
             }
             function formatTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return [h, m, sc].map(v => v.toString().padStart(2, '0')).join(':'); }
             function resetTimerUI() {
@@ -19765,6 +19785,7 @@
                 }
 
                 startTaskTimer();
+                updateSessionStatus();
                 renderTasks();
                 if (isInternalTabActive()) renderInternalTasks();
                 renderActiveTaskCard();
@@ -19818,6 +19839,7 @@
                     }
                 }
                 saveCurrentTaskState('on_hold');
+                updateSessionStatus();
                 renderTasks();
                 if (isInternalTabActive()) renderInternalTasks();
                 renderActiveTaskCard();
@@ -19856,6 +19878,7 @@
                         updateInternalTaskStatus(activeTaskId, 'In Progress');
                     }
                 }
+                updateSessionStatus();
                 renderTasks();
                 if (isInternalTabActive()) renderInternalTasks();
                 renderActiveTaskCard();
@@ -19895,6 +19918,7 @@
                 await clearCurrentTask();
                 toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
                 activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
+                updateSessionStatus();
                 renderTasks(); if (isInternalTabActive()) renderInternalTasks(); renderActiveTaskCard(); renderDailyPlan();
             }
 
