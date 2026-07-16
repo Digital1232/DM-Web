@@ -3960,25 +3960,96 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
         }
 
         const t = tasks.find(t => t.id === activeTaskId);
-        if (t && isInternalTask(t)) {
-            await updateInternalTaskStatus(activeTaskId, 'Completed');
-        }
-        const log = {
-            taskId: activeTaskId,
-            taskDesc: t?.desc || '',
-            client: t?.client || '',
-            userId: currentUser.email,
-            userName: currentUser.name,
+        
+        // Show learnings capture modal
+        openTaskLearningsModal(t);
+    }
+
+    function openTaskLearningsModal(task) {
+        if (!task) return;
+        
+        // Store temp task data for modal
+        window.pendingTaskEndData = {
+            taskId: task.id,
+            taskDesc: task.desc || '',
+            client: task.client || '',
             startTime: taskStartTime,
             endTime: Date.now(),
             durationSeconds: taskSeconds,
             durationFormatted: formatTime(taskSeconds)
         };
-        await push(ref(db, 'worksync/timelogs'), log);
-        await clearCurrentTask();
-        toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
-        activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
-        renderTasks(); if (activeView === 'internal-tasks') renderInternalTasks(); renderActiveTaskCard(); renderDailyPlan();
+        
+        // Show modal for learnings capture
+        document.getElementById('task-learnings-modal').showModal();
+    }
+
+    async function completeTaskWithLearnings() {
+        const data = window.pendingTaskEndData;
+        if (!data) return;
+
+        try {
+            const learningsContent = document.getElementById('task-learnings-input').value.trim();
+            const t = tasks.find(t => t.id === data.taskId);
+            
+            // Update learnings note if provided
+            if (learningsContent && t) {
+                t.learningsNote = learningsContent;
+                if (t.manual || isInternalTask(t)) {
+                    await update(ref(db, `worksync/manual_tasks/${eKey(t.userId)}/${t.id}`), { learningsNote: learningsContent });
+                } else {
+                    await update(ref(db, `worksync/manual_tasks/${eKey(t.userId)}/${t.id}`), { learningsNote: learningsContent });
+                }
+            }
+
+            // Update task status to Completed if internal
+            if (t && isInternalTask(t)) {
+                await updateInternalTaskStatus(data.taskId, 'Completed');
+            }
+
+            // Log the time
+            const log = {
+                taskId: data.taskId,
+                taskDesc: data.taskDesc || '',
+                client: data.client || '',
+                userId: currentUser.email,
+                userName: currentUser.name,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                durationSeconds: data.durationSeconds,
+                durationFormatted: data.durationFormatted,
+                learnings: learningsContent
+            };
+            await push(ref(db, 'worksync/timelogs'), log);
+
+            // Clear task state
+            await clearCurrentTask();
+            
+            // Close modal and update UI
+            document.getElementById('task-learnings-modal').close();
+            document.getElementById('task-learnings-input').value = '';
+            
+            toast(`Task completed — ${data.durationFormatted} logged with learnings`, 'success');
+            
+            activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
+            renderTasks(); if (activeView === 'internal-tasks') renderInternalTasks(); renderActiveTaskCard(); renderDailyPlan();
+            
+            window.pendingTaskEndData = null;
+        } catch (err) {
+            console.error('Error completing task:', err);
+            toast('Error completing task: ' + err.message, 'error');
+        }
+    }
+
+    function skipTaskLearnings() {
+        const data = window.pendingTaskEndData;
+        if (!data) return;
+
+        document.getElementById('task-learnings-modal').close();
+        document.getElementById('task-learnings-input').value = '';
+        window.pendingTaskEndData = null;
+        
+        // Don't update anything, just close
+        toast('Task end cancelled', 'info');
     }
 
     function renderActiveTaskCard() {
@@ -10026,7 +10097,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         countEl.textContent = `${uniquePlans.length} Task${uniquePlans.length !== 1 ? 's' : ''}`;
 
         if (!uniquePlans.length) {
-            tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-10 text-center text-xs text-slate-400 italic">No tasks planned for this date.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-10 text-center text-xs text-slate-400 italic">No tasks planned for this date.</td></tr>`;
             return;
         }
 
@@ -10085,6 +10156,9 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                     <td class="px-6 py-4">${statusBadgeHtml}</td>
                     <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
                     <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
+                    <td class="px-6 py-4 hidden xl:table-cell">
+                        <textarea id="learnings-${t.id}" placeholder="Add learnings..." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-500/20 resize-none max-w-xs" rows="2" onchange="saveLearningsNote('${t.id}', this.value)">${escapeHtml((t.learningsNote || ''))}</textarea>
+                    </td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-1">
                             ${activeTaskId === t.id ? `
@@ -10932,6 +11006,30 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         }
     }
 
+    async function saveLearningsNote(taskId, content) {
+        try {
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+            if (taskIndex === -1) return;
+            
+            const task = tasks[taskIndex];
+            task.learningsNote = content;
+            
+            // Determine if it's a manual or internal task
+            if (task.manual || isInternalTask(task)) {
+                await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { learningsNote: content });
+            } else {
+                // For Jira tasks, save to manual task mirror
+                await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { learningsNote: content });
+            }
+            
+            toast('Learning saved successfully', 'success');
+            renderDailyPlan();
+        } catch (err) {
+            console.error('Failed to save learning note:', err);
+            toast('Failed to save learning: ' + err.message, 'error');
+        }
+    }
+
     // ══════════════════════════════════════════
     //  INITIALIZATION
     // ══════════════════════════════════════════
@@ -11087,7 +11185,8 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.openProjectDetails = openProjectDetails;
     window.openClientReportDetails = openClientReportDetails;
     window.confirmSnehaTaskStart = confirmSnehaTaskStart;
-    window.renderDailyPlan = renderDailyPlan; window.openAssignPlanModal = openAssignPlanModal;
+    window.renderDailyPlan = renderDailyPlan; window.openAssignPlanModal = openAssignPlanModal; window.saveLearningsNote = saveLearningsNote;
+    window.openTaskLearningsModal = openTaskLearningsModal; window.completeTaskWithLearnings = completeTaskWithLearnings; window.skipTaskLearnings = skipTaskLearnings;
     window.initQcReportFilters = initQcReportFilters; // Expose to global scope
     window.setQcReportDatePreset = setQcReportDatePreset; // Expose to global scope
     window.handleQcReportFilterChange = handleQcReportFilterChange; // Expose to global scope

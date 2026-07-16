@@ -29,6 +29,8 @@
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- Social Analytics Import Module -->
+    <script src="js/socialAnalyticsImport.js"></script>
     <style>
         .drag-handle {
             cursor: grab;
@@ -37,6 +39,37 @@
         body.dragging-active [data-kanban-col] *,
         body.dragging-active [data-internal-kanban-col] * {
             pointer-events: none !important;
+        }
+
+        /* ── SOCIAL ANALYTICS BUTTON STYLING ── */
+        #sa-import-btn {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+        }
+
+        #sa-import-btn:hover {
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+            transform: translateY(-1px);
+        }
+
+        #sa-import-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(16, 185, 129, 0.2);
+        }
+
+        #sa-add-entry-btn {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+        }
+
+        #sa-add-entry-btn:hover {
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+        }
+
+        #sa-add-entry-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(99, 102, 241, 0.2);
         }
     </style>
     <link
@@ -7819,14 +7852,21 @@
                                     <option value="90">Last 90 Days</option>
                                     <option value="all">All Time</option>
                                 </select>
-                                <button id="sa-add-entry-btn" onclick="openAddAnalyticsModal()"
-                                    class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all whitespace-nowrap"
-                                    style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important; color: #ffffff !important;">
-                                    <iconify-icon icon="solar:add-circle-bold" width="16"
-                                        class="sm:w-[18px] sm:h-[18px]"
+                                <!-- Import Button -->
+                                <button id="sa-import-btn" onclick="document.getElementById('saImportModal').style.display='flex'"
+                                    class="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap border border-emerald-200"
+                                    style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: #ffffff !important;"
+                                    title="Import CSV data">
+                                    <iconify-icon icon="solar:download-linear" width="18" height="18"
                                         style="color: #ffffff !important;"></iconify-icon>
-                                    <span class="hidden sm:inline">Add Entry</span>
-                                    <span class="sm:hidden">Add</span>
+                                    <span>Import</span>
+                                </button>
+                                <button id="sa-add-entry-btn" onclick="openAddAnalyticsModal()"
+                                    class="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap border border-purple-200"
+                                    style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important; color: #ffffff !important;">
+                                    <iconify-icon icon="solar:add-circle-bold" width="18" height="18"
+                                        style="color: #ffffff !important;"></iconify-icon>
+                                    <span>Add Entry</span>
                                 </button>
                             </div>
                         </div>
@@ -8242,6 +8282,88 @@
             </div>
         </div>
     </dialog>
+
+    <!-- Modal: Social Analytics Import Data -->
+    <div id="saImportModal" style="display:none;" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="p-6 sm:p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-3">
+                    <iconify-icon icon="solar--download-linear" width="24" style="color:#10b981"></iconify-icon>
+                    Import Analytics Data
+                </h3>
+                <button onclick="document.getElementById('saImportModal').style.display='none'" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <!-- Instructions -->
+                <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                    <p class="text-sm font-bold text-blue-900">📋 How to import:</p>
+                    <ol class="text-sm text-blue-800 mt-2 ml-4 space-y-1 list-decimal">
+                        <li>Download the template CSV file</li>
+                        <li>Fill in your social media analytics data</li>
+                        <li>Upload the file to import all records</li>
+                    </ol>
+                </div>
+
+                <!-- Step 1: Download Template -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+                    <h4 class="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                        <span class="bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">1</span>
+                        Download Template
+                    </h4>
+                    <p class="text-sm text-slate-600 mb-3">Contains header row and sample data to guide your entries</p>
+                    <button type="button" onclick="downloadImportTemplate()" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all">
+                        <iconify-icon icon="solar--download-linear" width="18"></iconify-icon>
+                        Download CSV Template
+                    </button>
+                </div>
+
+                <!-- Step 2: Upload File -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+                    <h4 class="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                        <span class="bg-indigo-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">2</span>
+                        Upload Your File
+                    </h4>
+                    <input type="file" id="saImportFile" accept=".csv" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 mb-3">
+                    <p class="text-xs text-slate-600">📊 Maximum 500 records per import</p>
+                    <p class="text-xs text-slate-600"><a href="docs/SOCIAL_ANALYTICS_IMPORT.md" target="_blank" class="text-indigo-600 hover:underline">View complete format guide →</a></p>
+                </div>
+
+                <!-- Import Status (Hidden initially) -->
+                <div id="saImportStatus" style="display:none;">
+                    <h4 class="font-bold text-slate-900 mb-3 flex items-center gap-2">
+                        <span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">3</span>
+                        Import Results
+                    </h4>
+                    <div id="saImportStatusContent" class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-mono whitespace-pre-wrap overflow-y-auto max-h-64" style="line-height: 1.5;"></div>
+                </div>
+
+                <!-- Import Progress (Hidden initially) -->
+                <div id="saImportProgress" style="display:none;" class="space-y-2">
+                    <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                        <div id="saImportProgressBar" class="bg-gradient-to-r from-green-400 to-green-600 h-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p class="text-xs text-slate-600" id="saImportProgressText">Processing...</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 sm:p-8 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+                <button type="button" onclick="document.getElementById('saImportModal').style.display='none'" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all">
+                    Close
+                </button>
+                <button type="button" id="saImportSubmitBtn" onclick="handleSocialAnalyticsImport()" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                    style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
+                    <iconify-icon icon="solar--download-linear" width="18"></iconify-icon>
+                    Import Data
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Client label mapping -->
     <dialog id="clientMapModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
@@ -38855,6 +38977,128 @@
                     console.error('Failed to delete analytics entry:', err);
                     toast('Failed to delete. Please try again.', 'error');
                 }
+            }
+
+            /**
+             * Handle Social Analytics CSV Import
+             */
+            async function handleSocialAnalyticsImport() {
+                const fileInput = document.getElementById('saImportFile');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    toast('Please select a CSV file', 'error');
+                    return;
+                }
+
+                if (!file.name.toLowerCase().endsWith('.csv')) {
+                    toast('Please select a CSV file (.csv)', 'error');
+                    return;
+                }
+
+                if (!canEditSocialAnalytics()) {
+                    toast('You do not have permission to import data', 'error');
+                    return;
+                }
+
+                const progressDiv = document.getElementById('saImportProgress');
+                const progressBar = document.getElementById('saImportProgressBar');
+                const statusDiv = document.getElementById('saImportStatus');
+                const statusContent = document.getElementById('saImportStatusContent');
+                const submitBtn = document.getElementById('saImportSubmitBtn');
+                
+                progressDiv.style.display = 'block';
+                statusDiv.style.display = 'block';
+                submitBtn.disabled = true;
+
+                try {
+                    progressBar.style.width = '25%';
+                    statusContent.textContent = 'Reading file...';
+
+                    const fileText = await file.text();
+                    progressBar.style.width = '50%';
+                    statusContent.textContent = 'Parsing CSV...';
+
+                    const result = processCSVImport(fileText);
+                    progressBar.style.width = '75%';
+                    
+                    statusContent.textContent = formatValidationErrors(result);
+                    
+                    if (!result.success) {
+                        progressBar.style.width = '0%';
+                        progressDiv.style.display = 'none';
+                        toast('❌ Import validation failed - see details', 'error');
+                        submitBtn.disabled = false;
+                        return;
+                    }
+
+                    progressBar.style.width = '90%';
+                    statusContent.textContent += '\n\n⏳ Uploading to database...';
+                    
+                    const importedCount = await uploadAnalyticsRecords(result.data);
+                    
+                    progressBar.style.width = '100%';
+                    statusContent.textContent += `\n\n✅ Successfully imported ${importedCount} records!`;
+                    
+                    setTimeout(() => {
+                        if (typeof initSocialAnalytics === 'function') {
+                            initSocialAnalytics();
+                        }
+                        
+                        setTimeout(() => {
+                            document.getElementById('saImportModal').style.display = 'none';
+                            fileInput.value = '';
+                            progressDiv.style.display = 'none';
+                            statusDiv.style.display = 'none';
+                        }, 1000);
+                        
+                        toast(`✅ ${importedCount} records imported successfully!`, 'success');
+                    }, 1000);
+
+                } catch (error) {
+                    console.error('Import error:', error);
+                    progressDiv.style.display = 'none';
+                    progressBar.style.width = '0%';
+                    statusContent.textContent = `❌ Error: ${error.message}`;
+                    toast(`❌ Import failed: ${error.message}`, 'error');
+                    submitBtn.disabled = false;
+                }
+            }
+
+            /**
+             * Upload analytics records to Firebase
+             */
+            async function uploadAnalyticsRecords(records) {
+                if (!currentUser) {
+                    throw new Error('Not authenticated');
+                }
+
+                const userKey = saUserKey();
+                const analyticsRef = ref(db, `worksync/social_analytics/${userKey}`);
+                
+                let uploadedCount = 0;
+
+                for (const record of records) {
+                    try {
+                        const timestamp = new Date().toISOString();
+                        const entryData = {
+                            ...record,
+                            createdAt: timestamp,
+                            updatedAt: timestamp,
+                            createdBy: currentUser.email,
+                            createdByName: currentUser.displayName || currentUser.email.split('@')[0]
+                        };
+
+                        const newEntryRef = push(analyticsRef);
+                        await set(newEntryRef, entryData);
+                        
+                        uploadedCount++;
+                    } catch (error) {
+                        console.error('Error uploading record:', error);
+                    }
+                }
+
+                return uploadedCount;
             }
 
             function getPostedJiraTasks() {
