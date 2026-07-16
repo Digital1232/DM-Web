@@ -7,62 +7,36 @@
 // Validation rules for import
 const ANALYTICS_IMPORT_RULES = {
   requiredFields: ['Post', 'Client', 'Post Date', 'Post type'],
-  validClients: ['Einstein', 'IVN', 'NTT', 'Dream Daa', 'Quade', 'Facebook', 'Instagram', 'YouTube', 'LinkedIn', 'X'],
-  validPostTypes: ['Video', 'Post', 'Image', 'Reel', 'Story', 'Carousel', 'Text'],
+  validClients: ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Dream Daa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree', 'Facebook', 'Instagram', 'YouTube', 'LinkedIn', 'X'],
+  validPostTypes: ['Video', 'Poster'],
   numericFields: ['Views', 'Likes', 'Comments', 'Shares', 'Profile visits', 'Profile Reach', 'Engagements', 'Clicks', 'Repost'],
   dateFormats: ['MM-DD-YYYY', 'YYYY-MM-DD', 'DD-MMM', 'DD-Mon'],
-  maxRecordsPerImport: 500,
-  // Map flexible column names to standard fields
-  columnMapping: {
-    'Post': 'post',
-    'Client': 'client',
-    'Post Date': 'postDate',
-    'Post type': 'postType',
-    'Views': 'views',
-    'Likes': 'likes',
-    'Comments': 'comments',
-    'Shares': 'shares',
-    'Profile visits': 'profileVisits',
-    'Profile Reach': 'profileReach',
-    'Engagements': 'engagements',
-    'Clicks': 'clicks'
-  }
+  maxRecordsPerImport: 500
 };
 
 /**
- * Parse CSV text and return array of objects
+ * Parse CSV text and return array of objects containing headers and rows
  * @param {string} csvText - CSV content
- * @returns {Array} Parsed records
+ * @returns {Object} Parsed headers and rows
  */
 function parseCSV(csvText) {
-  const lines = csvText.trim().split('\n');
+  const lines = csvText.trim().split(/\r?\n/);
   if (lines.length < 2) {
     throw new Error('CSV must contain header and at least one data row');
   }
 
-  const headers = lines[0].split(',').map(h => h.trim());
-  const records = [];
+  const headers = parseCSVLine(lines[0]);
+  const rows = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue; // Skip empty lines
 
-    // Simple CSV parsing (handles basic cases; use CSV library for complex scenarios)
     const values = parseCSVLine(line);
-    
-    if (values.length !== headers.length) {
-      throw new Error(`Row ${i + 1}: Expected ${headers.length} columns, got ${values.length}`);
-    }
-
-    const record = {};
-    headers.forEach((header, index) => {
-      record[header] = values[index];
-    });
-
-    records.push(record);
+    rows.push({ rowNumber: i + 1, values });
   }
 
-  return records;
+  return { headers, rows };
 }
 
 /**
@@ -107,42 +81,32 @@ function parseCSVLine(line) {
 function validateAnalyticsRecord(record, rowNumber) {
   const errors = [];
 
-  // Map headers to standard field names
-  const mappedRecord = mapRecordFields(record);
-
   // Check required fields
-  ['post', 'client', 'postDate', 'postType'].forEach(field => {
-    if (!mappedRecord[field] || mappedRecord[field].toString().trim() === '') {
+  ['post', 'client', 'postDate', 'postType', 'platform'].forEach(field => {
+    if (!record[field] || record[field].toString().trim() === '') {
       errors.push(`Row ${rowNumber}: Missing required field "${field}"`);
     }
   });
 
   // Validate client
-  if (mappedRecord.client && !ANALYTICS_IMPORT_RULES.validClients.includes(mappedRecord.client)) {
-    errors.push(`Row ${rowNumber}: Invalid client "${mappedRecord.client}". Must be one of: ${ANALYTICS_IMPORT_RULES.validClients.join(', ')}`);
+  const systemClients = (typeof window !== 'undefined' && window.CLIENTS) ? window.CLIENTS : ((typeof CLIENTS !== 'undefined') ? CLIENTS : ANALYTICS_IMPORT_RULES.validClients);
+  if (record.client) {
+    const normalizedInput = record.client.toLowerCase().replace(/\s+/g, '');
+    const matched = systemClients.some(c => c.toLowerCase().replace(/\s+/g, '') === normalizedInput);
+    if (!matched) {
+      errors.push(`Row ${rowNumber}: Invalid client "${record.client}". Must be one of: ${systemClients.join(', ')}`);
+    }
   }
 
   // Validate post type
-  if (mappedRecord.postType && !ANALYTICS_IMPORT_RULES.validPostTypes.includes(mappedRecord.postType)) {
-    errors.push(`Row ${rowNumber}: Invalid postType "${mappedRecord.postType}". Must be one of: ${ANALYTICS_IMPORT_RULES.validPostTypes.join(', ')}`);
+  if (record.postType && !ANALYTICS_IMPORT_RULES.validPostTypes.includes(record.postType)) {
+    errors.push(`Row ${rowNumber}: Invalid postType "${record.postType}". Must be one of: ${ANALYTICS_IMPORT_RULES.validPostTypes.join(', ')}`);
   }
 
   // Validate date format
-  if (mappedRecord.postDate && !isValidDate(mappedRecord.postDate)) {
-    errors.push(`Row ${rowNumber}: Invalid postDate "${mappedRecord.postDate}". Accepted formats: MM-DD-YYYY, YYYY-MM-DD, DD-MMM`);
+  if (record.postDate && !isValidDate(record.postDate)) {
+    errors.push(`Row ${rowNumber}: Invalid postDate "${record.postDate}". Accepted formats: MM-DD-YYYY, YYYY-MM-DD, DD-MMM`);
   }
-
-  // Validate numeric fields (allow empty/dash values)
-  ANALYTICS_IMPORT_RULES.numericFields.forEach(field => {
-    const key = field.toLowerCase().replace(/\s+/g, '');
-    if (mappedRecord[key] && mappedRecord[key].toString().trim() !== '' && mappedRecord[key] !== '-') {
-      const value = mappedRecord[key].toString().replace(/,/g, '').trim();
-      const num = parseInt(value, 10);
-      if (isNaN(num) || num < 0) {
-        errors.push(`Row ${rowNumber}: ${field} must be a non-negative number, got "${mappedRecord[key]}"`);
-      }
-    }
-  });
 
   return {
     valid: errors.length === 0,
@@ -152,12 +116,15 @@ function validateAnalyticsRecord(record, rowNumber) {
 
 /**
  * Check if string is a valid date
- * Supports: MM-DD-YYYY, YYYY-MM-DD, DD-MMM (e.g., 02-Jul), DD-Mon
+ * Supports: MM-DD-YYYY, YYYY-MM-DD, DD-MMM (e.g., 02-Jul), DD-Mon, and slash equivalents
  * @param {string} dateStr - Date string
  * @returns {boolean}
  */
 function isValidDate(dateStr) {
   if (!dateStr) return false;
+  
+  // Normalize slashes to dashes
+  dateStr = dateStr.replace(/\//g, '-');
   
   // Format: YYYY-MM-DD
   const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -165,13 +132,24 @@ function isValidDate(dateStr) {
     return !isNaN(new Date(dateStr).getTime());
   }
 
-  // Format: MM-DD-YYYY
+  // Format: MM-DD-YYYY or DD-MM-YYYY
   const usRegex = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
   const usMatch = dateStr.match(usRegex);
   if (usMatch) {
-    const [, month, day, year] = usMatch;
-    const date = new Date(year, parseInt(month) - 1, day);
-    return date.getMonth() === parseInt(month) - 1 && date.getDate() === parseInt(day);
+    const [, p1, p2, year] = usMatch;
+    const val1 = parseInt(p1, 10);
+    const val2 = parseInt(p2, 10);
+    const y = parseInt(year, 10);
+    
+    // Check if valid as MM-DD-YYYY
+    const d1 = new Date(y, val1 - 1, val2);
+    const isValidUS = d1.getFullYear() === y && d1.getMonth() === val1 - 1 && d1.getDate() === val2;
+    if (isValidUS) return true;
+    
+    // Check if valid as DD-MM-YYYY
+    const d2 = new Date(y, val2 - 1, val1);
+    const isValidIN = d2.getFullYear() === y && d2.getMonth() === val2 - 1 && d2.getDate() === val1;
+    if (isValidIN) return true;
   }
 
   // Format: DD-MMM (e.g., 02-Jul, 09-Jul) - assumes current year
@@ -188,105 +166,36 @@ function isValidDate(dateStr) {
 }
 
 /**
- * Normalize and clean record data
- * Handles comma-separated numbers and standardizes field names
- * @param {Object} record - Raw record
- * @returns {Object} Cleaned record
- */
-function normalizeRecord(record) {
-  const mapped = mapRecordFields(record);
-  const normalized = {};
-
-  // String fields
-  ['post', 'client', 'postType'].forEach(field => {
-    if (mapped[field]) {
-      normalized[field] = mapped[field].toString().trim();
-    }
-  });
-
-  // Date field - normalize to YYYY-MM-DD
-  if (mapped.postDate) {
-    normalized.postDate = normalizeDateFormat(mapped.postDate);
-  }
-
-  // Numeric fields - strip commas, convert, allow dashes
-  const numericFieldsMap = {
-    'views': 'Views',
-    'likes': 'Likes',
-    'comments': 'Comments',
-    'shares': 'Shares',
-    'profileVisits': 'Profile visits',
-    'profileReach': 'Profile Reach',
-    'engagements': 'Engagements',
-    'clicks': 'Clicks'
-  };
-
-  Object.entries(numericFieldsMap).forEach(([normKey, origKey]) => {
-    const val = mapped[normKey];
-    if (val !== undefined && val !== null && val !== '-' && val.toString().trim() !== '') {
-      const num = parseInt(val.toString().replace(/,/g, '').trim(), 10);
-      normalized[normKey] = isNaN(num) ? 0 : num;
-    } else {
-      normalized[normKey] = 0;
-    }
-  });
-
-  // Calculate engagements if not provided or is 0
-  if (normalized.engagements === 0) {
-    normalized.engagements = (normalized.likes || 0) + (normalized.comments || 0) + (normalized.shares || 0);
-  }
-
-  return normalized;
-}
-
-/**
- * Map CSV header fields to standard field names
- * @param {Object} record - Record with original header names
- * @returns {Object} Record with mapped field names
- */
-function mapRecordFields(record) {
-  const mapped = {};
-  
-  Object.entries(record).forEach(([key, value]) => {
-    if (ANALYTICS_IMPORT_RULES.columnMapping[key]) {
-      mapped[ANALYTICS_IMPORT_RULES.columnMapping[key]] = value;
-    } else {
-      // Try case-insensitive and space-normalized match
-      const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
-      const foundMapping = Object.entries(ANALYTICS_IMPORT_RULES.columnMapping).find(
-        ([origKey]) => origKey.toLowerCase().replace(/\s+/g, '') === normalizedKey
-      );
-      
-      if (foundMapping) {
-        mapped[foundMapping[1]] = value;
-      } else {
-        // Keep original key
-        mapped[key] = value;
-      }
-    }
-  });
-  
-  return mapped;
-}
-
-/**
  * Normalize date to YYYY-MM-DD format
  * @param {string} dateStr - Date in various formats
  * @returns {string} Normalized date YYYY-MM-DD
  */
 function normalizeDateFormat(dateStr) {
+  if (!dateStr) return dateStr;
+
+  // Normalize slashes to dashes
+  dateStr = dateStr.replace(/\//g, '-');
+
   // Already in ISO format
   const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (isoRegex.test(dateStr)) {
     return dateStr;
   }
 
-  // MM-DD-YYYY
+  // MM-DD-YYYY or DD-MM-YYYY
   const usRegex = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
   const usMatch = dateStr.match(usRegex);
   if (usMatch) {
-    const [, month, day, year] = usMatch;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    const [, p1, p2, year] = usMatch;
+    const val1 = parseInt(p1, 10);
+    const val2 = parseInt(p2, 10);
+    
+    // Check if it is clearly DD-MM-YYYY (first part > 12)
+    if (val1 > 12 && val2 <= 12) {
+      return `${year}-${p2.padStart(2, '0')}-${p1.padStart(2, '0')}`;
+    }
+    // Default to MM-DD-YYYY
+    return `${year}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
   }
 
   // DD-MMM (e.g., 02-Jul)
@@ -309,11 +218,12 @@ function normalizeDateFormat(dateStr) {
     return `${date.getFullYear()}-${m}-${d}`;
   }
 
-  return dateStr; // Return as-is if unable to parse
+  return dateStr;
 }
 
 /**
  * Process and validate CSV import
+ * Maps multiple platform column sections into distinct platform entries.
  * @param {string} csvText - CSV content
  * @returns {Object} { success: boolean, data: Array, errors: Array, warnings: Array, summary: Object }
  */
@@ -332,35 +242,199 @@ function processCSVImport(csvText) {
   };
 
   try {
-    const records = parseCSV(csvText);
-    result.summary.totalRows = records.length;
+    const { headers, rows } = parseCSV(csvText);
+    result.summary.totalRows = rows.length;
 
-    if (records.length > ANALYTICS_IMPORT_RULES.maxRecordsPerImport) {
-      result.errors.push(`Import limited to ${ANALYTICS_IMPORT_RULES.maxRecordsPerImport} records. Your file contains ${records.length}`);
+    // Check header length
+    if (headers.length < 6) {
+      result.errors.push('CSV must contain at least 6 columns (Post, Client, Date, Type)');
       return result;
     }
 
-    records.forEach((record, index) => {
-      const rowNumber = index + 2; // +1 for header, +1 for 1-based indexing
-      const validation = validateAnalyticsRecord(record, rowNumber);
+    rows.forEach(({ rowNumber, values }) => {
+      // Validate column count
+      if (values.length !== headers.length) {
+        result.errors.push(`Row ${rowNumber}: Expected ${headers.length} columns, got ${values.length}`);
+        result.summary.invalidRows++;
+        return;
+      }
 
-      if (validation.valid) {
-        const normalized = normalizeRecord(record);
-        result.data.push(normalized);
+      // Common fields
+      const post = values[0] ? values[0].trim() : '';
+      const rawClient = values[3] ? values[3].trim() : '';
+      const rawDate = values[4] ? values[4].trim() : '';
+      const rawType = values[5] ? values[5].trim() : '';
+
+      // Validate common fields
+      const rowErrors = [];
+      if (!post) rowErrors.push(`Row ${rowNumber}: Missing required field "Post"`);
+      if (!rawClient) rowErrors.push(`Row ${rowNumber}: Missing required field "Client"`);
+      if (!rawDate) rowErrors.push(`Row ${rowNumber}: Missing required field "Post Date"`);
+      if (!rawType) rowErrors.push(`Row ${rowNumber}: Missing required field "Post type"`);
+
+      // Match client case-insensitively and space-insensitively
+      let client = rawClient;
+      if (rawClient) {
+        const systemClients = (typeof window !== 'undefined' && window.CLIENTS) ? window.CLIENTS : ((typeof CLIENTS !== 'undefined') ? CLIENTS : ANALYTICS_IMPORT_RULES.validClients);
+        const normalizedClientInput = rawClient.toLowerCase().replace(/\s+/g, '');
+        const matched = systemClients.find(c => c.toLowerCase().replace(/\s+/g, '') === normalizedClientInput);
+        if (matched) {
+          client = matched;
+        } else {
+          rowErrors.push(`Row ${rowNumber}: Invalid client "${rawClient}". Must be one of: ${systemClients.join(', ')}`);
+        }
+      }
+
+      // Normalize date
+      let postDate = rawDate;
+      if (rawDate) {
+        if (isValidDate(rawDate)) {
+          postDate = normalizeDateFormat(rawDate);
+        } else {
+          rowErrors.push(`Row ${rowNumber}: Invalid postDate "${rawDate}". Accepted formats: MM-DD-YYYY, YYYY-MM-DD, DD-MMM`);
+        }
+      }
+
+      // Map post type (Automate to Video/Poster only)
+      let postType = 'Poster';
+      if (rawType) {
+        const typeLower = rawType.toLowerCase();
+        if (typeLower.includes('video') || typeLower.includes('reel')) {
+          postType = 'Video';
+        } else {
+          postType = 'Poster';
+        }
+      }
+
+      if (rowErrors.length > 0) {
+        result.errors.push(...rowErrors);
+        result.summary.invalidRows++;
+        return;
+      }
+
+      // Extract platform-specific entries
+      const platformsData = [
+        {
+          name: 'Instagram',
+          indices: [6, 7, 8, 9, 10, 11],
+          map: { views: 6, likes: 7, comments: 8, shares: 9, reach: 11 }
+        },
+        {
+          name: 'Facebook',
+          indices: [12, 13, 14, 15, 16],
+          map: { views: 12, likes: 13, comments: 14, shares: 15 }
+        },
+        {
+          name: 'X (Twitter)',
+          indices: [17, 18, 19, 20, 21, 22],
+          map: { views: 17, likes: 18, comments: 19, shares: 20 } // Reposts mapped to shares
+        },
+        {
+          name: 'YouTube',
+          indices: [23, 24, 25],
+          map: { views: 23, likes: 24, comments: 25 }
+        }
+      ];
+
+      let platformCount = 0;
+      let platformErrors = [];
+
+      platformsData.forEach(platformInfo => {
+        // Check if there is data for this platform (i.e. not empty and not "-")
+        const hasData = platformInfo.indices.some(idx => {
+          const val = values[idx];
+          if (val === undefined || val === null) return false;
+          const clean = val.trim();
+          return clean !== '-' && clean !== '';
+        });
+
+        if (hasData) {
+          const record = {
+            post,
+            client,
+            postDate,
+            postType,
+            platform: platformInfo.name,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            reach: 0
+          };
+
+          // Extract and validate numeric fields
+          Object.entries(platformInfo.map).forEach(([field, colIdx]) => {
+            const val = values[colIdx];
+            if (val !== undefined && val !== null && val.trim() !== '-' && val.trim() !== '') {
+              const cleanVal = val.replace(/,/g, '').trim();
+              const num = parseInt(cleanVal, 10);
+              if (isNaN(num) || num < 0) {
+                platformErrors.push(`Row ${rowNumber}: Platform ${platformInfo.name} field value must be a non-negative number, got "${val}"`);
+              } else {
+                record[field] = num;
+              }
+            }
+          });
+
+          // profileVisits (Instagram specific, index 10)
+          if (platformInfo.name === 'Instagram') {
+             const pv = values[10];
+             if (pv !== undefined && pv !== null && pv.trim() !== '-' && pv.trim() !== '') {
+               const num = parseInt(pv.replace(/,/g, '').trim(), 10);
+               if (isNaN(num) || num < 0) {
+                 platformErrors.push(`Row ${rowNumber}: Instagram profile visits must be a non-negative number, got "${pv}"`);
+               } else {
+                 record.profileVisits = num;
+               }
+             }
+          }
+
+          // Calculate engagements
+          record.engagements = record.likes + record.comments + record.shares;
+
+          // Double check record validity
+          const recordValidation = validateAnalyticsRecord(record, rowNumber);
+          if (recordValidation.valid) {
+            result.data.push(record);
+            platformCount++;
+          } else {
+            platformErrors.push(...recordValidation.errors);
+          }
+        }
+      });
+
+      if (platformErrors.length > 0) {
+        result.errors.push(...platformErrors);
+        result.summary.invalidRows++;
+      } else if (platformCount > 0) {
         result.summary.validRows++;
       } else {
-        result.errors.push(...validation.errors);
+        result.errors.push(`Row ${rowNumber}: No platform metrics found (all platform columns are empty or '-')`);
         result.summary.invalidRows++;
       }
     });
 
-    result.success = result.summary.validRows > 0;
+    result.success = result.summary.validRows > 0 && result.errors.length === 0;
 
   } catch (error) {
     result.errors.push(`CSV Parse Error: ${error.message}`);
   }
 
   return result;
+}
+
+/**
+ * Placeholder for compatibility
+ */
+function normalizeRecord(record) {
+  return record;
+}
+
+/**
+ * Placeholder for compatibility
+ */
+function mapRecordFields(record) {
+  return record;
 }
 
 /**
@@ -386,7 +460,7 @@ function downloadImportTemplate() {
       '164', '5', '0'
     ],
     [
-      'Every corner of this campus holds a memory.❤️', '', '', 'Einstein', '07-02-2026', 'Post',
+      'Every corner of this campus holds a memory.❤️', '', '', 'Einstein', '07-02-2026', 'Poster',
       '1121', '26', '0', '10',
       '0', '955',
       '193', '3', '0', '0', '4',
@@ -394,7 +468,7 @@ function downloadImportTemplate() {
       '-', '-', '-'
     ],
     [
-      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', '', '', 'IVN', '02-Jul', 'Post',
+      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', '', '', 'IVN', '02-Jul', 'Poster',
       '126', '6', '0', '0',
       '0', '98',
       '30', '3', '0', '0', '3',
@@ -434,11 +508,11 @@ function formatValidationErrors(result) {
 
   if (result.errors.length > 0) {
     message += `\n❌ Errors:\n`;
-    result.errors.slice(0, 10).forEach(error => {
+    result.errors.slice(0, 15).forEach(error => {
       message += `  • ${error}\n`;
     });
-    if (result.errors.length > 10) {
-      message += `  ... and ${result.errors.length - 10} more errors\n`;
+    if (result.errors.length > 15) {
+      message += `  ... and ${result.errors.length - 15} more errors\n`;
     }
   }
 

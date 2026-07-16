@@ -49,10 +49,6 @@ function getEmployeeDashboardFilters() {
     };
 }
 
-function handleEmployeeDashboardFilterChange() {
-    renderEmployeeSelfPerformanceDashboard();
-}
-
 // ────────────────────────────────────────────────────────────────
 // DATA AGGREGATION
 // ────────────────────────────────────────────────────────────────

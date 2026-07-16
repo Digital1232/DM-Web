@@ -8075,6 +8075,11 @@
                                         All Entries</h4>
                                 </div>
                                 <div class="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                    <!-- Client Filter -->
+                                    <select id="sa-client-filter" onchange="filterSocialAnalytics()"
+                                        class="text-[11px] sm:text-xs border border-slate-200 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 font-semibold text-slate-600 outline-none">
+                                        <option value="all">All Clients</option>
+                                    </select>
                                     <select id="sa-platform-filter" onchange="filterSocialAnalytics()"
                                         class="text-[11px] sm:text-xs border border-slate-200 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 font-semibold text-slate-600 outline-none">
                                         <option value="all">All Platforms</option>
@@ -8088,12 +8093,21 @@
                                         class="text-[11px] sm:text-xs border border-slate-200 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 font-semibold text-slate-600 outline-none">
                                         <option value="all">All Types</option>
                                         <option value="Video">Video</option>
-                                        <option value="Image">Image</option>
-                                        <option value="Reel">Reel</option>
-                                        <option value="Story">Story</option>
-                                        <option value="Carousel">Carousel</option>
-                                        <option value="Text">Text</option>
+                                        <option value="Poster">Poster</option>
                                     </select>
+
+                                    <!-- Custom Date Range Filters -->
+                                    <div class="flex items-center gap-1">
+                                        <input type="date" id="sa-filter-start-date" onchange="filterSocialAnalytics()" placeholder="From Date"
+                                            class="text-[11px] sm:text-xs border border-slate-200 rounded-xl px-2 py-1.5 sm:py-2 font-semibold text-slate-600 outline-none bg-white max-w-[120px] sm:max-w-none">
+                                        <span class="text-xs text-slate-400 font-bold">to</span>
+                                        <input type="date" id="sa-filter-end-date" onchange="filterSocialAnalytics()" placeholder="To Date"
+                                            class="text-[11px] sm:text-xs border border-slate-200 rounded-xl px-2 py-1.5 sm:py-2 font-semibold text-slate-600 outline-none bg-white max-w-[120px] sm:max-w-none">
+                                        <button type="button" onclick="document.getElementById('sa-filter-start-date').value=''; document.getElementById('sa-filter-end-date').value=''; filterSocialAnalytics();" 
+                                            class="p-1 text-slate-400 hover:text-rose-500 transition-colors" title="Clear Date Filters">
+                                            <iconify-icon icon="solar:refresh-linear" width="16"></iconify-icon>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="overflow-x-auto -mx-4 sm:mx-0">
@@ -8232,11 +8246,7 @@
                             class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-200 outline-none">
                             <option value="">Select Type</option>
                             <option value="Video">Video</option>
-                            <option value="Image">Image</option>
-                            <option value="Reel">Reel</option>
-                            <option value="Story">Story</option>
-                            <option value="Carousel">Carousel</option>
-                            <option value="Text">Text</option>
+                            <option value="Poster">Poster</option>
                         </select>
                     </div>
                 </div>
@@ -8425,9 +8435,21 @@
             <!-- Body -->
             <div class="p-6 sm:p-8 space-y-6">
                 <!-- Date info -->
-                <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                    <p class="text-sm font-bold text-blue-900">📅 Yesterday's Top Posts</p>
-                    <p id="saTopPostsDate" class="text-xs text-blue-700 mt-1"></p>
+                <div class="bg-blue-50 border border-blue-150 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
+                    <div>
+                        <p class="text-sm font-bold text-blue-900">📅 Top Performing Posts Report</p>
+                        <p id="saTopPostsDate" class="text-xs text-blue-700 mt-1 font-medium"></p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-1.5">
+                            <label for="saTopPostsStartDate" class="text-[10px] font-black text-blue-900 uppercase tracking-wider whitespace-nowrap">From:</label>
+                            <input type="date" id="saTopPostsStartDate" onchange="showTopPostsReport()" class="border border-blue-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer shadow-sm hover:border-blue-300 transition-all">
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <label for="saTopPostsEndDate" class="text-[10px] font-black text-blue-900 uppercase tracking-wider whitespace-nowrap">To:</label>
+                            <input type="date" id="saTopPostsEndDate" onchange="showTopPostsReport()" class="border border-blue-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer shadow-sm hover:border-blue-300 transition-all">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Posts List -->
@@ -10962,6 +10984,7 @@
             };
 
             const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree'];
+            window.CLIENTS = CLIENTS;
 
             // Sub-clients managed under Vilpower DM — used for Murugesh daily task client selection
             const VILPOWER_DM_CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'Quade', 'Ramachandran'];
@@ -27371,29 +27394,34 @@
             // SNEHA'S TASK BREAKDOWN FUNCTIONS
             // ══════════════════════════════════════════════════════════════════
             
-            function getSnehaTaskLabels(taskId, snehaSelections, qcReports) {
+            function getSnehaTaskLabels(taskId, snehaSelections, qcReports, startTs = 0, endTs = Infinity) {
                 if (!taskId) return [];
                 const labels = new Set();
                 
                 // Get content selections Sneha made for this task
                 snehaSelections.forEach(s => {
                     if (s.taskId === taskId && (s.userId || '').toLowerCase() === 'snehavilpower@gmail.com') {
-                        (s.selectedItems || []).forEach(item => labels.add(item));
+                        const ts = Number(s.timestamp || 0);
+                        if (ts >= startTs && ts < endTs) {
+                            (s.selectedItems || []).forEach(item => labels.add(item));
+                        }
                     }
                 });
                 
                 // Check if Sneha reviewed this task's QC
                 if (qcReports.some(r => 
                     r.taskId === taskId && 
-                    (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com')) {
+                    (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                    Number(r.timestamp || 0) >= startTs &&
+                    Number(r.timestamp || 0) < endTs)) {
                     labels.add('QC Reviewed');
                 }
                 
                 return Array.from(labels);
             }
             
-            function formatTaskBreakdown(taskId, task, snehaSelections, qcReports) {
-                const labels = getSnehaTaskLabels(taskId, snehaSelections, qcReports);
+            function formatTaskBreakdown(taskId, task, snehaSelections, qcReports, startTs = 0, endTs = Infinity) {
+                const labels = getSnehaTaskLabels(taskId, snehaSelections, qcReports, startTs, endTs);
                 
                 if (labels.length === 0) {
                     return { breakdown: '', category: '' };
@@ -27691,7 +27719,7 @@
                                     }
                                     
                                     // Get breakdown for Sneha's tasks
-                                    const { breakdown, category } = formatTaskBreakdown(task.id, task, snehaSelections, qcReports);
+                                    const { breakdown, category } = formatTaskBreakdown(task.id, task, snehaSelections, qcReports, todayStartTsVal, todayEndTsVal);
                                     
                                     return `
                                             <div class="text-xs font-semibold text-slate-700 flex items-start gap-1.5 leading-snug">
@@ -38441,6 +38469,11 @@
             window.filterSaTaskPicker = filterSaTaskPicker;
             window.renderSaTaskPickerList = renderSaTaskPickerList;
             window.selectSaPickerTask = selectSaPickerTask;
+            window.showTopPostsReport = showTopPostsReport;
+            window.downloadTopPostsReport = downloadTopPostsReport;
+            window.openMonthlyReportDialog = openMonthlyReportDialog;
+            window.generateAndDownloadMonthlyReport = generateAndDownloadMonthlyReport;
+            window.handleSocialAnalyticsImport = handleSocialAnalyticsImport;
             window.initFilesManager = initFilesManager;
             window.fmSearchSystem = fmSearchSystem;
             window.fmOpenAddSystemModal = fmOpenAddSystemModal;
@@ -38484,11 +38517,7 @@
 
             const SA_TYPE_ICONS = {
                 'Video': 'solar:videocamera-record-bold',
-                'Image': 'solar:gallery-bold',
-                'Reel': 'solar:reel-bold',
-                'Story': 'solar:stories-bold',
-                'Carousel': 'solar:slider-horizontal-bold',
-                'Text': 'solar:text-bold'
+                'Poster': 'solar:gallery-bold'
             };
 
             function saUserKey() {
@@ -38572,6 +38601,33 @@
                     }
                     // Sort by posting date descending
                     saAllEntries.sort((a, b) => (b.postingDate || '').localeCompare(a.postingDate || ''));
+
+                    // Populate Client Filter dropdown dynamically
+                    const clientFilterSelect = document.getElementById('sa-client-filter');
+                    if (clientFilterSelect) {
+                        const currentSelection = clientFilterSelect.value;
+                        const uniqueClientsSet = new Set();
+                        
+                        if (typeof CLIENTS !== 'undefined') {
+                            CLIENTS.forEach(c => uniqueClientsSet.add(c));
+                        }
+                        
+                        saAllEntries.forEach(e => {
+                            if (e.client) uniqueClientsSet.add(e.client);
+                        });
+                        
+                        const sortedClients = Array.from(uniqueClientsSet).sort();
+                        
+                        clientFilterSelect.innerHTML = `<option value="all">All Clients</option>` + 
+                            sortedClients.map(c => `<option value="${c}">${c}</option>`).join('');
+                            
+                        if (sortedClients.includes(currentSelection) || currentSelection === 'all') {
+                            clientFilterSelect.value = currentSelection;
+                        } else {
+                            clientFilterSelect.value = 'all';
+                        }
+                    }
+
                     filterSocialAnalytics();
                 };
                 onValue(dbRef2, cb);
@@ -38579,18 +38635,21 @@
             }
 
             function filterSocialAnalytics() {
-                const range = document.getElementById('sa-date-range')?.value || '30';
                 const platformFilter = document.getElementById('sa-platform-filter')?.value || 'all';
                 const typeFilter = document.getElementById('sa-type-filter')?.value || 'all';
+                const clientFilter = document.getElementById('sa-client-filter')?.value || 'all';
+                const startStr = document.getElementById('sa-filter-start-date')?.value || '';
+                const endStr = document.getElementById('sa-filter-end-date')?.value || '';
 
                 let entries = [...saAllEntries];
 
-                // Date filter
-                if (range !== 'all') {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - parseInt(range));
-                    const cutoffStr = cutoff.toISOString().slice(0, 10);
-                    entries = entries.filter(e => (e.postingDate || e.reportDate || '') >= cutoffStr);
+                // Client filter
+                if (clientFilter !== 'all') {
+                    const normalizedFilter = clientFilter.toLowerCase().replace(/\s+/g, '');
+                    entries = entries.filter(e => {
+                        const clientName = e.client || '';
+                        return clientName.toLowerCase().replace(/\s+/g, '') === normalizedFilter;
+                    });
                 }
 
                 // Platform filter
@@ -38601,6 +38660,24 @@
                 // Type filter
                 if (typeFilter !== 'all') {
                     entries = entries.filter(e => e.postType === typeFilter);
+                }
+
+                // Date filter (custom date range or general dropdown fallback)
+                if (startStr || endStr) {
+                    if (startStr) {
+                        entries = entries.filter(e => (e.postingDate || e.reportDate || '').substring(0, 10) >= startStr);
+                    }
+                    if (endStr) {
+                        entries = entries.filter(e => (e.postingDate || e.reportDate || '').substring(0, 10) <= endStr);
+                    }
+                } else {
+                    const range = document.getElementById('sa-date-range')?.value || '30';
+                    if (range !== 'all') {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - parseInt(range));
+                        const cutoffStr = cutoff.toISOString().slice(0, 10);
+                        entries = entries.filter(e => (e.postingDate || e.reportDate || '') >= cutoffStr);
+                    }
                 }
 
                 saFilteredEntries = entries;
@@ -39290,128 +39367,185 @@
             }
 
             /**
-             * Show top posts report for yesterday
+             * Show top posts report for a given date (defaults to yesterday)
              */
-            function showTopPostsReport() {
+            function showTopPostsReport(customStart, customEnd) {
                 if (!canViewSocialAnalytics()) {
                     toast('You do not have permission to view reports', 'error');
                     return;
                 }
 
-                // Use the actual saAllEntries data
                 const entries = saAllEntries || [];
-                
-                if (entries.length === 0) {
-                    toast('No analytics data available', 'warning');
-                    return;
+
+                let startStr = customStart;
+                let endStr = customEnd;
+
+                if (!startStr || !endStr) {
+                    const startInput = document.getElementById('saTopPostsStartDate');
+                    const endInput = document.getElementById('saTopPostsEndDate');
+                    startStr = startInput ? startInput.value : '';
+                    endStr = endInput ? endInput.value : '';
                 }
 
-                // Get yesterday's date
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                let startDate, endDate;
 
-                // Get posts from yesterday, sorted by engagements
-                const yesterdayPosts = entries
+                if (startStr) {
+                    const parts = startStr.split('-');
+                    if (parts.length === 3) {
+                        startDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    } else {
+                        startDate = new Date(startStr);
+                    }
+                }
+                if (endStr) {
+                    const parts = endStr.split('-');
+                    if (parts.length === 3) {
+                        endDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    } else {
+                        endDate = new Date(endStr);
+                    }
+                }
+
+                // Default to yesterday
+                if (!startDate || isNaN(startDate.getTime())) {
+                    startDate = new Date();
+                    startDate.setDate(startDate.getDate() - 1);
+                }
+                if (!endDate || isNaN(endDate.getTime())) {
+                    endDate = new Date();
+                    endDate.setDate(endDate.getDate() - 1);
+                }
+
+                // If user accidentally selected start date after end date, swap them
+                if (startDate > endDate) {
+                    const temp = startDate;
+                    startDate = endDate;
+                    endDate = temp;
+                }
+
+                const formatLoc = (d) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+
+                const startFormatted = formatLoc(startDate);
+                const endFormatted = formatLoc(endDate);
+
+                // Sync UI inputs
+                const startInput = document.getElementById('saTopPostsStartDate');
+                const endInput = document.getElementById('saTopPostsEndDate');
+                if (startInput) startInput.value = startFormatted;
+                if (endInput) endInput.value = endFormatted;
+
+                // Filter and sort up to 10 posts by engagements
+                const rangePosts = entries
                     .filter(e => {
                         const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
-                        return postDate === yesterdayStr;
+                        return postDate >= startFormatted && postDate <= endFormatted;
                     })
                     .map(e => ({
                         ...e,
                         engagements: (parseInt(e.likes) || 0) + (parseInt(e.comments) || 0) + (parseInt(e.shares) || 0)
                     }))
                     .sort((a, b) => b.engagements - a.engagements)
-                    .slice(0, 5);
+                    .slice(0, 10);
 
-                if (yesterdayPosts.length === 0) {
-                    toast('No posts found for yesterday', 'info');
-                    return;
-                }
-
-                // Populate modal
-                document.getElementById('saTopPostsDate').textContent = yesterday.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                });
+                // Populate date subtext
+                const startLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const endLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                document.getElementById('saTopPostsDate').textContent = `${startLabel} to ${endLabel}`;
 
                 const postsList = document.getElementById('saTopPostsList');
-                postsList.innerHTML = yesterdayPosts.map((post, idx) => `
-                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex-1">
-                                <h4 class="font-bold text-slate-900 mb-1">#${idx + 1} - "${(post.title || post.post || 'Untitled').substring(0, 60)}${(post.title || post.post || '').length > 60 ? '...' : ''}"</h4>
-                                <div class="flex gap-2 items-center flex-wrap">
-                                    <span class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">${post.type || post.postType || 'Post'}</span>
-                                    <span class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">${post.platform || post.client || 'Unknown'}</span>
-                                    <span class="text-xs text-slate-500">${post.postingDate || post.reportDate || yesterdayStr}</span>
+                if (!postsList) return;
+
+                if (rangePosts.length === 0) {
+                    postsList.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <iconify-icon icon="solar:document-text-outline" width="48" class="mb-2 text-slate-300"></iconify-icon>
+                            <p class="text-sm font-semibold">No posts found for this date range</p>
+                            <p class="text-xs mt-1 text-slate-400">Try selecting another range or importing more data</p>
+                        </div>
+                    `;
+                } else {
+                    postsList.innerHTML = rangePosts.map((post, idx) => `
+                        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-slate-900 mb-1">#${idx + 1} - "${(post.title || post.post || 'Untitled').substring(0, 60)}${(post.title || post.post || '').length > 60 ? '...' : ''}"</h4>
+                                    <div class="flex gap-2 items-center flex-wrap">
+                                        <span class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">${post.type || post.postType || 'Post'}</span>
+                                        <span class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">${post.platform || post.client || 'Unknown'}</span>
+                                        <span class="text-xs text-slate-500">${post.postingDate || post.reportDate}</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-2xl font-black text-indigo-600">${post.engagements.toLocaleString()}</div>
+                                    <div class="text-xs text-slate-500 font-medium">Engagements</div>
                                 </div>
                             </div>
-                            <div class="text-right">
-                                <div class="text-2xl font-black text-indigo-600">${post.engagements.toLocaleString()}</div>
-                                <div class="text-xs text-slate-500 font-medium">Engagements</div>
+                            <div class="grid grid-cols-4 gap-2 pt-3 border-t border-slate-200">
+                                <div class="text-center">
+                                    <div class="font-bold text-slate-900">${(parseInt(post.views) || 0).toLocaleString()}</div>
+                                    <div class="text-xs text-slate-600">Views</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-bold text-slate-900">${(parseInt(post.likes) || 0).toLocaleString()}</div>
+                                    <div class="text-xs text-slate-600">Likes</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-bold text-slate-900">${(parseInt(post.comments) || 0).toLocaleString()}</div>
+                                    <div class="text-xs text-slate-600">Comments</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-bold text-slate-900">${(parseInt(post.shares) || 0).toLocaleString()}</div>
+                                    <div class="text-xs text-slate-600">Shares</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 pt-3 border-t border-slate-200">
-                            <div class="text-center">
-                                <div class="font-bold text-slate-900">${(parseInt(post.views) || 0).toLocaleString()}</div>
-                                <div class="text-xs text-slate-600">Views</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="font-bold text-slate-900">${(parseInt(post.likes) || 0).toLocaleString()}</div>
-                                <div class="text-xs text-slate-600">Likes</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="font-bold text-slate-900">${(parseInt(post.comments) || 0).toLocaleString()}</div>
-                                <div class="text-xs text-slate-600">Comments</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="font-bold text-slate-900">${(parseInt(post.shares) || 0).toLocaleString()}</div>
-                                <div class="text-xs text-slate-600">Shares</div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
+                    `).join('');
+                }
 
                 document.getElementById('saTopPostsModal').style.display = 'flex';
             }
 
-            /**
-             * Download top posts report
-             */
             function downloadTopPostsReport() {
                 const entries = saAllEntries || [];
-                
-                // Get yesterday's date
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-                const yesterdayPosts = entries
+                const startInput = document.getElementById('saTopPostsStartDate');
+                const endInput = document.getElementById('saTopPostsEndDate');
+                const startStr = startInput ? startInput.value : '';
+                const endStr = endInput ? endInput.value : '';
+
+                if (!startStr || !endStr) {
+                    toast('Please select a valid date range', 'error');
+                    return;
+                }
+
+                const rangePosts = entries
                     .filter(e => {
                         const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
-                        return postDate === yesterdayStr;
+                        return postDate >= startStr && postDate <= endStr;
                     })
                     .map(e => ({
                         ...e,
                         engagements: (parseInt(e.likes) || 0) + (parseInt(e.comments) || 0) + (parseInt(e.shares) || 0)
                     }))
                     .sort((a, b) => b.engagements - a.engagements)
-                    .slice(0, 5);
+                    .slice(0, 10);
 
-                if (yesterdayPosts.length === 0) {
-                    toast('No data to download', 'warning');
+                if (rangePosts.length === 0) {
+                    toast('No data to download for the selected date range', 'warning');
                     return;
                 }
 
                 let csv = `Social Analytics - Top Posts Report\n`;
                 csv += `Generated: ${new Date().toLocaleString()}\n`;
-                csv += `Date: ${yesterdayStr}\n\n`;
+                csv += `Period: ${startStr} to ${endStr}\n\n`;
                 csv += `Rank,Post Title,Platform,Type,Views,Likes,Comments,Shares,Total Engagements\n`;
 
-                yesterdayPosts.forEach((post, idx) => {
+                rangePosts.forEach((post, idx) => {
                     csv += `${idx + 1},"${(post.title || post.post || '').replace(/"/g, '""')}","${post.platform || post.client || ''}","${post.type || post.postType || ''}",${parseInt(post.views) || 0},${parseInt(post.likes) || 0},${parseInt(post.comments) || 0},${parseInt(post.shares) || 0},${post.engagements}\n`;
                 });
 
@@ -39419,7 +39553,7 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `top-posts-${yesterdayStr}.csv`;
+                link.download = `top-posts-${startStr}-to-${endStr}.csv`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -39435,6 +39569,40 @@
                 if (!canViewSocialAnalytics()) {
                     toast('You do not have permission to generate reports', 'error');
                     return;
+                }
+
+                // Populate client list dynamically from CLIENTS and existing entries
+                const clientSelect = document.getElementById('saReportClient');
+                if (clientSelect) {
+                    clientSelect.innerHTML = `
+                        <option value="">Select a client...</option>
+                        <option value="all">All Clients</option>
+                    `;
+                    
+                    const allClients = new Set();
+                    // Load from standard CLIENTS array if defined
+                    if (typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS)) {
+                        CLIENTS.forEach(c => {
+                            if (c) allClients.add(c.trim());
+                        });
+                    }
+
+                    // Also scan existing entries for client names
+                    const entries = saAllEntries || [];
+                    entries.forEach(e => {
+                        if (e.client) {
+                            allClients.add(e.client.trim());
+                        }
+                    });
+
+                    // Sort alphabetically and append to dropdown options
+                    const sortedClients = Array.from(allClients).sort((a, b) => a.localeCompare(b));
+                    sortedClients.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c;
+                        opt.textContent = c;
+                        clientSelect.appendChild(opt);
+                    });
                 }
 
                 document.getElementById('saMonthlyReportModal').style.display = 'flex';
@@ -39456,21 +39624,31 @@
 
                 const entries = saAllEntries || [];
                 
-                // Filter entries for the selected client and month
-                const monthStart = new Date(year, month - 1, 1);
-                const monthEnd = new Date(year, month, 0);
-                const monthStartStr = monthStart.toISOString().split('T')[0];
-                const monthEndStr = monthEnd.toISOString().split('T')[0];
+                // Formulate YYYY-MM-DD bounds using timezone-safe formatting
+                const monthStartStr = `${year}-${String(month).padStart(2, '0')}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const monthEndStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+                const clientName = client === 'all' ? 'All Clients' : client;
 
                 const clientEntries = entries.filter(e => {
                     const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
                     const isInMonth = postDate >= monthStartStr && postDate <= monthEndStr;
-                    const isClient = (e.platform === client || e.client === client);
+                    
+                    const entryClient = (e.client || '').trim();
+                    const entryPlatform = (e.platform || '').trim();
+
+                    const isClient = (client === 'all') || 
+                                     (entryClient.toLowerCase() === client.toLowerCase()) || 
+                                     (entryPlatform.toLowerCase() === client.toLowerCase());
+                                     
                     return isInMonth && isClient;
                 });
 
+                const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
+
                 if (clientEntries.length === 0) {
-                    toast(`No data found for ${client} in ${monthStart.toLocaleString('default', { month: 'long', year: 'numeric' })}`, 'info');
+                    toast(`No data found for ${clientName} in ${monthName} ${year}`, 'info');
                     return;
                 }
 
@@ -39504,8 +39682,8 @@
                 if (format === 'csv') {
                     // Generate CSV
                     let csv = `Social Analytics Monthly Report\n`;
-                    csv += `Client: ${client}\n`;
-                    csv += `Period: ${monthStart.toLocaleString('default', { month: 'long', year: 'numeric' })}\n`;
+                    csv += `Client: ${clientName}\n`;
+                    csv += `Period: ${monthName} ${year}\n`;
                     csv += `Generated: ${new Date().toLocaleString()}\n\n`;
                     
                     csv += `Summary\n`;
@@ -39533,17 +39711,16 @@
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = `${client}-report-${monthStart.getFullYear()}-${String(month).padStart(2, '0')}.csv`;
+                    link.download = `${clientName.replace(/\s+/g, '_')}-report-${year}-${String(month).padStart(2, '0')}.csv`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
                     URL.revokeObjectURL(url);
                 } else if (format === 'html') {
                     // Generate HTML
-                    const monthName = monthStart.toLocaleString('default', { month: 'long' });
                     const html = `
                         <div class="monthly-report">
-                            <h2>${client} - ${monthName} ${year}</h2>
+                            <h2>${clientName} - ${monthName} ${year}</h2>
                             
                             <div class="report-metrics">
                                 <div class="metric-card">
@@ -39614,44 +39791,58 @@
                         </div>
                     `;
 
+                    const openHtml = '<html' + '>';
+                    const openHead = '<head' + '>';
+                    const closeHead = '</head' + '>';
+                    const closeStyle = '</style' + '>';
+                    const openBody = '<body' + '>';
+                    const closeBody = '</body' + '>';
+                    const closeHtml = '</html' + '>';
+
                     const newWindow = window.open('', '', 'width=1000,height=800');
-                    newWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>${client} - ${monthName} ${year}</title>
-                            <style>
-                                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f5f5f5; }
-                                .monthly-report { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                                h2 { color: #1f2937; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 30px; font-size: 24px; }
-                                h3 { color: #374151; margin-top: 25px; margin-bottom: 15px; }
-                                .report-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
-                                .metric-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; }
-                                .metric-label { color: #6b7280; font-size: 0.875rem; font-weight: 500; }
-                                .metric-value { color: #1f2937; font-size: 1.875rem; font-weight: bold; margin-top: 5px; }
-                                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
-                                th { background: #f3f4f6; font-weight: 600; color: #1f2937; }
-                                tr:hover { background: #f9fafb; }
-                                ul { list-style: none; padding: 0; }
-                                li { padding: 8px 0; color: #374151; }
-                                li strong { color: #1f2937; }
-                                .button { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; }
-                                .button:hover { background: #2563eb; }
-                            </style>
-                        </head>
-                        <body>
-                            ${html}
-                            <button class="button" onclick="window.print()">🖨️ Print Report</button>
-                        </body>
-                        </html>
-                    `);
-                    newWindow.document.close();
+                    if (newWindow) {
+                        newWindow.document.write(`
+                            <!DOCTYPE html>
+                            ${openHtml}
+                            ${openHead}
+                                <title>${clientName} - ${monthName} ${year}</title>
+                                <style>
+                                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f5f5f5; }
+                                    .monthly-report { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                                    h2 { color: #1f2937; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 30px; font-size: 24px; }
+                                    h3 { color: #374151; margin-top: 25px; margin-bottom: 15px; }
+                                    .report-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+                                    .metric-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; }
+                                    .metric-label { color: #6b7280; font-size: 0.875rem; font-weight: 500; }
+                                    .metric-value { color: #1f2937; font-size: 1.875rem; font-weight: bold; margin-top: 5px; }
+                                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                                    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+                                    th { background: #f3f4f6; font-weight: 600; color: #1f2937; }
+                                    tr:hover { background: #f9fafb; }
+                                    ul { list-style: none; padding: 0; }
+                                    li { padding: 8px 0; color: #374151; }
+                                    li strong { color: #1f2937; }
+                                    .button { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; }
+                                    .button:hover { background: #2563eb; }
+                                </style>
+                                ${closeHead}
+                            ${openBody}
+                                ${html}
+                                <button class="button" onclick="window.print()">🖨️ Print Report</button>
+                            ${closeBody}
+                            ${closeHtml}
+                        `);
+                        newWindow.document.close();
+                    } else {
+                        toast('⚠️ Popup blocked! Please allow popups to view the detailed report window.', 'warning');
+                    }
                 }
 
                 document.getElementById('saMonthlyReportModal').style.display = 'none';
                 toast('✅ Report generated successfully', 'success');
             }
+
+            function getPostedJiraTasks() {
                 if (!tasks) return [];
                 return tasks.filter(t => !t.manual && t.status && t.status.toLowerCase() === 'posted');
             }
@@ -39736,6 +39927,7 @@
                     const titleInput = document.getElementById('sa-title');
                     const idInput = document.getElementById('sa-jira-task-id');
                     const clientSelect = document.getElementById('sa-client');
+                    const postTypeSelect = document.getElementById('sa-post-type');
 
                     if (titleInput) titleInput.value = task.desc || '';
                     if (idInput) idInput.value = task.id || '';
@@ -39746,6 +39938,16 @@
                                 clientSelect.selectedIndex = i;
                                 break;
                             }
+                        }
+                    }
+
+                    // Automate Post Type
+                    if (postTypeSelect && task.desc) {
+                        const desc = task.desc.toLowerCase();
+                        if (desc.includes('video')) {
+                            postTypeSelect.value = 'Video';
+                        } else if (desc.includes('poster')) {
+                            postTypeSelect.value = 'Poster';
                         }
                     }
                 }
@@ -41245,6 +41447,10 @@
                     return;
                 }
 
+                const dateRange = getCompletedTasksDateRange();
+                const fromTs = dateRange.from.getTime();
+                const toTs = dateRange.to.getTime();
+
                 // Group by client
                 const groupedByClient = {};
                 tasks.forEach(t => {
@@ -41304,7 +41510,7 @@
                         
                         // Get breakdown for Sneha's tasks in completed section
                         const { breakdown, category } = (task.loggedUser === 'snehavilpower@gmail.com')
-                            ? formatTaskBreakdown(task.id, task, snehaSelections, qcReports)
+                            ? formatTaskBreakdown(task.id, task, snehaSelections, qcReports, fromTs, toTs)
                             : { breakdown: '', category: '' };
 
                         html += `
