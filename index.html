@@ -67,6 +67,31 @@
             transform: translateY(-1px);
         }
 
+        #sa-report-btn {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);
+        }
+
+        #sa-report-btn:hover {
+            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+            transform: translateY(-1px);
+        }
+
+        #sa-download-btn {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.2);
+        }
+
+        #sa-download-btn:hover {
+            box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+            transform: translateY(-1px);
+        }
+
+        #sa-add-entry-btn:hover {
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+        }
+
         #sa-add-entry-btn:active {
             transform: translateY(0);
             box-shadow: 0 1px 4px rgba(99, 102, 241, 0.2);
@@ -7868,6 +7893,24 @@
                                         style="color: #ffffff !important;"></iconify-icon>
                                     <span>Add Entry</span>
                                 </button>
+                                <!-- Report Button -->
+                                <button id="sa-report-btn" onclick="showTopPostsReport()"
+                                    class="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap border border-blue-200"
+                                    style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important; color: #ffffff !important;"
+                                    title="View top posts from yesterday">
+                                    <iconify-icon icon="solar:chart-2-bold" width="18" height="18"
+                                        style="color: #ffffff !important;"></iconify-icon>
+                                    <span>Report</span>
+                                </button>
+                                <!-- Download Report Button -->
+                                <button id="sa-download-btn" onclick="openMonthlyReportDialog()"
+                                    class="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg active:shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap border border-orange-200"
+                                    style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important; color: #ffffff !important;"
+                                    title="Download monthly client reports">
+                                    <iconify-icon icon="solar:download-minimalistic-bold" width="18" height="18"
+                                        style="color: #ffffff !important;"></iconify-icon>
+                                    <span>Download</span>
+                                </button>
                             </div>
                         </div>
 
@@ -8360,6 +8403,143 @@
                     style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
                     <iconify-icon icon="solar--download-linear" width="18"></iconify-icon>
                     Import Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Top Posts Report (Yesterday) -->
+    <div id="saTopPostsModal" style="display:none;" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="p-6 sm:p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-3">
+                    <iconify-icon icon="solar:chart-2-bold" width="24" style="color:#0ea5e9"></iconify-icon>
+                    Top Performing Posts
+                </h3>
+                <button onclick="document.getElementById('saTopPostsModal').style.display='none'" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <!-- Date info -->
+                <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                    <p class="text-sm font-bold text-blue-900">📅 Yesterday's Top Posts</p>
+                    <p id="saTopPostsDate" class="text-xs text-blue-700 mt-1"></p>
+                </div>
+
+                <!-- Posts List -->
+                <div id="saTopPostsList" class="space-y-3">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 sm:p-8 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+                <button type="button" onclick="document.getElementById('saTopPostsModal').style.display='none'" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all">
+                    Close
+                </button>
+                <button type="button" onclick="downloadTopPostsReport()" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                    style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;">
+                    <iconify-icon icon="solar:download-minimalistic-bold" width="18"></iconify-icon>
+                    Download Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Monthly Client Report Download -->
+    <div id="saMonthlyReportModal" style="display:none;" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="p-6 sm:p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-3">
+                    <iconify-icon icon="solar:download-minimalistic-bold" width="24" style="color:#f97316"></iconify-icon>
+                    Download Monthly Report
+                </h3>
+                <button onclick="document.getElementById('saMonthlyReportModal').style.display='none'" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <!-- Instructions -->
+                <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                    <p class="text-sm font-bold text-blue-900">📋 Select Details</p>
+                    <p class="text-xs text-blue-700 mt-2">Choose a client and month to download detailed analytics report</p>
+                </div>
+
+                <!-- Client Selection -->
+                <div>
+                    <label class="block text-sm font-bold text-slate-900 mb-2">Client</label>
+                    <select id="saReportClient" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-200">
+                        <option value="">Select a client...</option>
+                        <option value="Einstein">Einstein</option>
+                        <option value="IVN">IVN</option>
+                        <option value="NTT">NTT</option>
+                        <option value="Dream Daa">Dream Daa</option>
+                        <option value="Quade">Quade</option>
+                    </select>
+                </div>
+
+                <!-- Month Selection -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-900 mb-2">Month</label>
+                        <select id="saReportMonth" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-200">
+                            <option value="">Select month...</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7" selected>July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-900 mb-2">Year</label>
+                        <select id="saReportYear" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-200">
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                            <option value="2026" selected>2026</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Report Format -->
+                <div>
+                    <label class="block text-sm font-bold text-slate-900 mb-2">Format</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all">
+                            <input type="radio" name="saReportFormat" value="csv" checked class="w-4 h-4">
+                            <span class="text-sm font-medium text-slate-900">📊 CSV (Excel)</span>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all">
+                            <input type="radio" name="saReportFormat" value="html" class="w-4 h-4">
+                            <span class="text-sm font-medium text-slate-900">📄 HTML (Detailed)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 sm:p-8 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+                <button type="button" onclick="document.getElementById('saMonthlyReportModal').style.display='none'" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all">
+                    Cancel
+                </button>
+                <button type="button" onclick="generateAndDownloadMonthlyReport()" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                    style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;">
+                    <iconify-icon icon="solar:download-minimalistic-bold" width="18"></iconify-icon>
+                    Generate Report
                 </button>
             </div>
         </div>
@@ -38326,6 +38506,14 @@
                 return isAdmin() || email === 'ajithvilpower@gmail.com';
             }
 
+            function canViewSocialAnalytics() {
+                // Can view if can edit, or if user is part of any team
+                if (canEditSocialAnalytics()) return true;
+                if (!currentUser) return false;
+                // Allow team members to view
+                return Array.isArray(teams) && teams.length > 0;
+            }
+
             // ══════════════════════════════════════════════════════════════════
             // FILES MANAGER
             // ══════════════════════════════════════════════════════════════════
@@ -39101,7 +39289,369 @@
                 return uploadedCount;
             }
 
-            function getPostedJiraTasks() {
+            /**
+             * Show top posts report for yesterday
+             */
+            function showTopPostsReport() {
+                if (!canViewSocialAnalytics()) {
+                    toast('You do not have permission to view reports', 'error');
+                    return;
+                }
+
+                // Use the actual saAllEntries data
+                const entries = saAllEntries || [];
+                
+                if (entries.length === 0) {
+                    toast('No analytics data available', 'warning');
+                    return;
+                }
+
+                // Get yesterday's date
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+                // Get posts from yesterday, sorted by engagements
+                const yesterdayPosts = entries
+                    .filter(e => {
+                        const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
+                        return postDate === yesterdayStr;
+                    })
+                    .map(e => ({
+                        ...e,
+                        engagements: (parseInt(e.likes) || 0) + (parseInt(e.comments) || 0) + (parseInt(e.shares) || 0)
+                    }))
+                    .sort((a, b) => b.engagements - a.engagements)
+                    .slice(0, 5);
+
+                if (yesterdayPosts.length === 0) {
+                    toast('No posts found for yesterday', 'info');
+                    return;
+                }
+
+                // Populate modal
+                document.getElementById('saTopPostsDate').textContent = yesterday.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+
+                const postsList = document.getElementById('saTopPostsList');
+                postsList.innerHTML = yesterdayPosts.map((post, idx) => `
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex-1">
+                                <h4 class="font-bold text-slate-900 mb-1">#${idx + 1} - "${(post.title || post.post || 'Untitled').substring(0, 60)}${(post.title || post.post || '').length > 60 ? '...' : ''}"</h4>
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <span class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">${post.type || post.postType || 'Post'}</span>
+                                    <span class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">${post.platform || post.client || 'Unknown'}</span>
+                                    <span class="text-xs text-slate-500">${post.postingDate || post.reportDate || yesterdayStr}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-black text-indigo-600">${post.engagements.toLocaleString()}</div>
+                                <div class="text-xs text-slate-500 font-medium">Engagements</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 pt-3 border-t border-slate-200">
+                            <div class="text-center">
+                                <div class="font-bold text-slate-900">${(parseInt(post.views) || 0).toLocaleString()}</div>
+                                <div class="text-xs text-slate-600">Views</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-bold text-slate-900">${(parseInt(post.likes) || 0).toLocaleString()}</div>
+                                <div class="text-xs text-slate-600">Likes</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-bold text-slate-900">${(parseInt(post.comments) || 0).toLocaleString()}</div>
+                                <div class="text-xs text-slate-600">Comments</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-bold text-slate-900">${(parseInt(post.shares) || 0).toLocaleString()}</div>
+                                <div class="text-xs text-slate-600">Shares</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('saTopPostsModal').style.display = 'flex';
+            }
+
+            /**
+             * Download top posts report
+             */
+            function downloadTopPostsReport() {
+                const entries = saAllEntries || [];
+                
+                // Get yesterday's date
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+                const yesterdayPosts = entries
+                    .filter(e => {
+                        const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
+                        return postDate === yesterdayStr;
+                    })
+                    .map(e => ({
+                        ...e,
+                        engagements: (parseInt(e.likes) || 0) + (parseInt(e.comments) || 0) + (parseInt(e.shares) || 0)
+                    }))
+                    .sort((a, b) => b.engagements - a.engagements)
+                    .slice(0, 5);
+
+                if (yesterdayPosts.length === 0) {
+                    toast('No data to download', 'warning');
+                    return;
+                }
+
+                let csv = `Social Analytics - Top Posts Report\n`;
+                csv += `Generated: ${new Date().toLocaleString()}\n`;
+                csv += `Date: ${yesterdayStr}\n\n`;
+                csv += `Rank,Post Title,Platform,Type,Views,Likes,Comments,Shares,Total Engagements\n`;
+
+                yesterdayPosts.forEach((post, idx) => {
+                    csv += `${idx + 1},"${(post.title || post.post || '').replace(/"/g, '""')}","${post.platform || post.client || ''}","${post.type || post.postType || ''}",${parseInt(post.views) || 0},${parseInt(post.likes) || 0},${parseInt(post.comments) || 0},${parseInt(post.shares) || 0},${post.engagements}\n`;
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `top-posts-${yesterdayStr}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                toast('✅ Report downloaded', 'success');
+            }
+
+            /**
+             * Open monthly report dialog
+             */
+            function openMonthlyReportDialog() {
+                if (!canViewSocialAnalytics()) {
+                    toast('You do not have permission to generate reports', 'error');
+                    return;
+                }
+
+                document.getElementById('saMonthlyReportModal').style.display = 'flex';
+            }
+
+            /**
+             * Generate and download monthly report
+             */
+            function generateAndDownloadMonthlyReport() {
+                const client = document.getElementById('saReportClient').value;
+                const month = parseInt(document.getElementById('saReportMonth').value);
+                const year = parseInt(document.getElementById('saReportYear').value);
+                const format = document.querySelector('input[name="saReportFormat"]:checked').value;
+
+                if (!client || !month || !year) {
+                    toast('Please select client, month and year', 'error');
+                    return;
+                }
+
+                const entries = saAllEntries || [];
+                
+                // Filter entries for the selected client and month
+                const monthStart = new Date(year, month - 1, 1);
+                const monthEnd = new Date(year, month, 0);
+                const monthStartStr = monthStart.toISOString().split('T')[0];
+                const monthEndStr = monthEnd.toISOString().split('T')[0];
+
+                const clientEntries = entries.filter(e => {
+                    const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
+                    const isInMonth = postDate >= monthStartStr && postDate <= monthEndStr;
+                    const isClient = (e.platform === client || e.client === client);
+                    return isInMonth && isClient;
+                });
+
+                if (clientEntries.length === 0) {
+                    toast(`No data found for ${client} in ${monthStart.toLocaleString('default', { month: 'long', year: 'numeric' })}`, 'info');
+                    return;
+                }
+
+                // Calculate metrics
+                const metrics = {
+                    totalPosts: clientEntries.length,
+                    totalViews: 0,
+                    totalLikes: 0,
+                    totalComments: 0,
+                    totalShares: 0,
+                    totalEngagements: 0,
+                    byType: {}
+                };
+
+                clientEntries.forEach(e => {
+                    metrics.totalViews += parseInt(e.views) || 0;
+                    metrics.totalLikes += parseInt(e.likes) || 0;
+                    metrics.totalComments += parseInt(e.comments) || 0;
+                    metrics.totalShares += parseInt(e.shares) || 0;
+                    const eng = (parseInt(e.likes) || 0) + (parseInt(e.comments) || 0) + (parseInt(e.shares) || 0);
+                    metrics.totalEngagements += eng;
+
+                    const type = e.type || e.postType || 'Post';
+                    metrics.byType[type] = (metrics.byType[type] || 0) + 1;
+                });
+
+                metrics.averageEngagementRate = metrics.totalViews > 0 
+                    ? ((metrics.totalEngagements / metrics.totalViews) * 100).toFixed(2)
+                    : '0.00';
+
+                if (format === 'csv') {
+                    // Generate CSV
+                    let csv = `Social Analytics Monthly Report\n`;
+                    csv += `Client: ${client}\n`;
+                    csv += `Period: ${monthStart.toLocaleString('default', { month: 'long', year: 'numeric' })}\n`;
+                    csv += `Generated: ${new Date().toLocaleString()}\n\n`;
+                    
+                    csv += `Summary\n`;
+                    csv += `Total Posts,${metrics.totalPosts}\n`;
+                    csv += `Total Views,${metrics.totalViews}\n`;
+                    csv += `Total Likes,${metrics.totalLikes}\n`;
+                    csv += `Total Comments,${metrics.totalComments}\n`;
+                    csv += `Total Shares,${metrics.totalShares}\n`;
+                    csv += `Total Engagements,${metrics.totalEngagements}\n`;
+                    csv += `Engagement Rate,${metrics.averageEngagementRate}%\n\n`;
+                    
+                    csv += `Posts by Type\n`;
+                    Object.entries(metrics.byType).forEach(([type, count]) => {
+                        csv += `${type},${count}\n`;
+                    });
+                    csv += `\n`;
+                    
+                    csv += `Detailed Posts\n`;
+                    csv += `Date,Title,Type,Views,Likes,Comments,Shares\n`;
+                    clientEntries.forEach(e => {
+                        csv += `"${e.postingDate || e.reportDate}","${(e.title || e.post || '').replace(/"/g, '""')}","${e.type || e.postType || ''}",${parseInt(e.views) || 0},${parseInt(e.likes) || 0},${parseInt(e.comments) || 0},${parseInt(e.shares) || 0}\n`;
+                    });
+                    
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${client}-report-${monthStart.getFullYear()}-${String(month).padStart(2, '0')}.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                } else if (format === 'html') {
+                    // Generate HTML
+                    const monthName = monthStart.toLocaleString('default', { month: 'long' });
+                    const html = `
+                        <div class="monthly-report">
+                            <h2>${client} - ${monthName} ${year}</h2>
+                            
+                            <div class="report-metrics">
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Posts</div>
+                                    <div class="metric-value">${metrics.totalPosts}</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Views</div>
+                                    <div class="metric-value">${metrics.totalViews.toLocaleString()}</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Engagements</div>
+                                    <div class="metric-value">${metrics.totalEngagements.toLocaleString()}</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Engagement Rate</div>
+                                    <div class="metric-value">${metrics.averageEngagementRate}%</div>
+                                </div>
+                            </div>
+
+                            <div class="report-breakdown">
+                                <h3>Engagement Breakdown</h3>
+                                <ul>
+                                    <li><strong>Likes:</strong> ${metrics.totalLikes.toLocaleString()}</li>
+                                    <li><strong>Comments:</strong> ${metrics.totalComments.toLocaleString()}</li>
+                                    <li><strong>Shares:</strong> ${metrics.totalShares.toLocaleString()}</li>
+                                </ul>
+                            </div>
+
+                            <div class="report-types">
+                                <h3>Posts by Type</h3>
+                                <ul>
+                                    ${Object.entries(metrics.byType).map(([type, count]) => 
+                                        `<li>${type}: ${count}</li>`
+                                    ).join('')}
+                                </ul>
+                            </div>
+
+                            <div class="report-posts-table">
+                                <h3>All Posts</h3>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Title</th>
+                                            <th>Type</th>
+                                            <th>Views</th>
+                                            <th>Likes</th>
+                                            <th>Comments</th>
+                                            <th>Shares</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${clientEntries.map(e => `
+                                            <tr>
+                                                <td>${e.postingDate || e.reportDate}</td>
+                                                <td>${(e.title || e.post || '').substring(0, 50)}</td>
+                                                <td>${e.type || e.postType || ''}</td>
+                                                <td>${parseInt(e.views) || 0}</td>
+                                                <td>${parseInt(e.likes) || 0}</td>
+                                                <td>${parseInt(e.comments) || 0}</td>
+                                                <td>${parseInt(e.shares) || 0}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+
+                    const newWindow = window.open('', '', 'width=1000,height=800');
+                    newWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>${client} - ${monthName} ${year}</title>
+                            <style>
+                                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #f5f5f5; }
+                                .monthly-report { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                                h2 { color: #1f2937; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 30px; font-size: 24px; }
+                                h3 { color: #374151; margin-top: 25px; margin-bottom: 15px; }
+                                .report-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+                                .metric-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; }
+                                .metric-label { color: #6b7280; font-size: 0.875rem; font-weight: 500; }
+                                .metric-value { color: #1f2937; font-size: 1.875rem; font-weight: bold; margin-top: 5px; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+                                th { background: #f3f4f6; font-weight: 600; color: #1f2937; }
+                                tr:hover { background: #f9fafb; }
+                                ul { list-style: none; padding: 0; }
+                                li { padding: 8px 0; color: #374151; }
+                                li strong { color: #1f2937; }
+                                .button { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; }
+                                .button:hover { background: #2563eb; }
+                            </style>
+                        </head>
+                        <body>
+                            ${html}
+                            <button class="button" onclick="window.print()">🖨️ Print Report</button>
+                        </body>
+                        </html>
+                    `);
+                    newWindow.document.close();
+                }
+
+                document.getElementById('saMonthlyReportModal').style.display = 'none';
+                toast('✅ Report generated successfully', 'success');
+            }
                 if (!tasks) return [];
                 return tasks.filter(t => !t.manual && t.status && t.status.toLowerCase() === 'posted');
             }
