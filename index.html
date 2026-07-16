@@ -8117,7 +8117,7 @@
                                             class="text-left text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                             <th class="pb-3 pr-2 sm:pr-4 px-4 sm:px-0">Date</th>
                                             <th class="pb-3 pr-2 sm:pr-4">Title</th>
-                                            <th class="pb-3 pr-2 sm:pr-4">Platform</th>
+                                            <th class="pb-3 pr-2 sm:pr-4 hidden sm:table-cell">Platform</th>
                                             <th class="pb-3 pr-2 sm:pr-4 text-right">Views</th>
                                             <th class="pb-3 pr-2 sm:pr-4 text-right">Likes</th>
                                             <th class="pb-3 text-center">Actions</th>
@@ -18086,12 +18086,15 @@
                         });
                     }
                 }
-                if (currentSearchTerm) filtered = filtered.filter(t => {
-                    const searchLower = currentSearchTerm.toLowerCase();
-                    return (t.id && t.id.toLowerCase().includes(searchLower)) ||
-                        (t.desc && t.desc.toLowerCase().includes(searchLower)) ||
-                        (t.assignee && t.assignee.toLowerCase().includes(searchLower));
-                });
+                if (currentSearchTerm) {
+                    const terms = currentSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+                    if (terms.length > 0) {
+                        filtered = filtered.filter(t => {
+                            const searchableText = `${t.id || ''} ${t.desc || ''} ${t.assignee || ''}`.toLowerCase();
+                            return terms.every(word => searchableText.includes(word));
+                        });
+                    }
+                }
 
                 if (taskSortCol) {
                     updateSortIconUI('task', taskSortCol, taskSortDir);
@@ -18379,13 +18382,13 @@
                     }
                 }
                 if (currentInternalSearchTerm) {
-                    const term = currentInternalSearchTerm.toLowerCase();
-                    filtered = filtered.filter(t =>
-                        (t.id || '').toLowerCase().includes(term) ||
-                        (t.desc || '').toLowerCase().includes(term) ||
-                        (t.client || '').toLowerCase().includes(term) ||
-                        (assigneeName(t) || '').toLowerCase().includes(term)
-                    );
+                    const terms = currentInternalSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+                    if (terms.length > 0) {
+                        filtered = filtered.filter(t => {
+                            const searchableText = `${t.id || ''} ${t.desc || ''} ${t.client || ''} ${assigneeName(t) || ''}`.toLowerCase();
+                            return terms.every(word => searchableText.includes(word));
+                        });
+                    }
                 }
                 if (internalTaskSortCol) {
                     updateSortIconUI('internal-task', internalTaskSortCol, internalTaskSortDir);
@@ -18430,9 +18433,11 @@
                             }
                             // Search
                             if (currentInternalSearchTerm) {
-                                const term = currentInternalSearchTerm.toLowerCase();
-                                if (!((t.id || '').toLowerCase().includes(term) || (t.desc || '').toLowerCase().includes(term) ||
-                                    (t.client || '').toLowerCase().includes(term) || (assigneeName(t) || '').toLowerCase().includes(term))) return false;
+                                const terms = currentInternalSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+                                if (terms.length > 0) {
+                                    const searchableText = `${t.id || ''} ${t.desc || ''} ${t.client || ''} ${assigneeName(t) || ''}`.toLowerCase();
+                                    if (!terms.every(word => searchableText.includes(word))) return false;
+                                }
                             }
                             return true;
                         });
@@ -35828,13 +35833,13 @@
                 }
 
                 if (term) {
-                    filtered = filtered.filter(t =>
-                        (t.status && t.status.toLowerCase().includes(searchLower)) ||
-                        (t.client && t.client.toLowerCase().includes(searchLower)) ||
-                        (t.id && t.id.toLowerCase().includes(searchLower)) ||
-                        (t.desc && t.desc.toLowerCase().includes(searchLower)) ||
-                        (assigneeName(t) && assigneeName(t).toLowerCase().includes(searchLower))
-                    );
+                    const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
+                    if (terms.length > 0) {
+                        filtered = filtered.filter(t => {
+                            const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''} ${assigneeName(t) || ''}`.toLowerCase();
+                            return terms.every(word => searchableText.includes(word));
+                        });
+                    }
                 }
 
                 filtered.sort((a, b) => {
@@ -39889,12 +39894,13 @@
                     postedTasks = postedTasks.filter(t => t.client && t.client.toLowerCase() === clientFilter.toLowerCase());
                 }
 
-                const filtered = postedTasks.filter(t => {
-                    const descMatch = (t.desc || '').toLowerCase().includes(query);
-                    const idMatch = (t.id || '').toLowerCase().includes(query);
-                    const clientMatch = (t.client || '').toLowerCase().includes(query);
-                    return descMatch || idMatch || clientMatch;
-                });
+                const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+                const filtered = terms.length > 0
+                    ? postedTasks.filter(t => {
+                        const searchableText = `${t.id || ''} ${t.desc || ''} ${t.client || ''}`.toLowerCase();
+                        return terms.every(word => searchableText.includes(word));
+                    })
+                    : postedTasks;
 
                 if (filtered.length === 0) {
                     listContainer.innerHTML = '';
@@ -41422,13 +41428,15 @@
 
 
             function filterCompletedTasks() {
-                const searchTerm = document.getElementById('cr-search-input')?.value.toLowerCase() || '';
+                const searchInputVal = document.getElementById('cr-search-input')?.value || '';
+                const terms = searchInputVal.toLowerCase().split(/\s+/).filter(Boolean);
 
-                const filtered = completedTasksFilteredList.filter(t =>
-                    t.desc?.toLowerCase().includes(searchTerm) ||
-                    t.id?.toLowerCase().includes(searchTerm) ||
-                    t.client?.toLowerCase().includes(searchTerm)
-                );
+                const filtered = terms.length > 0
+                    ? completedTasksFilteredList.filter(t => {
+                        const searchableText = `${t.id || ''} ${t.desc || ''} ${t.client || ''}`.toLowerCase();
+                        return terms.every(word => searchableText.includes(word));
+                    })
+                    : completedTasksFilteredList;
 
                 renderCompletedTasksList(filtered);
                 updateCompletedTasksKPIs(filtered);

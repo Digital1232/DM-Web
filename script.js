@@ -3315,12 +3315,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
                 });
             }
         }
-        if (currentSearchTerm) filtered = filtered.filter(t => {
-            const searchLower = currentSearchTerm.toLowerCase();
-            return (t.id && t.id.toLowerCase().includes(searchLower)) ||
-                (t.desc && t.desc.toLowerCase().includes(searchLower)) ||
-                (t.assignee && t.assignee.toLowerCase().includes(searchLower));
-        });
+        if (currentSearchTerm) {
+            const terms = currentSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+            if (terms.length > 0) {
+                filtered = filtered.filter(t => {
+                    const searchableText = `${t.id || ''} ${t.desc || ''} ${t.assignee || ''}`.toLowerCase();
+                    return terms.every(word => searchableText.includes(word));
+                });
+            }
+        }
 
         if (taskSortCol) {
             updateSortIconUI('task', taskSortCol, taskSortDir);
@@ -3514,13 +3517,13 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
             }
         }
         if (currentInternalSearchTerm) {
-            const term = currentInternalSearchTerm.toLowerCase();
-            filtered = filtered.filter(t =>
-                (t.id || '').toLowerCase().includes(term) ||
-                (t.desc || '').toLowerCase().includes(term) ||
-                (t.client || '').toLowerCase().includes(term) ||
-                (assigneeName(t) || '').toLowerCase().includes(term)
-            );
+            const terms = currentInternalSearchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+            if (terms.length > 0) {
+                filtered = filtered.filter(t => {
+                    const searchableText = `${t.id || ''} ${t.desc || ''} ${t.client || ''} ${assigneeName(t) || ''}`.toLowerCase();
+                    return terms.every(word => searchableText.includes(word));
+                });
+            }
         }
         if (internalTaskSortCol) {
             updateSortIconUI('internal-task', internalTaskSortCol, internalTaskSortDir);
@@ -10934,12 +10937,13 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         let filtered = tasks.filter(t => DAILY_PLAN_ALLOCATION_STATUSES.includes(t.status));
 
         if (term) {
-            filtered = filtered.filter(t =>
-                (t.status && t.status.toLowerCase().includes(searchLower)) ||
-                (t.client && t.client.toLowerCase().includes(searchLower)) ||
-                (t.id && t.id.toLowerCase().includes(searchLower)) ||
-                (t.desc && t.desc.toLowerCase().includes(searchLower))
-            );
+            const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
+            if (terms.length > 0) {
+                filtered = filtered.filter(t => {
+                    const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''}`.toLowerCase();
+                    return terms.every(word => searchableText.includes(word));
+                });
+            }
         } else {
             // Show tasks for selected user OR unassigned tasks so admin can assign them
             filtered = filtered.filter(t => (assigneeMatches(t, userEmail) || !t.assignee || t.assignee === 'Unassigned'));
@@ -11338,12 +11342,11 @@ function populateCompletedTasks() {
         
         // Check search filter
         if (completedTasksFilter) {
-            const searchLower = completedTasksFilter.toLowerCase();
-            const matchesSearch = (t.id || '').toLowerCase().includes(searchLower) ||
-                                  (t.desc || '').toLowerCase().includes(searchLower) ||
-                                  (t.summary || '').toLowerCase().includes(searchLower) ||
-                                  (t.client || '').toLowerCase().includes(searchLower);
-            if (!matchesSearch) return false;
+            const terms = completedTasksFilter.toLowerCase().split(/\s+/).filter(Boolean);
+            if (terms.length > 0) {
+                const searchableText = `${t.id || ''} ${t.desc || ''} ${t.summary || ''} ${t.client || ''}`.toLowerCase();
+                if (!terms.every(word => searchableText.includes(word))) return false;
+            }
         }
         
         return true;

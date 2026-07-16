@@ -351,8 +351,11 @@ function processCSVImport(csvText) {
         if (hasData) {
           const record = {
             post,
+            title: post,
             client,
             postDate,
+            postingDate: postDate,
+            reportDate: postDate,
             postType,
             platform: platformInfo.name,
             views: 0,
