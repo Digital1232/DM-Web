@@ -13318,9 +13318,17 @@
             function checkAutoCheckout() {
                 if (!isCheckedIn || !checkInTime) return;
                 const now = new Date();
+                const ciDate = new Date(checkInTime);
+                
+                // Check if it's a different calendar day
+                if (now.toDateString() !== ciDate.toDateString()) {
+                    autoCheckOut();
+                    return;
+                }
+                
                 const limit = getCheckoutLimit();
                 const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
-                if (isPastTime || now.toDateString() !== new Date(checkInTime).toDateString()) {
+                if (isPastTime) {
                     autoCheckOut();
                 }
             }
@@ -13348,15 +13356,29 @@
                 const state = localStorage.getItem('worksync_timerState');
                 const ciTime = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
                 if (!state || !ciTime) return;
+                
+                const now = new Date();
+                const ciDate = new Date(ciTime);
+                
+                // Check if it's a NEW calendar day (date mismatch means yesterday or older check-in)
+                if (now.toDateString() !== ciDate.toDateString()) {
+                    // It's a different day - auto logout the old session
+                    localStorage.removeItem('worksync_timerState');
+                    localStorage.removeItem('worksync_checkInTime');
+                    localStorage.removeItem('worksync_totalBreakDuration');
+                    localStorage.removeItem('worksync_breakStartTime');
+                    isCheckedIn = false;
+                    checkInTime = null;
+                    return;
+                }
+                
                 isCheckedIn = true;
                 checkInTime = ciTime;
                 totalBreakDuration = parseInt(localStorage.getItem('worksync_totalBreakDuration'), 10) || 0;
 
-                const now = new Date();
-                const ciDate = new Date(ciTime);
                 const limit = getCheckoutLimit();
                 const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
-                if (isPastTime || now.toDateString() !== ciDate.toDateString()) {
+                if (isPastTime) {
                     if (state === 'paused') {
                         breakStartTime = parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
                     }
