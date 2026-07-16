@@ -65,6 +65,11 @@ if (initializeApp) {
     const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
     const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'murugeshvilpower@gmail.com'];
 
+    // Daily Plan View Access - Map of user email to list of emails they can view tasks for
+    const DAILY_PLAN_VIEW_ACCESS = {
+        'karthikavilpower@gmail.com': ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'] // Karthika can view Barath and Immanuel's tasks
+    };
+
     const USERS = [
         { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
         { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
@@ -113,6 +118,15 @@ if (initializeApp) {
             'murugeshvilpower@gmail.com'
         ];
         return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
+    }
+
+    function canViewDailyPlanTasks(targetUserEmail) {
+        if (!currentUser) return false;
+        // Admins can view everyone's tasks
+        if (isAdmin()) return true;
+        // Check if current user can view this specific user's tasks
+        const userAccessList = DAILY_PLAN_VIEW_ACCESS[currentUser.email.toLowerCase()] || [];
+        return userAccessList.includes(targetUserEmail.toLowerCase());
     }
 
     const JIRA = {
@@ -9960,9 +9974,13 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         const dateInput = document.getElementById('dp-date');
         if (dateInput && !dateInput.value) dateInput.value = todayIso();
 
-        if (isAdmin()) {
+        // Show filter for admins or users with special permissions
+        const hasSpecialAccess = isAdmin() || (currentUser && (DAILY_PLAN_VIEW_ACCESS[currentUser.email.toLowerCase()] || []).length > 0);
+        if (hasSpecialAccess) {
             document.getElementById('dp-user-filter-container').classList.remove('hidden');
             populateDpUserFilter();
+        } else {
+            document.getElementById('dp-user-filter-container').classList.add('hidden');
         }
 
         if (dailyPlansUnsub) dailyPlansUnsub();
@@ -9982,7 +10000,17 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         const merged = new Map();
         USERS.forEach(u => merged.set(u.email.toLowerCase(), { ...u }));
         currentWorkUsers.forEach(u => merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u }));
-        const usersList = [...merged.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        let usersList = [...merged.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        // If not admin, filter to only allowed users
+        if (!isAdmin()) {
+            const allowedEmails = new Set(['current-user']); // Include self
+            if (currentUser) allowedEmails.add(currentUser.email.toLowerCase());
+            const customAccess = DAILY_PLAN_VIEW_ACCESS[currentUser.email.toLowerCase()] || [];
+            customAccess.forEach(email => allowedEmails.add(email.toLowerCase()));
+            
+            usersList = usersList.filter(u => allowedEmails.has(u.email.toLowerCase()));
+        }
 
         usersList.forEach(u => {
             sel.innerHTML += `<option value="${u.email}">${u.name}</option>`;
@@ -10016,9 +10044,19 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
         const mergedUsers = Array.from(allUsersMap.values()); // Use allUsersMap
 
-        let targetUsers = isAdmin() && document.getElementById('dp-user-filter').value !== 'all'
-            ? [document.getElementById('dp-user-filter').value]
-            : (isAdmin() ? mergedUsers.map(u => u.email) : [currentUser.email]);
+        let targetUsers;
+        if (isAdmin() && document.getElementById('dp-user-filter').value !== 'all') {
+            // Admin selected a specific user
+            targetUsers = [document.getElementById('dp-user-filter').value];
+        } else if (isAdmin()) {
+            // Admin viewing all
+            targetUsers = mergedUsers.map(u => u.email);
+        } else {
+            // Non-admin: show own tasks and any users they have permission to view
+            targetUsers = [currentUser.email];
+            const allowedUsers = DAILY_PLAN_VIEW_ACCESS[currentUser.email.toLowerCase()] || [];
+            targetUsers = targetUsers.concat(allowedUsers);
+        }
 
         let plannedTasks = [];
 
