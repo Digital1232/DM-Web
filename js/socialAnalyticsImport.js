@@ -224,7 +224,7 @@ function normalizeDateFormat(dateStr) {
 /**
  * Process and validate CSV import
  * Maps multiple platform column sections into distinct platform entries.
- * New format: Post, Client, Date, Type, then platform-specific metrics
+ * New format: Post, Client, Date, Type, then platform-specific metrics (6 + 5 + 5 + 3 columns)
  * @param {string} csvText - CSV content
  * @returns {Object} { success: boolean, data: Array, errors: Array, warnings: Array, summary: Object }
  */
@@ -246,9 +246,9 @@ function processCSVImport(csvText) {
     const { headers, rows } = parseCSV(csvText);
     result.summary.totalRows = rows.length;
 
-    // Check header length
-    if (headers.length < 4) {
-      result.errors.push('CSV must contain at least 4 columns (Post, Client, Date, Type)');
+    // Check header length - should be at least 4 base + 6 (Instagram) = 10
+    if (headers.length < 10) {
+      result.errors.push('CSV must contain at least 10 columns (Post, Client, Date, Type + Instagram metrics)');
       return result;
     }
 
@@ -313,34 +313,40 @@ function processCSVImport(csvText) {
         return;
       }
 
-      // Parse platform data from headers
-      const platformsData = [];
-      const headerMap = {};
-
-      headers.forEach((header, index) => {
-        if (index >= 4) { // Skip first 4 columns
-          const match = header.match(/^(\w+(?:\s\(\w+\))?)-(.+)$/);
-          if (match) {
-            const platform = match[1].trim();
-            const metric = match[2].trim();
-            
-            if (!headerMap[platform]) {
-              headerMap[platform] = {};
-              platformsData.push({ name: platform, metrics: headerMap[platform] });
-            }
-            headerMap[platform][metric] = index;
-          }
+      // Extract platform-specific entries based on fixed column positions
+      // Instagram: cols 4-9 (Views, Likes, Comments, Shares, Saves, Follows)
+      // Facebook: cols 10-14 (Views, Likes, Comments, Shares, Engagements)
+      // X: cols 15-19 (Views, Likes, Comments, Reposts, Engagements)
+      // YouTube: cols 20-22 (Views, Likes, Comments)
+      const platformsData = [
+        {
+          name: 'Instagram',
+          indices: [4, 5, 6, 7, 8, 9],
+          fields: ['views', 'likes', 'comments', 'shares', 'saves', 'follows']
+        },
+        {
+          name: 'Facebook',
+          indices: [10, 11, 12, 13, 14],
+          fields: ['views', 'likes', 'comments', 'shares', 'engagements']
+        },
+        {
+          name: 'X',
+          indices: [15, 16, 17, 18, 19],
+          fields: ['views', 'likes', 'comments', 'reposts', 'engagements']
+        },
+        {
+          name: 'YouTube',
+          indices: [20, 21, 22],
+          fields: ['views', 'likes', 'comments']
         }
-      });
+      ];
 
       let platformCount = 0;
       let platformErrors = [];
 
       platformsData.forEach(platformInfo => {
-        const metrics = platformInfo.metrics;
-        
         // Check if there is data for this platform
-        const hasData = Object.values(metrics).some(idx => {
+        const hasData = platformInfo.indices.some(idx => {
           const val = values[idx];
           if (val === undefined || val === null) return false;
           const clean = val.trim();
@@ -369,35 +375,24 @@ function processCSVImport(csvText) {
           };
 
           // Extract and validate numeric fields
-          Object.entries(metrics).forEach(([metricName, colIdx]) => {
+          platformInfo.indices.forEach((colIdx, i) => {
+            const fieldName = platformInfo.fields[i];
             const val = values[colIdx];
+            
             if (val !== undefined && val !== null && val.trim() !== '-' && val.trim() !== '') {
               const cleanVal = val.replace(/,/g, '').trim();
               const num = parseInt(cleanVal, 10);
               if (isNaN(num) || num < 0) {
-                platformErrors.push(`Row ${rowNumber}: Platform ${platformInfo.name} metric "${metricName}" must be a non-negative number, got "${val}"`);
+                platformErrors.push(`Row ${rowNumber}: Platform ${platformInfo.name} field "${fieldName}" must be a non-negative number, got "${val}"`);
               } else {
-                // Map metric names to record fields
-                const fieldMap = {
-                  'Views': 'views',
-                  'Likes': 'likes',
-                  'Comments': 'comments',
-                  'Shares': 'shares',
-                  'Reposts': 'reposts',
-                  'Engagements': 'engagements',
-                  'Reach': 'reach',
-                  'Follows Increased': 'follows',
-                  'Saves': 'saves'
-                };
-                const field = fieldMap[metricName] || metricName.toLowerCase().replace(/\s+/g, '');
-                record[field] = num;
+                record[fieldName] = num;
               }
             }
           });
 
           // Calculate engagements if not provided
-          if (record.engagements === 0) {
-            record.engagements = record.likes + record.comments + (record.shares || 0) + (record.reposts || 0);
+          if (record.engagements === 0 && (platformInfo.name === 'Instagram' || platformInfo.name === 'YouTube')) {
+            record.engagements = record.likes + record.comments + (record.shares || 0);
           }
 
           // Double check record validity
@@ -453,13 +448,13 @@ function downloadImportTemplate() {
   const headers = [
     'Post', 'Client', 'Post Date', 'Post type',
     // Instagram metrics
-    'Instagram-Views', 'Instagram-Likes', 'Instagram-Comments', 'Instagram-Shares', 'Instagram-Saves', 'Instagram-Follows Increased',
+    'Views', 'Likes', 'Comments', 'Shares', 'Saves', 'Follows Increased',
     // Facebook metrics
-    'Facebook-Views', 'Facebook-Likes', 'Facebook-Comments', 'Facebook-Shares', 'Facebook-Engagements',
+    'Views', 'Likes', 'Comments', 'Shares', 'Engagements',
     // X (Twitter) metrics
-    'X-Views', 'X-Likes', 'X-Comments', 'X-Reposts', 'X-Engagements',
+    'Views', 'Likes', 'Comments', 'Reposts', 'Engagements',
     // YouTube metrics (optional)
-    'YouTube-Views', 'YouTube-Likes', 'YouTube-Comments'
+    'Views', 'Likes', 'Comments'
   ];
 
   const sampleData = [
