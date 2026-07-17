@@ -8111,10 +8111,29 @@
                                 </div>
                             </div>
                             <div class="overflow-x-auto -mx-4 sm:mx-0">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <div id="sa-bulk-actions" class="hidden flex items-center gap-2">
+                                        <button id="sa-select-all-btn" onclick="toggleSelectAllAnalytics()" 
+                                            class="px-3 py-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-all">
+                                            Select All
+                                        </button>
+                                        <span id="sa-selected-count" class="text-sm font-semibold text-slate-600">
+                                            0 selected
+                                        </span>
+                                        <button id="sa-bulk-delete-btn" onclick="confirmBulkDeleteAnalytics()" 
+                                            class="px-4 py-2 text-xs font-bold rounded-lg bg-rose-100 text-rose-600 hover:bg-rose-200 transition-all">
+                                            Delete Selected
+                                        </button>
+                                    </div>
+                                </div>
                                 <table class="w-full text-xs sm:text-sm" id="sa-entries-table">
                                     <thead>
                                         <tr
                                             class="text-left text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                            <th class="pb-3 px-2 sm:px-4 w-8">
+                                                <input type="checkbox" id="sa-select-all-checkbox" onchange="toggleSelectAllAnalytics()" 
+                                                    class="w-4 h-4 rounded border-slate-300 cursor-pointer">
+                                            </th>
                                             <th class="pb-3 pr-2 sm:pr-4 px-4 sm:px-0">Date</th>
                                             <th class="pb-3 pr-2 sm:pr-4">Title</th>
                                             <th class="pb-3 pr-2 sm:pr-4 hidden sm:table-cell">Platform</th>
@@ -38504,6 +38523,10 @@
             window.saveAnalyticsEntry = saveAnalyticsEntry;
             window.editAnalyticsEntry = editAnalyticsEntry;
             window.deleteAnalyticsEntry = deleteAnalyticsEntry;
+            window.updateSaBulkActionsUI = updateSaBulkActionsUI;
+            window.toggleSelectAllAnalytics = toggleSelectAllAnalytics;
+            window.confirmBulkDeleteAnalytics = confirmBulkDeleteAnalytics;
+            window.bulkDeleteAnalyticsEntries = bulkDeleteAnalyticsEntries;
             window.showSaTaskPicker = showSaTaskPicker;
             window.hideSaTaskPicker = hideSaTaskPicker;
             window.toggleSaTaskPicker = toggleSaTaskPicker;
@@ -39087,7 +39110,7 @@
                 const tbody = document.getElementById('sa-entries-tbody');
                 if (!tbody) return;
                 if (!entries.length) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 text-sm">No entries match your filters.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 text-sm">No entries match your filters.</td></tr>';
                     return;
                 }
 
@@ -39096,7 +39119,11 @@
                     const platformColor = SA_PLATFORM_COLORS[e.platform] || '#94a3b8';
                     const canEdit = allowedToEdit;
                     return `
-                        <tr class="hover:bg-slate-50 transition-colors sa-fade-up" style="animation-delay:${idx * 30}ms">
+                        <tr class="hover:bg-slate-50 transition-colors sa-fade-up sa-entry-row" data-entry-id="${e.id}" data-user-key="${e.userKey}" style="animation-delay:${idx * 30}ms">
+                            <td class="py-3 px-2 sm:px-4 w-8">
+                                <input type="checkbox" class="sa-entry-checkbox w-4 h-4 rounded border-slate-300 cursor-pointer" 
+                                    onchange="updateSaBulkActionsUI()">
+                            </td>
                             <td class="py-3 px-4 sm:pr-4 text-xs font-semibold text-slate-600 whitespace-nowrap">${formatSaDate(e.postingDate)}</td>
                             <td class="py-3 px-2 sm:pr-4">
                                 <div class="text-xs sm:text-sm font-bold text-slate-900 max-w-[120px] sm:max-w-[200px] truncate" title="${(e.title || '').replace(/"/g, '&quot;')}">${e.title || 'Untitled'}</div>
@@ -39124,6 +39151,9 @@
                         </tr>
                     `;
                 }).join('');
+                
+                // Reset bulk actions UI
+                updateSaBulkActionsUI();
             }
 
 
@@ -39282,6 +39312,121 @@
                 } catch (err) {
                     console.error('Failed to delete analytics entry:', err);
                     toast('Failed to delete. Please try again.', 'error');
+                }
+            }
+
+            /**
+             * Update bulk actions UI based on selected entries
+             */
+            function updateSaBulkActionsUI() {
+                const checkboxes = document.querySelectorAll('.sa-entry-checkbox');
+                const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                const bulkActionsPanel = document.getElementById('sa-bulk-actions');
+                const selectedCountEl = document.getElementById('sa-selected-count');
+                const selectAllCheckbox = document.getElementById('sa-select-all-checkbox');
+                
+                // Show/hide bulk actions panel
+                if (selectedCount > 0) {
+                    bulkActionsPanel.classList.remove('hidden');
+                    selectedCountEl.textContent = `${selectedCount} selected`;
+                    
+                    // Update select all checkbox
+                    const totalCount = checkboxes.length;
+                    selectAllCheckbox.checked = selectedCount === totalCount;
+                    selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+                } else {
+                    bulkActionsPanel.classList.add('hidden');
+                    selectAllCheckbox.checked = false;
+                    selectAllCheckbox.indeterminate = false;
+                }
+            }
+
+            /**
+             * Toggle select all analytics entries
+             */
+            function toggleSelectAllAnalytics() {
+                const selectAllCheckbox = document.getElementById('sa-select-all-checkbox');
+                const checkboxes = document.querySelectorAll('.sa-entry-checkbox');
+                
+                checkboxes.forEach(cb => {
+                    cb.checked = selectAllCheckbox.checked;
+                });
+                
+                updateSaBulkActionsUI();
+            }
+
+            /**
+             * Confirm and delete all selected analytics entries
+             */
+            function confirmBulkDeleteAnalytics() {
+                if (!canEditSocialAnalytics()) {
+                    toast('You do not have permission to delete entries', 'error');
+                    return;
+                }
+
+                const checkboxes = document.querySelectorAll('.sa-entry-checkbox:checked');
+                const selectedCount = checkboxes.length;
+                
+                if (selectedCount === 0) {
+                    toast('Please select entries to delete', 'warning');
+                    return;
+                }
+
+                if (!confirm(`Delete ${selectedCount} selected analytics ${selectedCount === 1 ? 'entry' : 'entries'}? This action cannot be undone.`)) {
+                    return;
+                }
+
+                // Collect all selected entries
+                const entriesToDelete = [];
+                document.querySelectorAll('.sa-entry-row').forEach(row => {
+                    const checkbox = row.querySelector('.sa-entry-checkbox');
+                    if (checkbox.checked) {
+                        entriesToDelete.push({
+                            id: row.dataset.entryId,
+                            userKey: row.dataset.userKey
+                        });
+                    }
+                });
+
+                bulkDeleteAnalyticsEntries(entriesToDelete);
+            }
+
+            /**
+             * Perform bulk delete of analytics entries
+             */
+            async function bulkDeleteAnalyticsEntries(entries) {
+                if (entries.length === 0) return;
+
+                try {
+                    let successCount = 0;
+                    let failureCount = 0;
+
+                    // Delete all selected entries
+                    for (const entry of entries) {
+                        try {
+                            const targetKey = entry.userKey || saUserKey();
+                            await remove(ref(db, `worksync/social_analytics/${targetKey}/${entry.id}`));
+                            successCount++;
+                        } catch (err) {
+                            console.error(`Failed to delete entry ${entry.id}:`, err);
+                            failureCount++;
+                        }
+                    }
+
+                    // Show result
+                    if (failureCount === 0) {
+                        toast(`Successfully deleted ${successCount} ${successCount === 1 ? 'entry' : 'entries'}`, 'success');
+                    } else if (successCount === 0) {
+                        toast(`Failed to delete ${failureCount} ${failureCount === 1 ? 'entry' : 'entries'}`, 'error');
+                    } else {
+                        toast(`Deleted ${successCount}, failed ${failureCount}`, 'warning');
+                    }
+
+                    // Refresh the table
+                    filterSocialAnalytics();
+                } catch (err) {
+                    console.error('Bulk delete error:', err);
+                    toast('An error occurred during bulk delete', 'error');
                 }
             }
 
