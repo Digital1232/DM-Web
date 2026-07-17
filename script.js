@@ -67,7 +67,14 @@ if (initializeApp) {
 
     // Daily Plan View Access - Map of user email to list of emails they can view tasks for
     const DAILY_PLAN_VIEW_ACCESS = {
-        'karthikavilpower@gmail.com': ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'] // Karthika can view Barath and Immanuel's tasks
+        'karthikavilpower@gmail.com': [
+            'nanjil@vilpower.com',                    // Nanjil Manohar S
+            'digitalmarketing@vilpower.com',          // Palanirajan R
+            'murugeshvilpower@gmail.com',             // Murugesh Kumar A
+            'barathvilpower@gmail.com',               // Barath Magesh M
+            'snehavilpower@gmail.com',                // Sneha V
+            'immanuelvilpower@gmail.com'              // Immanuel Raja S
+        ] // Karthika can view all team members' tasks
     };
 
     const USERS = [
@@ -1541,9 +1548,20 @@ if (initializeApp) {
         isCheckedIn = false;
         if (checkInTime) {
             const ciDate = new Date(checkInTime);
-            const limitDate = new Date(ciDate);
+            const now = new Date();
             const limit = getCheckoutLimit();
-            limitDate.setHours(limit.hours, limit.mins, 0, 0);
+            
+            // Determine which date's limit to use: if it's a different day, use today's limit
+            let limitDate;
+            if (now.toDateString() !== ciDate.toDateString()) {
+                // Cross-day checkout: use today's date with checkout limit time
+                limitDate = new Date(now);
+                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+            } else {
+                // Same-day checkout: use check-in date with checkout limit time
+                limitDate = new Date(ciDate);
+                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+            }
 
             let endTime = Date.now();
             if (endTime > limitDate.getTime()) {
