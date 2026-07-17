@@ -33,6 +33,11 @@ function parseCSV(csvText) {
     if (!line) continue; // Skip empty lines
 
     const values = parseCSVLine(line);
+    
+    // Check if this is an empty row (all values are empty or just quotes)
+    const hasData = values.some(val => val && val.trim() !== '');
+    if (!hasData) continue; // Skip completely empty rows
+
     rows.push({ rowNumber: i + 1, values });
   }
 
