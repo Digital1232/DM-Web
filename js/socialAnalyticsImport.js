@@ -224,6 +224,7 @@ function normalizeDateFormat(dateStr) {
 /**
  * Process and validate CSV import
  * Maps multiple platform column sections into distinct platform entries.
+ * New format: Post, Client, Date, Type, then platform-specific metrics
  * @param {string} csvText - CSV content
  * @returns {Object} { success: boolean, data: Array, errors: Array, warnings: Array, summary: Object }
  */
@@ -246,8 +247,8 @@ function processCSVImport(csvText) {
     result.summary.totalRows = rows.length;
 
     // Check header length
-    if (headers.length < 6) {
-      result.errors.push('CSV must contain at least 6 columns (Post, Client, Date, Type)');
+    if (headers.length < 4) {
+      result.errors.push('CSV must contain at least 4 columns (Post, Client, Date, Type)');
       return result;
     }
 
@@ -259,11 +260,11 @@ function processCSVImport(csvText) {
         return;
       }
 
-      // Common fields
+      // Common fields from first 4 columns
       const post = values[0] ? values[0].trim() : '';
-      const rawClient = values[3] ? values[3].trim() : '';
-      const rawDate = values[4] ? values[4].trim() : '';
-      const rawType = values[5] ? values[5].trim() : '';
+      const rawClient = values[1] ? values[1].trim() : '';
+      const rawDate = values[2] ? values[2].trim() : '';
+      const rawType = values[3] ? values[3].trim() : '';
 
       // Validate common fields
       const rowErrors = [];
@@ -312,36 +313,34 @@ function processCSVImport(csvText) {
         return;
       }
 
-      // Extract platform-specific entries
-      const platformsData = [
-        {
-          name: 'Instagram',
-          indices: [6, 7, 8, 9, 10, 11],
-          map: { views: 6, likes: 7, comments: 8, shares: 9, reach: 11 }
-        },
-        {
-          name: 'Facebook',
-          indices: [12, 13, 14, 15, 16],
-          map: { views: 12, likes: 13, comments: 14, shares: 15 }
-        },
-        {
-          name: 'X (Twitter)',
-          indices: [17, 18, 19, 20, 21, 22],
-          map: { views: 17, likes: 18, comments: 19, shares: 20 } // Reposts mapped to shares
-        },
-        {
-          name: 'YouTube',
-          indices: [23, 24, 25],
-          map: { views: 23, likes: 24, comments: 25 }
+      // Parse platform data from headers
+      const platformsData = [];
+      const headerMap = {};
+
+      headers.forEach((header, index) => {
+        if (index >= 4) { // Skip first 4 columns
+          const match = header.match(/^(\w+(?:\s\(\w+\))?)-(.+)$/);
+          if (match) {
+            const platform = match[1].trim();
+            const metric = match[2].trim();
+            
+            if (!headerMap[platform]) {
+              headerMap[platform] = {};
+              platformsData.push({ name: platform, metrics: headerMap[platform] });
+            }
+            headerMap[platform][metric] = index;
+          }
         }
-      ];
+      });
 
       let platformCount = 0;
       let platformErrors = [];
 
       platformsData.forEach(platformInfo => {
-        // Check if there is data for this platform (i.e. not empty and not "-")
-        const hasData = platformInfo.indices.some(idx => {
+        const metrics = platformInfo.metrics;
+        
+        // Check if there is data for this platform
+        const hasData = Object.values(metrics).some(idx => {
           const val = values[idx];
           if (val === undefined || val === null) return false;
           const clean = val.trim();
@@ -362,38 +361,44 @@ function processCSVImport(csvText) {
             likes: 0,
             comments: 0,
             shares: 0,
-            reach: 0
+            reposts: 0,
+            engagements: 0,
+            reach: 0,
+            saves: 0,
+            follows: 0
           };
 
           // Extract and validate numeric fields
-          Object.entries(platformInfo.map).forEach(([field, colIdx]) => {
+          Object.entries(metrics).forEach(([metricName, colIdx]) => {
             const val = values[colIdx];
             if (val !== undefined && val !== null && val.trim() !== '-' && val.trim() !== '') {
               const cleanVal = val.replace(/,/g, '').trim();
               const num = parseInt(cleanVal, 10);
               if (isNaN(num) || num < 0) {
-                platformErrors.push(`Row ${rowNumber}: Platform ${platformInfo.name} field value must be a non-negative number, got "${val}"`);
+                platformErrors.push(`Row ${rowNumber}: Platform ${platformInfo.name} metric "${metricName}" must be a non-negative number, got "${val}"`);
               } else {
+                // Map metric names to record fields
+                const fieldMap = {
+                  'Views': 'views',
+                  'Likes': 'likes',
+                  'Comments': 'comments',
+                  'Shares': 'shares',
+                  'Reposts': 'reposts',
+                  'Engagements': 'engagements',
+                  'Reach': 'reach',
+                  'Follows Increased': 'follows',
+                  'Saves': 'saves'
+                };
+                const field = fieldMap[metricName] || metricName.toLowerCase().replace(/\s+/g, '');
                 record[field] = num;
               }
             }
           });
 
-          // profileVisits (Instagram specific, index 10)
-          if (platformInfo.name === 'Instagram') {
-             const pv = values[10];
-             if (pv !== undefined && pv !== null && pv.trim() !== '-' && pv.trim() !== '') {
-               const num = parseInt(pv.replace(/,/g, '').trim(), 10);
-               if (isNaN(num) || num < 0) {
-                 platformErrors.push(`Row ${rowNumber}: Instagram profile visits must be a non-negative number, got "${pv}"`);
-               } else {
-                 record.profileVisits = num;
-               }
-             }
+          // Calculate engagements if not provided
+          if (record.engagements === 0) {
+            record.engagements = record.likes + record.comments + (record.shares || 0) + (record.reposts || 0);
           }
-
-          // Calculate engagements
-          record.engagements = record.likes + record.comments + record.shares;
 
           // Double check record validity
           const recordValidation = validateAnalyticsRecord(record, rowNumber);
@@ -442,40 +447,53 @@ function mapRecordFields(record) {
 
 /**
  * Download import template CSV matching the Weekly Analytics format
+ * New format: Post, Client, Post Date, Post type, followed by platform-specific metrics
  */
 function downloadImportTemplate() {
   const headers = [
-    'Post', '', '', 'Client', 'Post Date', 'Post type',
-    'Views', 'Likes', 'Comments', 'Shares',
-    'Profile visits', 'Profile Reach',
-    'Views', 'Likes', 'Comments', 'Shares', 'Engagements',
-    'Views', 'Likes', 'Comments', 'Repost', 'Engagement', 'Clicks',
-    'Views', 'Likes', 'Comments'
+    'Post', 'Client', 'Post Date', 'Post type',
+    // Instagram metrics
+    'Instagram-Views', 'Instagram-Likes', 'Instagram-Comments', 'Instagram-Shares', 'Instagram-Saves', 'Instagram-Follows Increased',
+    // Facebook metrics
+    'Facebook-Views', 'Facebook-Likes', 'Facebook-Comments', 'Facebook-Shares', 'Facebook-Engagements',
+    // X (Twitter) metrics
+    'X-Views', 'X-Likes', 'X-Comments', 'X-Reposts', 'X-Engagements',
+    // YouTube metrics (optional)
+    'YouTube-Views', 'YouTube-Likes', 'YouTube-Comments'
   ];
 
   const sampleData = [
     [
-      '🚨Attention Alumni Squad 📢', '', '', 'Einstein', '07-01-2026', 'Video',
-      '4149', '149', '1', '137',
-      '8', '3598',
+      '🚨Attention Alumni Squad 📢', 'Einstein', '07-01-2026', 'Video',
+      // Instagram sample
+      '4149', '149', '1', '137', '8', '3598',
+      // Facebook sample
       '1059', '24', '0', '3', '28',
-      '-', '-', '-', '-', '-', '-',
+      // X sample
+      '2150', '45', '12', '8', '65',
+      // YouTube sample
       '164', '5', '0'
     ],
     [
-      'Every corner of this campus holds a memory.❤️', '', '', 'Einstein', '07-02-2026', 'Poster',
-      '1121', '26', '0', '10',
-      '0', '955',
+      'Every corner of this campus holds a memory.❤️', 'Einstein', '07-02-2026', 'Poster',
+      // Instagram sample
+      '1121', '26', '0', '10', '0', '955',
+      // Facebook sample
       '193', '3', '0', '0', '4',
-      '-', '-', '-', '-', '-', '-',
+      // X sample
+      '450', '22', '5', '2', '29',
+      // YouTube sample
       '-', '-', '-'
     ],
     [
-      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', '', '', 'IVN', '02-Jul', 'Poster',
-      '126', '6', '0', '0',
-      '0', '98',
+      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', 'IVN', '02-Jul', 'Poster',
+      // Instagram sample
+      '126', '6', '0', '0', '0', '98',
+      // Facebook sample
       '30', '3', '0', '0', '3',
-      '-', '-', '-', '-', '-', '-',
+      // X sample
+      '78', '8', '1', '0', '9',
+      // YouTube sample
       '-', '-', '-'
     ]
   ];
@@ -484,6 +502,12 @@ function downloadImportTemplate() {
   sampleData.forEach(row => {
     csv += row.map(val => `"${val}"`).join(',') + '\n';
   });
+
+  // Add empty rows for user to fill
+  const emptyRow = new Array(headers.length).fill('');
+  for (let i = 0; i < 3; i++) {
+    csv += emptyRow.map(val => `"${val}"`).join(',') + '\n';
+  }
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
