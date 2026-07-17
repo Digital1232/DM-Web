@@ -1120,44 +1120,89 @@ if (initializeApp) {
     } */
 
     async function logout() {
-        if (db && currentUser) {
-            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false);
-            await clearCurrentTask();
+        // Disable the logout button immediately to prevent double-clicks
+        const logoutBtn = document.getElementById('logout-btn') || document.querySelector('[onclick*="logout"]');
+        if (logoutBtn) logoutBtn.disabled = true;
+        
+        try {
+            // Parallel non-blocking cleanup - don't wait for database
+            if (db && currentUser) {
+                // Fire these off without awaiting (they'll complete in background)
+                Promise.resolve()
+                    .then(() => set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false))
+                    .then(() => clearCurrentTask())
+                    .catch(err => console.error('Logout cleanup error:', err));
+            }
+            
+            // Clear subscriptions immediately (non-blocking)
+            Object.values(convListeners).forEach(off => off && off());
+            if (currentWorkUnsub) currentWorkUnsub();
+            if (todayReportUnsub) todayReportUnsub();
+            if (announcementsUnsub) announcementsUnsub();
+            if (announcementNotifyUnsub) announcementNotifyUnsub();
+            if (dprUnsub) dprUnsub();
+            if (notesUnsub) notesUnsub();
+            if (attendanceUnsub) attendanceUnsub();
+            if (allTimeLogsUnsub) allTimeLogsUnsub();
+            if (dailyPlansUnsub) dailyPlansUnsub();
+            
+            // Clear intervals immediately (non-blocking)
+            if (dailyReportSchedulerRef) clearInterval(dailyReportSchedulerRef);
+            if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
+            if (syncIntervalRef) clearInterval(syncIntervalRef);
+            clearInterval(currentWorkRefreshRef);
+            clearInterval(timerRef);
+            
+            // Reset variables immediately
+            dailyReportSchedulerRef = null;
+            liveBoardTimerRef = null;
+            dailyPlansUnsub = null;
+            dailyPlans = {};
+            syncIntervalRef = null;
+            currentWorkUnsub = null;
+            todayReportUnsub = null;
+            announcementsUnsub = null;
+            announcementNotifyUnsub = null;
+            dprUnsub = null;
+            notesUnsub = null;
+            attendanceUnsub = null;
+            allTimeLogsUnsub = null;
+            currentWorkRefreshRef = null;
+            currentWorkFilterKey = '';
+            convListeners = {};
+            currentUser = null;
+            window.currentUser = null;
+            tasks = [];
+            dprEntries = [];
+            attendanceEvents = [];
+            activeTaskId = null;
+            isCheckedIn = false;
+            seconds = 0;
+            activeConvId = null;
+            unreadCounts = {};
+            unreadAnnouncements = 0;
+            
+            // Firebase signOut with timeout
+            try {
+                await Promise.race([
+                    signOut(auth),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+                ]);
+            } catch (err) {
+                console.error('SignOut error:', err);
+            }
+            
+            // Clear local storage and redirect
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = '/';
+            
+        } catch (err) {
+            console.error('Logout error:', err);
+            // Force redirect anyway
+            window.location.href = '/';
         }
-        await signOut(auth);
-        Object.values(convListeners).forEach(off => off && off());
-        if (currentWorkUnsub) currentWorkUnsub();
-        if (todayReportUnsub) todayReportUnsub();
-        if (announcementsUnsub) announcementsUnsub();
-        if (announcementNotifyUnsub) announcementNotifyUnsub();
-        if (dprUnsub) dprUnsub();
-        if (notesUnsub) notesUnsub();
-        if (attendanceUnsub) attendanceUnsub();
-        if (allTimeLogsUnsub) allTimeLogsUnsub();
-        if (dailyPlansUnsub) dailyPlansUnsub();
-        if (dailyReportSchedulerRef) clearInterval(dailyReportSchedulerRef);
-        dailyReportSchedulerRef = null;
-        if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
-        liveBoardTimerRef = null;
-        dailyPlansUnsub = null; dailyPlans = {};
-        if (syncIntervalRef) clearInterval(syncIntervalRef);
-        clearInterval(currentWorkRefreshRef);
-        currentWorkUnsub = null;
-        todayReportUnsub = null;
-        announcementsUnsub = null;
-        announcementNotifyUnsub = null;
-        dprUnsub = null;
-        notesUnsub = null;
-        attendanceUnsub = null;
-        allTimeLogsUnsub = null;
-        currentWorkRefreshRef = null;
-        syncIntervalRef = null;
-        currentWorkFilterKey = '';
-        convListeners = {};
-        currentUser = null;
-        window.currentUser = null; // Clear from window for metaIntegration.js
-        tasks = []; dprEntries = []; attendanceEvents = []; activeTaskId = null; isCheckedIn = false;
-        clearInterval(timerRef); seconds = 0; activeConvId = null; unreadCounts = {}; unreadAnnouncements = 0;
+    }
         localStorage.removeItem('worksync_user');
         localStorage.removeItem('worksync_timerState');
         localStorage.removeItem('worksync_checkInTime');
