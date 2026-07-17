@@ -77,6 +77,11 @@ if (initializeApp) {
         ] // Karthika can view all team members' tasks
     };
 
+    // Live Work Board Access - Map of user email to list of emails they can view current tasks for
+    const LIVE_WORK_BOARD_ACCESS = {
+        'anithavilpower@gmail.com': ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'] // Karthika can view Barath and Immanuel's current tasks
+    };
+
     const USERS = [
         { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
         { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
@@ -104,6 +109,14 @@ if (initializeApp) {
     function hasClientWideAccess() { return currentUser && CLIENT_WIDE_ACCESS_EMAILS.some(e => e.toLowerCase() === (currentUser.email || '').toLowerCase()); }
     function canViewReports() { return true; }
     function canViewDailySummary() { return isAdmin() || isManager(); }
+    function canViewLiveWorkBoard() {
+        // Admins and managers can always view
+        if (isAdmin() || isManager()) return true;
+        // Check if user has any Live Work Board access permissions
+        if (!currentUser) return false;
+        const accessList = LIVE_WORK_BOARD_ACCESS[currentUser.email.toLowerCase()] || [];
+        return accessList.length > 0;
+    }
     function canViewProjects() { return isAdmin() || isManager(); }
     function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
     function canViewQcPortal() {
@@ -4598,14 +4611,29 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
         if (activeView !== 'dashboard') return;
         const list = document.getElementById('admin-current-work-list');
         const countEl = document.getElementById('admin-current-work-count');
-        if (!list || !countEl || !canViewDailySummary()) return;
-        const activeCount = currentWorkUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
+        if (!list || !countEl) return;
+        
+        // Check if user can view Live Work Board
+        if (!canViewDailySummary() && !canViewLiveWorkBoard()) return;
+        
+        // Filter employees based on permissions
+        let visibleUsers = currentWorkUsers;
+        if (!canViewDailySummary()) {
+            // Non-admin/manager: filter to only allowed employees + self
+            const allowedEmails = new Set();
+            if (currentUser) allowedEmails.add(currentUser.email.toLowerCase());
+            const customAccess = LIVE_WORK_BOARD_ACCESS[currentUser.email.toLowerCase()] || [];
+            customAccess.forEach(email => allowedEmails.add(email.toLowerCase()));
+            visibleUsers = currentWorkUsers.filter(u => allowedEmails.has(u.email.toLowerCase()));
+        }
+        
+        const activeCount = visibleUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
         countEl.textContent = `${activeCount} Active`;
-        if (!currentWorkUsers.length) {
+        if (!visibleUsers.length) {
             list.innerHTML = `<p class="xl:col-span-2 p-5 text-center text-xs text-slate-400 italic">No employees found.</p>`;
             return;
         }
-        list.innerHTML = currentWorkUsers.map(u => {
+        list.innerHTML = visibleUsers.map(u => {
             const task = u.currentTask;
             const online = !!u.online;
             const elapsed = task?.startedAt ? formatTime(Math.max(Math.floor((Date.now() - task.startedAt) / 1000), 0)) : '00:00:00';
