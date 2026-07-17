@@ -8597,6 +8597,11 @@
                 <button type="button" onclick="document.getElementById('saMonthlyReportModal').style.display='none'" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all">
                     Cancel
                 </button>
+                <button type="button" onclick="openPremiumAnalyticsDashboard()" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                    style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;">
+                    <iconify-icon icon="solar:chart-2-bold" width="18"></iconify-icon>
+                    📊 Dashboard
+                </button>
                 <button type="button" onclick="generateAndDownloadMonthlyReport()" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg hover:shadow-xl"
                     style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;">
                     <iconify-icon icon="solar:download-minimalistic-bold" width="18"></iconify-icon>
@@ -38556,6 +38561,7 @@
             window.showTopPostsReport = showTopPostsReport;
             window.downloadTopPostsReport = downloadTopPostsReport;
             window.openMonthlyReportDialog = openMonthlyReportDialog;
+            window.openPremiumAnalyticsDashboard = openPremiumAnalyticsDashboard;
             window.generateAndDownloadMonthlyReport = generateAndDownloadMonthlyReport;
             window.handleSocialAnalyticsImport = handleSocialAnalyticsImport;
             window.initFilesManager = initFilesManager;
@@ -39856,6 +39862,64 @@
                 }
 
                 document.getElementById('saMonthlyReportModal').style.display = 'flex';
+            }
+
+            /**
+             * Open premium analytics dashboard with filtered data
+             */
+            function openPremiumAnalyticsDashboard() {
+                if (!canViewSocialAnalytics()) {
+                    toast('You do not have permission to view analytics', 'error');
+                    return;
+                }
+
+                const client = document.getElementById('saReportClient')?.value;
+                const month = parseInt(document.getElementById('saReportMonth')?.value);
+                const year = parseInt(document.getElementById('saReportYear')?.value);
+
+                if (!client || !month || !year) {
+                    toast('Please select client, month and year', 'error');
+                    return;
+                }
+
+                const entries = saAllEntries || [];
+                const monthStartStr = `${year}-${String(month).padStart(2, '0')}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const monthEndStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+                const filteredEntries = entries.filter(e => {
+                    const postDate = (e.postingDate || e.reportDate || '').substring(0, 10);
+                    const isInMonth = postDate >= monthStartStr && postDate <= monthEndStr;
+                    const entryClient = (e.client || '').trim();
+                    const entryPlatform = (e.platform || '').trim();
+                    const isClient = (client === 'all') || 
+                                     (entryClient.toLowerCase() === client.toLowerCase()) || 
+                                     (entryPlatform.toLowerCase() === client.toLowerCase());
+                    return isInMonth && isClient;
+                });
+
+                if (filteredEntries.length === 0) {
+                    toast('No data available for the selected filters', 'info');
+                    return;
+                }
+
+                // Store data in localStorage for dashboard to access
+                const dashboardData = {
+                    entries: filteredEntries,
+                    client: client === 'all' ? 'All Clients' : client,
+                    month: month,
+                    year: year
+                };
+
+                localStorage.setItem('socialAnalyticsData', JSON.stringify(dashboardData));
+
+                // Close the dialog
+                document.getElementById('saMonthlyReportModal').style.display = 'none';
+
+                // Open the premium dashboard
+                window.open('analytics-dashboard.html', '_blank');
+
+                toast('Opening premium analytics dashboard...', 'success');
             }
 
             /**
