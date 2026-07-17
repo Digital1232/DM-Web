@@ -348,6 +348,7 @@ function processCSVImport(csvText) {
 
       let platformCount = 0;
       let platformErrors = [];
+      const platformsUsed = [];
 
       platformsData.forEach(platformInfo => {
         // Check if there is data for this platform
@@ -359,6 +360,12 @@ function processCSVImport(csvText) {
         });
 
         if (hasData) {
+          // Check for duplicate platform in this row
+          if (platformsUsed.includes(platformInfo.name)) {
+            platformErrors.push(`Row ${rowNumber}: Platform "${platformInfo.name}" appears multiple times (duplicate entry detected)`);
+          }
+          platformsUsed.push(platformInfo.name);
+
           const record = {
             post,
             title: post,
@@ -453,70 +460,58 @@ function mapRecordFields(record) {
 function downloadImportTemplate() {
   const headers = [
     'Post', '', '', 'Client', 'Post Date', 'Post type',
-    // Instagram metrics (6)
-    'Views', 'Likes', 'Comments', 'Shares', 'Profile visits', 'Profile Reach',
-    // Facebook metrics (5)
-    'Views', 'Likes', 'Comments', 'Shares', 'Engagements',
-    // X (Twitter) metrics (6)
-    'Views', 'Likes', 'Comments', 'Repost', 'Engagement', 'Clicks',
-    // YouTube metrics (3)
-    'Views', 'Likes', 'Comments'
+    // Instagram metrics (6) - CLEARLY LABELED
+    'Instagram: Views', 'Instagram: Likes', 'Instagram: Comments', 'Instagram: Shares', 'Instagram: Profile visits', 'Instagram: Profile Reach',
+    // Facebook metrics (5) - CLEARLY LABELED
+    'Facebook: Views', 'Facebook: Likes', 'Facebook: Comments', 'Facebook: Shares', 'Facebook: Engagements',
+    // X (Twitter) metrics (6) - CLEARLY LABELED
+    'X: Views', 'X: Likes', 'X: Comments', 'X: Repost', 'X: Engagement', 'X: Clicks',
+    // YouTube metrics (3) - CLEARLY LABELED
+    'YouTube: Views', 'YouTube: Likes', 'YouTube: Comments'
   ];
 
   const sampleData = [
     [
       'Great Achievement Post', '', '', 'Einstein', '07-01-2026', 'Video',
-      // Instagram
+      // Instagram (use data OR "-" to skip)
       '5000', '250', '10', '50', '20', '4500',
-      // Facebook
+      // Facebook (use data OR "-" to skip)
       '1200', '30', '2', '5', '35',
-      // X
+      // X (use data OR "-" to skip)
       '3000', '80', '15', '20', '100', '25',
-      // YouTube
+      // YouTube (use data OR "-" to skip)
       '500', '10', '5'
     ],
     [
       'Learning Post Example', '', '', 'NTT', '07-02-2026', 'Poster',
-      // Instagram
+      // Instagram only - leave others blank or use "-"
       '2000', '100', '5', '20', '10', '1800',
-      // Facebook
-      '600', '15', '1', '3', '18',
-      // X
-      '1500', '40', '8', '10', '50', '12',
-      // YouTube
-      '200', '5', '2'
+      '-', '-', '-', '-', '-',
+      '-', '-', '-', '-', '-', '-',
+      '-', '-', '-'
     ],
     [
       'Product Showcase', '', '', 'IVN', '07-03-2026', 'Video',
-      // Instagram
+      // All platforms have data
       '8000', '400', '20', '80', '30', '7200',
-      // Facebook
       '2000', '50', '4', '10', '60',
-      // X
       '4500', '120', '25', '35', '150', '40',
-      // YouTube
       '800', '20', '8'
     ],
     [
       'Client Update', '', '', 'Vilpower', '07-04-2026', 'Poster',
-      // Instagram
-      '3500', '150', '8', '35', '15', '3100',
-      // Facebook
+      // Facebook and YouTube only
+      '-', '-', '-', '-', '-', '-',
       '900', '25', '2', '4', '30',
-      // X
-      '2000', '60', '12', '18', '80', '18',
-      // YouTube
+      '-', '-', '-', '-', '-', '-',
       '350', '8', '3'
     ],
     [
       'Announcement', '', '', 'Einstein', '07-05-2026', 'Video',
-      // Instagram
+      // Instagram, Facebook, YouTube (skip X)
       '6000', '300', '15', '60', '25', '5400',
-      // Facebook
       '1500', '40', '3', '8', '48',
-      // X
-      '3500', '100', '20', '25', '120', '30',
-      // YouTube
+      '-', '-', '-', '-', '-', '-',
       '600', '12', '6'
     ]
   ];
@@ -526,11 +521,22 @@ function downloadImportTemplate() {
     csv += row.map(val => `"${val}"`).join(',') + '\n';
   });
 
-  // Add 5 empty rows for user to fill
+  // Add 5 empty rows for user to fill with instructions
   const emptyRow = new Array(headers.length).fill('');
   for (let i = 0; i < 5; i++) {
     csv += emptyRow.map(val => `"${val}"`).join(',') + '\n';
   }
+
+  // Add instruction row at the bottom
+  const instructionRow = [
+    'NOTE: Use "-" or leave blank for platforms where you don\'t have data', 
+    '', '', '', '', '',
+    'Instagram (6 cols)', '', '', '', '', '',
+    'Facebook (5 cols)', '', '', '', '',
+    'X/Twitter (6 cols)', '', '', '', '', '',
+    'YouTube (3 cols)', '', ''
+  ];
+  csv += '\n' + instructionRow.map(val => `"${val}"`).join(',');
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
