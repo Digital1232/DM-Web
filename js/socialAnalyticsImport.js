@@ -38,6 +38,13 @@ function parseCSV(csvText) {
     const hasData = values.some(val => val && val.trim() !== '');
     if (!hasData) continue; // Skip completely empty rows
 
+    // Skip instruction/note rows (rows that start with "NOTE:", "Instruction", etc.)
+    const firstVal = (values[0] || '').trim().toUpperCase();
+    if (firstVal.startsWith('NOTE') || firstVal.startsWith('INSTRUCTION') || 
+        firstVal.startsWith('---') || firstVal.includes('Example') && !values[3]) {
+      continue;
+    }
+
     rows.push({ rowNumber: i + 1, values });
   }
 
@@ -270,6 +277,12 @@ function processCSVImport(csvText) {
       const rawClient = values[3] ? values[3].trim() : '';
       const rawDate = values[4] ? values[4].trim() : '';
       const rawType = values[5] ? values[5].trim() : '';
+
+      // Skip rows that are clearly empty or instruction rows
+      if (!post && !rawClient && !rawDate && !rawType) {
+        result.summary.skippedRows++;
+        return;
+      }
 
       // Validate common fields
       const rowErrors = [];
@@ -560,6 +573,7 @@ function formatValidationErrors(result) {
   let message = `Import Summary:\n`;
   message += `Total Rows: ${result.summary.totalRows}\n`;
   message += `Valid Rows: ${result.summary.validRows}\n`;
+  message += `Skipped Rows: ${result.summary.skippedRows}\n`;
   message += `Invalid Rows: ${result.summary.invalidRows}\n`;
 
   if (result.errors.length > 0) {
