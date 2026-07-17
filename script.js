@@ -10036,6 +10036,22 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
     }
 
+    function toggleDpUserDropdown() {
+        const dropdown = document.getElementById('dp-user-dropdown');
+        const arrow = document.getElementById('dp-user-filter-arrow');
+        if (dropdown) {
+            dropdown.classList.toggle('hidden');
+            if (arrow) arrow.classList.toggle('rotate-180');
+        }
+    }
+
+    function selectAllDpUsers(selectAll) {
+        const userCheckboxes = document.querySelectorAll('[id^="dp-user-check-"]');
+        userCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAll;
+        });
+    }
+
     function filterDailyPlan(type) {
         dpFilter = type;
         const allBtn = document.getElementById('dp-filter-all');
@@ -11192,7 +11208,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.doCheckIn = doCheckIn; window.doBreak = doBreak; window.doResume = doResume; window.confirmCheckOut = confirmCheckOut;
     window.syncTasks = syncTasks; window.toggleActiveTask = toggleActiveTask;
     window.saveBoardSettings = saveBoardSettings;
-    window.filterDailyPlan = filterDailyPlan;
+    window.filterDailyPlan = filterDailyPlan; window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers;
     window.toggleTaskViewMode = toggleTaskViewMode; window.dragTask = dragTask; window.dropTask = dropTask;
     window.toggleStatusFilter = toggleStatusFilter;
     window.toggleInternalStatusFilter = toggleInternalStatusFilter;
