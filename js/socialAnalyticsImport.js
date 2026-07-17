@@ -224,7 +224,7 @@ function normalizeDateFormat(dateStr) {
 /**
  * Process and validate CSV import
  * Maps multiple platform column sections into distinct platform entries.
- * New format: Post, Client, Date, Type, then platform-specific metrics (6 + 5 + 5 + 3 columns)
+ * Format: Post, (3 empty), Client, Date, Type, then platform metrics
  * @param {string} csvText - CSV content
  * @returns {Object} { success: boolean, data: Array, errors: Array, warnings: Array, summary: Object }
  */
@@ -246,9 +246,9 @@ function processCSVImport(csvText) {
     const { headers, rows } = parseCSV(csvText);
     result.summary.totalRows = rows.length;
 
-    // Check header length - should be at least 4 base + 6 (Instagram) = 10
-    if (headers.length < 10) {
-      result.errors.push('CSV must contain at least 10 columns (Post, Client, Date, Type + Instagram metrics)');
+    // Check header length - should be 25 (Post + 3 empty + Client + Date + Type + 6 + 5 + 6 + 3)
+    if (headers.length < 25) {
+      result.errors.push('CSV must contain at least 25 columns (Post + 3 empty + Client + Date + Type + all platform metrics)');
       return result;
     }
 
@@ -260,11 +260,11 @@ function processCSVImport(csvText) {
         return;
       }
 
-      // Common fields from first 4 columns
+      // Common fields
       const post = values[0] ? values[0].trim() : '';
-      const rawClient = values[1] ? values[1].trim() : '';
-      const rawDate = values[2] ? values[2].trim() : '';
-      const rawType = values[3] ? values[3].trim() : '';
+      const rawClient = values[3] ? values[3].trim() : '';
+      const rawDate = values[4] ? values[4].trim() : '';
+      const rawType = values[5] ? values[5].trim() : '';
 
       // Validate common fields
       const rowErrors = [];
@@ -314,29 +314,29 @@ function processCSVImport(csvText) {
       }
 
       // Extract platform-specific entries based on fixed column positions
-      // Instagram: cols 4-9 (Views, Likes, Comments, Shares, Saves, Follows)
-      // Facebook: cols 10-14 (Views, Likes, Comments, Shares, Engagements)
-      // X: cols 15-19 (Views, Likes, Comments, Reposts, Engagements)
-      // YouTube: cols 20-22 (Views, Likes, Comments)
+      // Instagram: cols 6-11 (Views, Likes, Comments, Shares, Profile visits, Profile Reach - 6 columns)
+      // Facebook: cols 12-16 (Views, Likes, Comments, Shares, Engagements - 5 columns)
+      // X: cols 17-22 (Views, Likes, Comments, Repost, Engagement, Clicks - 6 columns)
+      // YouTube: cols 23-25 (Views, Likes, Comments - 3 columns)
       const platformsData = [
         {
           name: 'Instagram',
-          indices: [4, 5, 6, 7, 8, 9],
-          fields: ['views', 'likes', 'comments', 'shares', 'saves', 'follows']
+          indices: [6, 7, 8, 9, 10, 11],
+          fields: ['views', 'likes', 'comments', 'shares', 'profileVisits', 'profileReach']
         },
         {
           name: 'Facebook',
-          indices: [10, 11, 12, 13, 14],
+          indices: [12, 13, 14, 15, 16],
           fields: ['views', 'likes', 'comments', 'shares', 'engagements']
         },
         {
           name: 'X',
-          indices: [15, 16, 17, 18, 19],
-          fields: ['views', 'likes', 'comments', 'reposts', 'engagements']
+          indices: [17, 18, 19, 20, 21, 22],
+          fields: ['views', 'likes', 'comments', 'reposts', 'engagements', 'clicks']
         },
         {
           name: 'YouTube',
-          indices: [20, 21, 22],
+          indices: [23, 24, 25],
           fields: ['views', 'likes', 'comments']
         }
       ];
@@ -370,8 +370,9 @@ function processCSVImport(csvText) {
             reposts: 0,
             engagements: 0,
             reach: 0,
-            saves: 0,
-            follows: 0
+            profileVisits: 0,
+            profileReach: 0,
+            clicks: 0
           };
 
           // Extract and validate numeric fields
@@ -442,53 +443,75 @@ function mapRecordFields(record) {
 
 /**
  * Download import template CSV matching the Weekly Analytics format
- * New format: Post, Client, Post Date, Post type, followed by platform-specific metrics
+ * Format: Post, (3 empty), Client, Post Date, Post type, then platform metrics
  */
 function downloadImportTemplate() {
   const headers = [
-    'Post', 'Client', 'Post Date', 'Post type',
-    // Instagram metrics
-    'Views', 'Likes', 'Comments', 'Shares', 'Saves', 'Follows Increased',
-    // Facebook metrics
+    'Post', '', '', 'Client', 'Post Date', 'Post type',
+    // Instagram metrics (6)
+    'Views', 'Likes', 'Comments', 'Shares', 'Profile visits', 'Profile Reach',
+    // Facebook metrics (5)
     'Views', 'Likes', 'Comments', 'Shares', 'Engagements',
-    // X (Twitter) metrics
-    'Views', 'Likes', 'Comments', 'Reposts', 'Engagements',
-    // YouTube metrics (optional)
+    // X (Twitter) metrics (6)
+    'Views', 'Likes', 'Comments', 'Repost', 'Engagement', 'Clicks',
+    // YouTube metrics (3)
     'Views', 'Likes', 'Comments'
   ];
 
   const sampleData = [
     [
-      '🚨Attention Alumni Squad 📢', 'Einstein', '07-01-2026', 'Video',
-      // Instagram sample
+      '🚨Attention Alumni Squad 📢', '', '', 'Einstein', '07-01-2026', 'Video',
+      // Instagram
       '4149', '149', '1', '137', '8', '3598',
-      // Facebook sample
+      // Facebook
       '1059', '24', '0', '3', '28',
-      // X sample
-      '2150', '45', '12', '8', '65',
-      // YouTube sample
+      // X
+      '2150', '45', '12', '8', '65', '28',
+      // YouTube
       '164', '5', '0'
     ],
     [
-      'Every corner of this campus holds a memory.❤️', 'Einstein', '07-02-2026', 'Poster',
-      // Instagram sample
+      'Every corner of this campus holds a memory.❤️', '', '', 'Einstein', '07-02-2026', 'Poster',
+      // Instagram
       '1121', '26', '0', '10', '0', '955',
-      // Facebook sample
+      // Facebook
       '193', '3', '0', '0', '4',
-      // X sample
-      '450', '22', '5', '2', '29',
-      // YouTube sample
+      // X
+      '450', '22', '5', '2', '29', '18',
+      // YouTube
       '-', '-', '-'
     ],
     [
-      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', 'IVN', '02-Jul', 'Poster',
-      // Instagram sample
+      'A Glimpse of Convocation 2026🎓', '', '', 'Einstein', '07-03-2026', 'Video',
+      // Instagram
+      '10792', '407', '0', '131', '17', '7801',
+      // Facebook
+      '1030', '20', '0', '0', '21',
+      // X
+      '890', '65', '8', '12', '85', '42',
+      // YouTube
+      '882', '21', '0'
+    ],
+    [
+      'Taste-ல king… IVN செங்கல்பட்டு அரிசி! 👑🌾', '', '', 'IVN', '02-Jul', 'Poster',
+      // Instagram
       '126', '6', '0', '0', '0', '98',
-      // Facebook sample
+      // Facebook
       '30', '3', '0', '0', '3',
-      // X sample
-      '78', '8', '1', '0', '9',
-      // YouTube sample
+      // X
+      '78', '8', '1', '0', '9', '5',
+      // YouTube
+      '-', '-', '-'
+    ],
+    [
+      'Full and full coconut oli la dhan samaika poren minivlog', '', '', 'IVN', '03-Jul', 'Video',
+      // Instagram
+      '44851', '532', '6', '9', '0', '39568',
+      // Facebook
+      '-', '-', '-', '-', '-',
+      // X
+      '-', '-', '-', '-', '-', '-',
+      // YouTube
       '-', '-', '-'
     ]
   ];
@@ -498,9 +521,9 @@ function downloadImportTemplate() {
     csv += row.map(val => `"${val}"`).join(',') + '\n';
   });
 
-  // Add empty rows for user to fill
+  // Add 5 empty rows for user to fill
   const emptyRow = new Array(headers.length).fill('');
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     csv += emptyRow.map(val => `"${val}"`).join(',') + '\n';
   }
 
