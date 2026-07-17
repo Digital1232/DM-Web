@@ -67,7 +67,7 @@ if (initializeApp) {
 
     // Daily Plan View Access - Map of user email to list of emails they can view tasks for
     const DAILY_PLAN_VIEW_ACCESS = {
-        'karthikavilpower@gmail.com': [
+        'anithavilpower@gmail.com': [
             'nanjil@vilpower.com',                    // Nanjil Manohar S
             'digitalmarketing@vilpower.com',          // Palanirajan R
             'murugeshvilpower@gmail.com',             // Murugesh Kumar A
@@ -83,7 +83,7 @@ if (initializeApp) {
         { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
         { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
         { email: 'snehavilpower@gmail.com', name: 'Sneha V', role: 'Team Member', avatar: 'Sneha' },
-        { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
+        { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
         { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
         { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
     ];
