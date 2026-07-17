@@ -8134,11 +8134,31 @@
                                                 <input type="checkbox" id="sa-select-all-checkbox" onchange="toggleSelectAllAnalytics()" 
                                                     class="w-4 h-4 rounded border-slate-300 cursor-pointer">
                                             </th>
-                                            <th class="pb-3 pr-2 sm:pr-4 px-4 sm:px-0">Date</th>
-                                            <th class="pb-3 pr-2 sm:pr-4">Title</th>
-                                            <th class="pb-3 pr-2 sm:pr-4 hidden sm:table-cell">Platform</th>
-                                            <th class="pb-3 pr-2 sm:pr-4 text-right">Views</th>
-                                            <th class="pb-3 pr-2 sm:pr-4 text-right">Likes</th>
+                                            <th class="pb-3 pr-2 sm:pr-4 px-4 sm:px-0">
+                                                <button onclick="sortTableColumn('sa-entries-tbody', 0, 'date')" class="flex items-center gap-1 hover:text-slate-600 transition-colors" title="Sort by Date">
+                                                    Date <iconify-icon icon="solar:sort-vertical-bold" width="14"></iconify-icon>
+                                                </button>
+                                            </th>
+                                            <th class="pb-3 pr-2 sm:pr-4">
+                                                <button onclick="sortTableColumn('sa-entries-tbody', 1, 'text')" class="flex items-center gap-1 hover:text-slate-600 transition-colors" title="Sort by Title">
+                                                    Title <iconify-icon icon="solar:sort-vertical-bold" width="14"></iconify-icon>
+                                                </button>
+                                            </th>
+                                            <th class="pb-3 pr-2 sm:pr-4 table-cell">
+                                                <button onclick="sortTableColumn('sa-entries-tbody', 2, 'text')" class="flex items-center gap-1 hover:text-slate-600 transition-colors" title="Sort by Platform">
+                                                    Platform <iconify-icon icon="solar:sort-vertical-bold" width="14"></iconify-icon>
+                                                </button>
+                                            </th>
+                                            <th class="pb-3 pr-2 sm:pr-4 text-right">
+                                                <button onclick="sortTableColumn('sa-entries-tbody', 3, 'number')" class="flex items-center gap-1 ml-auto hover:text-slate-600 transition-colors" title="Sort by Views">
+                                                    Views <iconify-icon icon="solar:sort-vertical-bold" width="14"></iconify-icon>
+                                                </button>
+                                            </th>
+                                            <th class="pb-3 pr-2 sm:pr-4 text-right">
+                                                <button onclick="sortTableColumn('sa-entries-tbody', 4, 'number')" class="flex items-center gap-1 ml-auto hover:text-slate-600 transition-colors" title="Sort by Likes">
+                                                    Likes <iconify-icon icon="solar:sort-vertical-bold" width="14"></iconify-icon>
+                                                </button>
+                                            </th>
                                             <th class="pb-3 text-center">Actions</th>
                                         </tr>
                                     </thead>
@@ -39129,7 +39149,7 @@
                                 <div class="text-xs sm:text-sm font-bold text-slate-900 max-w-[120px] sm:max-w-[200px] truncate" title="${(e.title || '').replace(/"/g, '&quot;')}">${e.title || 'Untitled'}</div>
                                 ${e.link ? `<a href="${e.link}" target="_blank" class="text-[9px] sm:text-[10px] text-indigo-500 hover:underline hidden sm:block">View ↗</a>` : ''}
                             </td>
-                            <td class="py-3 px-2 sm:pr-4 hidden sm:table-cell">
+                            <td class="py-3 px-2 sm:pr-4 table-cell">
                                 <span class="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold text-white" style="background:${platformColor}">
                                     ${e.platform || '—'}
                                 </span>
@@ -39428,6 +39448,50 @@
                     console.error('Bulk delete error:', err);
                     toast('An error occurred during bulk delete', 'error');
                 }
+            }
+
+            /**
+             * Sort table column by Date, Title, Platform, Views, or Likes
+             */
+            function sortTableColumn(tableBodyId, columnIndex, sortType) {
+                const tbody = document.getElementById(tableBodyId);
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                
+                // Determine if we're sorting ascending or descending
+                const currentSortColumn = tbody.dataset.sortColumn;
+                const currentSortDirection = tbody.dataset.sortDirection;
+                let isAscending = true;
+                
+                if (currentSortColumn == columnIndex && currentSortDirection === 'asc') {
+                    isAscending = false;
+                }
+                
+                // Sort the rows
+                rows.sort((a, b) => {
+                    let aValue, bValue;
+                    
+                    if (sortType === 'date') {
+                        aValue = new Date(a.cells[columnIndex]?.textContent.trim() || '0');
+                        bValue = new Date(b.cells[columnIndex]?.textContent.trim() || '0');
+                    } else if (sortType === 'number') {
+                        aValue = parseInt(a.cells[columnIndex]?.textContent.replace(/[^0-9]/g, '') || '0');
+                        bValue = parseInt(b.cells[columnIndex]?.textContent.replace(/[^0-9]/g, '') || '0');
+                    } else {
+                        aValue = (a.cells[columnIndex]?.textContent || '').trim().toLowerCase();
+                        bValue = (b.cells[columnIndex]?.textContent || '').trim().toLowerCase();
+                    }
+                    
+                    if (aValue < bValue) return isAscending ? -1 : 1;
+                    if (aValue > bValue) return isAscending ? 1 : -1;
+                    return 0;
+                });
+                
+                // Reorder rows in tbody
+                rows.forEach(row => tbody.appendChild(row));
+                
+                // Update sort state
+                tbody.dataset.sortColumn = columnIndex;
+                tbody.dataset.sortDirection = isAscending ? 'asc' : 'desc';
             }
 
             /**

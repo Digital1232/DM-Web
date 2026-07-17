@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Social Media Analytics Report - One Desk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/heroicons@2/styles.css">
+    
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        :root {
+            --primary: #4F46E5;
+            --secondary: #7C3AED;
+            --accent-green: #10B981;
+            --accent-orange: #F59E0B;
+            --accent-blue: #3B82F6;
+            --bg-light: #F8FAFC;
+            --card-white: #FFFFFF;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-light: #0F172A;
+                --card-white: #1E293B;
+            }
+        }
+        
+        body {
+            background-color: var(--bg-light);
+            transition: background-color 0.3s ease;
+        }
+        
+        .gradient-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        .gradient-success {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #059669 100%);
+        }
+        
+        .gradient-orange {
+            background: linear-gradient(135deg, var(--accent-orange) 0%, #D97706 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .card-shadow-lg {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .fade-in-stagger {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        
+        .fade-in-stagger:nth-child(1) { animation-delay: 0.1s; }
+        .fade-in-stagger:nth-child(2) { animation-delay: 0.2s; }
+        .fade-in-stagger:nth-child(3) { animation-delay: 0.3s; }
+        .fade-in-stagger:nth-child(4) { animation-delay: 0.4s; }
+        .fade-in-stagger:nth-child(5) { animation-delay: 0.5s; }
+        .fade-in-stagger:nth-child(6) { animation-delay: 0.6s; }
+        
+        .count-up {
+            animation: countUp 0.8s ease-out;
+        }
+        
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .icon-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .trend-up {
+            color: var(--accent-green);
+        }
+        
+        .trend-down {
+            color: #EF4444;
+        }
+        
+        .badge-excellent {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        
+        .badge-good {
+            background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+        }
+        
+        .badge-average {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+        
+        .badge-low {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+            .hide-on-print {
+                display: none !important;
+            }
+            .card-hover {
+                transition: none;
+            }
+            .card-hover:hover {
+                transform: none;
+            }
+            .page-break-inside {
+                page-break-inside: avoid;
+            }
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+        
+        thead th {
+            white-space: nowrap;
+        }
+        
+        tbody td {
+            white-space: nowrap;
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid #E2E8F0;
+            transition: background-color 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background-color: #F1F5F9;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            tbody tr:hover {
+                background-color: #334155;
+            }
+        }
+        
+        .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <!-- Header -->
+    <header class="gradient-primary text-white py-12 px-4 md:px-8 relative overflow-hidden">
+        <div class="absolute inset-0 opacity-20">
+            <svg class="w-full h-full" viewBox="0 0 1200 120"><path d="M0,50 Q300,0 600,50 T1200,50 L1200,120 L0,120 Z" fill="currentColor"></path></svg>
+        </div>
+        
+        <div class="max-w-7xl mx-auto relative z-10 fade-in">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+                <!-- Left Section -->
+                <div class="flex-1">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur">
+                            <span class="text-xl font-bold">🏢</span>
+                        </div>
+                        <div>
+                            <h1 class="text-4xl md:text-5xl font-bold tracking-tight">Executive Report</h1>
+                            <p class="text-blue-100 text-sm mt-1">NTT • July 2026</p>
+                        </div>
+                    </div>
+                    <p class="text-lg text-blue-100">Monthly Social Media Performance Report</p>
+                    <div class="flex items-center gap-2 mt-4 text-sm text-blue-100">
+                        <span>📅 01 July 2026</span>
+                        <span>→</span>
+                        <span>31 July 2026</span>
+                    </div>
+                </div>
+                
+                <!-- Right Section -->
+                <div class="text-right text-sm">
+                    <p class="text-blue-100 mb-2">Generated On</p>
+                    <p class="font-semibold mb-4" id="generatedDate">17 July 2026</p>
+                    <p class="text-blue-100 mb-2">Powered by</p>
+                    <div class="inline-block bg-white/10 backdrop-blur px-3 py-2 rounded-lg">
+                        <p class="font-semibold">One Desk</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Social Platforms -->
+            <div class="flex gap-4 mt-8 pt-6 border-t border-white/20">
+                <span class="text-sm text-blue-100">Reporting from:</span>
+                <div class="flex gap-3">
+                    <span class="inline-flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1 rounded-full text-sm">
+                        <span>📘</span> Facebook
+                    </span>
+                    <span class="inline-flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1 rounded-full text-sm">
+                        <span>📷</span> Instagram
+                    </span>
+                    <span class="inline-flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-1 rounded-full text-sm">
+                        <span>🎬</span> Meta
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 md:px-8 py-12">
+        <!-- Section 1: Executive KPI Cards -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Key Performance Indicators</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- KPI Card 1: Total Posts -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-600 dark:text-slate-400 text-sm font-medium mb-2">Total Posts</p>
+                            <p class="text-4xl font-bold text-slate-900 dark:text-white count-up" data-target="287">0</p>
+                            <div class="flex items-center gap-1 mt-3">
+                                <span class="text-sm font-semibold text-green-600">↑ 12.4%</span>
+                                <span class="text-xs text-slate-500">vs last month</span>
+                            </div>
+                        </div>
+                        <div class="icon-circle gradient-primary">
+                            <span class="text-2xl">📝</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- KPI Card 2: Total Views -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-600 dark:text-slate-400 text-sm font-medium mb-2">Total Views</p>
+                            <p class="text-4xl font-bold text-slate-900 dark:text-white count-up" data-target="1248000">0</p>
+                            <div class="flex items-center gap-1 mt-3">
+                                <span class="text-sm font-semibold text-green-600">↑ 14.2%</span>
+                                <span class="text-xs text-slate-500">vs last month</span>
+                            </div>
+                        </div>
+                        <div class="icon-circle gradient-success">
+                            <span class="text-2xl">👁</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- KPI Card 3: Total Engagement -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-600 dark:text-slate-400 text-sm font-medium mb-2">Total Engagement</p>
+                            <p class="text-4xl font-bold text-slate-900 dark:text-white count-up" data-target="48500">0</p>
+                            <div class="flex items-center gap-1 mt-3">
+                                <span class="text-sm font-semibold text-green-600">↑ 8.9%</span>
+                                <span class="text-xs text-slate-500">vs last month</span>
+                            </div>
+                        </div>
+                        <div class="icon-circle" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                            <span class="text-2xl">💬</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- KPI Card 4: Engagement Rate -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-600 dark:text-slate-400 text-sm font-medium mb-2">Engagement Rate</p>
+                            <p class="text-4xl font-bold text-slate-900 dark:text-white count-up" data-target="3.89">0</p>
+                            <div class="flex items-center gap-1 mt-3">
+                                <span class="text-sm font-semibold text-green-600">↑ 2.3%</span>
+                                <span class="text-xs text-slate-500">vs last month</span>
+                            </div>
+                        </div>
+                        <div class="icon-circle" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);">
+                            <span class="text-2xl">📊</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Section 2: Charts Row -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Performance Analysis</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Chart Card 1: Engagement Breakdown -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Engagement Breakdown</h3>
+                    <div class="relative h-64">
+                        <canvas id="engagementChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Chart Card 2: Content Type Distribution -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Content Distribution</h3>
+                    <div class="relative h-64">
+                        <canvas id="contentTypeChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Chart Card 3: Performance Trend -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Views Trend</h3>
+                    <div class="relative h-64">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Section 3: Top Performing Content -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Top Performing Content</h2>
+            
+            <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden card-shadow card-hover fade-in-stagger page-break-inside">
+                <div class="grid md:grid-cols-2 gap-8 p-8">
+                    <!-- Left: Thumbnail -->
+                    <div class="flex flex-col">
+                        <div class="relative bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl h-64 md:h-auto flex items-end justify-end overflow-hidden">
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span class="text-6xl">🎥</span>
+                            </div>
+                            <div class="absolute top-4 right-4 bg-white/20 backdrop-blur px-3 py-1 rounded-full text-xs font-semibold text-white">
+                                Featured
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Content Info -->
+                    <div class="flex flex-col justify-between">
+                        <div>
+                            <div class="inline-block bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-semibold mb-4">
+                                🏆 Top Performer
+                            </div>
+                            <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                                "How to Master Social Media Strategy in 2026"
+                            </h3>
+                            <div class="flex gap-4 text-sm text-slate-600 dark:text-slate-400 mb-6">
+                                <span>📱 Instagram</span>
+                                <span>📅 July 28, 2026</span>
+                            </div>
+                            
+                            <!-- Metrics Grid -->
+                            <div class="grid grid-cols-3 gap-4 mb-6">
+                                <div class="bg-slate-50 dark:bg-slate-700 p-3 rounded-lg">
+                                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-1">Views</p>
+                                    <p class="text-2xl font-bold text-slate-900 dark:text-white">156K</p>
+                                </div>
+                                <div class="bg-slate-50 dark:bg-slate-700 p-3 rounded-lg">
+                                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-1">Likes</p>
+                                    <p class="text-2xl font-bold text-slate-900 dark:text-white">12.4K</p>
+                                </div>
+                                <div class="bg-slate-50 dark:bg-slate-700 p-3 rounded-lg">
+                                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-1">CTR</p>
+                                    <p class="text-2xl font-bold text-slate-900 dark:text-white">7.9%</p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex gap-3 text-sm">
+                                <div class="flex items-center gap-1">
+                                    <span class="text-slate-600 dark:text-slate-400">💬</span>
+                                    <span class="font-semibold text-slate-900 dark:text-white">2,847 Comments</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-slate-600 dark:text-slate-400">↗️</span>
+                                    <span class="font-semibold text-slate-900 dark:text-white">1,932 Shares</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Success Card -->
+                        <div class="mt-6 gradient-success text-white rounded-lg p-4">
+                            <p class="text-sm font-semibold">✨ Key Insight</p>
+                            <p class="text-sm mt-2">This post generated <span class="font-bold">76% of total engagement</span> for July, making it our highest performer.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Section 4: AI Performance Highlights -->
+        <section class="mb-12">
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- AI Highlights Card -->
+                <div class="gradient-success text-white rounded-2xl p-8 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-2xl font-bold mb-6">🤖 AI Performance Summary</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl mt-1">✔</span>
+                            <div>
+                                <p class="font-semibold">Best Performing Post</p>
+                                <p class="text-sm text-green-50 mt-1">Video content drives 3.2x more engagement</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl mt-1">✔</span>
+                            <div>
+                                <p class="font-semibold">Highest Reach</p>
+                                <p class="text-sm text-green-50 mt-1">Instagram Reels average 234K impressions</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl mt-1">✔</span>
+                            <div>
+                                <p class="font-semibold">Highest Engagement</p>
+                                <p class="text-sm text-green-50 mt-1">Carousel posts get 5.2% engagement rate</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl mt-1">✔</span>
+                            <div>
+                                <p class="font-semibold">Best Publishing Day</p>
+                                <p class="text-sm text-green-50 mt-1">Wednesday posts receive 34% more engagement</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl mt-1">✔</span>
+                            <div>
+                                <p class="font-semibold">Best Publishing Time</p>
+                                <p class="text-sm text-green-50 mt-1">6:00 PM - 8:00 PM EST drives peak engagement</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Recommendations Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 card-shadow card-hover fade-in-stagger page-break-inside" style="border: 2px solid var(--secondary);">
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-6">💡 AI Recommendations</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                            <span class="text-lg mt-0.5">📹</span>
+                            <div>
+                                <p class="font-semibold text-slate-900 dark:text-white">Increase Video Content</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Videos outperform static images by 3.2x</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                            <span class="text-lg mt-0.5">🎠</span>
+                            <div>
+                                <p class="font-semibold text-slate-900 dark:text-white">Use Carousel Formats</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Multi-image carousels drive consistent engagement</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                            <span class="text-lg mt-0.5">⏰</span>
+                            <div>
+                                <p class="font-semibold text-slate-900 dark:text-white">Post Between 6-8 PM</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Peak audience activity hours for maximum reach</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                            <span class="text-lg mt-0.5">📚</span>
+                            <div>
+                                <p class="font-semibold text-slate-900 dark:text-white">Educational Content</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">How-to and tips get 2.1x higher engagement</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                            <span class="text-lg mt-0.5">🎯</span>
+                            <div>
+                                <p class="font-semibold text-slate-900 dark:text-white">Improve Call-to-Action</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Clear CTAs increase click rates by 47%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Section 5: Posts Performance Table -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">All Posts Performance</h2>
+            
+            <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden card-shadow page-break-inside">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600">
+                                <th class="text-left px-4 py-4 font-semibold text-slate-900 dark:text-white w-20">Date</th>
+                                <th class="text-left px-4 py-4 font-semibold text-slate-900 dark:text-white flex-1 min-w-max">Title</th>
+                                <th class="text-left px-4 py-4 font-semibold text-slate-900 dark:text-white w-32 table-cell">Platform</th>
+                                <th class="text-right px-4 py-4 font-semibold text-slate-900 dark:text-white w-20">Views</th>
+                                <th class="text-right px-4 py-4 font-semibold text-slate-900 dark:text-white w-20">Likes</th>
+                                <th class="text-center px-4 py-4 font-semibold text-slate-900 dark:text-white w-20">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 28</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">How to Master Social Media Strategy</td>
+                                <td class="px-4 py-4 w-32">📷 Instagram</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">156K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">12.4K</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-excellent">View</span></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 25</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">Summer Campaign Launch 2026</td>
+                                <td class="px-4 py-4 w-32">📘 Facebook</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">89K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">4.6K</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-good">View</span></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 22</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">Behind the Scenes at One Desk</td>
+                                <td class="px-4 py-4 w-32">📷 Instagram</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">67K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">2.5K</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-average">View</span></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 20</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">Customer Success Story</td>
+                                <td class="px-4 py-4 w-32">🎬 Meta</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">134K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">10.8K</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-excellent">View</span></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 18</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">Industry Insights Report</td>
+                                <td class="px-4 py-4 w-32">📘 Facebook</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">32K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">672</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-average">View</span></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <td class="px-4 py-4 text-slate-600 dark:text-slate-400 w-20">Jul 15</td>
+                                <td class="px-4 py-4 font-medium text-slate-900 dark:text-white flex-1 min-w-max">Product Demo Video</td>
+                                <td class="px-4 py-4 w-32">📷 Instagram</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">98K</td>
+                                <td class="px-4 py-4 text-right font-semibold text-slate-900 dark:text-white w-20">4.6K</td>
+                                <td class="px-4 py-4 text-center w-20"><span class="inline-block px-2 py-1 rounded text-xs font-semibold text-white badge-good">View</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <!-- Section 6: Bottom Analytics -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-8">Additional Insights</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Audience Overview -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Audience Overview</h3>
+                    <div class="relative h-64">
+                        <canvas id="audienceChart"></canvas>
+                    </div>
+                    <div class="mt-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-600 dark:text-slate-400">Desktop:</span>
+                            <span class="font-semibold text-slate-900 dark:text-white">62%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-600 dark:text-slate-400">Mobile:</span>
+                            <span class="font-semibold text-slate-900 dark:text-white">38%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Best Time to Post -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Best Time to Post</h3>
+                    <div class="relative h-64">
+                        <canvas id="bestTimeChart"></canvas>
+                    </div>
+                    <div class="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <p class="text-xs font-semibold text-green-700 dark:text-green-400">Peak Hours</p>
+                        <p class="text-sm font-bold text-green-900 dark:text-green-200 mt-1">6:00 PM - 8:00 PM EST</p>
+                    </div>
+                </div>
+                
+                <!-- AI Insights Card -->
+                <div class="bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white rounded-2xl p-6 card-shadow card-hover fade-in-stagger page-break-inside">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <span>🤖</span> Smart Recommendations
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-400 mt-1">→</span>
+                            <p class="text-sm leading-relaxed">Focus on video content for 3.2x higher engagement</p>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-400 mt-1">→</span>
+                            <p class="text-sm leading-relaxed">Schedule posts between 6-8 PM for maximum reach</p>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-400 mt-1">→</span>
+                            <p class="text-sm leading-relaxed">Use carousel format for consistent engagement</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 mt-16 py-8 px-4 md:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid md:grid-cols-2 gap-8 items-center">
+                <!-- Left Section -->
+                <div class="flex flex-col gap-2">
+                    <h3 class="font-bold text-lg text-slate-900 dark:text-white">One Desk</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Marketing Intelligence Platform</p>
+                </div>
+                
+                <!-- Right Section -->
+                <div class="text-right">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Powered by</p>
+                    <p class="font-semibold text-slate-900 dark:text-white">VilPower Solutions Pvt Ltd</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-500 mt-2">Generated Automatically • Confidential</p>
+                </div>
+            </div>
+            
+            <div class="border-t border-slate-200 dark:border-slate-700 mt-8 pt-8">
+                <div class="flex justify-between items-center hide-on-print">
+                    <p class="text-xs text-slate-600 dark:text-slate-400">Executive Report • July 2026</p>
+                    <button onclick="window.print()" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                        📥 Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        // Report Data Object
+        const report = {
+            totalPosts: 287,
+            totalViews: 1248000,
+            totalEngagement: 48500,
+            engagementRate: 3.89,
+            likes: 28340,
+            comments: 12847,
+            shares: 7313,
+            contentTypes: {
+                post: 45,
+                video: 89,
+                carousel: 102,
+                reel: 51
+            },
+            posts: [
+                { title: 'How to Master Social Media Strategy', platform: 'Instagram', type: 'Reel', reach: 342000, views: 156000, likes: 12400, comments: 2847, shares: 1932, engagement: 7.9 },
+                { title: 'Summer Campaign Launch 2026', platform: 'Facebook', type: 'Post', reach: 128000, views: 89000, likes: 4620, comments: 1203, shares: 456, engagement: 5.2 },
+                { title: 'Behind the Scenes at One Desk', platform: 'Instagram', type: 'Carousel', reach: 98000, views: 67000, likes: 2547, comments: 1143, shares: 234, engagement: 3.8 },
+                { title: 'Customer Success Story', platform: 'Meta', type: 'Video', reach: 245000, views: 134000, likes: 10878, comments: 2102, shares: 1847, engagement: 8.1 },
+                { title: 'Industry Insights Report', platform: 'Facebook', type: 'Post', reach: 54000, views: 32000, likes: 672, comments: 304, shares: 87, engagement: 2.1 },
+                { title: 'Product Demo Video', platform: 'Instagram', type: 'Video', reach: 178000, views: 98000, likes: 4603, comments: 1247, shares: 892, engagement: 4.7 }
+            ],
+            audienceBreakdown: { desktop: 62, mobile: 38 }
+        };
+        
+        // Count Up Animation
+        function animateCountUp() {
+            document.querySelectorAll('[data-target]').forEach(element => {
+                const target = parseFloat(element.dataset.target);
+                const isDecimal = target % 1 !== 0;
+                const increment = target / 60;
+                let current = 0;
+                
+                const interval = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        element.textContent = isDecimal ? target.toFixed(2) : target.toLocaleString();
+                        clearInterval(interval);
+                    } else {
+                        element.textContent = isDecimal ? current.toFixed(2) : Math.floor(current).toLocaleString();
+                    }
+                }, 30);
+            });
+        }
+        
+        // Set Generated Date
+        function setGeneratedDate() {
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const today = new Date().toLocaleDateString('en-US', options);
+            document.getElementById('generatedDate').textContent = today;
+        }
+        
+        // Initialize Charts
+        function initCharts() {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            font: { family: "'Inter', sans-serif", size: 12 },
+                            color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#334155'
+                        }
+                    }
+                }
+            };
+            
+            // Engagement Breakdown Chart
+            const engagementCtx = document.getElementById('engagementChart').getContext('2d');
+            new Chart(engagementCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Likes', 'Comments', 'Shares'],
+                    datasets: [{
+                        data: [report.likes, report.comments, report.shares],
+                        backgroundColor: ['#4F46E5', '#10B981', '#F59E0B'],
+                        borderColor: ['#FFF', '#FFF', '#FFF'],
+                        borderWidth: 2
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // Content Type Chart
+            const contentCtx = document.getElementById('contentTypeChart').getContext('2d');
+            new Chart(contentCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Video', 'Carousel', 'Reel', 'Post'],
+                    datasets: [{
+                        data: [report.contentTypes.video, report.contentTypes.carousel, report.contentTypes.reel, report.contentTypes.post],
+                        backgroundColor: ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
+                        borderColor: ['#FFF', '#FFF', '#FFF', '#FFF'],
+                        borderWidth: 2
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // Trend Chart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Views',
+                        data: [285000, 298000, 318000, 347000],
+                        borderColor: '#4F46E5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#4F46E5',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: {
+                        ...chartOptions.plugins,
+                        filler: { propagate: true }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#334155' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#334155' }
+                        }
+                    }
+                }
+            });
+            
+            // Audience Chart
+            const audienceCtx = document.getElementById('audienceChart').getContext('2d');
+            new Chart(audienceCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Desktop', 'Mobile'],
+                    datasets: [{
+                        data: [report.audienceBreakdown.desktop, report.audienceBreakdown.mobile],
+                        backgroundColor: ['#3B82F6', '#10B981'],
+                        borderColor: ['#FFF', '#FFF'],
+                        borderWidth: 2
+                    }]
+                },
+                options: chartOptions
+            });
+            
+            // Best Time Chart
+            const bestTimeCtx = document.getElementById('bestTimeChart').getContext('2d');
+            new Chart(bestTimeCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['6-8PM', '8-10PM', '10AM-12PM', '12-2PM'],
+                    datasets: [{
+                        label: 'Engagement',
+                        data: [8200, 5400, 2100, 1800],
+                        backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444'],
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#334155' }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: document.documentElement.classList.contains('dark') ? '#E2E8F0' : '#334155' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            animateCountUp();
+            setGeneratedDate();
+            initCharts();
+        });
+    </script>
+</body>
+</html>
