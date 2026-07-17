@@ -2890,7 +2890,7 @@
                                 <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
                             <span id="header-timer-display"
-                                class="text-xs font-black text-slate-700 font-mono tracking-tight">06:25:56</span>
+                                class="text-xs font-black text-slate-700 font-mono tracking-tight">00:00:00</span>
                             <span id="header-timer-status"
                                 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">WORKING</span>
                         </div>
@@ -12340,20 +12340,31 @@
                         }
                     }, 300); // Short delay to prioritize view rendering
 
-                    // PERFORMANCE: Load remaining data in background after view appears
+                    // PERFORMANCE: Load remaining data in background PARALLEL after view appears
                     // Don't wait for these - let them load while user sees UI
-                    loadManualTasks();
-                    loadDiscussions();
-                    loadQcReports();
-                    loadSnehaSelections();
+                    const backgroundTasks = Promise.all([
+                        loadManualTasks(),
+                        loadDiscussions(),
+                        loadQcReports(),
+                        loadSnehaSelections(),
+                        getAllUsers().then(users => { allUsersMap = users; return users; })
+                    ]);
 
-                    allUsersMap = await getAllUsers(); // Populate the global map
-                    // Re-render the floating chat list now that user data is ready
-                    if (typeof fcpRenderList === 'function' && fcpOpen) fcpRenderList();
-                    runMorningLearningSetup();
-                    await ensureMurugeshDailyTasks();
-                    await ensureAjithDailyTasks();
-                    await ensurePalaniDailyTasks();
+                    // Run morning learning and daily task setup in parallel AFTER allUsersMap is ready
+                    backgroundTasks.then(() => {
+                        runMorningLearningSetup();
+                        // Populate the floating chat list now that user data is ready
+                        if (typeof fcpRenderList === 'function' && fcpOpen) fcpRenderList();
+                        
+                        // Run all daily task ensures in parallel instead of sequentially
+                        return Promise.all([
+                            ensureMurugeshDailyTasks(),
+                            ensureAjithDailyTasks(),
+                            ensurePalaniDailyTasks()
+                        ]);
+                    }).catch(err => console.error('Background initialization error:', err));
+
+                    // Render DM list and daily summary without waiting
                     if (activeView === 'chat') renderDmList();
                     if (canViewDailySummary()) {
                         if (currentWorkUnsub) {
@@ -13538,9 +13549,20 @@
                 isCheckedIn = false;
                 if (checkInTime) {
                     const ciDate = new Date(checkInTime);
-                    const limitDate = new Date(ciDate);
+                    const now = new Date();
                     const limit = getCheckoutLimit();
-                    limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                    
+                    // Determine which date's limit to use: if it's a different day, use today's limit
+                    let limitDate;
+                    if (now.toDateString() !== ciDate.toDateString()) {
+                        // Cross-day checkout: use today's date with checkout limit time
+                        limitDate = new Date(now);
+                        limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                    } else {
+                        // Same-day checkout: use check-in date with checkout limit time
+                        limitDate = new Date(ciDate);
+                        limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                    }
 
                     let endTime = Date.now();
                     if (endTime > limitDate.getTime()) {
@@ -18579,7 +18601,7 @@
                     <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600"><button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button></td>
                     <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">
                         ${escapeHtml(t.desc || '')}
-                        ${isMorningLearningTask(t) ? `<span class="ml-1 text-[8px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">9–10 AM</span>` : ''}
+                        ${isMorningLearningTask(t) ? `<span class="ml-1 text-[8px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">${escapeHtml(t.timeSlot || getMorningLearningSlot(t.userId || t.assigneeEmail))}</span>` : ''}
                         ${(t.description || t.notes) ? `<div class="text-[10px] text-slate-400 mt-1 truncate">${escapeHtml(t.description || t.notes)}</div>` : ''}
                     </td>
                     <td class="px-6 py-4">
@@ -19386,7 +19408,7 @@
                 }, 60000); // check every minute
             }
 
-            async function completeMorningLearningTask(task, learningContent = '', videoUrl = '') {
+            async function completeMorningLearningTask(task, learningContent = '', videoUrl = '', skipRender = false) {
                 if (!task || !isMorningLearningTask(task) || !db) return false;
                 const today = todayIso();
                 if (task.lastCompletedDate === today) return true;
@@ -19417,14 +19439,17 @@
                 };
                 if (videoUrl) logData.videoUrl = videoUrl;
 
-                await push(ref(db, 'worksync/learning_logs'), logData);
-
                 const ownerKey = eKey(task.userId || user.email);
-                await update(ref(db, `worksync/manual_tasks/${ownerKey}/${task.id}`), {
-                    status: 'Completed',
-                    lastCompletedDate: today,
-                    completedAt: Date.now()
-                });
+
+                // Execute database operations in parallel
+                await Promise.all([
+                    push(ref(db, 'worksync/learning_logs'), logData),
+                    update(ref(db, `worksync/manual_tasks/${ownerKey}/${task.id}`), {
+                        status: 'Completed',
+                        lastCompletedDate: today,
+                        completedAt: Date.now()
+                    })
+                ]);
 
                 const idx = tasks.findIndex(t => t.id === task.id);
                 if (idx >= 0) {
@@ -19432,9 +19457,14 @@
                     tasks[idx].lastCompletedDate = today;
                 }
 
-                renderInternalTasks();
-                renderDailyPlan();
-                if (activeView === 'learnings-org') renderLearningsOrgPanel();
+                // Defer expensive renders to next frame if not skipped
+                if (!skipRender) {
+                    requestAnimationFrame(() => {
+                        renderInternalTasks();
+                        renderDailyPlan();
+                        if (activeView === 'learnings-org') renderLearningsOrgPanel();
+                    });
+                }
                 toast('Morning learning completed — attendance logged', 'success');
                 return true;
             }
@@ -21674,8 +21704,12 @@
                     btn.innerHTML = '<iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon> Submitting...';
 
                     try {
-                        await completeMorningLearningTask(task, content, videoUrl);
+                        // Close modal immediately for instant feedback
                         document.getElementById('ml-completion-modal').close();
+                        
+                        // Process submission in background
+                        await completeMorningLearningTask(task, content, videoUrl);
+                        toast('Morning Learning completed ✓', 'success');
                     } catch (e) {
                         toast('Error saving completion details', 'error');
                         console.error(e);
@@ -34035,9 +34069,11 @@
 
                     const isWorkingOnThis = userLive?.currentTask?.taskId === t.id;
                     const taskState = userLive?.currentTask?.state;
-                    const liveTimerHtml = isWorkingOnThis && taskState === 'working'
+                    const liveTimerHtml = isMorningLearningTask(t)
+                        ? `<span class="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:sun-2-bold" width="10"></iconify-icon> ${escapeHtml(t.timeSlot || getMorningLearningSlot(t.userId || t.assigneeEmail))}</span>`
+                        : (isWorkingOnThis && taskState === 'working'
                         ? `<span class="live-task-timer ml-2 text-[10px] font-black text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 animate-pulse inline-flex items-center gap-1 shrink-0" data-started="${userLive.currentTask.startedAt}" data-state="working"><iconify-icon icon="solar:play-circle-bold" width="10"></iconify-icon> ${formatTime(Math.max(0, Math.floor((Date.now() - userLive.currentTask.startedAt) / 1000)))}</span>`
-                        : (isWorkingOnThis && taskState === 'on_hold' ? `<span class="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:pause-circle-bold" width="10"></iconify-icon> ON HOLD</span>` : '');
+                        : (isWorkingOnThis && taskState === 'on_hold' ? `<span class="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:pause-circle-bold" width="10"></iconify-icon> ON HOLD</span>` : ''));
 
                     return `
                 <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${dailyPlanRowClass(t.status, t)}">
