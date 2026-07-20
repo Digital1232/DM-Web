@@ -34855,13 +34855,24 @@
 
             function renderDailyPlanStats(uniquePlans) {
                 const statsGrid = document.getElementById('dp-stats-dashboard');
+                
+                // Count each category - exclude completed tasks from categorization
+                const statusToLower = (t) => (t.status || '').trim().toLowerCase();
+                
                 const stats = {
                     total: uniquePlans.length,
-                    designInProgress: uniquePlans.filter(t => ['in progress', 'design in progress', 'content in progress', 'shoot in progress'].includes((t.status || '').trim().toLowerCase())).length,
-                    hold: uniquePlans.filter(t => ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())).length,
-                    thumbnail: uniquePlans.filter(t => ['thumbnail waiting', 'thumbnail'].includes((t.status || '').trim().toLowerCase())).length,
-                    rework: uniquePlans.filter(t => (t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase())).length,
-                    completed: uniquePlans.filter(t => isDone(t.status) || isInternalDone(t.status) || isTaskCompletedStatus(t.status)).length
+                    todo: uniquePlans.filter(t => ['to do', 'design to do'].includes(statusToLower(t))).length,
+                    designInProgress: uniquePlans.filter(t => ['in progress', 'design in progress', 'content in progress', 'shoot in progress'].includes(statusToLower(t))).length,
+                    rework: uniquePlans.filter(t => (statusToLower(t).includes('rework') || ['rework designs', 'rework', 'rework design'].includes(statusToLower(t)))).length,
+                    thumbnail: uniquePlans.filter(t => ['thumbnail waiting', 'thumbnail'].includes(statusToLower(t))).length,
+                    hold: uniquePlans.filter(t => ['hold', 'design hold', 'on hold'].includes(statusToLower(t))).length,
+                    qualityCheck: uniquePlans.filter(t => ['quality check', 'qc started'].includes(statusToLower(t))).length,
+                    completed: uniquePlans.filter(t => {
+                        const s = statusToLower(t);
+                        // Exclude thumbnail statuses from completed count - they are tracked separately
+                        if (['thumbnail waiting', 'thumbnail'].includes(s)) return false;
+                        return isDone(t.status) || isInternalDone(t.status) || isTaskCompletedStatus(t.status);
+                    }).length
                 };
                 if (!statsGrid) return;
                 const cards = [
@@ -34874,8 +34885,15 @@
                         badgeStyle: 'background: rgba(59,130,246,.08); color: #3B82F6; box-shadow: inset 0 0 0 1px rgba(59,130,246,.14);'
                     },
                     {
+                        title: 'To Do',
+                        value: stats.todo,
+                        icon: 'solar:list-bold',
+                        tone: 'slate',
+                        valueClass: 'text-slate-600 dark:text-slate-400',
+                        badgeStyle: 'background: rgba(100,116,139,.08); color: #64748B; box-shadow: inset 0 0 0 1px rgba(100,116,139,.14);'
+                    },
+                    {
                         title: 'In Progress',
-                        subtitle: 'Design In Progress',
                         value: stats.designInProgress,
                         icon: 'solar:clock-circle-bold',
                         tone: 'amber',
@@ -34883,12 +34901,12 @@
                         badgeStyle: 'background: rgba(245,158,11,.08); color: #F59E0B; box-shadow: inset 0 0 0 1px rgba(245,158,11,.14);'
                     },
                     {
-                        title: 'Hold',
-                        value: stats.hold,
-                        icon: 'solar:pause-circle-bold',
-                        tone: 'red',
-                        valueClass: 'text-rose-600 dark:text-rose-400',
-                        badgeStyle: 'background: rgba(239,68,68,.08); color: #EF4444; box-shadow: inset 0 0 0 1px rgba(239,68,68,.14);'
+                        title: 'Rework',
+                        value: stats.rework,
+                        icon: 'solar:refresh-bold',
+                        tone: 'orange',
+                        valueClass: 'text-orange-600 dark:text-orange-400',
+                        badgeStyle: 'background: rgba(251,146,60,.08); color: #FB923C; box-shadow: inset 0 0 0 1px rgba(251,146,60,.14);'
                     },
                     {
                         title: 'Thumbnail',
@@ -34899,12 +34917,20 @@
                         badgeStyle: 'background: rgba(139,92,246,.08); color: #8B5CF6; box-shadow: inset 0 0 0 1px rgba(139,92,246,.14);'
                     },
                     {
-                        title: 'Rework',
-                        value: stats.rework,
-                        icon: 'solar:refresh-bold',
-                        tone: 'orange',
-                        valueClass: 'text-orange-600 dark:text-orange-400',
-                        badgeStyle: 'background: rgba(251,146,60,.08); color: #FB923C; box-shadow: inset 0 0 0 1px rgba(251,146,60,.14);'
+                        title: 'Hold',
+                        value: stats.hold,
+                        icon: 'solar:pause-circle-bold',
+                        tone: 'red',
+                        valueClass: 'text-rose-600 dark:text-rose-400',
+                        badgeStyle: 'background: rgba(239,68,68,.08); color: #EF4444; box-shadow: inset 0 0 0 1px rgba(239,68,68,.14);'
+                    },
+                    {
+                        title: 'QC/Review',
+                        value: stats.qualityCheck,
+                        icon: 'solar:eye-bold',
+                        tone: 'cyan',
+                        valueClass: 'text-cyan-600 dark:text-cyan-400',
+                        badgeStyle: 'background: rgba(34,211,238,.08); color: #22D3EE; box-shadow: inset 0 0 0 1px rgba(34,211,238,.14);'
                     },
                     {
                         title: 'Completed',
