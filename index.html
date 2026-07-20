@@ -36818,21 +36818,40 @@
                 renderApSelectedTasks();
 
                 const sel = document.getElementById('ap-user');
-                if (isAdmin()) {
-                    const usersList = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || '')); // Use allUsersMap
-                    sel.innerHTML = usersList.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
-                    sel.disabled = false;
-                } else {
-                    sel.innerHTML = `<option value="${currentUser.email}">${currentUser.name || currentUser.email}</option>`;
-                    sel.value = currentUser.email;
-                    sel.disabled = true;
+                if (!sel) {
+                    console.error('[openAssignPlanModal] ap-user element not found');
+                    return;
                 }
 
-                const clients = getClientCatalog();
-                const clientSel = document.getElementById('ap-client-filter');
-                if (clientSel) clientSel.innerHTML = '<option value="">All Clients</option>' + clients.map(c => `<option value="${c}">${escapeHtml(c)}</option>`).join('');
+                // Populate assignee dropdown
+                try {
+                    if (isAdmin && isAdmin()) {
+                        const usersList = Array.from(allUsersMap?.values() || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                        if (usersList.length > 0) {
+                            sel.innerHTML = usersList.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+                            sel.disabled = false;
+                        } else {
+                            console.warn('[openAssignPlanModal] No users in allUsersMap');
+                            sel.innerHTML = '<option value="">Loading users...</option>';
+                        }
+                    } else if (currentUser) {
+                        sel.innerHTML = `<option value="${currentUser.email}">${currentUser.name || currentUser.email}</option>`;
+                        sel.value = currentUser.email;
+                        sel.disabled = true;
+                    } else {
+                        console.warn('[openAssignPlanModal] currentUser not available');
+                        sel.innerHTML = '<option value="">Select User</option>';
+                    }
+                } catch (err) {
+                    console.error('[openAssignPlanModal] Error populating users:', err);
+                    sel.innerHTML = '<option value="">Error loading users</option>';
+                }
 
-                const statuses = [...new Set(tasks.map(t => t.status).filter(Boolean))].sort();
+                const clients = getClientCatalog && getClientCatalog();
+                const clientSel = document.getElementById('ap-client-filter');
+                if (clientSel) clientSel.innerHTML = '<option value="">All Clients</option>' + (clients || []).map(c => `<option value="${c}">${escapeHtml(c)}</option>`).join('');
+
+                const statuses = [...new Set((tasks || []).map(t => t.status).filter(Boolean))].sort();
                 const statusSel = document.getElementById('ap-status-filter');
                 if (statusSel) statusSel.innerHTML = '<option value="">All Statuses</option>' + statuses.map(s => `<option value="${s}">${escapeHtml(s)}</option>`).join('');
 
