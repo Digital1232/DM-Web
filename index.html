@@ -3408,7 +3408,7 @@
                                         <input id="task-search" type="search" placeholder="Search tasks..."
                                             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                             data-lpignore="true" data-1p-ignore="true" data-form-type="other"
-                                            name="task-search-field" oninput="searchTasks(this.value)"
+                                            name="task-search-field" oninput="PerfOptimizer.debounce('taskSearch', () => searchTasks(document.getElementById('task-search').value), 500)"
                                             class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-40">
                                     </div>
                                 </div>
@@ -3612,7 +3612,7 @@
                                         <input id="internal-task-search" type="search" placeholder="Search tasks..."
                                             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                             data-lpignore="true" data-1p-ignore="true" data-form-type="other"
-                                            name="internal-task-search-field" oninput="searchInternalTasks(this.value)"
+                                            name="internal-task-search-field" oninput="PerfOptimizer.debounce('internalTaskSearch', () => searchInternalTasks(document.getElementById('internal-task-search').value), 500)"
                                             class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-40">
                                     </div>
                                 </div>
@@ -3714,7 +3714,7 @@
                         <div
                             class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div class="flex items-center gap-4">
-                                <input type="date" id="dp-date" onchange="renderDailyPlan()" onclick="this.showPicker()"
+                                <input type="date" id="dp-date" onchange="PerfOptimizer.debounce('dpDateChange', () => PerfOptimizer.queueRender(() => renderDailyPlan(), 'high'), 200)" onclick="this.showPicker()"
                                     class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
                                 <div id="dp-user-filter-container" class="hidden relative">
                                     <button type="button" id="dp-user-filter-btn" onclick="toggleDpUserDropdown()"
@@ -11053,6 +11053,167 @@
                 return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
             }
 
+            // ═══════════════════════════════════════════════════════════
+            // PERFORMANCE OPTIMIZATION UTILITIES
+            // ═══════════════════════════════════════════════════════════
+            
+            // Debounce/Throttle utilities
+            const PerfOptimizer = {
+                // Cache for filtered/sorted results
+                _filterCache: new Map(),
+                _sortCache: new Map(),
+                _renderQueue: [],
+                _renderScheduled: false,
+                _debounceTimers: new Map(),
+                _throttleTimers: new Map(),
+                
+                // Generate cache key from filter params
+                getCacheKey(type, params) {
+                    return `${type}:${JSON.stringify(params)}`;
+                },
+                
+                // Debounce function calls (used for filters, search, etc.)
+                debounce(id, fn, delay = 300) {
+                    if (this._debounceTimers.has(id)) {
+                        clearTimeout(this._debounceTimers.get(id));
+                    }
+                    const timer = setTimeout(() => {
+                        fn();
+                        this._debounceTimers.delete(id);
+                    }, delay);
+                    this._debounceTimers.set(id, timer);
+                },
+                
+                // Throttle function calls (used for frequent events)
+                throttle(id, fn, delay = 100) {
+                    if (this._throttleTimers.has(id)) return;
+                    fn();
+                    const timer = setTimeout(() => {
+                        this._throttleTimers.delete(id);
+                    }, delay);
+                    this._throttleTimers.set(id, timer);
+                },
+                
+                // Batch multiple render calls into a single render cycle
+                queueRender(fn, priority = 'normal') {
+                    this._renderQueue.push({ fn, priority, timestamp: Date.now() });
+                    this._scheduleRenderBatch();
+                },
+                
+                _scheduleRenderBatch() {
+                    if (this._renderScheduled) return;
+                    this._renderScheduled = true;
+                    requestAnimationFrame(() => {
+                        this._executeBatchedRenders();
+                        this._renderScheduled = false;
+                    });
+                },
+                
+                _executeBatchedRenders() {
+                    // Sort by priority (high first) then by timestamp
+                    const priorityMap = { high: 0, normal: 1, low: 2 };
+                    this._renderQueue.sort((a, b) => {
+                        const pDiff = priorityMap[a.priority] - priorityMap[b.priority];
+                        return pDiff !== 0 ? pDiff : a.timestamp - b.timestamp;
+                    });
+                    
+                    // Execute unique render functions
+                    const executed = new Set();
+                    this._renderQueue.forEach(({ fn }) => {
+                        const fnStr = fn.toString();
+                        if (!executed.has(fnStr)) {
+                            executed.add(fnStr);
+                            try {
+                                fn();
+                            } catch (e) {
+                                console.error('[PerfOpt] Render error:', e);
+                            }
+                        }
+                    });
+                    
+                    this._renderQueue = [];
+                },
+                
+                // Clear caches when data changes
+                invalidateCache(pattern = null) {
+                    if (!pattern) {
+                        this._filterCache.clear();
+                        this._sortCache.clear();
+                    } else {
+                        for (const key of this._filterCache.keys()) {
+                            if (key.includes(pattern)) this._filterCache.delete(key);
+                        }
+                        for (const key of this._sortCache.keys()) {
+                            if (key.includes(pattern)) this._sortCache.delete(key);
+                        }
+                    }
+                }
+            };
+            
+            // Memoized filter function to avoid re-filtering identical params
+            function memoizedFilterTasks(tasks, filters) {
+                const cacheKey = PerfOptimizer.getCacheKey('filterTasks', filters);
+                if (PerfOptimizer._filterCache.has(cacheKey)) {
+                    return PerfOptimizer._filterCache.get(cacheKey);
+                }
+                
+                let result = tasks.filter(t => !isInternalTask(t));
+                
+                if (filters.statusFilter && filters.statusFilter.length > 0) {
+                    result = result.filter(t => filters.statusFilter.includes(t.status));
+                } else if (filters.statusFilter && filters.statusFilter.length === 0) {
+                    result = [];
+                }
+                
+                if (filters.assigneeFilter && filters.assigneeFilter !== 'all') {
+                    result = result.filter(t => assigneeMatches(t, filters.assigneeFilter));
+                }
+                
+                if (filters.clientFilter && filters.clientFilter !== 'all') {
+                    result = result.filter(t => t.client === filters.clientFilter);
+                }
+                
+                if (filters.dueDateFilter && filters.dueDateFilter !== 'all') {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    if (filters.dueDateFilter === 'overdue') {
+                        result = result.filter(t => {
+                            if (!t.duedate || isDone(t.status)) return false;
+                            const dueDate = new Date(t.duedate);
+                            return dueDate < today;
+                        });
+                    } else if (filters.dueDateFilter === 'today') {
+                        const todayStr = today.toISOString().slice(0, 10);
+                        result = result.filter(t => t.duedate === todayStr);
+                    } else if (filters.dueDateFilter === 'this_week') {
+                        const startOfWeek = new Date(today);
+                        startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+                        const endOfWeek = new Date(startOfWeek);
+                        endOfWeek.setDate(startOfWeek.getDate() + 6);
+                        endOfWeek.setHours(23, 59, 59, 999);
+                        
+                        result = result.filter(t => {
+                            if (!t.duedate) return false;
+                            const dueDate = new Date(t.duedate);
+                            return dueDate >= startOfWeek && dueDate <= endOfWeek;
+                        });
+                    }
+                }
+                
+                if (filters.searchTerm) {
+                    const searchLower = filters.searchTerm.toLowerCase();
+                    result = result.filter(t =>
+                        (t.id && t.id.toLowerCase().includes(searchLower)) ||
+                        (t.desc && t.desc.toLowerCase().includes(searchLower)) ||
+                        (t.assignee && t.assignee.toLowerCase().includes(searchLower))
+                    );
+                }
+                
+                PerfOptimizer._filterCache.set(cacheKey, result);
+                return result;
+            }
+
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
                 projectKey: 'JULY',
@@ -14700,6 +14861,18 @@
             let activeStrategyClientFilter = 'All';
 
             async function initStrategyCalendar() {
+                console.time('[PERF] initStrategyCalendar');
+                
+                // CRITICAL: Ensure customClients are loaded first
+                if (!customClients || customClients.length === 0) {
+                    console.log('[initStrategyCalendar] Preloading customClients...');
+                    const loaded = await preloadCustomClients();
+                    if (!loaded) {
+                        console.log('[initStrategyCalendar] Using CLIENTS array as fallback');
+                        customClients = [...(window.CLIENTS || [])];
+                    }
+                }
+                
                 // Show action buttons container if they can write/admin
                 const acts = document.getElementById('strategy-action-buttons');
                 if (acts) {
@@ -14724,14 +14897,42 @@
                 `).join('');
                 }
 
-                if (!db) return;
+                if (!db) {
+                    console.timeEnd('[PERF] initStrategyCalendar');
+                    return;
+                }
                 if (strategyEventsUnsub) strategyEventsUnsub();
 
+                // CRITICAL FIX: Render immediately with current data (even if empty)
+                // This ensures UI appears on first load, before Firebase callback fires
+                console.log('[initStrategyCalendar] Rendering with current data (may be empty on first load)');
+                renderStrategyClientTabs();
+                renderStrategyCalendar();
+                renderStrategySidebar();
+
+                // Set up real-time listener for updates
                 strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
                     strategyEvents = snap.val() || {};
+                    
+                    // DIAGNOSTIC LOGGING
+                    const totalEvents = Object.keys(strategyEvents).length;
+                    const eventsWithDates = Object.values(strategyEvents).filter(e => e.date).length;
+                    const eventsWithClients = Object.values(strategyEvents).filter(e => e.client).length;
+                    const uniqueClientsInEvents = new Set(Object.values(strategyEvents).map(e => e.client).filter(c => c));
+                    
+                    console.log('=== STRATEGY CALENDAR LOADED (Firebase callback) ===');
+                    console.log(`Total events: ${totalEvents}`);
+                    console.log(`Events with dates: ${eventsWithDates}`);
+                    console.log(`Events with clients: ${eventsWithClients}`);
+                    console.log(`Unique clients in events: ${uniqueClientsInEvents.size}`, Array.from(uniqueClientsInEvents));
+                    console.log(`Available customClients: ${customClients.length}`, customClients);
+                    
+                    // Re-render with new data from Firebase
                     renderStrategyClientTabs();
                     renderStrategyCalendar();
                     renderStrategySidebar();
+                    
+                    console.timeEnd('[PERF] initStrategyCalendar');
                 });
             }
 
@@ -14745,49 +14946,246 @@
                 renderStrategySidebar();
             }
 
-            function renderStrategyClientTabs() {
-                const container = document.getElementById('strategy-client-tabs-container');
-                if (!container) return;
+            // DEBUG FUNCTION - Call from console: debugStrategyCalendar()
+            function debugStrategyCalendar() {
+                console.group('🔍 STRATEGY CALENDAR DEBUG INFO');
+                console.log('Total events:', Object.keys(strategyEvents).length);
+                console.log('Current filter:', activeStrategyClientFilter);
+                console.log('Current date:', strategyCurrentDate.toLocaleDateString());
+                
+                const eventsWithoutDate = Object.entries(strategyEvents).filter(([, e]) => !e.date);
+                if (eventsWithoutDate.length > 0) {
+                    console.warn(`⚠️ ${eventsWithoutDate.length} events missing DATE field:`, eventsWithoutDate);
+                }
+                
+                const eventsByClient = {};
+                Object.values(strategyEvents).forEach(e => {
+                    const client = e.client || 'General';
+                    if (!eventsByClient[client]) eventsByClient[client] = 0;
+                    eventsByClient[client]++;
+                });
+                console.table(eventsByClient);
+                
+                console.log('Custom Clients:', customClients);
+                console.log('All Clients (CLIENTS array):', window.CLIENTS || 'Not accessible');
+                
+                // Sample events
+                const sample = Object.entries(strategyEvents).slice(0, 3).map(([id, e]) => ({ id, ...e }));
+                console.log('Sample events:', sample);
+                
+                console.groupEnd();
+            }
+            window.debugStrategyCalendar = debugStrategyCalendar;
 
-                // Get unique clients from strategyEvents that actually exist
-                const uniqueClients = new Set();
-                Object.values(strategyEvents).forEach(ev => {
-                    if (ev.client) {
-                        uniqueClients.add(ev.client);
+            // COMPREHENSIVE DIAGNOSTIC - Shows why tasks are not matching to events
+            function diagnosticStrategyTaskMatching() {
+                console.group('🔍 STRATEGY CALENDAR TASK MATCHING DIAGNOSTIC');
+                
+                console.log(`📊 OVERVIEW:`);
+                console.log(`  • Total Jira tasks loaded: ${tasks?.length || 0}`);
+                console.log(`  • Total strategy events: ${Object.keys(strategyEvents).length}`);
+                console.log(`  • Custom clients available: ${customClients?.length || 0}`);
+                
+                if (!tasks || tasks.length === 0) {
+                    console.warn('⚠️ NO TASKS LOADED! Call syncTasks() first to load tasks from Jira.');
+                    console.groupEnd();
+                    return;
+                }
+                
+                console.log(`\n📋 FIRST 5 TASKS AVAILABLE:`);
+                tasks.slice(0, 5).forEach(t => {
+                    console.log(`  • ${t.id}: "${t.desc}" [${t.client}]`);
+                });
+                
+                console.log(`\n🔗 MATCHING ANALYSIS BY EVENT:`);
+                const unmatchedEvents = [];
+                const matchedEvents = [];
+                
+                Object.entries(strategyEvents).forEach(([eventId, event]) => {
+                    const matched = findMatchedStrategyTask(event.title, event.desc, event.jiraId, false);
+                    
+                    if (matched) {
+                        matchedEvents.push({
+                            title: event.title,
+                            matchedTo: `${matched.id}: ${matched.desc}`,
+                            client: event.client
+                        });
+                    } else {
+                        unmatchedEvents.push({
+                            title: event.title,
+                            client: event.client,
+                            desc: event.desc,
+                            jiraId: event.jiraId
+                        });
+                        
+                        // Debug this specific event
+                        console.log(`\n  ❌ EVENT UNMATCHED: "${event.title}" (Client: ${event.client})`);
+                        console.log(`     Description: "${event.desc}"`);
+                        console.log(`     Jira ID: "${event.jiraId}"`);
+                        
+                        // Try to match with debugging enabled
+                        const debugMatch = findMatchedStrategyTask(event.title, event.desc, event.jiraId, true);
+                        if (debugMatch) {
+                            console.log(`     ✅ Debug found match: ${debugMatch.id}`);
+                        }
                     }
                 });
+                
+                console.log(`\n✅ MATCHED EVENTS: ${matchedEvents.length}`);
+                if (matchedEvents.length > 0 && matchedEvents.length <= 10) {
+                    matchedEvents.forEach(m => {
+                        console.log(`  ✓ "${m.title}" → ${m.matchedTo}`);
+                    });
+                }
+                
+                console.log(`\n❌ UNMATCHED EVENTS: ${unmatchedEvents.length}`);
+                if (unmatchedEvents.length > 0) {
+                    console.table(unmatchedEvents);
+                }
+                
+                console.log(`\n💡 RECOMMENDATIONS:`);
+                if (unmatchedEvents.length > 0) {
+                    console.log(`  1. Check if Jira task titles exactly match event titles`);
+                    console.log(`  2. Use 'eventTitle = taskId' format for precise matching`);
+                    console.log(`  3. Verify tasks are using correct client names matching customClients`);
+                    console.log(`  4. Try manually selecting Jira tasks in the Strategy Calendar modal`);
+                }
+                
+                console.groupEnd();
+            }
+            window.diagnosticStrategyTaskMatching = diagnosticStrategyTaskMatching;
+
+            // TEST DATA HELPER - Creates sample strategy events for testing
+            async function createStrategyTestData() {
+                if (!db) {
+                    console.error('Firebase not connected');
+                    return;
+                }
+                
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const nextWeek = new Date(today);
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                
+                const dateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                
+                const testEvents = [
+                    {
+                        id: 'test-event-1',
+                        title: 'Test Campaign Launch',
+                        date: dateStr(today),
+                        client: 'Ashmithasree',
+                        status: 'To Do',
+                        desc: 'Test campaign for verification',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-2',
+                        title: 'Design Review',
+                        date: dateStr(tomorrow),
+                        client: 'NTT',
+                        status: 'In Progress',
+                        desc: 'Design checkpoint',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-3',
+                        title: 'Social Media Planning',
+                        date: dateStr(nextWeek),
+                        client: 'Einstein',
+                        status: 'To Do',
+                        desc: 'Plan social content',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-4',
+                        title: 'General Event (No Client)',
+                        date: dateStr(today),
+                        client: null,
+                        status: 'Done',
+                        desc: 'Event without specific client',
+                        owner: currentUser?.email || 'test@example.com'
+                    }
+                ];
+                
+                console.log('Creating test strategy events...');
+                
+                for (const event of testEvents) {
+                    try {
+                        await set(ref(db, `worksync/strategy_events/${event.id}`), event);
+                        console.log(`✓ Created: ${event.title}`);
+                    } catch (err) {
+                        console.error(`✗ Failed to create ${event.title}:`, err.message);
+                    }
+                }
+                
+                console.log('Test data creation complete. Calendar should update automatically.');
+            }
+            window.createStrategyTestData = createStrategyTestData;
+
+            function renderStrategyClientTabs() {
+                const container = document.getElementById('strategy-client-tabs-container');
+                if (!container) {
+                    console.warn('[renderStrategyClientTabs] Container not found');
+                    return;
+                }
+
+                // CRITICAL FIX: Get unique clients from BOTH Jira tasks AND strategy events
+                const uniqueClients = new Set();
+                
+                // From Jira tasks (only Jira, not internal)
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        if (!task.manual && !isInternalTask(task) && task.client && task.client !== 'Others') {
+                            uniqueClients.add(task.client);
+                        }
+                    });
+                }
+
+                // From strategy events (your manually created plans)
+                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        if (ev.client && ev.client !== 'General') {
+                            uniqueClients.add(ev.client);
+                        }
+                    });
+                }
 
                 const sortedClients = Array.from(uniqueClients).sort();
 
                 // Build tab list starting with "All"
                 const tabs = ['All'];
 
-                // Check if there is any strategy event with no client
-                const hasGeneral = Object.values(strategyEvents).some(ev => !ev.client);
-                if (hasGeneral) {
-                    tabs.push('General');
+                // Add "Others" if there are Jira tasks without specific client
+                const hasOthers = (tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client === 'Others'))) ||
+                                 (strategyEvents && Object.values(strategyEvents).some(ev => !ev.client));
+                if (hasOthers) {
+                    tabs.push('Others');
                 }
 
                 sortedClients.forEach(c => tabs.push(c));
+                
+                console.log('[renderStrategyClientTabs] Rendering tabs from Jira + Strategy Events:', tabs.length, 'tabs');
 
                 // Ensure the active filter is still valid (if not, reset to 'All')
                 if (!tabs.includes(activeStrategyClientFilter)) {
                     activeStrategyClientFilter = 'All';
                 }
 
-                container.innerHTML = tabs.map(tab => {
+                // CRITICAL: Build HTML with performance optimization
+                const tabsHtml = tabs.map(tab => {
                     const isActive = activeStrategyClientFilter === tab;
                     const activeClass = isActive
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
                         : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 hover:border-slate-200';
 
-                    return `
-                    <button onclick="setStrategyClientFilter(this.getAttribute('data-client'))" data-client="${escapeHtml(tab)}" 
-                        class="px-4 py-2 rounded-2xl text-xs font-bold transition-all ${activeClass}">
-                        ${escapeHtml(tab)}
-                    </button>
-                `;
+                    return `<button onclick="setStrategyClientFilter(this.getAttribute('data-client'))" data-client="${escapeHtml(tab)}" class="px-4 py-2 rounded-2xl text-xs font-bold transition-all ${activeClass}">${escapeHtml(tab)}</button>`;
                 }).join('');
+
+                // Set HTML in one operation (not incremental)
+                container.innerHTML = tabsHtml;
+                console.log('[renderStrategyClientTabs] Container updated with', tabs.length, 'tabs');
             }
 
             function setStrategyClientFilter(client) {
@@ -14861,27 +15259,56 @@
                 return colors[index][format];
             }
 
-            function findMatchedStrategyTask(eventTitle, eventDesc, eventJiraId) {
-                if (!tasks || tasks.length === 0) return null;
+            function findMatchedStrategyTask(eventTitle, eventDesc, eventJiraId, debugMode = false) {
+                if (!tasks || tasks.length === 0) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ❌ No tasks available (tasks.length = ${tasks?.length})`);
+                    return null;
+                }
 
                 // 0. Explicit saved Jira ID match
                 if (eventJiraId) {
                     const matched = tasks.find(t => t.id.toLowerCase() === eventJiraId.toLowerCase());
-                    if (matched) return matched;
+                    if (matched) {
+                        if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by Jira ID: ${eventJiraId}`);
+                        return matched;
+                    }
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ❌ Jira ID not found: ${eventJiraId}`);
                 }
 
                 const title = (eventTitle || '').toLowerCase().trim();
                 const desc = (eventDesc || '').toLowerCase().trim();
 
-                // 1. Direct Jira ID match
+                // 1. Direct Jira ID match (if title/desc contains Jira key)
                 let matched = tasks.find(t => title.includes(t.id.toLowerCase()) || desc.includes(t.id.toLowerCase()));
-                if (matched) return matched;
+                if (matched) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by ID in text: ${matched.id}`);
+                    return matched;
+                }
 
                 // 2. Exact Title match
                 matched = tasks.find(t => (t.desc || '').toLowerCase().trim() === title);
-                if (matched) return matched;
+                if (matched) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by exact title: ${matched.id}`);
+                    return matched;
+                }
 
-                // 3. Jaccard Similarity matching
+                // 3. Partial word matching (case-insensitive, word boundaries)
+                const titleWords = title.split(/\s+/).filter(w => w.length > 2);
+                if (titleWords.length > 0) {
+                    for (const t of tasks) {
+                        const taskDesc = (t.desc || '').toLowerCase();
+                        const matchCount = titleWords.filter(word => taskDesc.includes(word)).length;
+                        const matchRatio = matchCount / titleWords.length;
+                        
+                        // Match if 50% of significant words are in the task
+                        if (matchRatio >= 0.5) {
+                            if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by word ratio (${(matchRatio*100).toFixed(0)}%): ${matched.id}`);
+                            return t;
+                        }
+                    }
+                }
+
+                // 4. Jaccard Similarity matching (as fallback)
                 const stopWords = new Set(['english', 'and', 'the', 'for', 'with', 'you', 'your', 'our', 'this', 'that', 'with', 'from', 'version', 'video', 'post', 'image']);
                 const getSignificantTokens = (str) => {
                     return new Set(
@@ -14892,7 +15319,13 @@
                 };
 
                 const eventTokens = getSignificantTokens(title);
-                if (eventTokens.size === 0) return null;
+                if (eventTokens.size === 0) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ❌ No significant tokens in event title`);
+                    return null;
+                }
+
+                let bestMatch = null;
+                let bestSimilarity = 0;
 
                 for (const t of tasks) {
                     const taskDesc = (t.desc || '').toLowerCase();
@@ -14907,9 +15340,22 @@
                     const unionSize = eventTokens.size + taskTokens.size - intersectionSize;
                     const similarity = intersectionSize / unionSize;
 
-                    if (similarity >= 0.6) {
+                    if (similarity > bestSimilarity) {
+                        bestSimilarity = similarity;
+                        bestMatch = t;
+                    }
+
+                    if (similarity >= 0.5) {
+                        if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by Jaccard (${(similarity*100).toFixed(0)}%): ${t.id}`);
                         return t;
                     }
+                }
+
+                if (debugMode && bestMatch) {
+                    console.log(`[findMatchedStrategyTask] ⚠️ Best match below threshold (${(bestSimilarity*100).toFixed(0)}%): ${bestMatch.id}`);
+                }
+                if (debugMode && !bestMatch) {
+                    console.log(`[findMatchedStrategyTask] ❌ No matches found. Available tasks: ${tasks.length}`);
                 }
 
                 return null;
@@ -14936,7 +15382,10 @@
             function renderStrategyCalendar() {
                 const grid = document.getElementById('strategy-calendar-grid');
                 const title = document.getElementById('strategy-calendar-title');
-                if (!grid || !title) return;
+                if (!grid || !title) {
+                    console.error('Strategy calendar grid or title element not found!');
+                    return;
+                }
 
                 const month = strategyCurrentDate.getMonth();
                 const year = strategyCurrentDate.getFullYear();
@@ -14956,42 +15405,108 @@
                 const today = new Date();
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-                const eventsByDate = {};
-                Object.entries(strategyEvents).forEach(([id, ev]) => {
+                // CRITICAL CHANGE: Build calendar from JIRA tasks ONLY (exclude internal tasks)
+                // Get all tasks and group by due date
+                const tasksByDate = {};
+                
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        // Filter: Only Jira tasks (not manual, not internal)
+                        if (task.manual || isInternalTask(task)) {
+                            return; // Skip manual and internal tasks
+                        }
+
+                        // Filter by client (if not "All")
+                        if (activeStrategyClientFilter !== 'All') {
+                            const taskClient = task.client || 'Others';
+                            if (taskClient !== activeStrategyClientFilter) {
+                                return; // Skip this task
+                            }
+                        }
+
+                        // Group by due date (if task has a due date in this month/year)
+                        if (task.duedate) {
+                            const [ty, tm, td] = task.duedate.split('-').map(Number);
+                            if (tm - 1 === month && ty === year) {
+                                const dateStr = task.duedate;
+                                if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+                                tasksByDate[dateStr].push({
+                                    id: task.id,
+                                    title: task.desc || task.id,
+                                    client: task.client || 'Others',
+                                    status: task.status,
+                                    assignee: task.assignee || '',
+                                    isJiraTask: true
+                                });
+                            }
+                        }
+                    });
+                }
+
+                // Also include strategy events (for backwards compatibility)
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
                     if (!ev.date) return;
 
                     // Filter by client
                     if (activeStrategyClientFilter !== 'All') {
-                        if (activeStrategyClientFilter === 'General') {
-                            if (ev.client) return;
-                        } else {
-                            if (ev.client !== activeStrategyClientFilter) return;
+                        const eventClient = ev.client || 'General';
+                        if (eventClient !== activeStrategyClientFilter) {
+                            return; // Skip this event
                         }
                     }
 
-                    const d = ev.date; // YYYY-MM-DD
-                    if (!eventsByDate[d]) eventsByDate[d] = [];
-                    eventsByDate[d].push({ id, ...ev });
+                    // Only include if date is in current month
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    const dateStr = ev.date;
+                    if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+                    
+                    // Check if this event is already added from Jira
+                    const alreadyAdded = tasksByDate[dateStr].some(t => t.id === ev.jiraId && t.isJiraTask);
+                    if (!alreadyAdded) {
+                        tasksByDate[dateStr].push({
+                            id: ev.id,
+                            title: ev.title,
+                            client: ev.client || 'General',
+                            status: ev.status || 'To Do',
+                            jiraId: ev.jiraId,
+                            isStrategyEvent: true
+                        });
+                    }
                 });
+
+                const totalTasks = Object.values(tasksByDate).reduce((sum, arr) => sum + arr.length, 0);
+                console.log(`[renderStrategyCalendar] Showing ${totalTasks} Jira tasks (Filter: ${activeStrategyClientFilter})`);
 
                 // Render days
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     const isToday = dateStr === todayStr;
-                    const dayEvents = eventsByDate[dateStr] || [];
+                    const dayTasks = tasksByDate[dateStr] || [];
 
-                    let eventsHtml = '';
-                    dayEvents.forEach(ev => {
-                        const matchedTask = findMatchedStrategyTask(ev.title, ev.desc, ev.jiraId);
-                        const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
+                    let tasksHtml = '';
+                    dayTasks.forEach(task => {
+                        // For Jira tasks, use task.status directly (already synced from Jira)
+                        // For strategy events, try to find matching Jira task
+                        let finalStatus = task.status || 'To Do';
+                        if (task.isStrategyEvent && task.jiraId) {
+                            const matchedJiraTask = tasks?.find(t => t.id === task.jiraId);
+                            if (matchedJiraTask) {
+                                finalStatus = matchedJiraTask.status;
+                            }
+                        }
+                        finalStatus = normalizeStrategyStatus(finalStatus);
 
                         const badgeClass = getStrategyStatusColor(finalStatus, 'pill');
+                        const clientName = task.client || 'Others';
 
-                        eventsHtml += `
-                        <div onclick="event.stopPropagation(); openEditStrategyEventModal('${ev.id}')" 
-                             class="${badgeClass} px-2 py-1.5 rounded-xl text-[9px] font-black shadow-sm transition-all hover:scale-105 active:scale-95 truncate mb-1" 
-                             title="${escapeHtml(ev.title)} [${escapeHtml(finalStatus)}] [${escapeHtml(ev.client || 'General')}]">
-                            ${escapeHtml(ev.title)}
+                        tasksHtml += `
+                        <div onclick="event.stopPropagation(); ${task.isStrategyEvent ? `openEditStrategyEventModal('${task.id}')` : `openJiraTaskDetail('${task.id}')`}" 
+                             class="${badgeClass} px-2 py-1.5 rounded-xl text-[9px] font-black shadow-sm transition-all hover:scale-105 active:scale-95 truncate mb-1 cursor-pointer" 
+                             title="${escapeHtml(task.title)} [${escapeHtml(finalStatus)}] [${escapeHtml(clientName)}]">
+                            <div class="truncate">${escapeHtml(task.title)}</div>
+                            <div class="text-[8px] opacity-75 truncate">${escapeHtml(clientName)}</div>
                         </div>
                     `;
                     });
@@ -15003,7 +15518,7 @@
                             ${d}
                         </span>
                         <div class="mt-2 flex-1">
-                            ${eventsHtml}
+                            ${tasksHtml}
                         </div>
                     </div>
                 `;
@@ -15024,59 +15539,113 @@
                 const month = strategyCurrentDate.getMonth();
                 const year = strategyCurrentDate.getFullYear();
 
-                // Filter events belonging to current month/year and client
-                const activeMonthEvents = Object.entries(strategyEvents)
-                    .map(([id, ev]) => ({ id, ...ev }))
-                    .filter(ev => {
-                        if (!ev.date) return false;
-                        const [ey, em, ed] = ev.date.split('-').map(Number);
-                        const sameMonthYear = (em - 1) === month && ey === year;
-                        if (!sameMonthYear) return false;
+                // Collect JIRA tasks for current month (EXCLUDE INTERNAL TASKS)
+                const activeMonthTasks = [];
+                
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        // Filter: Skip manual and internal tasks
+                        if (task.manual || isInternalTask(task)) {
+                            return; // Skip internal tasks
+                        }
+
+                        if (!task.duedate) return;
+                        
+                        const [ty, tm, td] = task.duedate.split('-').map(Number);
+                        if (tm - 1 !== month || ty !== year) return;
 
                         // Filter by client
                         if (activeStrategyClientFilter !== 'All') {
-                            if (activeStrategyClientFilter === 'General') {
-                                if (ev.client) return false;
-                            } else {
-                                if (ev.client !== activeStrategyClientFilter) return false;
-                            }
+                            const taskClient = task.client || 'Others';
+                            if (taskClient !== activeStrategyClientFilter) return;
                         }
-                        return true;
-                    })
-                    .sort((a, b) => a.date.localeCompare(b.date));
 
-                if (activeMonthEvents.length === 0) {
+                        activeMonthTasks.push({
+                            id: task.id,
+                            date: task.duedate,
+                            title: task.desc || task.id,
+                            client: task.client || 'Others',
+                            status: task.status,
+                            desc: `Jira: ${task.id}`,
+                            owner: task.assignee || 'Unassigned',
+                            isJiraTask: true
+                        });
+                    });
+                }
+
+                // Also collect strategy events (for backwards compatibility)
+                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
+                    Object.entries(strategyEvents).forEach(([id, ev]) => {
+                        if (!ev.date) return;
+                        
+                        const [ey, em, ed] = ev.date.split('-').map(Number);
+                        if (em - 1 !== month || ey !== year) return;
+
+                        // Filter by client
+                        if (activeStrategyClientFilter !== 'All') {
+                            const eventClient = ev.client || 'General';
+                            if (eventClient !== activeStrategyClientFilter) return;
+                        }
+
+                        // Check if this event is already added from Jira
+                        const alreadyAdded = activeMonthTasks.some(t => t.id === ev.jiraId && t.isJiraTask);
+                        if (!alreadyAdded) {
+                            activeMonthTasks.push({
+                                id: ev.id,
+                                date: ev.date,
+                                title: ev.title,
+                                client: ev.client || 'General',
+                                status: ev.status || 'To Do',
+                                desc: ev.desc || 'No goal described.',
+                                owner: ev.owner,
+                                isStrategyEvent: true
+                            });
+                        }
+                    });
+                }
+
+                // Sort by date
+                activeMonthTasks.sort((a, b) => a.date.localeCompare(b.date));
+
+                if (activeMonthTasks.length === 0) {
                     listEl.innerHTML = `
                     <div class="text-center py-8">
                         <iconify-icon icon="solar:info-circle-linear" class="text-slate-300 mb-2" width="32"></iconify-icon>
-                        <p class="text-xs text-slate-400 italic">No strategies scheduled for this month.</p>
+                        <p class="text-xs text-slate-400 italic">No Jira tasks scheduled for this month.</p>
                     </div>
                 `;
                     return;
                 }
 
-                listEl.innerHTML = activeMonthEvents.map(ev => {
-                    const ownerName = allUsersMap.get(ev.owner?.toLowerCase())?.name || ev.owner || 'Unassigned';
+                listEl.innerHTML = activeMonthTasks.map(task => {
+                    // Get owner/assignee name
+                    let ownerName = task.owner || 'Unassigned';
+                    if (task.isJiraTask) {
+                        const user = allUsersMap.get(task.owner?.toLowerCase());
+                        ownerName = user?.name || task.owner || 'Unassigned';
+                    }
 
-                    const matchedTask = findMatchedStrategyTask(ev.title, ev.desc, ev.jiraId);
-                    const finalStatus = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
-
+                    const finalStatus = normalizeStrategyStatus(task.status);
                     const pillColor = getStrategyStatusColor(finalStatus, 'pill');
+                    const clientColor = getStrategyClientColor(task.client, 'pill');
+
+                    const [ty, tm, td] = task.date.split('-').map(Number);
+                    const dateStr = new Date(ty, tm - 1, td).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
                     const statusHtml = finalStatus ? `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-bold border border-indigo-100">${escapeHtml(finalStatus)}</span>` : '';
 
                     return `
-                    <div onclick="openEditStrategyEventModal('${ev.id}')" 
-                         class="p-4 bg-slate-50 hover:bg-white border border-slate-200 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] space-y-2 shadow-sm">
+                    <div onclick="event.stopPropagation(); ${task.isStrategyEvent ? `openEditStrategyEventModal('${task.id}')` : ''}" 
+                         class="p-4 bg-slate-50 hover:bg-white border border-slate-200 rounded-2xl ${task.isStrategyEvent ? 'cursor-pointer' : ''} transition-all hover:scale-[1.01] space-y-2 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${(() => { const [ey, em, ed] = ev.date.split('-').map(Number); return new Date(ey, em - 1, ed).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); })()}</span>
+                            <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${dateStr}</span>
                             <div class="flex items-center gap-1">
                                 ${statusHtml}
-                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${pillColor}">${escapeHtml(ev.client || 'General')}</span>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${clientColor}">${escapeHtml(task.client)}</span>
                             </div>
                         </div>
-                        <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(ev.title)}</h5>
-                        <p class="text-[10px] text-slate-600 line-clamp-2">${escapeHtml(ev.desc || 'No goal described.')}</p>
+                        <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(task.title)}</h5>
+                        <p class="text-[10px] text-slate-600 line-clamp-2">${escapeHtml(task.desc)}</p>
                         <div class="flex items-center justify-between pt-1 border-t border-slate-100/50 text-[9px] text-slate-400 font-bold uppercase">
                             <span class="text-slate-600">Assignee: ${escapeHtml(ownerName)}</span>
                         </div>
@@ -17508,14 +18077,46 @@
                 if (activeView === 'shoots') renderShootCalendar();
             }
 
+            async function preloadCustomClients() {
+                if (!db) return;
+                try {
+                    console.time('[PERF] preloadCustomClients');
+                    const snap = await get(ref(db, 'worksync/settings/custom_clients'));
+                    if (snap.exists() && Array.isArray(snap.val())) {
+                        customClients = snap.val();
+                        console.timeEnd('[PERF] preloadCustomClients');
+                        console.log('[Preload] CustomClients loaded:', customClients.length, 'clients');
+                        return true;
+                    }
+                    console.timeEnd('[PERF] preloadCustomClients');
+                    console.log('[Preload] No custom clients found, using CLIENTS array');
+                    return false;
+                } catch (err) {
+                    console.error('[Preload] Error loading customClients:', err);
+                    return false;
+                }
+            }
+
             function initClientSettings() {
                 if (!db) return;
+                console.time('[PERF] initClientSettings');
+                
                 onValue(ref(db, 'worksync/settings'), snap => {
+                    console.timeEnd('[PERF] initClientSettings');
                     const settings = snap.val() || {};
                     clientLabelMap = settings.client_label_map || {};
                     if (Array.isArray(settings.custom_clients) && settings.custom_clients.length) {
                         customClients = settings.custom_clients;
                     }
+                    console.log('[ClientSettings] Loaded:', customClients.length, 'clients');
+                    
+                    // CRITICAL: Re-render strategy calendar tabs if it's already initialized
+                    // This ensures tabs show up even if calendar opened before settings loaded
+                    if (document.getElementById('strategy-client-tabs-container')) {
+                        renderStrategyClientTabs();
+                        console.log('[ClientSettings] Re-rendered strategy tabs');
+                    }
+                    
                     refreshAllTaskClientDisplay();
                     if (activeView === 'clients-admin') loadClientNamesAdmin();
                 });
@@ -17871,9 +18472,9 @@
 
                     localStorage.setItem('worksync_tasks', JSON.stringify(tasks));
                     localStorage.setItem('worksync_lastSync', Date.now().toString());
-
                     populateAssigneeFilter();
-                    renderTasks(); updateStats();
+                    PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                    PerfOptimizer.queueRender(() => updateStats(), 'normal');
                     populateClientFilter(); // Call after renderTasks to ensure task data is updated
                     populateInternalAssigneeFilter();
                     populateInternalClientFilter();
@@ -20359,7 +20960,11 @@
                 toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
                 activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
                 updateSessionStatus();
-                renderTasks(); if (isInternalTabActive()) renderInternalTasks(); renderActiveTaskCard(); renderDailyPlan();
+                // Batch render calls instead of sequential
+                PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                PerfOptimizer.queueRender(() => renderActiveTaskCard(), 'high');
+                PerfOptimizer.queueRender(() => renderDailyPlan(), 'normal');
             }
 
             function renderActiveTaskCard() {
@@ -32347,7 +32952,11 @@
                         };
                         await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail || currentUser.email)}/${taskId}`), task);
                         tasks = mergeTasksById([task, ...tasks]);
-                        renderTasks(); renderInternalTasks(); updateStats();
+                        // Batch render calls
+                        PerfOptimizer.invalidateCache('filterTasks');
+                        PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                        PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                        PerfOptimizer.queueRender(() => updateStats(), 'normal');
                         toast('Task added to One Desk', 'success');
                     }
                     document.getElementById('addTaskModal').close();
@@ -32488,10 +33097,12 @@
                     await checkAndCreateThumbnailSubTask(tasks[taskIndex], newAssigneeEmail);
                 }
 
-                renderTasks(); updateStats();
-                if (isInternalTabActive()) renderInternalTasks();
-                if (activeView === 'shoots') renderShootCalendar();
-                if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                if (activeView === 'shoots') PerfOptimizer.queueRender(() => renderShootCalendar(), 'high');
+                if ((activeView === 'dailyplan' || isDailyPlanTabActive())) PerfOptimizer.queueRender(() => renderDailyPlan(), 'normal');
                 document.getElementById('editTaskModal').close();
                 populateClientFilter();
                 toast('Task updated successfully', 'success');
@@ -32543,9 +33154,11 @@
                     tasks.splice(taskIndex, 1);
 
                     // Re-render UI
-                    renderTasks(); updateStats();
-                    if (isInternalTabActive()) renderInternalTasks();
-                    if (activeView === 'shoots') renderShootCalendar();
+                    PerfOptimizer.invalidateCache('filterTasks');
+                    PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                    PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                    if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                    if (activeView === 'shoots') PerfOptimizer.queueRender(() => renderShootCalendar(), 'high');
 
                     document.getElementById('editTaskModal').close();
                     populateClientFilter();
@@ -32581,9 +33194,11 @@
                         populateClientFilter();
                         populateInternalAssigneeFilter();
                         populateInternalClientFilter();
-                        renderTasks(); updateStats();
-                        if (isInternalTabActive()) renderInternalTasks();
-                        if (activeView === 'shoots') renderShootCalendar();
+                        PerfOptimizer.invalidateCache('filterTasks');
+                        PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                        PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                        if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                        if (activeView === 'shoots') PerfOptimizer.queueRender(() => renderShootCalendar(), 'high');
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                         if (activeView === 'plan-tracking') renderPlanTrackingView();
@@ -32608,8 +33223,10 @@
                         populateClientFilter();
                         populateInternalAssigneeFilter();
                         populateInternalClientFilter();
-                        renderTasks(); updateStats();
-                        if (isInternalTabActive()) renderInternalTasks();
+                        PerfOptimizer.invalidateCache('filterTasks');
+                        PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                        PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                        if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
                         if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
@@ -32905,11 +33522,8 @@
                         currentStatusFilter = [];
                     }
                 } else {
-                    // A specific status checkbox was changed
                     const selected = Array.from(document.querySelectorAll('#status-menu input[type="checkbox"]:not([value="all"]):checked')).map(c => c.value);
-
                     if (selected.length === 0) {
-                        // If no specific statuses are selected, revert to 'all'
                         currentStatusFilter = 'all';
                         allCheckbox.checked = true;
                     } else {
@@ -32928,35 +33542,42 @@
                 } else {
                     label.textContent = `${currentStatusFilter.length} Selected`;
                 }
-                renderTasks();
+                
+                // Debounce render (300ms delay)
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.debounce('filterTasks', () => PerfOptimizer.queueRender(() => renderTasks(), 'high'), 300);
             }
 
             function setAssigneeFilter(v) {
                 currentAssigneeFilter = v;
-                renderTasks();
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.debounce('filterTasks', () => PerfOptimizer.queueRender(() => renderTasks(), 'high'), 300);
             }
 
             function searchTasks(term) {
                 currentSearchTerm = (term || '').trim();
-                // Clear the input value to prevent auto-fill issues
                 const searchInput = document.getElementById('task-search');
                 if (searchInput && searchInput.value.trim() !== currentSearchTerm) {
                     searchInput.value = currentSearchTerm;
                 }
-                renderTasks();
+                
+                // Debounce search renders (500ms for search)
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.debounce('searchTasks', () => PerfOptimizer.queueRender(() => renderTasks(), 'normal'), 500);
             }
 
             function searchInternalTasks(term) {
                 currentInternalSearchTerm = (term || '').trim();
-                // Clear the input value to prevent auto-fill issues
                 const searchInput = document.getElementById('internal-task-search');
                 if (searchInput && searchInput.value.trim() !== currentInternalSearchTerm) {
                     searchInput.value = currentInternalSearchTerm;
                 }
-                renderInternalTasks();
+                
+                // Debounce search renders (500ms for search)
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.debounce('searchInternalTasks', () => PerfOptimizer.queueRender(() => renderInternalTasks(), 'normal'), 500);
             }
 
-            // Clear search boxes when switching between task tabs
             function clearTaskSearches() {
                 const jiraSearch = document.getElementById('task-search');
                 const internalSearch = document.getElementById('internal-task-search');
@@ -32973,7 +33594,8 @@
 
             function setClientFilter(v) {
                 currentClientFilter = v;
-                renderTasks();
+                PerfOptimizer.invalidateCache('filterTasks');
+                PerfOptimizer.debounce('filterTasks', () => PerfOptimizer.queueRender(() => renderTasks(), 'high'), 300);
             }
 
             function setDueDateFilter(v) {
