@@ -158,7 +158,7 @@ if (initializeApp) {
         useLocalApi: false
     };
 
-    const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM'];
+    const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
 
     // Leave Approval Chains - Different employees have different approval hierarchies
     const LEAVE_APPROVAL_CHAINS = {
@@ -9262,24 +9262,9 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             if (startNow && createdTaskId) {
                 document.getElementById('addTaskModal').close();
                 
-                // Find the task in the tasks list and start it
-                const taskToStart = tasks.find(t => t.id === createdTaskId);
-                if (taskToStart) {
-                    // Update task status to "In Progress" and activate it
-                    taskToStart.status = 'In Progress';
-                    // Activate the task immediately
-                    activeTaskId = createdTaskId;
-                    taskSeconds = 0;
-                    taskOnHold = false;
-                    taskStartTime = Date.now();
-                    startTaskTimer();
-                    renderTasks();
-                    renderInternalTasks();
-                    renderActiveTaskCard();
-                    toast(`✅ Task "${title}" started!`, 'success');
-                } else {
-                    toast(`Task created, but couldn't auto-start. Start it manually.`, 'warning');
-                }
+                // Use the proper doStartTask function to start the task
+                // This ensures all the necessary updates and state management are handled correctly
+                await doStartTask(createdTaskId);
             } else {
                 document.getElementById('addTaskModal').close();
             }
@@ -10336,7 +10321,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 ? [...new Set([...INTERNAL_TASK_STATUSES, t.status])].filter(Boolean)
                 : [...new Set([...MANUAL_TASK_STATUSES, ...tasks.filter(x => !isInternalTask(x)).map(x => x.status).filter(Boolean), t.status])].filter(Boolean).sort();
             const statusSelectHtml = `
-                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
+                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 max-w-[120px]">
                         ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === (t.status || '').trim().toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
@@ -10363,9 +10348,8 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                         <p class="text-xs text-slate-900 mt-1 max-w-xs truncate">${escapeHtml(t.desc)}</p>
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
-                    <td class="px-6 py-4">${statusBadgeHtml}</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[80px] truncate">${escapeHtml(t.duedate || '—')}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[150px] truncate">${escapeHtml(assigneeNameStr)}</td>
                     <td class="px-6 py-4 hidden xl:table-cell">
                         <textarea id="learnings-${t.id}" placeholder="Add learnings..." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-500/20 resize-none max-w-xs" rows="2" onchange="saveLearningsNote('${t.id}', this.value)">${escapeHtml((t.learningsNote || ''))}</textarea>
                     </td>

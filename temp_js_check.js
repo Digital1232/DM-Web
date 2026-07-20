@@ -1,4 +1,4 @@
-
+﻿
         let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get;
         let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
         let getStorage, sRef, uploadBytes, getDownloadURL;
@@ -75,7 +75,7 @@
             useLocalApi: false
         };
 
-        const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'AshmithaSree'];
+        const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'AshmithaSree', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
         
         // Leave Approval Chains - Different employees have different approval hierarchies
         const LEAVE_APPROVAL_CHAINS = {
@@ -7278,7 +7278,7 @@
             tbody.innerHTML = uniquePlans.map(t => {
                 const taskKeyHtml = t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
                 const statusSelectHtml = `
-                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
+                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[80px] truncate truncate">
                         ${[...new Set(tasks.map(x => x.status).filter(Boolean))].sort().map(s => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
@@ -7305,9 +7305,8 @@
                         <p class="text-xs text-slate-900 mt-1 max-w-xs truncate">${escapeHtml(t.desc)}</p>
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
-                    <td class="px-6 py-4">${statusBadgeHtml}</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || 'â€”')}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[80px] truncate">${escapeHtml(t.duedate || '—')}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[80px] truncate truncate">${escapeHtml(assigneeNameStr)}</td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-1">
                             ${activeTaskId === t.id ? `
@@ -7574,3 +7573,10 @@
         window.updateInternalTaskStatus = updateInternalTaskStatus;
         window.refreshEmployeeCurrentTasks = refreshEmployeeCurrentTasks;
             
+
+
+
+
+
+
+
