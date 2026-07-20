@@ -10521,6 +10521,21 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label
+                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Videos Count</label>
+                    <input id="strategy-videos-count" type="number" min="0" placeholder="0"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
+                </div>
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Posters Count</label>
+                    <input id="strategy-posters-count" type="number" min="0" placeholder="0"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label
                         class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</label>
                     <select id="strategy-client"
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
@@ -14918,9 +14933,13 @@
                 // Populating clients dropdown in modal
                 const clientSelect = document.getElementById('strategy-client');
                 if (clientSelect) {
-                    clientSelect.innerHTML = '<option value="">-- General / No Client --</option>' + customClients.map(c => `
+                    const clientOptions = '<option value="">-- General / No Client --</option>' + customClients.map(c => `
                     <option value="${escapeHtml(c)}">${escapeHtml(c)}</option>
                 `).join('');
+                    clientSelect.innerHTML = clientOptions;
+                    console.log('[initStrategyCalendar] Client dropdown populated with', customClients.length, 'clients');
+                } else {
+                    console.warn('[initStrategyCalendar] Client select element not found');
                 }
 
                 if (!db) {
@@ -15904,6 +15923,8 @@
                 document.getElementById('strategy-client').value = '';
                 document.getElementById('strategy-status').value = 'To Do';
                 document.getElementById('strategy-desc').value = '';
+                document.getElementById('strategy-videos-count').value = '';
+                document.getElementById('strategy-posters-count').value = '';
 
                 // Clear Jira selection
                 document.getElementById('strategy-jira-id').value = '';
@@ -15929,161 +15950,186 @@
             }
 
             function openEditStrategyEventModal(eventId) {
+                console.log('[openEditStrategyEventModal] Opening event:', eventId, 'Available events:', Object.keys(strategyEvents).length);
                 const ev = strategyEvents[eventId];
-                if (!ev) return;
+                if (!ev) {
+                    console.error('[openEditStrategyEventModal] Event not found:', eventId, 'strategyEvents keys:', Object.keys(strategyEvents || {}));
+                    return toast('Event not found', 'error');
+                }
 
                 // Sneha, Murugesh and Admin can edit. Others can only view!
                 const canWrite = canViewStrategyCalendar();
+                console.log('[openEditStrategyEventModal] canWrite:', canWrite, 'currentUser:', currentUser?.email);
 
-                document.getElementById('strategy-modal-title').textContent = canWrite ? 'Edit Strategy Event' : 'View Strategy Event';
-                document.getElementById('strategy-event-id').value = eventId;
-                document.getElementById('strategy-title').value = ev.title || '';
-                document.getElementById('strategy-date').value = ev.date || '';
-                document.getElementById('strategy-owner').value = ev.owner || '';
-                document.getElementById('strategy-client').value = ev.client || '';
-                
-                // Restore Jira ID if explicitly saved, otherwise auto-match
-                const jiraId = ev.jiraId || '';
-                document.getElementById('strategy-jira-id').value = jiraId;
-                const jiraSearch = document.getElementById('strategy-jira-search');
-                const jiraSelected = document.getElementById('strategy-jira-selected');
-                const clearBtn2 = document.getElementById('strategy-jira-clear-btn');
-                
-                let matchedTask = null;
-                if (jiraId) {
-                    matchedTask = tasks ? tasks.find(t => t.id.toLowerCase() === jiraId.toLowerCase()) : null;
-                    const summaryText = matchedTask && matchedTask.desc ? ` - ${matchedTask.desc}` : '';
-                    jiraSearch.value = `${jiraId}${summaryText}`;
-                    jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>${escapeHtml(summaryText)}`;
-                    if (clearBtn2) clearBtn2.classList.remove('hidden');
-                } else {
-                    matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
-                    if (matchedTask) {
-                        const mJiraId = matchedTask.id;
-                        document.getElementById('strategy-jira-id').value = mJiraId;
-                        jiraSearch.value = `${mJiraId} - ${matchedTask.desc || ''}`;
-                        jiraSelected.innerHTML = `⚠️ Auto-Matched: <strong>${mJiraId}</strong> - ${escapeHtml(matchedTask.desc || '')}`;
+                try {
+                    // Populate all form fields
+                    document.getElementById('strategy-modal-title').textContent = canWrite ? 'Edit Strategy Event' : 'View Strategy Event';
+                    document.getElementById('strategy-event-id').value = eventId;
+                    document.getElementById('strategy-title').value = ev.title || '';
+                    document.getElementById('strategy-date').value = ev.date || '';
+                    document.getElementById('strategy-owner').value = ev.owner || '';
+                    document.getElementById('strategy-client').value = ev.client || '';
+                    
+                    // Handle videos and posters count
+                    const videosCountEl = document.getElementById('strategy-videos-count');
+                    const postersCountEl = document.getElementById('strategy-posters-count');
+                    if (videosCountEl) videosCountEl.value = ev.videosCount || '';
+                    if (postersCountEl) postersCountEl.value = ev.postersCount || '';
+                    
+                    // Restore Jira ID if explicitly saved, otherwise auto-match
+                    const jiraId = ev.jiraId || '';
+                    document.getElementById('strategy-jira-id').value = jiraId;
+                    const jiraSearch = document.getElementById('strategy-jira-search');
+                    const jiraSelected = document.getElementById('strategy-jira-selected');
+                    const clearBtn2 = document.getElementById('strategy-jira-clear-btn');
+                    
+                    let matchedTask = null;
+                    if (jiraId) {
+                        matchedTask = tasks ? tasks.find(t => t.id.toLowerCase() === jiraId.toLowerCase()) : null;
+                        const summaryText = matchedTask && matchedTask.desc ? ` - ${matchedTask.desc}` : '';
+                        if (jiraSearch) jiraSearch.value = `${jiraId}${summaryText}`;
+                        if (jiraSelected) jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>${escapeHtml(summaryText)}`;
                         if (clearBtn2) clearBtn2.classList.remove('hidden');
                     } else {
-                        jiraSearch.value = '';
-                        jiraSelected.innerHTML = 'No task selected';
-                        if (clearBtn2) clearBtn2.classList.add('hidden');
-                    }
-                }
-                const dropdown = document.getElementById('strategy-jira-dropdown');
-                if (dropdown) dropdown.classList.add('hidden');
-
-                document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
-                document.getElementById('strategy-desc').value = ev.desc || '';
-                
-                // Sync Jira task Status and Assignee to existing fields if we have a matched task
-                if (matchedTask) {
-                    // Status sync from Jira
-                    const statusValue = normalizeStrategyStatus(matchedTask.status);
-                    document.getElementById('strategy-status').value = statusValue;
-                    console.log('Edit mode - synced status:', statusValue);
-                    
-                    // Assignee sync from Jira
-                    if (matchedTask.assignee) {
-                        const assigneeName = matchedTask.assignee;
-                        const userByName = Array.from(allUsersMap.values()).find(u => 
-                            u.name.toLowerCase() === assigneeName.toLowerCase()
-                        );
-                        if (userByName) {
-                            document.getElementById('strategy-owner').value = userByName.email;
-                            console.log('Edit mode - synced assignee:', userByName.email);
+                        matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
+                        if (matchedTask) {
+                            const mJiraId = matchedTask.id;
+                            document.getElementById('strategy-jira-id').value = mJiraId;
+                            if (jiraSearch) jiraSearch.value = `${mJiraId} - ${matchedTask.desc || ''}`;
+                            if (jiraSelected) jiraSelected.innerHTML = `⚠️ Auto-Matched: <strong>${mJiraId}</strong> - ${escapeHtml(matchedTask.desc || '')}`;
+                            if (clearBtn2) clearBtn2.classList.remove('hidden');
+                        } else {
+                            if (jiraSearch) jiraSearch.value = '';
+                            if (jiraSelected) jiraSelected.innerHTML = 'No task selected';
+                            if (clearBtn2) clearBtn2.classList.add('hidden');
                         }
                     }
-                }
+                    const dropdown = document.getElementById('strategy-jira-dropdown');
+                    if (dropdown) dropdown.classList.add('hidden');
 
-                // Restore format value
-                selectStrategyFormat(ev.format || 'Poster');
+                    document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
+                    document.getElementById('strategy-desc').value = ev.desc || '';
+                    
+                    console.log('[openEditStrategyEventModal] Form fields populated:', {
+                        title: ev.title,
+                        date: ev.date,
+                        client: ev.client,
+                        status: normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do')),
+                        owner: ev.owner,
+                        videosCount: ev.videosCount,
+                        postersCount: ev.postersCount
+                    });
 
-                // Toggle readonly/disabled state depending on permissions
-                const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status'];
-                fields.forEach(f => {
-                    const el = document.getElementById(f);
-                    if (el) {
-                        if (canWrite) {
-                            el.removeAttribute('readonly');
-                            el.removeAttribute('disabled');
-                        } else {
-                            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                                el.setAttribute('readonly', 'true');
-                            } else {
-                                el.setAttribute('disabled', 'true');
+                    // Sync Jira task Status and Assignee to existing fields if we have a matched task
+                    if (matchedTask) {
+                        const statusValue = normalizeStrategyStatus(matchedTask.status);
+                        document.getElementById('strategy-status').value = statusValue;
+                        console.log('Edit mode - synced status:', statusValue);
+                        
+                        if (matchedTask.assignee) {
+                            const assigneeName = matchedTask.assignee;
+                            const userByName = Array.from(allUsersMap.values()).find(u => 
+                                u.name.toLowerCase() === assigneeName.toLowerCase()
+                            );
+                            if (userByName) {
+                                document.getElementById('strategy-owner').value = userByName.email;
+                                console.log('Edit mode - synced assignee:', userByName.email);
                             }
                         }
                     }
-                });
 
-                // Toggle format button disabled states using pointer-events instead of disabled attr
-                const posterBtn = document.getElementById('strategy-format-poster');
-                const videoBtn = document.getElementById('strategy-format-video');
-                if (posterBtn && videoBtn) {
-                    if (canWrite) {
-                        posterBtn.style.pointerEvents = 'auto';
-                        posterBtn.style.opacity = '1';
-                        videoBtn.style.pointerEvents = 'auto';
-                        videoBtn.style.opacity = '1';
-                        posterBtn.classList.remove('opacity-50');
-                        videoBtn.classList.remove('opacity-50');
-                    } else {
-                        posterBtn.style.pointerEvents = 'none';
-                        posterBtn.style.opacity = '0.5';
-                        videoBtn.style.pointerEvents = 'none';
-                        videoBtn.style.opacity = '0.5';
-                        posterBtn.classList.add('opacity-50');
-                        videoBtn.classList.add('opacity-50');
-                    }
-                }
+                    // Restore format value
+                    selectStrategyFormat(ev.format || 'Poster');
 
-                // Also disable Jira search controls in view mode
-                if (jiraSearch) {
-                    if (canWrite) {
-                        jiraSearch.removeAttribute('disabled');
-                    } else {
-                        jiraSearch.setAttribute('disabled', 'true');
-                    }
-                }
-                const jiraSearchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
-                if (jiraSearchBtn) {
-                    if (canWrite) {
-                        jiraSearchBtn.style.pointerEvents = 'auto';
-                        jiraSearchBtn.style.opacity = '1';
-                    } else {
-                        jiraSearchBtn.style.pointerEvents = 'none';
-                        jiraSearchBtn.style.opacity = '0.5';
-                    }
-                }
-                if (clearBtn2) {
-                    if (canWrite) {
-                        clearBtn2.style.pointerEvents = 'auto';
-                        clearBtn2.style.opacity = '1';
-                    } else {
-                        clearBtn2.style.pointerEvents = 'none';
-                        clearBtn2.style.opacity = '0.5';
-                    }
-                }
+                    // Toggle readonly/disabled state depending on permissions
+                    const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status', 'strategy-videos-count', 'strategy-posters-count'];
+                    fields.forEach(f => {
+                        const el = document.getElementById(f);
+                        if (el) {
+                            if (canWrite) {
+                                el.removeAttribute('readonly');
+                                el.removeAttribute('disabled');
+                            } else {
+                                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                                    el.setAttribute('readonly', 'true');
+                                } else {
+                                    el.setAttribute('disabled', 'true');
+                                }
+                            }
+                        }
+                    });
 
-                const delBtn = document.getElementById('strategy-delete-btn');
-                if (delBtn) {
-                    delBtn.classList.toggle('hidden', !canWrite);
-                }
-
-                // Also disable save button in view mode
-                const saveBtn = document.getElementById('strategy-save-btn');
-                if (saveBtn) {
-                    if (canWrite) {
-                        saveBtn.style.pointerEvents = 'auto';
-                        saveBtn.style.opacity = '1';
-                    } else {
-                        saveBtn.style.pointerEvents = 'none';
-                        saveBtn.style.opacity = '0.5';
+                    // Toggle format button disabled states
+                    const posterBtn = document.getElementById('strategy-format-poster');
+                    const videoBtn = document.getElementById('strategy-format-video');
+                    if (posterBtn && videoBtn) {
+                        if (canWrite) {
+                            posterBtn.style.pointerEvents = 'auto';
+                            posterBtn.style.opacity = '1';
+                            videoBtn.style.pointerEvents = 'auto';
+                            videoBtn.style.opacity = '1';
+                            posterBtn.classList.remove('opacity-50');
+                            videoBtn.classList.remove('opacity-50');
+                        } else {
+                            posterBtn.style.pointerEvents = 'none';
+                            posterBtn.style.opacity = '0.5';
+                            videoBtn.style.pointerEvents = 'none';
+                            videoBtn.style.opacity = '0.5';
+                            posterBtn.classList.add('opacity-50');
+                            videoBtn.classList.add('opacity-50');
+                        }
                     }
-                }
 
-                document.getElementById('strategyEventModal').showModal();
+                    // Disable Jira search controls in view mode
+                    if (jiraSearch) {
+                        if (canWrite) {
+                            jiraSearch.removeAttribute('disabled');
+                        } else {
+                            jiraSearch.setAttribute('disabled', 'true');
+                        }
+                    }
+                    const jiraSearchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
+                    if (jiraSearchBtn) {
+                        if (canWrite) {
+                            jiraSearchBtn.style.pointerEvents = 'auto';
+                            jiraSearchBtn.style.opacity = '1';
+                        } else {
+                            jiraSearchBtn.style.pointerEvents = 'none';
+                            jiraSearchBtn.style.opacity = '0.5';
+                        }
+                    }
+                    if (clearBtn2) {
+                        if (canWrite) {
+                            clearBtn2.style.pointerEvents = 'auto';
+                            clearBtn2.style.opacity = '1';
+                        } else {
+                            clearBtn2.style.pointerEvents = 'none';
+                            clearBtn2.style.opacity = '0.5';
+                        }
+                    }
+
+                    const delBtn = document.getElementById('strategy-delete-btn');
+                    if (delBtn) {
+                        delBtn.classList.toggle('hidden', !canWrite);
+                    }
+
+                    const saveBtn = document.getElementById('strategy-save-btn');
+                    if (saveBtn) {
+                        if (canWrite) {
+                            saveBtn.style.pointerEvents = 'auto';
+                            saveBtn.style.opacity = '1';
+                        } else {
+                            saveBtn.style.pointerEvents = 'none';
+                            saveBtn.style.opacity = '0.5';
+                        }
+                    }
+
+                    document.getElementById('strategyEventModal').showModal();
+                    console.log('[openEditStrategyEventModal] Modal opened successfully');
+                } catch (err) {
+                    console.error('[openEditStrategyEventModal] Error:', err, err.stack);
+                    toast('Error opening event: ' + err.message, 'error');
+                }
             }
 
             function closeStrategyEventModal() {
@@ -16102,6 +16148,8 @@
                 const desc = document.getElementById('strategy-desc').value.trim();
                 const format = document.getElementById('strategy-format').value;
                 const jiraId = document.getElementById('strategy-jira-id').value || '';
+                const videosCount = parseInt(document.getElementById('strategy-videos-count').value) || 0;
+                const postersCount = parseInt(document.getElementById('strategy-posters-count').value) || 0;
 
                 if (!title || !date) {
                     return toast('Please fill in title and date.', 'error');
@@ -16126,6 +16174,8 @@
                         desc,
                         format, // Save the content format
                         jiraId, // Explicitly save the JIRA Task ID link!
+                        videosCount, // Save video count
+                        postersCount, // Save poster count
                         updatedBy: currentUser.email,
                         updatedAt: Date.now()
                     };
