@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>WorkSync Daily Summary</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        
+        .email-container {
+            max-width: 950px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(15, 23, 42, 0.08);
+        }
+
+        /* Header Section */
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            padding: 40px 32px;
+            text-align: center;
+            border-bottom: 4px solid #4f46e5;
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            display: inline-block;
+            font-size: 24px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1px;
+        }
+
+        .header-title {
+            font-size: 32px;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 16px 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .header-subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0;
+            font-weight: 500;
+        }
+
+        /* Main Content */
+        .content {
+            padding: 40px 32px;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 16px;
+            font-weight: 900;
+            color: #1e293b;
+            margin: 32px 0 20px 0;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* KPI Dashboard Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+        }
+
+        .kpi-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .kpi-value {
+            font-size: 36px;
+            font-weight: 900;
+            color: #6366f1;
+            margin: 0;
+            line-height: 1;
+        }
+
+        /* Employee Table */
+        .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 32px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            border: 1px solid #e2e8f0;
+            padding: 12px 16px;
+            vertical-align: middle;
+        }
+
+        tr:nth-child(odd) td {
+            background-color: #f8fafc;
+        }
+
+        tr:nth-child(even) td {
+            background-color: #ffffff;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status-working {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-break {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-hold {
+            background-color: #fed7aa;
+            color: #92400e;
+        }
+
+        .status-offline {
+            background-color: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .task-id {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #6366f1;
+        }
+
+        /* Highlight Row */
+        .highlight-row {
+            background-color: #fef9e7 !important;
+        }
+
+        /* Top Performers Section */
+        .performers-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .performer-card {
+            background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+            border: 2px solid #fcd34d;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .performer-badge {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .performer-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 12px 0 8px 0;
+        }
+
+        .performer-metric {
+            font-size: 12px;
+            color: #64748b;
+            margin: 4px 0;
+        }
+
+        /* Alert Section */
+        .alert-box {
+            background-color: #fee2e2;
+            border-left: 4px solid #ef4444;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 32px;
+        }
+
+        .alert-title {
+            font-weight: 700;
+            color: #991b1b;
+            margin: 0 0 12px 0;
+            font-size: 14px;
+        }
+
+        .alert-content {
+            color: #7f1d1d;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .alert-list {
+            margin: 8px 0 0 20px;
+            padding: 0;
+        }
+
+        .alert-list li {
+            margin: 6px 0;
+        }
+
+        /* Client Summary Section */
+        .client-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .client-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+
+        .client-item:last-child {
+            border-bottom: none;
+        }
+
+        .client-name {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .client-count {
+            background-color: #6366f1;
+            color: #ffffff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* Active Employees Section */
+        .active-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .active-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .active-employee {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .active-duration {
+            font-family: 'Courier New', monospace;
+            color: #6366f1;
+            font-weight: 600;
+        }
+
+        /* AI Insights Section */
+        .insights-box {
+            background: linear-gradient(135deg, #ede9fe 0%, #f3e8ff 100%);
+            border: 2px solid #c4b5fd;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 32px;
+        }
+
+        .insights-box .section-title {
+            margin-top: 0;
+            color: #6d28d9;
+            border-bottom-color: #c4b5fd;
+        }
+
+        .insights-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .insights-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #5b21b6;
+        }
+
+        .insights-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .insights-bullet {
+            margin-right: 10px;
+            color: #a78bfa;
+            font-weight: 700;
+        }
+
+        /* Recommendations Section */
+        .recommendations-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+            border: 2px solid #93c5fd;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 32px;
+        }
+
+        .recommendations-box .section-title {
+            margin-top: 0;
+            color: #1e40af;
+            border-bottom-color: #93c5fd;
+        }
+
+        .recommendations-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .recommendations-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #1e3a8a;
+        }
+
+        .recommendations-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .recommendations-bullet {
+            margin-right: 10px;
+            color: #60a5fa;
+            font-weight: 700;
+        }
+
+        /* Footer */
+        .footer {
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            padding: 24px 32px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .footer-text {
+            margin: 8px 0;
+        }
+
+        .footer-brand {
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .kpi-grid,
+            .performers-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .content {
+                padding: 24px 16px;
+            }
+
+            .header {
+                padding: 24px 16px;
+            }
+
+            .header-title {
+                font-size: 24px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px 12px;
+            }
+
+            .kpi-value {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-container">
+                <div class="logo">🔷 ONEDESK</div>
+            </div>
+            <h1 class="header-title">WorkSync Daily Summary</h1>
+            <p class="header-subtitle">Saturday, 11 July 2026 • Generated at 5:45 PM</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <!-- KPI Dashboard -->
+            <div class="section-title">📊 Executive KPI Dashboard</div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon">⏱️</div>
+                    <div class="kpi-label">Total Worked Hours</div>
+                    <p class="kpi-value">39:58:58</p>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">📋</div>
+                    <div class="kpi-label">Tasks Logged</div>
+                    <p class="kpi-value">47</p>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">👥</div>
+                    <div class="kpi-label">Active Employees</div>
+                    <p class="kpi-value">8</p>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">🏢</div>
+                    <div class="kpi-label">Clients Worked</div>
+                    <p class="kpi-value">6</p>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">⚡</div>
+                    <div class="kpi-label">Avg Time per Task</div>
+                    <p class="kpi-value">51m</p>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">📈</div>
+                    <div class="kpi-label">Productivity Score</div>
+                    <p class="kpi-value">94%</p>
+                </div>
+            </div>
+
+            <!-- Employee Performance Table -->
+            <div class="section-title">👥 Employee Performance</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Worked Hours</th>
+                            <th>Completed Tasks</th>
+                            <th>Status</th>
+                            <th>Current Task</th>
+                            <th>Productivity %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="highlight-row">
+                            <td><strong>Karthika K</strong></td>
+                            <td>7:45:22</td>
+                            <td><strong>12</strong></td>
+                            <td><span class="status-badge status-working">🟢 Working</span></td>
+                            <td><span class="task-id">JULY-401</span></td>
+                            <td><strong>98%</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Palanirajan R</strong></td>
+                            <td>8:12:45</td>
+                            <td>10</td>
+                            <td><span class="status-badge status-working">🟢 Working</span></td>
+                            <td><span class="task-id">JULY-402</span></td>
+                            <td>96%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Murugesh Kumar A</strong></td>
+                            <td>6:30:15</td>
+                            <td>9</td>
+                            <td><span class="status-badge status-working">🟢 Working</span></td>
+                            <td><span class="task-id">JULY-403</span></td>
+                            <td>94%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Barath Magesh M</strong></td>
+                            <td>5:45:30</td>
+                            <td>7</td>
+                            <td><span class="status-badge status-break">🟡 Break</span></td>
+                            <td><span class="task-id">JULY-404</span></td>
+                            <td>88%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Immanuel Raja S</strong></td>
+                            <td>6:15:00</td>
+                            <td>8</td>
+                            <td><span class="status-badge status-working">🟢 Working</span></td>
+                            <td><span class="task-id">JULY-405</span></td>
+                            <td>92%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Sneha S</strong></td>
+                            <td>4:50:12</td>
+                            <td>0</td>
+                            <td><span class="status-badge status-offline">⚪ Offline</span></td>
+                            <td>—</td>
+                            <td>0%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Ajith</strong></td>
+                            <td>0:00:00</td>
+                            <td>0</td>
+                            <td><span class="status-badge status-offline">⚪ Offline</span></td>
+                            <td>—</td>
+                            <td>0%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Alex</strong></td>
+                            <td>0:00:00</td>
+                            <td>1</td>
+                            <td><span class="status-badge status-offline">⚪ Offline</span></td>
+                            <td><span class="task-id">JULY-406</span></td>
+                            <td>12%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Top Performers -->
+            <div class="section-title">🏆 Today's Top Performers</div>
+            <div class="performers-grid">
+                <div class="performer-card">
+                    <div class="performer-badge">🥇</div>
+                    <div class="performer-name">Karthika K</div>
+                    <div class="performer-metric">Highest Tasks Completed</div>
+                    <div class="performer-metric"><strong>12 Tasks</strong></div>
+                </div>
+                <div class="performer-card">
+                    <div class="performer-badge">🥈</div>
+                    <div class="performer-name">Palanirajan R</div>
+                    <div class="performer-metric">Longest Working Hours</div>
+                    <div class="performer-metric"><strong>8:12:45</strong></div>
+                </div>
+                <div class="performer-card">
+                    <div class="performer-badge">🥉</div>
+                    <div class="performer-name">Immanuel Raja S</div>
+                    <div class="performer-metric">Highest Productivity</div>
+                    <div class="performer-metric"><strong>92%</strong></div>
+                </div>
+            </div>
+
+            <!-- Employees Needing Attention -->
+            <div class="alert-box">
+                <div class="alert-title">⚠️ Employees Requiring Attention</div>
+                <div class="alert-content">
+                    <p style="margin: 0 0 8px 0;"><strong>No activity recorded today:</strong></p>
+                    <ul class="alert-list">
+                        <li><strong>Sneha S</strong> – 0 tasks, 0 hours worked</li>
+                        <li><strong>Ajith</strong> – 0 tasks, 0 hours worked</li>
+                        <li><strong>Alex</strong> – Minimal activity (1 task)</li>
+                    </ul>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; font-style: italic;">Recommended action: Follow up with inactive team members to ensure no blockers.</p>
+                </div>
+            </div>
+
+            <!-- Client Summary -->
+            <div class="section-title">🏢 Client-Wise Task Distribution</div>
+            <ul class="client-list">
+                <li class="client-item">
+                    <span class="client-name">VilPower</span>
+                    <span class="client-count">9 Tasks</span>
+                </li>
+                <li class="client-item">
+                    <span class="client-name">NTT</span>
+                    <span class="client-count">8 Tasks</span>
+                </li>
+                <li class="client-item">
+                    <span class="client-name">Einstein</span>
+                    <span class="client-count">7 Tasks</span>
+                </li>
+                <li class="client-item">
+                    <span class="client-name">DreamDaa</span>
+                    <span class="client-count">6 Tasks</span>
+                </li>
+                <li class="client-item">
+                    <span class="client-name">IVN</span>
+                    <span class="client-count">5 Tasks</span>
+                </li>
+                <li class="client-item">
+                    <span class="client-name">Quade</span>
+                    <span class="client-count">4 Tasks</span>
+                </li>
+            </ul>
+
+            <!-- Currently Active Employees -->
+            <div class="section-title">⚡ Currently Active Employees</div>
+            <ul class="active-list">
+                <li class="active-item">
+                    <div>
+                        <div class="active-employee">Palanirajan R</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;"><span class="task-id">JULY-402</span></div>
+                    </div>
+                    <div class="active-duration">02:14:22</div>
+                </li>
+                <li class="active-item">
+                    <div>
+                        <div class="active-employee">Karthika K</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;"><span class="task-id">JULY-401</span></div>
+                    </div>
+                    <div class="active-duration">01:58:15</div>
+                </li>
+                <li class="active-item">
+                    <div>
+                        <div class="active-employee">Immanuel Raja S</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;"><span class="task-id">JULY-405</span></div>
+                    </div>
+                    <div class="active-duration">01:32:40</div>
+                </li>
+                <li class="active-item">
+                    <div>
+                        <div class="active-employee">Murugesh Kumar A</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;"><span class="task-id">JULY-403</span></div>
+                    </div>
+                    <div class="active-duration">00:45:30</div>
+                </li>
+            </ul>
+
+            <!-- AI Daily Insights -->
+            <div class="insights-box">
+                <div class="section-title">💡 AI Daily Insights</div>
+                <ul class="insights-list">
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>Team completed 47 tasks today</strong> – Above average productivity for Saturday.</span>
+                    </li>
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>Total working time: 39:58:58</strong> – Exceeded target hours by 8 hours.</span>
+                    </li>
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>Karthika K is top performer</strong> – Completed 12 tasks with 98% productivity score.</span>
+                    </li>
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>Palanirajan logged highest hours</strong> – 8:12:45 worked with consistent engagement.</span>
+                    </li>
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>Three employees recorded no activity</strong> – Sneha S, Ajith, and Alex need follow-up.</span>
+                    </li>
+                    <li class="insights-item">
+                        <span class="insights-bullet">•</span>
+                        <span><strong>VilPower project leads workload</strong> – 9 tasks completed compared to other clients.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Tomorrow's Recommendations -->
+            <div class="recommendations-box">
+                <div class="section-title">🎯 Tomorrow's Recommendations</div>
+                <ul class="recommendations-list">
+                    <li class="recommendations-item">
+                        <span class="recommendations-bullet">✓</span>
+                        <span><strong>Follow up with inactive employees</strong> – Check with Sneha S and Ajith on any blockers or issues.</span>
+                    </li>
+                    <li class="recommendations-item">
+                        <span class="recommendations-bullet">✓</span>
+                        <span><strong>Balance workload across teams</strong> – Consider reassigning tasks to maintain even distribution.</span>
+                    </li>
+                    <li class="recommendations-item">
+                        <span class="recommendations-bullet">✓</span>
+                        <span><strong>Review pending client approvals</strong> – Ensure VilPower project approvals are timely.</span>
+                    </li>
+                    <li class="recommendations-item">
+                        <span class="recommendations-bullet">✓</span>
+                        <span><strong>Allocate tasks strategically</strong> – Leverage top performers like Karthika for complex deliverables.</span>
+                    </li>
+                    <li class="recommendations-item">
+                        <span class="recommendations-bullet">✓</span>
+                        <span><strong>Monitor Sunday schedule</strong> – Confirm if team is available for weekend operations.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-text">Generated automatically by <span class="footer-brand">OneDesk</span></p>
+            <p class="footer-text"><span class="footer-brand">VilPower Solutions Pvt Ltd</span></p>
+            <p class="footer-text" style="font-size: 11px; color: #94a3b8;">This is an automated email. Please do not reply directly.</p>
+        </div>
+    </div>
+</body>
+</html>

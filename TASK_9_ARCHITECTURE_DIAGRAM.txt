@@ -1,0 +1,413 @@
+================================================================================
+              TASK 9 - JIRA AUTO-FETCH ARCHITECTURE DIAGRAM
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         USER INTERACTION FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. MODAL OPENING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User clicks strategy event
+        ↓
+  openEditStrategyEventModal(eventId) invoked
+        ↓
+  Load strategy event data from strategyEvents object
+        ↓
+  Set form fields (title, date, owner, desc, format)
+        ↓
+  Set strategy-jira-id (hidden) = ev.jiraTaskId
+        ↓
+  Call: loadStrategyJiraDisplay()  ← NEW
+        ↓
+  [Display updates]
+  - If jiraTaskId exists:
+    ✅ Show "✅ Selected: TASK-ID"
+    ✅ Show clear button (✕)
+  - If no jiraTaskId:
+    ℹ️ Show "No task selected"
+    ℹ️ Hide clear button
+        ↓
+  Show modal dialog
+
+
+2. SEARCH & AUTO-FETCH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User types in strategy-jira-search field
+        ↓
+  oninput event → searchJiraTasksForStrategy()
+        ↓
+  Check: searchTerm.length >= 2?
+        ↓ (YES)
+  Call: fetchJiraTasksForStrategy()
+        ↓
+  [Show loading]
+  Dropdown = "<loading spinner>"
+  Dropdown.classList.remove('hidden')
+        ↓
+  Build JQL query:
+  "summary ~ 'search' OR description ~ 'search' OR key ~ 'search'"
+        ↓
+  Async call: jiraRequest(url, 'get')
+        ↓
+  API Response Handling:
+  
+  ✅ Success & Issues Found:
+     Build dropdown HTML with:
+     - Task ID (📌 JULY-123)
+     - Summary (Task title)
+     - Status (📌 In Progress)
+     - Assignee (👤 John Doe)
+     Display all 20 results
+     
+  ✅ Success & No Issues:
+     Display: "No matching Jira tasks found"
+     
+  ❌ API Error:
+     Display: "Error fetching Jira tasks"
+        ↓
+  Dropdown visible with results
+
+
+3. SELECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User clicks task in dropdown
+        ↓
+  selectJiraTaskForStrategy(taskId, taskSummary) triggered
+        ↓
+  [Update state]
+  strategy-jira-id.value = taskId  (hidden field)
+  strategy-jira-search.value = "TASK-ID: Summary"
+        ↓
+  [Update display]
+  strategy-jira-selected = "✅ Selected: TASK-ID - Summary"
+  strategy-jira-clear-btn.classList.remove('hidden')  ← Show clear button
+        ↓
+  Dropdown.classList.add('hidden')  ← Close dropdown
+        ↓
+  Show toast: "✅ Linked to Jira task JULY-123"
+
+
+4. CLEAR SELECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User clicks red ✕ (clear) button
+        ↓
+  clearStrategyJiraSelection() triggered
+        ↓
+  [Reset all fields]
+  strategy-jira-id.value = ""  (hidden, clears data)
+  strategy-jira-search.value = ""  (search clears)
+  strategy-jira-selected.innerHTML = "No task selected"
+  strategy-jira-clear-btn.classList.add('hidden')  ← Hide button
+  strategy-jira-dropdown.classList.add('hidden')  ← Close dropdown
+        ↓
+  Show toast: "Jira task selection cleared"
+
+
+5. DROPDOWN AUTO-CLOSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User clicks outside dropdown area
+        ↓
+  Document click event listener fires
+        ↓
+  Check: Click target NOT in [dropdown, search field, search button]?
+        ↓ (YES - clicked outside)
+  dropdown.classList.add('hidden')  ← Close dropdown
+        ↓ (NO - clicked inside area)
+  Do nothing (keep dropdown open)
+
+
+6. SAVE EVENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  User clicks "Save Strategy Event" button
+        ↓
+  saveStrategyEvent() function runs
+        ↓
+  Collect form data:
+  - title = strategy-title.value
+  - jiraTaskId = strategy-jira-id.value  ← From hidden field
+  - date = strategy-date.value
+  - owner = strategy-owner.value
+  - desc = strategy-desc.value
+  - format = strategy-format.value
+        ↓
+  Create event object with all fields
+        ↓
+  Save to Firebase:
+  worksync/strategy_events/{eventId}/
+  {
+    title: "Campaign Name",
+    jiraTaskId: "JULY-123",  ← Stored here
+    date: "2026-07-15",
+    owner: "John Doe",
+    desc: "Description",
+    format: "Poster"
+  }
+        ↓
+  Toast: "✅ Strategy event saved!"
+  Close modal
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATA FLOW ARCHITECTURE                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+USER INPUT
+    ↓
+STRATEGY-JIRA-SEARCH (visible input field)
+    ↓
+searchJiraTasksForStrategy() (auto-trigger)
+    ↓
+fetchJiraTasksForStrategy() (API call)
+    ↓
+JIRA REST API v3
+    ↓
+    Response JSON
+    ↓
+Build Dropdown HTML
+    ↓
+STRATEGY-JIRA-DROPDOWN (visible results)
+    ↓
+selectJiraTaskForStrategy() (onclick)
+    ↓
+STRATEGY-JIRA-ID (hidden field - stores ID)
+    ↓
+saveStrategyEvent() (on form submit)
+    ↓
+FIREBASE - worksync/strategy_events/{id}
+    ↓
+renderStrategyCalendar() (displays 🔗)
+    ↓
+User sees Jira link in calendar
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         COMPONENT HIERARCHY                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+STRATEGY EVENT MODAL
+│
+├─ Event Title / Campaign Name
+│  └─ strategy-title (text input)
+│
+├─ Jira Task ID (Auto-fetch) ← NEW COMPONENT
+│  │
+│  ├─ strategy-jira-search (text input)
+│  │  └─ oninput="searchJiraTasksForStrategy()"
+│  │
+│  ├─ Search Button
+│  │  └─ onclick="fetchJiraTasksForStrategy()"
+│  │
+│  ├─ Clear Button ✕ (hidden by default)
+│  │  └─ onclick="clearStrategyJiraSelection()"
+│  │
+│  ├─ strategy-jira-id (hidden field)
+│  │  └─ Stores selected task ID
+│  │
+│  ├─ strategy-jira-dropdown (hidden by default)
+│  │  └─ Populated with Jira search results
+│  │
+│  └─ strategy-jira-selected (display text)
+│     └─ Shows selection status
+│
+├─ Date
+├─ Assignee
+├─ Format (Poster/Video)
+├─ Client
+├─ Status
+├─ Description
+│
+├─ Save Button
+├─ Delete Button
+└─ Close Button
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FUNCTION CALL MAP                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+openEditStrategyEventModal(eventId)
+    ├─ Loads event data
+    ├─ Sets form fields
+    ├─ [NEW] Call: loadStrategyJiraDisplay()
+    │         └─ Updates Jira display on modal open
+    └─ Shows modal
+
+User types → searchJiraTasksForStrategy()
+    └─ If searchTerm.length >= 2:
+       └─ Call: fetchJiraTasksForStrategy()
+          └─ Async fetch from Jira API
+             ├─ Build JQL query
+             ├─ Call: jiraRequest(url, 'get')
+             ├─ Process results
+             └─ Render dropdown HTML
+
+User clicks task → selectJiraTaskForStrategy(id, summary)
+    ├─ Set strategy-jira-id.value
+    ├─ Update search field
+    ├─ Show selection message
+    ├─ Show clear button
+    ├─ Close dropdown
+    └─ Show toast
+
+User clicks ✕ → clearStrategyJiraSelection()
+    ├─ Clear strategy-jira-id.value
+    ├─ Clear search field
+    ├─ Reset display message
+    ├─ Hide clear button
+    ├─ Close dropdown
+    └─ Show toast
+
+User clicks outside → Document click listener
+    └─ Close dropdown if clicked outside area
+
+User clicks Save → saveStrategyEvent()
+    ├─ Collect form data including jiraTaskId
+    ├─ Save to Firebase
+    └─ Close modal
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    PERMISSION ENFORCEMENT FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+openEditStrategyEventModal() checks:
+canWrite = canViewStrategyCalendar()
+    ↓
+If canWrite === true (Admin/Sneha/Murugesh):
+    ├─ strategy-jira-search = EDITABLE
+    ├─ strategy-jira-search = NOT readonly
+    ├─ Clear button = CLICKABLE
+    └─ Can save changes
+
+If canWrite === false (Non-admin user):
+    ├─ strategy-jira-search = READONLY
+    ├─ strategy-jira-search = readonly="true"
+    ├─ Clear button = DISABLED
+    └─ Can view but not edit
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ERROR HANDLING PATHS                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+NO SEARCH TERM
+    → fetchJiraTasksForStrategy()
+    → Toast: "Enter a search term or task title"
+    → Return
+
+API ERROR (Network, 401, etc.)
+    → Catch error in try/catch
+    → Dropdown: "Error fetching Jira tasks"
+    → Log to console
+
+NO RESULTS FOUND
+    → Response: issues = []
+    → Dropdown: "No matching Jira tasks found"
+
+MISSING HTML ELEMENTS
+    → Each function checks if elements exist
+    → Graceful fail if element not found
+    → No page crash
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         VISUAL STATE MACHINE                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+INITIAL STATE
+├─ Search field: empty
+├─ Clear button: hidden
+├─ Dropdown: hidden
+└─ Message: "No task selected"
+    
+    ↓ (User types 2+ chars)
+    
+SEARCHING STATE
+├─ Search field: has text
+├─ Dropdown: showing
+├─ Dropdown content: "Searching Jira... 🔄"
+└─ Clear button: still hidden
+    
+    ↓ (API returns results)
+    
+RESULTS STATE
+├─ Search field: has search term
+├─ Dropdown: showing results
+├─ Each result: clickable
+└─ Clear button: still hidden (no selection yet)
+    
+    ↓ (User clicks a result)
+    
+SELECTED STATE
+├─ Search field: "TASK-ID: Summary"
+├─ Clear button: visible (red ✕)
+├─ Dropdown: hidden
+├─ Message: "✅ Selected: TASK-ID - Summary"
+└─ Hidden field (strategy-jira-id): contains TASK-ID
+    
+    ↓ (User clicks clear button)
+    
+CLEARED STATE
+├─ Search field: cleared
+├─ Clear button: hidden
+├─ Dropdown: hidden
+├─ Message: "No task selected"
+└─ Hidden field (strategy-jira-id): empty
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      INTEGRATION TOUCH POINTS                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. MODAL OPENING
+   Entry: User clicks strategy event
+   Function: openEditStrategyEventModal()
+   Integration: Calls loadStrategyJiraDisplay() to restore state
+
+2. FORM SUBMISSION
+   Entry: User clicks "Save Strategy Event"
+   Function: saveStrategyEvent()
+   Integration: Reads strategy-jira-id value and saves to Firebase
+
+3. CALENDAR RENDERING
+   Entry: Page loads or event updates
+   Function: renderStrategyCalendar()
+   Integration: Reads jiraTaskId and displays 🔗 link
+
+4. PERMISSIONS
+   Entry: Modal opens
+   Function: canViewStrategyCalendar()
+   Integration: Controls read-only state of search field
+
+5. DATA PERSISTENCE
+   Entry: User selects Jira task
+   Storage: Firebase worksync/strategy_events/{id}/jiraTaskId
+   Integration: Loaded on modal open, displayed on calendar
+
+
+================================================================================
+                            SUMMARY
+================================================================================
+
+This diagram shows:
+✅ Complete user interaction flow
+✅ Data flow through the system
+✅ Component hierarchy
+✅ Function call relationships
+✅ Permission enforcement
+✅ Error handling paths
+✅ Visual state transitions
+✅ Integration touch points
+
+All flows are bidirectional and responsive to user actions.
+The system gracefully handles errors and edge cases.
+Data persists through the Firebase integration.
+
+================================================================================

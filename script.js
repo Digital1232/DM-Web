@@ -2426,13 +2426,17 @@ if (initializeApp) {
             let eventsHtml = '';
             dayEvents.forEach(ev => {
                 const badgeClass = platformStyles[ev.platform] || 'bg-slate-500 text-white';
-                const jiraLink = ev.jiraTaskId ? `<a href="${generateJiraLink(ev.jiraTaskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="absolute top-1 right-1 text-white hover:bg-white/20 rounded-full p-0.5 transition-all" title="Open in Jira">🔗</a>` : '';
+                const jiraLink = ev.jiraTaskId ? `<a href="${generateJiraLink(ev.jiraTaskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-white hover:text-yellow-300 transition-colors" title="Open ${ev.jiraTaskId} in Jira">🔗</a>` : '';
+                const clientText = ev.client ? `<span class="text-[8px] text-white/80">${escapeHtml(ev.client)}</span>` : '';
                 eventsHtml += `
                         <div onclick="event.stopPropagation(); openEditStrategyEventModal('${ev.id}')" 
-                             class="relative ${badgeClass} px-2 py-1 rounded-lg text-[9px] font-black truncate shadow-sm transition-all hover:scale-105 active:scale-95" 
-                             title="${escapeHtml(ev.title)} ${ev.jiraTaskId ? ' [' + ev.jiraTaskId + ']' : ''} [${escapeHtml(ev.platform)}]">
-                            ${escapeHtml(ev.title)}
-                            ${jiraLink}
+                             class="relative ${badgeClass} px-2 py-1 rounded-lg text-[9px] font-black shadow-sm transition-all hover:scale-105 active:scale-95 space-y-0.5 cursor-pointer group" 
+                             title="${escapeHtml(ev.title)} ${ev.jiraTaskId ? ' [' + ev.jiraTaskId + ']' : ''} ${ev.client ? ' (' + ev.client + ')' : ''} [${escapeHtml(ev.platform)}]">
+                            <div class="flex items-center justify-between gap-1 truncate">
+                                <span class="truncate flex-1">${escapeHtml(ev.title)}</span>
+                                ${jiraLink}
+                            </div>
+                            ${clientText}
                         </div>
                     `;
             });
@@ -3014,6 +3018,9 @@ function loadStrategyJiraDisplay() {
         jiraSearch.value = jiraId;
         jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>`;
         if (clearBtn) clearBtn.classList.remove('hidden');
+        
+        // Fetch and display Jira status
+        fetchStrategyJiraStatus(jiraId);
     } else {
         jiraSearch.value = '';
         jiraSelected.innerHTML = 'No task selected';
@@ -3021,6 +3028,61 @@ function loadStrategyJiraDisplay() {
     }
     
     document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+}
+
+// Fetch Jira task status and sync with strategy event
+async function fetchStrategyJiraStatus(jiraTaskId) {
+    if (!jiraTaskId) return;
+    
+    try {
+        const statusDisplay = document.getElementById('strategy-jira-status');
+        if (!statusDisplay) return;
+        
+        statusDisplay.innerHTML = '<span class="text-xs text-slate-500">Loading status...</span>';
+        
+        // Find the task in our local tasks array to get its current status
+        const task = tasks.find(t => t.id === jiraTaskId);
+        
+        if (task) {
+            // Display live status from local tasks data
+            const statusClass = getStatusColorClass(task.status);
+            const statusHtml = `
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase text-slate-600">Status:</span>
+                    <span class="text-xs font-black px-2 py-1 rounded-lg ${statusClass}">
+                        ${escapeHtml(task.status || 'Unknown')}
+                    </span>
+                </div>
+            `;
+            statusDisplay.innerHTML = statusHtml;
+            
+            // Also update the strategy event with current task status
+            const eventId = document.getElementById('strategy-event-id').value;
+            if (eventId && strategyEvents[eventId]) {
+                strategyEvents[eventId].jiraStatus = task.status;
+            }
+        } else {
+            statusDisplay.innerHTML = '<span class="text-xs text-slate-500">Task not found in system</span>';
+        }
+    } catch (err) {
+        console.error('Error fetching Jira status:', err);
+        const statusDisplay = document.getElementById('strategy-jira-status');
+        if (statusDisplay) {
+            statusDisplay.innerHTML = '<span class="text-xs text-red-500">Error loading status</span>';
+        }
+    }
+}
+
+// Helper function to get status color class
+function getStatusColorClass(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'done' || s === 'completed' || s === 'closed') return 'bg-emerald-100 text-emerald-700';
+    if (s === 'in progress') return 'bg-blue-100 text-blue-700';
+    if (s === 'in review' || s === 'review') return 'bg-violet-100 text-violet-700';
+    if (s === 'client sent') return 'bg-amber-100 text-amber-700';
+    if (s === 'content work') return 'bg-teal-100 text-teal-700';
+    if (s === 'quality check' || s === 'qc') return 'bg-orange-100 text-orange-700';
+    return 'bg-slate-100 text-slate-600';
 }
 
 // Clear Jira selection

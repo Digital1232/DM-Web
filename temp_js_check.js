@@ -871,7 +871,7 @@
             const message = remoteVersion
                 ? `New app version detected (${remoteVersion}). Reloading in 5 seconds...`
                 : 'New app version detected. Reloading in 5 seconds...';
-            toast(message, 'success', () => window.location.reload());
+            toast(message, 'success', 5000);
             setTimeout(() => window.location.reload(), 5000);
         }
 
@@ -1284,9 +1284,20 @@
             isCheckedIn = false;
             if (checkInTime) {
                 const ciDate = new Date(checkInTime);
-                const limitDate = new Date(ciDate);
+                const now = new Date();
                 const limit = getCheckoutLimit();
-                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                
+                // Determine which date's limit to use: if it's a different day, use today's limit
+                let limitDate;
+                if (now.toDateString() !== ciDate.toDateString()) {
+                    // Cross-day checkout: use today's date with checkout limit time
+                    limitDate = new Date(now);
+                    limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                } else {
+                    // Same-day checkout: use check-in date with checkout limit time
+                    limitDate = new Date(ciDate);
+                    limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                }
                 
                 let endTime = Date.now();
                 if (endTime > limitDate.getTime()) {

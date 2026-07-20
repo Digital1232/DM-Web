@@ -1,0 +1,137 @@
+================================================================================
+                    TEST COMPLETED TAB FIX - ACTION PLAN
+================================================================================
+
+WHAT I DID:
+✅ Added detailed console logging to trace the tab switching
+✅ Added defensive code in initCompletedTasksTab() to ensure hidden class is removed
+✅ Both changes work together to make the Completed Tab visible
+
+================================================================================
+
+WHAT YOU NEED TO DO:
+
+1. OPEN DEVTOOLS
+   Press: F12
+   Go to: Console tab
+   Keep it open while testing
+
+2. CLICK "Today's Completed" BUTTON
+   Watch the console for logs
+   
+3. CHECK THE COMPLETED TAB CONTENT
+   Can you see the "Completed Tasks" section?
+   YES = ✅ Fixed!
+   NO = Report the logs to me
+
+4. REPORT BACK WITH:
+   □ Is the Completed Tab showing? (Yes/No)
+   □ What does console show? (copy log text)
+   □ Any error messages? (Yes/No)
+
+================================================================================
+
+KEY INDICATOR TO LOOK FOR:
+
+After clicking "Today's Completed" button, you should see:
+
+[switchTasksTab COMPLETED] After remove - has hidden? false ← THIS IS KEY
+
+If it shows FALSE:
+  ✅ The code is working correctly
+  → If tab still not visible, it's a CSS issue
+
+If it shows TRUE:
+  ❌ The hidden class is not being removed
+  → This is the bug that needs fixing
+
+================================================================================
+
+DEFENSIVE CODE NOW IN PLACE:
+
+Location: initCompletedTasksTab() function
+
+Code:
+```
+const completedTab = document.getElementById('tasks-tab-completed');
+if (completedTab && completedTab.classList.contains('hidden')) {
+    console.warn('[initCompletedTasksTab] WARNING: completedTab had hidden class, removing it');
+    completedTab.classList.remove('hidden');
+}
+```
+
+This acts as a SAFETY NET - even if the hidden class gets re-added somewhere,
+this code will remove it again when the completed tab initializes.
+
+================================================================================
+
+CONSOLE LOGS TO EXPECT:
+
+When you click "Today's Completed" button, you should see:
+
+[switchTasksTab START] Switching to: completed
+[switchTasksTab] completedTab exists? true
+[switchTasksTab COMPLETED] Before remove - has hidden? true
+[switchTasksTab COMPLETED] After remove - has hidden? false ← KEY LINE
+[switchTasksTab COMPLETED] After init - has hidden? false ← SHOULD BE FALSE
+[switchTasksTab END] Switched to: completed, activeTasksTab: completed
+
+If you see any different values (especially TRUE for the "After remove" line),
+tell me exactly what the logs show.
+
+================================================================================
+
+QUICK DEBUG TEST:
+
+Open browser console and paste:
+
+const el = document.getElementById('tasks-tab-completed');
+console.log('Before:', el.classList.contains('hidden'));
+el.classList.remove('hidden');
+console.log('After:', el.classList.contains('hidden'));
+console.log('Display:', window.getComputedStyle(el).display);
+
+Expected output:
+Before: true
+After: false
+Display: block (or similar)
+
+If the "After" shows TRUE, classList.remove() isn't working properly.
+
+================================================================================
+
+FINAL CHECKLIST:
+
+□ Browser DevTools opened (F12)
+□ Console tab active
+□ Clicked "Today's Completed" button
+□ Checked if Completed Tab content is visible
+□ Recorded console logs
+□ Ready to report findings
+
+================================================================================
+
+REPORT TEMPLATE:
+
+When you reply, please provide:
+
+Completed Tab Visible: [ ] Yes [ ] No
+
+Console "After remove - has hidden?" shows: [ ] false [ ] true [ ] didn't see this
+
+Any error messages: [ ] No [ ] Yes (describe)
+
+Console output (paste here):
+[Paste the console logs here]
+
+Additional notes:
+[Any observations about what happened]
+
+================================================================================
+
+STATUS: READY TO TEST ✅
+
+Code changes applied. Defensive mechanism in place.
+Now testing to confirm the fix works.
+
+================================================================================
