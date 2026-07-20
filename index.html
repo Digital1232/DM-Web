@@ -2232,11 +2232,28 @@
         }
 
         html.dark .selection\:bg-indigo-100::selection {
-            background: rgba(109, 93, 246, 0.28);
+            background: rgba(99, 102, 241, 0.6);
+            color: #ffffff;
         }
 
         html.dark .selection\:text-indigo-700::selection {
-            color: #F8FAFC;
+            color: #ffffff;
+        }
+
+        /* ── DARK MODE: Text Selection Visibility ── */
+        html.dark ::selection {
+            background: rgba(99, 102, 241, 0.6);
+            color: #ffffff;
+        }
+
+        html.dark #messages-area ::selection {
+            background: rgba(99, 102, 241, 0.6);
+            color: #ffffff;
+        }
+
+        html.dark #messages-area .message-text ::selection {
+            background: rgba(99, 102, 241, 0.6);
+            color: #ffffff;
         }
 
         /* ── REPORT & CALENDAR PANELS: Fix Overflow & Z-Index ── */
@@ -3819,15 +3836,9 @@
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('status')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-48 cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Status <iconify-icon
                                                         id="sort-dp-status" icon="solar:sort-vertical-linear"
-                                                        class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
-                                            </th>
-                                            <th onclick="handleDpSort('client')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell cursor-pointer hover:text-indigo-600 transition-colors group">
-                                                <div class="flex items-center gap-1">Client <iconify-icon
-                                                        id="sort-dp-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('duedate')"
@@ -3840,6 +3851,12 @@
                                                 class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Assignee <iconify-icon
                                                         id="sort-dp-assignee" icon="solar:sort-vertical-linear"
+                                                        class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
+                                            </th>
+                                            <th onclick="handleDpSort('client')"
+                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                <div class="flex items-center gap-1">Client <iconify-icon
+                                                        id="sort-dp-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th
@@ -23761,19 +23778,30 @@
                         const subClass = isMe ? 'text-white/60' : 'text-slate-400';
                         const sizeTxt = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
 
-                        // Simpler open: just use an <a> with the base64 or URL
+                        // Create download link with download attribute
                         attachmentHtml += `
-                        <div class="${text ? 'mb-2' : ''} mt-1">
-                            <a href="${a.url}" target="_blank" rel="noopener noreferrer"
-                               class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl transition-colors border cursor-pointer"
+                        <div class="${text ? 'mb-2' : ''} mt-1 group/attachment">
+                            <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl border cursor-pointer transition-colors"
                                style="text-decoration:none">
                                 <iconify-icon icon="${meta.icon}" width="22" style="color:${meta.color};flex-shrink:0"></iconify-icon>
                                 <div class="min-w-0">
                                     <p class="text-xs font-bold ${textClass} truncate max-w-[160px]">${escapeHtml(a.name || 'File')}</p>
-                                    <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''} · Click to open</p>
+                                    <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''}</p>
                                 </div>
-                                <iconify-icon icon="solar:square-arrow-right-up-bold" width="14" class="${isMe ? 'text-white/50' : 'text-slate-300'} flex-shrink-0"></iconify-icon>
-                            </a>
+                                <div class="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                                    <a href="${a.url}" target="_blank" rel="noopener noreferrer"
+                                       class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity"
+                                       title="Open file">
+                                        <iconify-icon icon="solar:square-arrow-right-up-bold" width="14" class="${isMe ? 'text-white/50' : 'text-slate-300'}"></iconify-icon>
+                                    </a>
+                                    <a href="${a.url}" download="${escapeHtml(a.name || 'file')}"
+                                       class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity opacity-0 group-hover/attachment:opacity-100"
+                                       title="Download file"
+                                       onclick="event.stopPropagation()">
+                                        <iconify-icon icon="solar:download-square-bold" width="14" class="${isMe ? 'text-white/50 hover:text-white' : 'text-slate-300 hover:text-slate-600'}"></iconify-icon>
+                                    </a>
+                                </div>
+                            </div>
                         </div>`;
                     });
                 }
