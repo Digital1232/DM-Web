@@ -10538,7 +10538,7 @@
                 <div class="flex gap-2 ml-auto">
                     <button onclick="closeStrategyEventModal()"
                         class="px-4 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold">Cancel</button>
-                    <button onclick="saveStrategyEvent()"
+                    <button onclick="saveStrategyEvent()" id="strategy-save-btn"
                         class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 transition-all">Save
                         Event</button>
                 </div>
@@ -15991,22 +15991,70 @@
                     }
                 });
 
-                // Toggle format button disabled states
+                // Toggle format button disabled states using pointer-events instead of disabled attr
                 const posterBtn = document.getElementById('strategy-format-poster');
                 const videoBtn = document.getElementById('strategy-format-video');
                 if (posterBtn && videoBtn) {
                     if (canWrite) {
-                        posterBtn.removeAttribute('disabled');
-                        videoBtn.removeAttribute('disabled');
+                        posterBtn.style.pointerEvents = 'auto';
+                        posterBtn.style.opacity = '1';
+                        videoBtn.style.pointerEvents = 'auto';
+                        videoBtn.style.opacity = '1';
+                        posterBtn.classList.remove('opacity-50');
+                        videoBtn.classList.remove('opacity-50');
                     } else {
-                        posterBtn.setAttribute('disabled', 'true');
-                        videoBtn.setAttribute('disabled', 'true');
+                        posterBtn.style.pointerEvents = 'none';
+                        posterBtn.style.opacity = '0.5';
+                        videoBtn.style.pointerEvents = 'none';
+                        videoBtn.style.opacity = '0.5';
+                        posterBtn.classList.add('opacity-50');
+                        videoBtn.classList.add('opacity-50');
+                    }
+                }
+
+                // Also disable Jira search controls in view mode
+                if (jiraSearch) {
+                    if (canWrite) {
+                        jiraSearch.removeAttribute('disabled');
+                    } else {
+                        jiraSearch.setAttribute('disabled', 'true');
+                    }
+                }
+                const jiraSearchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
+                if (jiraSearchBtn) {
+                    if (canWrite) {
+                        jiraSearchBtn.style.pointerEvents = 'auto';
+                        jiraSearchBtn.style.opacity = '1';
+                    } else {
+                        jiraSearchBtn.style.pointerEvents = 'none';
+                        jiraSearchBtn.style.opacity = '0.5';
+                    }
+                }
+                if (clearBtn2) {
+                    if (canWrite) {
+                        clearBtn2.style.pointerEvents = 'auto';
+                        clearBtn2.style.opacity = '1';
+                    } else {
+                        clearBtn2.style.pointerEvents = 'none';
+                        clearBtn2.style.opacity = '0.5';
                     }
                 }
 
                 const delBtn = document.getElementById('strategy-delete-btn');
                 if (delBtn) {
                     delBtn.classList.toggle('hidden', !canWrite);
+                }
+
+                // Also disable save button in view mode
+                const saveBtn = document.getElementById('strategy-save-btn');
+                if (saveBtn) {
+                    if (canWrite) {
+                        saveBtn.style.pointerEvents = 'auto';
+                        saveBtn.style.opacity = '1';
+                    } else {
+                        saveBtn.style.pointerEvents = 'none';
+                        saveBtn.style.opacity = '0.5';
+                    }
                 }
 
                 document.getElementById('strategyEventModal').showModal();
