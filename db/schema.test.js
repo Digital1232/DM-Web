@@ -3,16 +3,15 @@
  * Validates all tables, indexes, and constraints are properly created
  */
 
-const { describe, it, before, after } = require('vitest');
 const { getClient } = require('./client');
 
 let db;
 
-before(async () => {
+beforeAll(async () => {
   db = getClient();
 });
 
-after(async () => {
+afterAll(async () => {
   await db.close();
 });
 
