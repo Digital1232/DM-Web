@@ -1284,29 +1284,9 @@
             overflow-x: hidden !important;
         }
 
-        /* Adjust logo and toggle header area when collapsed */
+        /* Hide logo area completely when collapsed to save space and move menu to top */
         aside.sidebar-collapsed .flex.justify-between {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            width: 100% !important;
-            margin-top: 16px !important;
-            margin-bottom: 24px !important;
-        }
-
-        /* Show logo wrapper div when collapsed */
-        aside.sidebar-collapsed .flex.justify-between > div {
-            display: block !important;
-        }
-
-        /* Hide logo img when collapsed */
-        aside.sidebar-collapsed img[alt="One Desk Logo"] {
             display: none !important;
-        }
-
-        /* Show favicon when collapsed */
-        aside.sidebar-collapsed img.logo-collapsed {
-            display: block !important;
         }
 
         /* Navigation container - compact vertical stack flowing naturally */
@@ -1861,7 +1841,7 @@
             --ws-text-2: #E5E7EB;
             --ws-text-3: #CBD5E1;
             --ws-text-4: #94A3B8;
-            --ws-text-5: #64748B;
+            --ws-text-5: #a3c5ff;
             --ws-accent: #6D5DF6;
             --ws-accent-hover: #7C5CFF;
             --ws-accent-soft: #221C4F;
@@ -4410,22 +4390,7 @@
                     </div>
                     <!-- Format Counts -->
                     <div class="flex items-center gap-3 flex-wrap">
-                        <!-- Video Count Badge -->
-                        <div class="flex items-center gap-2 bg-rose-50 border border-rose-100 rounded-2xl px-4 py-2">
-                            <iconify-icon icon="solar:videocamera-record-bold-duotone" class="text-rose-500" width="18"></iconify-icon>
-                            <div class="flex flex-col leading-tight">
-                                <span id="strategy-video-count" class="text-xl font-black text-rose-600 leading-none">0</span>
-                                <span class="text-[9px] font-bold text-rose-400 uppercase tracking-widest">Videos</span>
-                            </div>
-                        </div>
-                        <!-- Poster Count Badge -->
-                        <div class="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2">
-                            <iconify-icon icon="solar:document-bold-duotone" class="text-indigo-500" width="18"></iconify-icon>
-                            <div class="flex flex-col leading-tight">
-                                <span id="strategy-poster-count" class="text-xl font-black text-indigo-600 leading-none">0</span>
-                                <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Posters</span>
-                            </div>
-                        </div>
+
                         <!-- Add Button (only visible to permitted users) -->
                         <div id="strategy-action-buttons" class="hidden">
                             <button onclick="openAddStrategyEventModal()"
@@ -11505,6 +11470,63 @@
             const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
             let qcReportDateFrom = null; // New state variable for QC reports filter
             let qcReportDateTo = null;   // New state variable for QC reports filter
+
+            const STATUS_CATEGORIES = {
+                WORKING: {
+                    bg: 'bg-blue-100',
+                    text: 'text-blue-700',
+                    icon: 'solar:play-circle-bold',
+                    statuses: [
+                        'in progress', 'content in progress', 'design in progress',
+                        'quality check', 'qc', 'thumbnail waiting', 'rework designs',
+                        'in review', 'review', 'testing', 'qa', 'shoot in progress',
+                        'thumbnail', 'discussion', 'learnings', 'learning'
+                    ]
+                },
+                WAITING: {
+                    bg: 'bg-amber-100',
+                    text: 'text-amber-700',
+                    icon: 'solar:clock-circle-bold',
+                    statuses: [
+                        'to do', 'shoot needed', 'client content approval',
+                        'design to do', 'design hold', 'hold', 'on hold',
+                        'backlog', 'selected for development', 'shoot planned'
+                    ]
+                },
+                COMPLETED: {
+                    bg: 'bg-emerald-100',
+                    text: 'text-emerald-700',
+                    icon: 'solar:check-circle-bold',
+                    statuses: [
+                        'design completed', 'posted', 'done', 'analytics',
+                        'client sent', 'client approved', 'completed', 'shoot completed',
+                        'resolved', 'closed', 'approved', 'shoot cancelled',
+                        'skipped', 'missed'
+                    ]
+                }
+            };
+
+            function getStatusStyle(status) {
+                const s = (status || '').trim().toLowerCase();
+                if (STATUS_CATEGORIES.COMPLETED.statuses.includes(s)) {
+                    return STATUS_CATEGORIES.COMPLETED;
+                }
+                if (STATUS_CATEGORIES.WORKING.statuses.includes(s)) {
+                    return STATUS_CATEGORIES.WORKING;
+                }
+                // Default to WAITING / PENDING
+                return STATUS_CATEGORIES.WAITING;
+            }
+
+            function renderStatusBadge(status) {
+                if (!status) return '';
+                const style = getStatusStyle(status);
+                return `<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 h-[28px] text-xs font-semibold ${style.bg} ${style.text} whitespace-nowrap">
+                    <iconify-icon icon="${style.icon}" width="14"></iconify-icon>
+                    ${escapeHtml(status)}
+                </span>`;
+            }
+
             const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
             const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed'];
 
@@ -12420,14 +12442,10 @@
 
             // DAILY PLAN HELPER
             function dailyPlanRowClass(s, task = null) {
-                if (task && isInternalTask(task)) {
-                    if (isInternalDone(s)) return 'bg-emerald-50/30';
-                    if (isInternalInProgress(s)) return 'bg-amber-50/30';
-                    return 'bg-blue-50/30';
-                }
-                if (isDone(s)) return 'bg-emerald-50/30';
-                if (isInProgress(s)) return 'bg-amber-50/30';
-                return 'bg-blue-50/30';
+                const style = getStatusStyle(s);
+                if (style.bg.includes('emerald')) return 'bg-emerald-50/30';
+                if (style.bg.includes('blue')) return 'bg-blue-50/30';
+                return 'bg-amber-50/30';
             }
 
             function dailyPlanCarryStatuses(task) {
@@ -12437,6 +12455,64 @@
             function taskEligibleForDailyPlanAllocation(task) {
                 if (isInternalTask(task)) return INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES.includes(task.status);
                 return DAILY_PLAN_ALLOCATION_STATUSES.includes(task.status);
+            }
+
+            function collectAllTodayTasksForUser(userEmail, dateStr = todayIso()) {
+                const selectedDate = new Date(dateStr);
+                selectedDate.setHours(0, 0, 0, 0);
+                const userPlans = dailyPlans[eKey(userEmail)] || {};
+                let plannedTasks = [];
+                const seenIds = new Set();
+
+                // 1. Daily Plan entries (including completed if exact date is today)
+                Object.entries(userPlans).forEach(([taskId, planData]) => {
+                    const task = tasks.find(t => t.id === taskId);
+                    if (!task) return;
+
+                    const planDate = new Date(planData.date);
+                    planDate.setHours(0, 0, 0, 0);
+
+                    const isExactDate = planDate.getTime() === selectedDate.getTime();
+                    const isCompleted = isDone(task.status) || isInternalDone(task.status) || isTaskCompletedStatus(task.status);
+                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && dailyPlanCarryStatuses(task).includes(task.status);
+
+                    if (isExactDate || (isCarryOver && !isCompleted)) {
+                        plannedTasks.push(task);
+                        seenIds.add(task.id);
+                    }
+                });
+
+                // 2. Tasks with duedate matching dateStr
+                tasks.forEach(task => {
+                    if (assigneeMatches(task, userEmail) && task.duedate === dateStr) {
+                        if (!seenIds.has(task.id)) {
+                            plannedTasks.push(task);
+                            seenIds.add(task.id);
+                        }
+                    }
+                });
+
+                // 3. Auto-included Jira tasks
+                tasks
+                    .filter(task => DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .forEach(task => {
+                        if (!seenIds.has(task.id)) {
+                            plannedTasks.push(task);
+                            seenIds.add(task.id);
+                        }
+                    });
+
+                // 4. Auto-included Internal tasks
+                tasks
+                    .filter(task => isInternalTask(task) && INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .forEach(task => {
+                        if (!seenIds.has(task.id)) {
+                            plannedTasks.push(task);
+                            seenIds.add(task.id);
+                        }
+                    });
+
+                return plannedTasks;
             }
 
             function collectDailyPlanTasksForUser(userEmail, dateStr) {
@@ -14566,17 +14642,8 @@
             // JIRA Completed Statuses: Design Completed, Thumbnail Waiting, Quality Check, Client Sent, Client Approved, Posted, Analytics, Done
             // INTERNAL Completed Statuses: Completed, Shoot Completed
             function isCompletedTask(status) {
-                if (!status) return false;
-                const s = (status || '').trim().toLowerCase();
-                // Jira completed statuses
-                const jiraCompleted = ['done', 'resolved', 'closed', 'completed', 'design completed', 'thumbnail waiting', 'quality check', 'client sent', 'client approved', 'posted', 'analytics'];
-                // Internal completed statuses
-                const internalCompleted = ['completed', 'shoot completed'];
-                // Terminal statuses
-                const terminal = ['shoot cancelled'];
-
-                const allCompleted = [...jiraCompleted, ...internalCompleted, ...terminal];
-                return allCompleted.includes(s);
+                const style = getStatusStyle(status);
+                return style.bg.includes('emerald');
             }
 
             // Legacy aliases for backward compatibility - all route to isCompletedTask
@@ -14589,24 +14656,30 @@
             }
 
             function isInternalDone(status) {
-                if (!status) return false;
-                const s = (status || '').trim().toLowerCase();
-                return ['completed', 'done', 'shoot completed'].includes(s);
+                return isCompletedTask(status);
             }
 
             // ═══════════════════════════════════════════════════════════════════
             // Status classification helpers
             // ═══════════════════════════════════════════════════════════════════
 
-            // In Progress: Only "In Progress" status - Quality Check, Client Sent, Analytics are now COMPLETED
             function isInProgress(s) {
-                return ['In Progress'].includes(s);
+                const style = getStatusStyle(s);
+                return style.bg.includes('blue');
             }
 
-            function isTodo(s) { return ['To Do', 'To do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Shoot Planned', 'Content To Do', 'Content In Progress', 'Client Content Approval'].includes(s); }
-            function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
-            // Internal In Progress: Only "In Progress"
-            function isInternalInProgress(s) { return ['In Progress'].includes(s); }
+            function isTodo(s) {
+                const style = getStatusStyle(s);
+                return style.bg.includes('amber');
+            }
+
+            function isInternalTodo(s) {
+                return isTodo(s);
+            }
+
+            function isInternalInProgress(s) {
+                return isInProgress(s);
+            }
 
             async function getAllUsers() {
                 const snap = await get(ref(db, 'worksync/users'));
@@ -18938,9 +19011,10 @@
                         : [...currentStatusFilter];
                     allStatuses = sortBoardStatuses(allStatuses);
                     const statusColors = (s) => {
-                        if (isDone(s)) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
-                        if (isInProgress(s)) return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
-                        return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
+                        const style = getStatusStyle(s);
+                        if (style.bg.includes('emerald')) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
+                        if (style.bg.includes('blue')) return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
+                        return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
                     };
                     const cols = allStatuses.map(status => ({
                         id: status.toLowerCase().replace(/\s/g, '-'),
@@ -19291,14 +19365,10 @@
                     allStatuses = sortInternalBoardStatuses(allStatuses);
 
                     const statusColors = (s) => {
-                        if (s === 'Shoot Cancelled') return { bg: 'bg-rose-50/50', border: 'border-rose-100', titleColor: 'text-rose-600' };
-                        if (isInternalDone(s) || isDone(s)) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
-                        if (['In Progress', 'Shoot In Progress', 'Shoot Planned'].includes(s)) return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
-                        if (s === 'Hold') return { bg: 'bg-orange-50/50', border: 'border-orange-100', titleColor: 'text-orange-600' };
-                        if (['Shoot Needed', 'Shoot Completed'].includes(s)) return { bg: 'bg-purple-50/50', border: 'border-purple-100', titleColor: 'text-purple-600' };
-                        if (s === 'Learnings') return { bg: 'bg-violet-50/50', border: 'border-violet-100', titleColor: 'text-violet-600' };
-                        if (s === 'Discussion') return { bg: 'bg-sky-50/50', border: 'border-sky-100', titleColor: 'text-sky-600' };
-                        return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
+                        const style = getStatusStyle(s);
+                        if (style.bg.includes('emerald')) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
+                        if (style.bg.includes('blue')) return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
+                        return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
                     };
 
                     kanban.innerHTML = allStatuses.map(status => {
@@ -19456,9 +19526,8 @@
             }
 
             function statusClass(s) {
-                if (isDone(s)) return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
-                if (isInProgress(s)) return 'bg-amber-50 text-amber-600 border border-amber-100';
-                return 'bg-blue-50 text-blue-600 border border-blue-100';
+                const style = getStatusStyle(s);
+                return `${style.bg} ${style.text}`;
             }
             function priorityClass(p) {
                 if (['High', 'Highest', 'Critical'].includes(p)) return 'text-rose-500';
@@ -22206,20 +22275,15 @@
             function updateStats() {
 
                 // --- User-specific stats for "Today's Performance" card ---
-                const myTasks = tasks.filter(t => assigneeMatches(t, 'me'));
+                const myEmail = currentUser ? currentUser.email : 'me';
+                const myTodayTasks = collectAllTodayTasksForUser(myEmail, todayIso());
 
-                const assignedGroup = ['todo', 'to do', 'design to do', 'rework designs'];
-                const progressGroup = ['design inprogress', 'design in progress', 'in progress', 'inprogress'];
-                const holdGroup = ['hold', 'design hold', 'on hold'];
-                const completedGroup = ['design completed', 'completed', 'done'];
+                const myAssigned = myTodayTasks.length;
+                const myInProgress = myTodayTasks.filter(t => isInProgress(t.status)).length;
+                const myHold = myTodayTasks.filter(t => (t.status || '').toLowerCase().includes('hold')).length;
+                const myCompleted = myTodayTasks.filter(t => isDone(t.status) || isInternalDone(t.status) || isTaskCompletedStatus(t.status)).length;
 
-                const myAssigned = myTasks.filter(t => assignedGroup.includes((t.status || '').toLowerCase())).length;
-                const myInProgress = myTasks.filter(t => progressGroup.includes((t.status || '').toLowerCase())).length;
-                const myHold = myTasks.filter(t => holdGroup.includes((t.status || '').toLowerCase())).length;
-                const myCompleted = myTasks.filter(t => completedGroup.includes((t.status || '').toLowerCase())).length;
-                const myPendingCount = myTasks.filter(t => !completedGroup.includes((t.status || '').toLowerCase())).length;
-
-                const elTotal = document.getElementById('stat-total'); if (elTotal) elTotal.textContent = myTasks.length;
+                const elTotal = document.getElementById('stat-total'); if (elTotal) elTotal.textContent = myAssigned;
                 const elTodo = document.getElementById('stat-todo'); if (elTodo) elTodo.textContent = myInProgress;
                 const elProg = document.getElementById('stat-progress'); if (elProg) elProg.textContent = myHold;
                 const elDone = document.getElementById('stat-done'); if (elDone) elDone.textContent = myCompleted;
@@ -30793,12 +30857,9 @@
                     }
 
                     const getStatusBadgeClass = (status) => {
-                        const s = (status || '').toLowerCase().trim();
-                        if (isTaskCompletedStatus(status) || isDone(status)) return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-                        if (s.includes('hold')) return 'bg-rose-50 text-rose-700 border-rose-100';
-                        if (s.includes('rework') || s.includes('correction')) return 'bg-amber-50 text-amber-700 border-amber-100';
-                        if (s.includes('progress')) return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-                        return 'bg-slate-50 text-slate-700 border-slate-100';
+                        const style = getStatusStyle(status);
+                        const border = style.bg.replace('bg-', 'border-').replace('-50', '-100');
+                        return `${style.bg} ${style.text} ${border}`;
                     };
 
                     let snehaBreakdownHtml = '';
@@ -33020,7 +33081,7 @@
                 internalFields.classList.toggle('hidden', taskType !== 'internal');
             }
 
-            async function submitManualTask() {
+            async function submitManualTask(startNow = false) {
                 const platform = document.getElementById('mt-platform').value;
                 const taskType = document.getElementById('mt-task-type').value;
                 const title = document.getElementById('mt-title').value.trim();
@@ -33066,8 +33127,13 @@
 
                         const res = await jiraRequest(url, 'post', payload);
                         if (res.success && (res.data?.key || res.key)) {
-                            toast(`Jira task ${(res.data?.key || res.key)} created!`, 'success');
+                            const jiraKey = res.data?.key || res.key;
+                            toast(`Jira task ${jiraKey} created!`, 'success');
                             await syncTasks(true); // Auto-sync to show the new task in the list
+                            
+                            if (startNow && jiraKey) {
+                                await doStartTask(jiraKey);
+                            }
                         } else {
                             throw new Error(jiraErrorMessage(res));
                         }
@@ -33097,6 +33163,10 @@
                         PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
                         PerfOptimizer.queueRender(() => updateStats(), 'normal');
                         toast('Task added to One Desk', 'success');
+
+                        if (startNow && taskId) {
+                            await doStartTask(taskId);
+                        }
                     }
                     document.getElementById('addTaskModal').close();
                     populateClientFilter();
@@ -37939,28 +38009,8 @@
             }
 
             function getTaskStatusColor(status) {
-                // Use 3-color system from spec
-                const normalizedStatus = (status || '').toLowerCase().trim();
-
-                // NOT COMPLETED (Red)
-                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
-                if (notCompletedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
-                    return 'bg-red-50 text-red-700 border border-red-200';
-                }
-
-                // COMPLETED (Green)
-                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
-                if (completedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
-                    return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                }
-
-                // POSTED (Blue)
-                const postedStatuses = ['posted', 'analytics', 'done'];
-                if (postedStatuses.some(s => normalizedStatus === s || normalizedStatus.includes(s))) {
-                    return 'bg-blue-50 text-blue-700 border border-blue-200';
-                }
-
-                return 'bg-slate-50 text-slate-700 border border-slate-200';
+                const style = getStatusStyle(status);
+                return `${style.bg} ${style.text}`;
             }
 
             // ── PHASE 4: CARRY-FORWARD AUTOMATION ─────────────────────────────────────
@@ -45354,7 +45404,6 @@
              * Get ROI status badge
              */
             function getROIBadgeStyle(roi) {
-                if (roi > 100) {
                 if (roi > 100) {
                     return { bg: '#dcfce7', text: '#166534', label: 'Excellent' };
                 } else if (roi > 0) {

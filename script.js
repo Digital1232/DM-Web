@@ -2479,13 +2479,7 @@ if (initializeApp) {
             })
             .sort((a, b) => a.date.localeCompare(b.date));
 
-        // ── Auto-calculate Video & Poster counts from the format field ──
-        const videoCount = activeMonthEvents.filter(ev => ev.format === 'Video').length;
-        const posterCount = activeMonthEvents.filter(ev => ev.format === 'Poster' || !ev.format).length;
-        const videoEl = document.getElementById('strategy-video-count');
-        const posterEl = document.getElementById('strategy-poster-count');
-        if (videoEl) videoEl.textContent = videoCount;
-        if (posterEl) posterEl.textContent = posterCount;
+
 
         if (activeMonthEvents.length === 0) {
             listEl.innerHTML = `

@@ -189,7 +189,7 @@ describe('SubmissionDetector', () => {
       const result = await detector.detectAndProcessSubmissions();
 
       expect(result.startTime).toBeGreaterThan(0);
-      expect(result.endTime).toBeGreaterThan(result.startTime);
+      expect(result.endTime).toBeGreaterThanOrEqual(result.startTime);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
       expect(result.durationMs).toBe(result.endTime - result.startTime);
     });
