@@ -3375,6 +3375,16 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
                     }
                 }
             }
+            window.safeSetLocalStorage = safeSetLocalStorage;
+
+            function openJiraTaskDetail(taskId) {
+                if (!taskId) return;
+                const task = (typeof tasks !== 'undefined' ? tasks : []).find(t => t.id === taskId);
+                const jiraKey = task ? (task.jiraKey || task.id) : taskId;
+                const jiraUrl = `https://vilpowerdigitalmarketing.atlassian.net/browse/${encodeURIComponent(jiraKey)}`;
+                window.open(jiraUrl, '_blank');
+            }
+            window.openJiraTaskDetail = openJiraTaskDetail;
 
             safeSetLocalStorage('worksync_tasks', JSON.stringify(tasks));
             safeSetLocalStorage('worksync_lastSync', Date.now().toString());
