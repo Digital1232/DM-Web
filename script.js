@@ -2634,6 +2634,9 @@ if (initializeApp) {
     async function saveStrategyEvent() {
         if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
 
+        const saveBtn = document.getElementById('strategy-save-btn');
+        const origBtnText = saveBtn ? saveBtn.innerHTML : 'Save Event';
+
         const id = document.getElementById('strategy-event-id').value;
         const title = document.getElementById('strategy-title').value.trim();
         const jiraId = document.getElementById('strategy-jira-id').value.trim();
@@ -2644,6 +2647,12 @@ if (initializeApp) {
 
         if (!title || !date) {
             return toast('Please fill in title and date.', 'error');
+        }
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.style.opacity = '0.7';
+            saveBtn.innerHTML = '<iconify-icon icon="svg-spinners:ring-resize" width="16" class="inline mr-1"></iconify-icon> Saving...';
         }
 
         // If format is Poster, auto assign to Karthika
@@ -2676,117 +2685,125 @@ if (initializeApp) {
                 // Update
                 await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
                 toast('Strategy event updated!', 'success');
+                closeStrategyEventModal();
             } else {
                 // Create
                 evPayload.createdAt = Date.now();
                 evPayload.createdBy = userEmail;
                 await push(ref(db, 'worksync/strategy_events'), evPayload);
                 toast('Strategy event scheduled!', 'success');
+                closeStrategyEventModal();
 
-                // Auto-create a task with details in Jira
-                const addDays = (dateStr, days) => {
-                    const d = new Date(dateStr + 'T00:00:00');
-                    d.setDate(d.getDate() + days);
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                };
-                const taskDueDate = addDays(date, -4);
-                const projectKey = 'JULY';
-                const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
-                const jiraPayload = {
-                    fields: {
-                        project: { key: projectKey },
-                        summary: title,
-                        issuetype: { name: 'Task' },
-                        labels: [],
-                        duedate: taskDueDate
-                    }
-                };
-
-                if (desc) {
-                    jiraPayload.fields.description = {
-                        type: 'doc',
-                        version: 1,
-                        content: [
-                            {
-                                type: 'paragraph',
-                                content: [
-                                    {
-                                        type: 'text',
-                                        text: desc
-                                    }
-                                ]
-                            }
-                        ]
+                // Auto-create a task with details in Jira asynchronously in background
+                (async () => {
+                    const addDays = (dateStr, days) => {
+                        const d = new Date(dateStr + 'T00:00:00');
+                        d.setDate(d.getDate() + days);
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     };
-                }
+                    const taskDueDate = addDays(date, -4);
+                    const projectKey = 'JULY';
+                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
+                    const jiraPayload = {
+                        fields: {
+                            project: { key: projectKey },
+                            summary: title,
+                            issuetype: { name: 'Task' },
+                            labels: [],
+                            duedate: taskDueDate
+                        }
+                    };
 
-                if (owner) {
-                    const assigneeUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get(owner.toLowerCase()) : { email: owner, name: owner };
-                    if (typeof findJiraAccountId === 'function') {
-                        const accountId = await findJiraAccountId(assigneeUser);
-                        if (accountId) {
-                            jiraPayload.fields.assignee = { id: accountId };
+                    if (desc) {
+                        jiraPayload.fields.description = {
+                            type: 'doc',
+                            version: 1,
+                            content: [
+                                {
+                                    type: 'paragraph',
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: desc
+                                        }
+                                    ]
+                                }
+                            ]
+                        };
+                    }
+
+                    if (owner) {
+                        const assigneeUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get(owner.toLowerCase()) : { email: owner, name: owner };
+                        if (typeof findJiraAccountId === 'function') {
+                            const accountId = await findJiraAccountId(assigneeUser);
+                            if (accountId) {
+                                jiraPayload.fields.assignee = { id: accountId };
+                            }
                         }
                     }
-                }
 
-                try {
-                    const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
-                    if (res.success && (res.data?.key || res.key)) {
-                        const parentKey = res.data?.key || res.key;
-                        toast(`Jira task ${parentKey} created!`, 'success');
+                    try {
+                        const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
+                        if (res.success && (res.data?.key || res.key)) {
+                            const parentKey = res.data?.key || res.key;
+                            toast(`Jira task ${parentKey} created!`, 'success');
 
-                        // Auto create a subtask thumbnail for video tasks and assign to Karthika
-                        if (format === 'Video') {
-                            const subtaskTitle = `${title} + Thumbnail`;
-                            const subtaskPayload = {
-                                fields: {
-                                    project: { key: projectKey },
-                                    parent: { key: parentKey },
-                                    summary: subtaskTitle,
-                                    issuetype: { name: 'Sub-task' }
+                            // Auto create a subtask thumbnail for video tasks and assign to Karthika
+                            if (format === 'Video') {
+                                const subtaskTitle = `${title} + Thumbnail`;
+                                const subtaskPayload = {
+                                    fields: {
+                                        project: { key: projectKey },
+                                        parent: { key: parentKey },
+                                        summary: subtaskTitle,
+                                        issuetype: { name: 'Sub-task' }
+                                    }
+                                };
+
+                                const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get('karthikavilpower@gmail.com') : { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
+                                if (typeof findJiraAccountId === 'function') {
+                                    const karthikaAccountId = await findJiraAccountId(karthikaUser);
+                                    if (karthikaAccountId) {
+                                        subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                                    }
                                 }
-                            };
 
-                            const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap.get) ? allUsersMap.get('karthikavilpower@gmail.com') : { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
-                            if (typeof findJiraAccountId === 'function') {
-                                const karthikaAccountId = await findJiraAccountId(karthikaUser);
-                                if (karthikaAccountId) {
-                                    subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                                try {
+                                    const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                                    if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                        toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
+                                    } else {
+                                        console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
+                                        toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
+                                    }
+                                } catch (subErr) {
+                                    console.error('Error auto-creating subtask:', subErr);
+                                    toast(`Failed to create subtask: ${subErr.message}`, 'warning');
                                 }
                             }
 
-                            try {
-                                const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
-                                if (subRes.success && (subRes.data?.key || subRes.key)) {
-                                    toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
-                                } else {
-                                    console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
-                                    toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
-                                }
-                            } catch (subErr) {
-                                console.error('Error auto-creating subtask:', subErr);
-                                toast(`Failed to create subtask: ${subErr.message}`, 'warning');
+                            if (typeof syncTasks === 'function') {
+                                await syncTasks(true);
                             }
+                        } else {
+                            console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
+                            toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
                         }
-
-                        if (typeof syncTasks === 'function') {
-                            await syncTasks(true);
-                        }
-                    } else {
-                        console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
-                        toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
+                    } catch (jiraErr) {
+                        console.error('Error auto-creating Jira task:', jiraErr);
+                        toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
                     }
-                } catch (jiraErr) {
-                    console.error('Error auto-creating Jira task:', jiraErr);
-                    toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
-                }
+                })();
             }
-
-            closeStrategyEventModal();
         } catch (err) {
             console.error(err);
             toast('Failed to save strategy event', 'error');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.opacity = '1';
+                saveBtn.innerHTML = origBtnText;
+            }
         }
     }
 
