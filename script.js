@@ -2701,7 +2701,7 @@ if (initializeApp) {
                         d.setDate(d.getDate() + days);
                         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     };
-                    const taskDueDate = addDays(date, -4);
+                    const taskDueDate = date;
                     const projectKey = 'JULY';
                     const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                     const jiraPayload = {

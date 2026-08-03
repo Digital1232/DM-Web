@@ -15523,6 +15523,20 @@
                 const today = new Date();
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+                // Sync any strategy event due dates that were offset in Jira back to the original strategy event date
+                if (strategyEvents && tasks && tasks.length > 0) {
+                    Object.entries(strategyEvents).forEach(([id, ev]) => {
+                        if (!ev.date) return;
+                        const matchedTask = tasks.find(t => (ev.jiraId && t.id.toLowerCase() === ev.jiraId.toLowerCase()) || (t.desc && ev.title && t.desc.toLowerCase() === ev.title.toLowerCase()));
+                        if (matchedTask && matchedTask.duedate && matchedTask.duedate !== ev.date) {
+                            console.log(`[Auto-Revert] Reverting task ${matchedTask.id} due date from ${matchedTask.duedate} to ${ev.date}`);
+                            matchedTask.duedate = ev.date;
+                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(matchedTask.id)}`;
+                            jiraRequest(jiraUrl, 'put', { fields: { duedate: ev.date } }).catch(e => console.error('Failed to sync Jira duedate:', e));
+                        }
+                    });
+                }
+
                 // CRITICAL CHANGE: Build calendar from JIRA tasks ONLY (exclude internal tasks)
                 // Get all tasks and group by due date
                 const tasksByDate = {};
@@ -16305,7 +16319,7 @@
                         // Perform Jira task creation & sync asynchronously in background!
                         (async () => {
                             try {
-                                const taskDueDate = ptAddDays(date, -4);
+                                const taskDueDate = date;
                                 const isJuly = date && date.split('-')[1] === '07';
                                 const isJune = date && date.split('-')[1] === '06';
                                 const projectKey = isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey);
