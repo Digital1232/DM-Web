@@ -15010,6 +15010,52 @@
             let strategyEventsUnsub = null;
             let activeStrategyClientFilter = 'All';
 
+            function populateStrategyClientDropdown(selectedValue = '') {
+                const clientSelect = document.getElementById('strategy-client');
+                if (!clientSelect) return;
+
+                const clientSet = new Set();
+                if (typeof customClients !== 'undefined' && Array.isArray(customClients)) {
+                    customClients.forEach(c => { if (c && c !== 'All' && c !== 'Others') clientSet.add(c.trim()); });
+                }
+                if (typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS)) {
+                    CLIENTS.forEach(c => { if (c && c !== 'All' && c !== 'Others') clientSet.add(c.trim()); });
+                }
+                if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                    tasks.forEach(t => { if (t.client && t.client !== 'Others' && t.client !== 'All') clientSet.add(t.client.trim()); });
+                }
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => { if (ev.client && ev.client !== 'General' && ev.client !== 'All' && ev.client !== 'Others') clientSet.add(ev.client.trim()); });
+                }
+                if (selectedValue && selectedValue !== 'All' && selectedValue !== 'Others') {
+                    clientSet.add(selectedValue.trim());
+                }
+
+                const sortedClients = Array.from(clientSet).sort((a, b) => a.localeCompare(b));
+
+                let html = '<option value="">-- General / No Client --</option>';
+                sortedClients.forEach(c => {
+                    html += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+                });
+
+                clientSelect.innerHTML = html;
+
+                if (selectedValue && selectedValue !== 'All') {
+                    const targetVal = selectedValue.trim();
+                    const options = Array.from(clientSelect.options);
+                    const match = options.find(opt => opt.value === targetVal) ||
+                                  options.find(opt => opt.value.toLowerCase() === targetVal.toLowerCase());
+                    if (match) {
+                        clientSelect.value = match.value;
+                    } else {
+                        clientSelect.value = '';
+                    }
+                } else {
+                    clientSelect.value = '';
+                }
+            }
+            window.populateStrategyClientDropdown = populateStrategyClientDropdown;
+
             async function initStrategyCalendar() {
                 console.time('[PERF] initStrategyCalendar');
                 
@@ -15040,16 +15086,7 @@
                 }
 
                 // Populating clients dropdown in modal
-                const clientSelect = document.getElementById('strategy-client');
-                if (clientSelect) {
-                    const clientOptions = '<option value="">-- General / No Client --</option>' + customClients.map(c => `
-                    <option value="${escapeHtml(c)}">${escapeHtml(c)}</option>
-                `).join('');
-                    clientSelect.innerHTML = clientOptions;
-                    console.log('[initStrategyCalendar] Client dropdown populated with', customClients.length, 'clients');
-                } else {
-                    console.warn('[initStrategyCalendar] Client select element not found');
-                }
+                populateStrategyClientDropdown(typeof activeStrategyClientFilter !== 'undefined' ? activeStrategyClientFilter : '');
 
                 if (!db) {
                     console.timeEnd('[PERF] initStrategyCalendar');
@@ -16076,7 +16113,7 @@
                 document.getElementById('strategy-owner').value = '';
                 
                 const defaultClient = (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '';
-                document.getElementById('strategy-client').value = defaultClient;
+                populateStrategyClientDropdown(defaultClient);
 
                 document.getElementById('strategy-status').value = 'To Do';
                 const descEl = document.getElementById('strategy-desc');
@@ -16169,7 +16206,8 @@
                     document.getElementById('strategy-title').value = ev.title || '';
                     document.getElementById('strategy-date').value = ev.date || '';
                     document.getElementById('strategy-owner').value = ev.owner || '';
-                    document.getElementById('strategy-client').value = ev.client || '';
+                    
+                    populateStrategyClientDropdown(ev.client || '');
                     
                     // Handle videos and posters count
                     const videosCountEl = document.getElementById('strategy-videos-count');

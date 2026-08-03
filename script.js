@@ -2594,8 +2594,12 @@ if (initializeApp) {
         document.getElementById('strategy-owner').value = '';
         
         const defaultClient = (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '';
-        const clientEl = document.getElementById('strategy-client');
-        if (clientEl) clientEl.value = defaultClient;
+        if (typeof populateStrategyClientDropdown === 'function') {
+            populateStrategyClientDropdown(defaultClient);
+        } else {
+            const clientEl = document.getElementById('strategy-client');
+            if (clientEl) clientEl.value = defaultClient;
+        }
 
         const descEl = document.getElementById('strategy-desc');
         if (descEl) descEl.value = '';
