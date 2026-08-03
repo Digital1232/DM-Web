@@ -15537,10 +15537,47 @@
                     });
                 }
 
-                // CRITICAL CHANGE: Build calendar from JIRA tasks ONLY (exclude internal tasks)
-                // Get all tasks and group by due date
+                // Build calendar from Strategy Events and Jira tasks (excluding internal & duplicates)
                 const tasksByDate = {};
                 
+                const strategyJiraIds = new Set();
+                if (strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        const jId = ev.jiraId || ev.jiraTaskId;
+                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                    });
+                }
+
+                // 1. Process Strategy Events first (master items on Strategy Calendar)
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+                    if (!ev.date) return;
+
+                    // Filter by client
+                    if (activeStrategyClientFilter !== 'All') {
+                        const eventClient = ev.client || 'General';
+                        if (eventClient !== activeStrategyClientFilter) {
+                            return; // Skip this event
+                        }
+                    }
+
+                    // Only include if date is in current month
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    const dateStr = ev.date;
+                    if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+                    
+                    tasksByDate[dateStr].push({
+                        id: id,
+                        title: ev.title,
+                        client: ev.client || 'General',
+                        status: ev.status || 'To Do',
+                        jiraId: ev.jiraId || ev.jiraTaskId,
+                        isStrategyEvent: true
+                    });
+                });
+
+                // 2. Process Jira tasks (only add Jira tasks that do NOT belong to a Strategy Event)
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
                         // Filter: Only Jira tasks (not manual, not internal)
@@ -15561,6 +15598,23 @@
                             const [ty, tm, td] = task.duedate.split('-').map(Number);
                             if (tm - 1 === month && ty === year) {
                                 const dateStr = task.duedate;
+                                
+                                // Deduplication check: Skip if task is linked to a Strategy Event
+                                const lowerTaskId = task.id.toLowerCase().trim();
+                                if (strategyJiraIds.has(lowerTaskId)) {
+                                    return; // Already rendered as Strategy Event
+                                }
+
+                                const dayList = tasksByDate[dateStr] || [];
+                                const matchesTitleClient = dayList.some(item => 
+                                    item.title && task.desc && 
+                                    item.title.toLowerCase().trim() === task.desc.toLowerCase().trim() && 
+                                    (item.client || '').toLowerCase().trim() === (task.client || '').toLowerCase().trim()
+                                );
+                                if (matchesTitleClient) {
+                                    return; // Already rendered as Strategy Event
+                                }
+
                                 if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
                                 tasksByDate[dateStr].push({
                                     id: task.id,
@@ -15574,39 +15628,6 @@
                         }
                     });
                 }
-
-                // Also include strategy events (for backwards compatibility)
-                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
-                    if (!ev.date) return;
-
-                    // Filter by client
-                    if (activeStrategyClientFilter !== 'All') {
-                        const eventClient = ev.client || 'General';
-                        if (eventClient !== activeStrategyClientFilter) {
-                            return; // Skip this event
-                        }
-                    }
-
-                    // Only include if date is in current month
-                    const [ey, em, ed] = ev.date.split('-').map(Number);
-                    if (em - 1 !== month || ey !== year) return;
-
-                    const dateStr = ev.date;
-                    if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
-                    
-                    // Check if this event is already added from Jira
-                    const alreadyAdded = tasksByDate[dateStr].some(t => t.id === ev.jiraId && t.isJiraTask);
-                    if (!alreadyAdded) {
-                        tasksByDate[dateStr].push({
-                            id: id,
-                            title: ev.title,
-                            client: ev.client || 'General',
-                            status: ev.status || 'To Do',
-                            jiraId: ev.jiraId,
-                            isStrategyEvent: true
-                        });
-                    }
-                });
 
                 const totalTasks = Object.values(tasksByDate).reduce((sum, arr) => sum + arr.length, 0);
                 console.log(`[renderStrategyCalendar] Showing ${totalTasks} Jira tasks (Filter: ${activeStrategyClientFilter})`);
@@ -15671,9 +15692,46 @@
                 const month = strategyCurrentDate.getMonth();
                 const year = strategyCurrentDate.getFullYear();
 
-                // Collect JIRA tasks for current month (EXCLUDE INTERNAL TASKS)
+                // Collect Strategy Events and Jira tasks for current month (excluding internal & duplicates)
                 const activeMonthTasks = [];
                 
+                const strategyJiraIds = new Set();
+                if (strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        const jId = ev.jiraId || ev.jiraTaskId;
+                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                    });
+                }
+
+                // 1. Process Strategy Events first
+                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
+                    Object.entries(strategyEvents).forEach(([id, ev]) => {
+                        if (!ev.date) return;
+                        
+                        const [ey, em, ed] = ev.date.split('-').map(Number);
+                        if (em - 1 !== month || ey !== year) return;
+
+                        // Filter by client
+                        if (activeStrategyClientFilter !== 'All') {
+                            const eventClient = ev.client || 'General';
+                            if (eventClient !== activeStrategyClientFilter) return;
+                        }
+
+                        activeMonthTasks.push({
+                            id: id,
+                            date: ev.date,
+                            title: ev.title,
+                            client: ev.client || 'General',
+                            status: ev.status || 'To Do',
+                            desc: ev.desc || 'No goal described.',
+                            owner: ev.owner,
+                            jiraId: ev.jiraId || ev.jiraTaskId,
+                            isStrategyEvent: true
+                        });
+                    });
+                }
+
+                // 2. Process Jira tasks (excluding ones linked to Strategy Events)
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
                         // Filter: Skip manual and internal tasks
@@ -15692,6 +15750,16 @@
                             if (taskClient !== activeStrategyClientFilter) return;
                         }
 
+                        const lowerTaskId = task.id.toLowerCase().trim();
+                        if (strategyJiraIds.has(lowerTaskId)) return;
+
+                        const matchesTitleClient = activeMonthTasks.some(item => 
+                            item.title && task.desc && 
+                            item.title.toLowerCase().trim() === task.desc.toLowerCase().trim() && 
+                            (item.client || '').toLowerCase().trim() === (task.client || '').toLowerCase().trim()
+                        );
+                        if (matchesTitleClient) return;
+
                         activeMonthTasks.push({
                             id: task.id,
                             date: task.duedate,
@@ -15702,37 +15770,6 @@
                             owner: task.assignee || 'Unassigned',
                             isJiraTask: true
                         });
-                    });
-                }
-
-                // Also collect strategy events (for backwards compatibility)
-                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
-                    Object.entries(strategyEvents).forEach(([id, ev]) => {
-                        if (!ev.date) return;
-                        
-                        const [ey, em, ed] = ev.date.split('-').map(Number);
-                        if (em - 1 !== month || ey !== year) return;
-
-                        // Filter by client
-                        if (activeStrategyClientFilter !== 'All') {
-                            const eventClient = ev.client || 'General';
-                            if (eventClient !== activeStrategyClientFilter) return;
-                        }
-
-                        // Check if this event is already added from Jira
-                        const alreadyAdded = activeMonthTasks.some(t => t.id === ev.jiraId && t.isJiraTask);
-                        if (!alreadyAdded) {
-                            activeMonthTasks.push({
-                                id: id,
-                                date: ev.date,
-                                title: ev.title,
-                                client: ev.client || 'General',
-                                status: ev.status || 'To Do',
-                                desc: ev.desc || 'No goal described.',
-                                owner: ev.owner,
-                                isStrategyEvent: true
-                            });
-                        }
                     });
                 }
 
