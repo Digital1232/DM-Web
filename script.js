@@ -151,8 +151,8 @@ if (initializeApp) {
 
     const JIRA = {
         domain: 'vilpowerdigitalmarketing.atlassian.net',
-        projectKey: 'JULY',
-        projectKeys: ['JULY'],
+        projectKey: 'AUG',
+        projectKeys: ['MAY', 'JUN', 'JULY', 'AUG'],
         apiUrl: '/api/jira',
         gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
         useLocalApi: false
@@ -2702,7 +2702,10 @@ if (initializeApp) {
                         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     };
                     const taskDueDate = date;
-                    const projectKey = 'JULY';
+                    const isAug = date && date.split('-')[1] === '08';
+                    const isJuly = date && date.split('-')[1] === '07';
+                    const isJune = date && date.split('-')[1] === '06';
+                    const projectKey = isAug ? 'AUG' : (isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey));
                     const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                     const jiraPayload = {
                         fields: {
@@ -3290,7 +3293,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
             if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
         }
         try {
-            const projectKeys = JIRA.projectKeys || ['JUN', 'JULY'];
+            const projectKeys = JIRA.projectKeys || ['MAY', 'JUN', 'JULY', 'AUG'];
             const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
             const manualTasks = tasks.filter(t => t.manual);
 
@@ -9259,7 +9262,8 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             let createdTaskId = null;
 
             if (platform === 'jira') {
-                const projectKey = 'JULY';
+                const curMonth = new Date().getMonth(); // 7 is August
+                const projectKey = curMonth === 7 ? 'AUG' : (curMonth === 6 ? 'JULY' : (curMonth === 5 ? 'JUN' : JIRA.projectKey));
                 const url = `https://${JIRA.domain}/rest/api/3/issue`;
                 const payload = {
                     fields: {

@@ -25,8 +25,8 @@ export function knownUserByEmail(email) { return USERS.find(u => u.email.toLower
 
 export const JIRA = {
     domain: 'vilpowerdigitalmarketing.atlassian.net',
-    projectKey: 'JULY',
-    projectKeys: ['JULY'],
+    projectKey: 'AUG',
+    projectKeys: ['MAY', 'JUN', 'JULY', 'AUG'],
     apiUrl: '/api/jira',
     gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
     useLocalApi: false
