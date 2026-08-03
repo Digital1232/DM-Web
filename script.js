@@ -3355,10 +3355,29 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
                 });
             }
 
-            tasks = mergeTasksById(Array.from(taskMap.values()));
+            function safeSetLocalStorage(key, value) {
+                try {
+                    localStorage.setItem(key, value);
+                } catch (e) {
+                    console.warn(`[localStorage] QuotaExceeded error when setting key "${key}". Attempting cache cleanup...`, e);
+                    try {
+                        const keysToRemove = [];
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const k = localStorage.key(i);
+                            if (k && k !== key && (k.startsWith('worksync_cache_') || k.startsWith('worksync_report') || k.startsWith('contentType') || k.includes('toasted') || k.includes('log'))) {
+                                keysToRemove.push(k);
+                            }
+                        }
+                        keysToRemove.forEach(k => localStorage.removeItem(k));
+                        localStorage.setItem(key, value);
+                    } catch (retryErr) {
+                        console.warn(`[localStorage] Storage quota full. Skipped caching "${key}":`, retryErr);
+                    }
+                }
+            }
 
-            localStorage.setItem('worksync_tasks', JSON.stringify(tasks));
-            localStorage.setItem('worksync_lastSync', Date.now().toString());
+            safeSetLocalStorage('worksync_tasks', JSON.stringify(tasks));
+            safeSetLocalStorage('worksync_lastSync', Date.now().toString());
 
             populateAssigneeFilter();
             renderTasks(); updateStats();
