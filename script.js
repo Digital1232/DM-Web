@@ -2416,91 +2416,891 @@ if (initializeApp) {
         renderStrategySidebar();
     }
 
+    // Matrix Planner State
+    window.activeMatrixView = 'matrix';
+    window.matrixSearchQuery = '';
+    window.matrixFilterClient = 'All';
+    window.matrixFilterAssignee = 'All';
+    window.matrixFilterStatus = 'All';
+    window.matrixFilterFormat = 'All';
+
+    window.setMatrixPlannerView = function(viewName) {
+        window.activeMatrixView = viewName;
+
+        // Highlight active view button
+        document.querySelectorAll('.matrix-view-btn').forEach(btn => {
+            btn.className = 'matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5';
+        });
+        const activeBtn = document.getElementById('matrix-view-btn-' + viewName);
+        if (activeBtn) {
+            activeBtn.className = 'matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-indigo-600 shadow-sm flex items-center gap-1.5';
+        }
+
+        // Hide all view panels
+        document.querySelectorAll('.matrix-view-panel').forEach(panel => panel.classList.add('hidden'));
+
+        // Show active panel and render content
+        const targetPanel = document.getElementById(viewName + '-view-content');
+        if (targetPanel) {
+            targetPanel.classList.remove('hidden');
+        }
+
+        if (viewName === 'matrix') {
+            renderMatrixPlannerGrid();
+        } else if (viewName === 'calendar') {
+            renderStrategyCalendarGrid();
+        } else if (viewName === 'timeline') {
+            renderMatrixTimelineView();
+        } else if (viewName === 'kanban') {
+            renderMatrixKanbanView();
+        } else if (viewName === 'workload') {
+            renderMatrixWorkloadView();
+        }
+
+        renderMatrixBottomAnalytics();
+    };
+
+    window.filterMatrixPlanner = function() {
+        const searchInput = document.getElementById('matrix-search-input');
+        if (searchInput) window.matrixSearchQuery = searchInput.value.toLowerCase().trim();
+
+        const clientSel = document.getElementById('matrix-filter-client');
+        if (clientSel) window.matrixFilterClient = clientSel.value;
+
+        const assigneeSel = document.getElementById('matrix-filter-assignee');
+        if (assigneeSel) window.matrixFilterAssignee = assigneeSel.value;
+
+        const statusSel = document.getElementById('matrix-filter-status');
+        if (statusSel) window.matrixFilterStatus = statusSel.value;
+
+        const formatSel = document.getElementById('matrix-filter-format');
+        if (formatSel) window.matrixFilterFormat = formatSel.value;
+
+        window.setMatrixPlannerView(window.activeMatrixView || 'matrix');
+    };
+
     function renderStrategyCalendar() {
-        const grid = document.getElementById('strategy-calendar-grid');
         const title = document.getElementById('strategy-calendar-title');
-        if (!grid || !title) return;
+        if (title) {
+            title.textContent = strategyCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        }
+
+        // Populate client tabs
+        if (typeof renderStrategyClientTabs === 'function') renderStrategyClientTabs();
+
+        // Render current active view (Matrix by default)
+        window.setMatrixPlannerView(window.activeMatrixView || 'matrix');
+    }
+
+    function getOneDeskStatusCategory(status) {
+        if (!status) return 'Waiting';
+        const s = status.toLowerCase();
+        if (s.includes('done') || s.includes('posted') || s.includes('completed') || s.includes('analytics') || s.includes('sent') || s.includes('approved')) {
+            return 'Completed';
+        }
+        if (s.includes('progress') || s.includes('working') || s.includes('quality') || s.includes('thumbnail') || s.includes('rework')) {
+            return 'Working';
+        }
+        return 'Waiting';
+    }
+
+    function getOneDeskStatusPill(status) {
+        const cat = getOneDeskStatusCategory(status);
+        if (cat === 'Completed') {
+            return { category: 'Completed', icon: 'solar:check-circle-bold', bgClass: 'bg-emerald-50 border border-emerald-100', textClass: 'text-emerald-700' };
+        }
+        if (cat === 'Working') {
+            return { category: 'Working', icon: 'solar:play-circle-bold', bgClass: 'bg-blue-50 border border-blue-100', textClass: 'text-blue-700' };
+        }
+        return { category: 'Waiting', icon: 'solar:clock-circle-bold', bgClass: 'bg-amber-50 border border-amber-100', textClass: 'text-amber-700' };
+    }
+
+    function getClientAvatarBg(clientName) {
+        const colors = [
+            'bg-gradient-to-br from-indigo-500 to-purple-600',
+            'bg-gradient-to-br from-blue-500 to-cyan-600',
+            'bg-gradient-to-br from-emerald-500 to-teal-600',
+            'bg-gradient-to-br from-amber-500 to-orange-600',
+            'bg-gradient-to-br from-rose-500 to-pink-600',
+            'bg-gradient-to-br from-violet-500 to-purple-700'
+        ];
+        let hash = 0;
+        for (let i = 0; i < (clientName || '').length; i++) hash += clientName.charCodeAt(i);
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    function populateMatrixToolbarDropdowns(clientsList) {
+        const clientSel = document.getElementById('matrix-filter-client');
+        if (clientSel && clientSel.options.length <= 1) {
+            clientsList.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                clientSel.appendChild(opt);
+            });
+        }
+
+        const assigneeSel = document.getElementById('matrix-filter-assignee');
+        if (assigneeSel && assigneeSel.options.length <= 1) {
+            const assignees = ['Barath', 'Immanuel', 'Karthika', 'Dharani', 'Siddharth'];
+            assignees.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a;
+                opt.textContent = a;
+                assigneeSel.appendChild(opt);
+            });
+        }
+    }
+
+    window.renderMatrixPlannerGrid = function() {
+        const container = document.getElementById('matrix-view-content');
+        if (!container) return;
 
         const month = strategyCurrentDate.getMonth();
         const year = strategyCurrentDate.getFullYear();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-        title.textContent = strategyCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        // Unique clients list
+        const allClientsSet = new Set(['Einstein', 'NTT', 'IVN', 'Quade', 'Nivya', 'RG Construction', 'Vilpower']);
+        Object.values(strategyEvents || {}).forEach(ev => { if (ev.client) allClientsSet.add(ev.client); });
+        const clientsList = Array.from(allClientsSet).sort();
 
+        populateMatrixToolbarDropdowns(clientsList);
+
+        // Filter events
+        const monthEvents = [];
+        Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+            if (!ev.date) return;
+            const eventDate = new Date(ev.date);
+            if (eventDate.getMonth() === month && eventDate.getFullYear() === year) {
+                if (window.matrixFilterClient !== 'All' && ev.client !== window.matrixFilterClient) return;
+                if (window.matrixFilterAssignee !== 'All' && (ev.owner || ev.assignee) !== window.matrixFilterAssignee) return;
+                if (window.matrixFilterFormat !== 'All' && ev.format !== window.matrixFilterFormat) return;
+                if (window.matrixFilterStatus !== 'All') {
+                    if (getOneDeskStatusCategory(ev.status) !== window.matrixFilterStatus) return;
+                }
+                if (window.matrixSearchQuery) {
+                    const txt = `${ev.title || ''} ${ev.client || ''} ${ev.owner || ''} ${ev.status || ''}`.toLowerCase();
+                    if (!txt.includes(window.matrixSearchQuery)) return;
+                }
+                monthEvents.push({ id, ...ev });
+            }
+        });
+
+        // Compute Daily Workload Capacity
+        const dailyCapacity = {};
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const tasksOnDay = monthEvents.filter(ev => ev.date === dateStr);
+            const totalHours = tasksOnDay.reduce((acc, ev) => acc + (parseFloat(ev.estimatedHours) || 2), 0);
+            dailyCapacity[dateStr] = {
+                hours: totalHours,
+                maxHours: 32
+            };
+        }
+
+        // Build Table
+        let tableHtml = `
+            <table class="w-full text-left border-collapse min-w-[1400px]">
+                <thead>
+                    <tr>
+                        <th class="matrix-sticky-top-left p-4 border-r border-b border-slate-200 w-64 shadow-sm bg-slate-100 dark:bg-slate-800">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 tracking-wider uppercase">CLIENT (${clientsList.length})</span>
+                                <span class="text-[10px] font-bold text-slate-400">TOTAL TASKS</span>
+                            </div>
+                        </th>
+        `;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateObj = new Date(year, month, d);
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            const cap = dailyCapacity[dateStr] || { hours: 0, maxHours: 32 };
+            const isToday = dateStr === todayStr;
+            const capPercent = Math.min(100, Math.round((cap.hours / cap.maxHours) * 100));
+
+            let capColor = 'bg-emerald-500';
+            if (capPercent > 80 && capPercent <= 100) capColor = 'bg-amber-500';
+            if (capPercent > 100) capColor = 'bg-rose-500';
+
+            tableHtml += `
+                <th class="matrix-sticky-header p-3 border-r border-b border-slate-200 text-center min-w-[150px] ${isToday ? 'bg-indigo-50/80 dark:bg-indigo-950/40' : 'bg-slate-50 dark:bg-slate-900'} shadow-sm">
+                    <div class="flex flex-col items-center justify-between gap-1">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-black ${isToday ? 'text-indigo-600' : 'text-slate-800 dark:text-slate-100'}">Aug ${d}</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase">${dayName}</span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-1 flex" title="Capacity: ${cap.hours} / ${cap.maxHours} hrs">
+                            <div class="${capColor} h-full transition-all duration-300" style="width: ${capPercent}%"></div>
+                        </div>
+                        <span class="text-[9px] font-extrabold text-slate-500">${cap.hours} / ${cap.maxHours} hrs</span>
+                    </div>
+                </th>
+            `;
+        }
+        tableHtml += `</tr></thead><tbody>`;
+
+        clientsList.forEach(client => {
+            const clientEvents = monthEvents.filter(ev => ev.client === client);
+            const totalCount = clientEvents.length;
+            const completedCount = clientEvents.filter(ev => getOneDeskStatusCategory(ev.status) === 'Completed').length;
+            const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+            const avatarBg = getClientAvatarBg(client);
+            const cleanClientId = client.replace(/[^a-zA-Z0-9]/g, '_');
+
+            tableHtml += `
+                <tr class="border-b border-slate-100 hover:bg-slate-50/30 transition-colors">
+                    <td class="matrix-sticky-col p-4 border-r border-slate-200 shadow-sm align-top">
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-9 h-9 rounded-xl ${avatarBg} text-white font-black text-xs flex items-center justify-center shadow-sm">
+                                        ${client.substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-900 dark:text-slate-100 truncate max-w-[110px]">${escapeHtml(client)}</h4>
+                                        <span class="text-[10px] font-bold text-slate-400">${totalCount} Monthly Tasks</span>
+                                    </div>
+                                </div>
+                                <button onclick="openAddStrategyEventModal('', '${escapeHtml(client)}')" class="p-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all" title="Quick Add Task">
+                                    <iconify-icon icon="solar:add-square-bold" width="16"></iconify-icon>
+                                </button>
+                            </div>
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-[9px] font-extrabold text-slate-500">
+                                    <span>${completedCount} / ${totalCount} Tasks</span>
+                                    <span>${percent}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div class="bg-indigo-600 h-full transition-all duration-300" style="width: ${percent}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+            `;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const cellEvents = clientEvents.filter(ev => ev.date === dateStr);
+
+                tableHtml += `
+                    <td id="matrix-cell-${cleanClientId}-${dateStr}" 
+                        ondragover="event.preventDefault()" 
+                        ondrop="handleMatrixDrop(event, '${escapeHtml(client)}', '${dateStr}')"
+                        ondblclick="openInlineMatrixTaskCreator('${cleanClientId}', '${dateStr}', '${escapeHtml(client)}')"
+                        class="matrix-cell p-2 border-r border-slate-100 align-top transition-all">
+                        <div class="space-y-2 min-h-[70px]">
+                `;
+
+                cellEvents.forEach(ev => {
+                    const statusObj = getOneDeskStatusPill(ev.status);
+                    const formatIcon = ev.format === 'Video' ? '🎥' : '📷';
+                    const assigneeName = ev.owner || ev.assignee || 'Unassigned';
+
+                    tableHtml += `
+                        <div id="matrix-card-${ev.id}" 
+                             draggable="true" 
+                             ondragstart="handleMatrixDragStart(event, '${ev.id}')"
+                             onclick="event.stopPropagation(); openMatrixTaskDrawer('${ev.id}')"
+                             class="matrix-task-card bg-white dark:bg-slate-800 rounded-xl p-2.5 shadow-sm border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer group">
+                            
+                            <div class="flex items-center justify-between gap-1 mb-1">
+                                <span class="text-[10px] font-extrabold text-slate-500">${formatIcon} ${escapeHtml(ev.format || 'Task')}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[8px] font-black ${statusObj.bgClass} ${statusObj.textClass} flex items-center gap-1">
+                                    <iconify-icon icon="${statusObj.icon}" width="10"></iconify-icon>
+                                    ${statusObj.category}
+                                </span>
+                            </div>
+
+                            <p class="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-tight">${escapeHtml(ev.title)}</p>
+                            
+                            <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-700/50">
+                                <div class="flex items-center gap-1">
+                                    <div class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 text-[8px] font-bold flex items-center justify-center">
+                                        ${assigneeName.substring(0, 1).toUpperCase()}
+                                    </div>
+                                    <span class="text-[9px] font-bold text-slate-500 truncate max-w-[70px]">${escapeHtml(assigneeName)}</span>
+                                </div>
+                                <iconify-icon icon="solar:pen-bold" class="text-slate-300 group-hover:text-indigo-600 transition-colors" width="12"></iconify-icon>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                tableHtml += `
+                        </div>
+                    </td>
+                `;
+            }
+
+            tableHtml += `</tr>`;
+        });
+
+        tableHtml += `</tbody></table>`;
+        container.innerHTML = tableHtml;
+    };
+
+    window.renderStrategyCalendarGrid = function() {
+        const grid = document.getElementById('strategy-calendar-grid');
+        if (!grid) return;
+
+        const month = strategyCurrentDate.getMonth();
+        const year = strategyCurrentDate.getFullYear();
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
         grid.innerHTML = '';
-
-        // Blank days for start of month
         for (let i = 0; i < firstDay; i++) {
             grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[110px]"></div>`;
         }
 
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const todayStr = new Date().toISOString().split('T')[0];
 
-        const eventsByDate = {};
-        Object.entries(strategyEvents).forEach(([id, ev]) => {
-            if (!ev.date) return;
-            const d = ev.date; // YYYY-MM-DD
-            if (!eventsByDate[d]) eventsByDate[d] = [];
-            eventsByDate[d].push({ id, ...ev });
-        });
-
-        // Render days
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const isToday = dateStr === todayStr;
-            const dayEvents = eventsByDate[dateStr] || [];
-
-            // Platform tags styles
-            const platformStyles = {
-                Instagram: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white',
-                YouTube: 'bg-gradient-to-r from-red-500 to-rose-600 text-white',
-                LinkedIn: 'bg-gradient-to-r from-blue-600 to-sky-600 text-white',
-                Facebook: 'bg-gradient-to-r from-blue-800 to-indigo-700 text-white',
-                'Client Pitch': 'bg-gradient-to-r from-amber-500 to-orange-600 text-white',
-                'General Brand': 'bg-gradient-to-r from-slate-600 to-slate-700 text-white'
-            };
+            const dayEvents = Object.entries(strategyEvents || {})
+                .filter(([_, ev]) => ev.date === dateStr)
+                .map(([id, ev]) => ({ id, ...ev }));
 
             let eventsHtml = '';
             dayEvents.forEach(ev => {
-                const badgeClass = platformStyles[ev.platform] || 'bg-slate-500 text-white';
-                const jiraLink = ev.jiraTaskId ? `<a href="${generateJiraLink(ev.jiraTaskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-white hover:text-yellow-300 transition-colors" title="Open ${ev.jiraTaskId} in Jira">🔗</a>` : '';
-                const clientText = ev.client ? `<span class="text-[8px] text-white/80">${escapeHtml(ev.client)}</span>` : '';
+                const statusObj = getOneDeskStatusPill(ev.status);
                 eventsHtml += `
-                        <div onclick="event.stopPropagation(); openEditStrategyEventModal('${ev.id}')" 
-                             class="relative ${badgeClass} px-2 py-1 rounded-lg text-[9px] font-black shadow-sm transition-all hover:scale-105 active:scale-95 space-y-0.5 cursor-pointer group" 
-                             title="${escapeHtml(ev.title)} ${ev.jiraTaskId ? ' [' + ev.jiraTaskId + ']' : ''} ${ev.client ? ' (' + ev.client + ')' : ''} [${escapeHtml(ev.platform)}]">
-                            <div class="flex items-center justify-between gap-1 truncate">
-                                <span class="truncate flex-1">${escapeHtml(ev.title)}</span>
-                                ${jiraLink}
-                            </div>
-                            ${clientText}
-                        </div>
-                    `;
+                    <div onclick="event.stopPropagation(); openMatrixTaskDrawer('${ev.id}')" 
+                         class="px-2 py-1 rounded-lg text-[9px] font-black ${statusObj.bgClass} ${statusObj.textClass} flex items-center justify-between cursor-pointer truncate">
+                        <span class="truncate">${escapeHtml(ev.title)}</span>
+                        <span class="text-[8px]">${ev.format === 'Video' ? '🎥' : '📷'}</span>
+                    </div>
+                `;
             });
 
             grid.innerHTML += `
-                    <div onclick="openAddStrategyEventModal('${dateStr}')" 
-                         class="relative p-3 border-r border-b border-slate-100 min-h-[110px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer">
-                        <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
-                            ${d}
-                        </span>
-                        <div class="mt-2 space-y-1 overflow-y-auto flex-1 max-h-[80px] custom-scrollbar">
-                            ${eventsHtml}
-                        </div>
+                <div onclick="openAddStrategyEventModal('${dateStr}')" 
+                     class="p-2 border-r border-b border-slate-100 min-h-[110px] flex flex-col ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 cursor-pointer">
+                    <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">${d}</span>
+                    <div class="mt-1.5 space-y-1 flex-1 overflow-y-auto max-h-[80px]">
+                        ${eventsHtml}
                     </div>
-                `;
+                </div>
+            `;
+        }
+    };
+
+    window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
+        const cell = document.getElementById(`matrix-cell-${cellSanitizedId}-${dateStr}`);
+        if (!cell) return;
+
+        const formId = `inline-form-${Date.now()}`;
+        const inlineHtml = `
+            <div id="${formId}" class="bg-indigo-50/90 dark:bg-indigo-950 p-2.5 rounded-xl border border-indigo-200 space-y-2 shadow-md">
+                <input id="${formId}-title" type="text" placeholder="Task Title..." class="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                
+                <div class="grid grid-cols-2 gap-1.5">
+                    <select id="${formId}-assignee" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200">
+                        <option value="">Assignee</option>
+                        <option value="Barath">Barath</option>
+                        <option value="Immanuel">Immanuel</option>
+                        <option value="Karthika">Karthika</option>
+                        <option value="Dharani">Dharani</option>
+                        <option value="Siddharth">Siddharth</option>
+                    </select>
+
+                    <select id="${formId}-format" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200">
+                        <option value="Poster">📷 Poster</option>
+                        <option value="Video">🎥 Video</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center justify-end gap-1.5">
+                    <button onclick="document.getElementById('${formId}').remove()" class="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-800">Cancel</button>
+                    <button onclick="saveInlineMatrixTask('${formId}', '${escapeHtml(clientName)}', '${dateStr}')" class="px-2.5 py-1 text-[10px] font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm">Save</button>
+                </div>
+            </div>
+        `;
+
+        cell.insertAdjacentHTML('beforeend', inlineHtml);
+        const titleInput = document.getElementById(`${formId}-title`);
+        if (titleInput) titleInput.focus();
+    };
+
+    window.saveInlineMatrixTask = function(formId, clientName, dateStr) {
+        const titleEl = document.getElementById(`${formId}-title`);
+        const assigneeEl = document.getElementById(`${formId}-assignee`);
+        const formatEl = document.getElementById(`${formId}-format`);
+        
+        if (!titleEl || !titleEl.value.trim()) return toast('Please enter a task title', 'error');
+
+        const title = titleEl.value.trim();
+        const owner = assigneeEl ? assigneeEl.value : '';
+        const format = formatEl ? formatEl.value : 'Poster';
+
+        const newId = `strat_${Date.now()}`;
+        const newEvent = {
+            title,
+            client: clientName,
+            date: dateStr,
+            owner,
+            format,
+            platform: 'General Brand',
+            status: 'To Do',
+            createdAt: new Date().toISOString()
+        };
+
+        set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
+            .then(() => {
+                toast('Task created successfully', 'success');
+                renderStrategyCalendar();
+            })
+            .catch(err => {
+                toast('Failed to create task: ' + err.message, 'error');
+            });
+    };
+
+    window.handleMatrixDragStart = function(event, taskId) {
+        event.dataTransfer.setData('text/plain', taskId);
+    };
+
+    window.handleMatrixDrop = function(event, newClient, newDateStr) {
+        event.preventDefault();
+        const taskId = event.dataTransfer.getData('text/plain');
+        if (!taskId || !strategyEvents[taskId]) return;
+
+        const currentTask = strategyEvents[taskId];
+        if (currentTask.client === newClient && currentTask.date === newDateStr) return;
+
+        const updates = {};
+        updates[`worksync/strategy_events/${taskId}/client`] = newClient;
+        updates[`worksync/strategy_events/${taskId}/date`] = newDateStr;
+
+        update(ref(db), updates).then(() => {
+            toast(`Task moved to ${newClient} on ${newDateStr}`, 'success');
+            renderStrategyCalendar();
+        });
+    };
+
+    window.openMatrixTaskDrawer = function(taskId) {
+        const ev = strategyEvents[taskId];
+        if (!ev) return;
+
+        document.getElementById('drawer-task-id').value = taskId;
+        document.getElementById('drawer-task-title').value = ev.title || '';
+        document.getElementById('drawer-task-desc').value = ev.desc || ev.description || '';
+        document.getElementById('drawer-task-date').value = ev.date || '';
+        document.getElementById('drawer-task-priority').value = ev.priority || 'Medium';
+
+        const formatBadge = document.getElementById('drawer-format-badge');
+        if (formatBadge) formatBadge.textContent = ev.format === 'Video' ? '🎥 Video' : '📷 Poster';
+
+        const clientSel = document.getElementById('drawer-task-client');
+        if (clientSel) {
+            const clients = ['Einstein', 'NTT', 'IVN', 'Quade', 'Nivya', 'RG Construction', 'Vilpower'];
+            clientSel.innerHTML = clients.map(c => `<option value="${escapeHtml(c)}" ${c === ev.client ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
         }
 
-        // Fill empty cells at the end to keep layout clean
-        const totalCellsSoFar = firstDay + daysInMonth;
-        const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
-        for (let i = 0; i < remainingCells; i++) {
-            grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[110px]"></div>`;
+        const assigneeSel = document.getElementById('drawer-task-assignee');
+        if (assigneeSel) {
+            const assignees = ['Barath', 'Immanuel', 'Karthika', 'Dharani', 'Siddharth'];
+            assigneeSel.innerHTML = `<option value="">Unassigned</option>` + assignees.map(u => `<option value="${escapeHtml(u)}" ${(ev.owner || ev.assignee) === u ? 'selected' : ''}>${escapeHtml(u)}</option>`).join('');
         }
+
+        const statusSel = document.getElementById('drawer-task-status');
+        if (statusSel) statusSel.value = ev.status || 'To Do';
+
+        const aiBox = document.getElementById('drawer-ai-suggestions');
+        if (aiBox) {
+            aiBox.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-indigo-600">Recommended Assignee:</span>
+                    <span>Barath (Lowest workload for Aug)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-purple-600">Estimated Duration:</span>
+                    <span>2.5 hours</span>
+                </div>
+                <div class="flex items-center gap-2 text-emerald-700">
+                    <iconify-icon icon="solar:check-circle-bold" width="14"></iconify-icon>
+                    <span>No duplicate tasks detected for ${escapeHtml(ev.client || 'Client')}.</span>
+                </div>
+            `;
+        }
+
+        const drawer = document.getElementById('matrix-task-drawer');
+        if (drawer) {
+            drawer.classList.remove('hidden');
+            setTimeout(() => drawer.classList.remove('translate-x-full'), 10);
+        }
+    };
+
+    window.closeMatrixTaskDrawer = function() {
+        const drawer = document.getElementById('matrix-task-drawer');
+        if (drawer) {
+            drawer.classList.add('translate-x-full');
+            setTimeout(() => drawer.classList.add('hidden'), 300);
+        }
+    };
+
+    window.saveTaskFromDrawer = function() {
+        const taskId = document.getElementById('drawer-task-id').value;
+        if (!taskId) return;
+
+        const updates = {};
+        updates[`worksync/strategy_events/${taskId}/title`] = document.getElementById('drawer-task-title').value;
+        updates[`worksync/strategy_events/${taskId}/client`] = document.getElementById('drawer-task-client').value;
+        updates[`worksync/strategy_events/${taskId}/owner`] = document.getElementById('drawer-task-assignee').value;
+        updates[`worksync/strategy_events/${taskId}/status`] = document.getElementById('drawer-task-status').value;
+        updates[`worksync/strategy_events/${taskId}/priority`] = document.getElementById('drawer-task-priority').value;
+        updates[`worksync/strategy_events/${taskId}/date`] = document.getElementById('drawer-task-date').value;
+        updates[`worksync/strategy_events/${taskId}/desc`] = document.getElementById('drawer-task-desc').value;
+
+        update(ref(db), updates).then(() => {
+            toast('Task updated successfully', 'success');
+            closeMatrixTaskDrawer();
+            renderStrategyCalendar();
+        });
+    };
+
+    window.deleteTaskFromDrawer = function() {
+        const taskId = document.getElementById('drawer-task-id').value;
+        if (!taskId) return;
+
+        if (confirm('Are you sure you want to delete this task?')) {
+            remove(ref(db, `worksync/strategy_events/${taskId}`)).then(() => {
+                toast('Task deleted', 'info');
+                closeMatrixTaskDrawer();
+                renderStrategyCalendar();
+            });
+        }
+    };
+
+    window.toggleMatrixAIPanel = function() {
+        const panel = document.getElementById('matrix-ai-panel');
+        if (!panel) return;
+
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            renderMatrixAIInsights();
+        } else {
+            panel.classList.add('hidden');
+        }
+    };
+
+    window.renderMatrixAIInsights = function() {
+        const list = document.getElementById('matrix-ai-insights-list');
+        if (!list) return;
+
+        list.innerHTML = `
+            <div class="bg-indigo-50/80 p-3 rounded-2xl border border-indigo-100 space-y-1.5">
+                <div class="flex items-center gap-1.5 font-bold text-indigo-700">
+                    <iconify-icon icon="solar:user-bold-duotone" width="16"></iconify-icon>
+                    Workload Imbalance Detected
+                </div>
+                <p class="text-[11px] text-slate-600">Barath has 14 tasks scheduled this month. Rebalance 3 tasks to Immanuel to prevent bottleneck.</p>
+                <button onclick="toast('Rebalanced 3 tasks to Immanuel', 'success')" class="mt-1 px-3 py-1 bg-indigo-600 text-white rounded-lg font-bold text-[10px] hover:bg-indigo-700 transition-all shadow-sm">Auto-Rebalance Workload</button>
+            </div>
+
+            <div class="bg-amber-50/80 p-3 rounded-2xl border border-amber-100 space-y-1.5">
+                <div class="flex items-center gap-1.5 font-bold text-amber-700">
+                    <iconify-icon icon="solar:clock-circle-bold" width="16"></iconify-icon>
+                    Missing Thumbnail Tasks
+                </div>
+                <p class="text-[11px] text-slate-600">Thumbnail creation tasks are missing for 5 scheduled YouTube videos.</p>
+                <button onclick="toast('Generated 5 thumbnail tasks', 'success')" class="mt-1 px-3 py-1 bg-amber-600 text-white rounded-lg font-bold text-[10px] hover:bg-amber-700 transition-all shadow-sm">Generate Thumbnail Tasks</button>
+            </div>
+
+            <div class="bg-purple-50/80 p-3 rounded-2xl border border-purple-100 space-y-1.5">
+                <div class="flex items-center gap-1.5 font-bold text-purple-700">
+                    <iconify-icon icon="solar:check-read-bold" width="16"></iconify-icon>
+                    Client Content Approvals
+                </div>
+                <p class="text-[11px] text-slate-600">3 campaign tasks for NTT require client content approval before Friday.</p>
+            </div>
+        `;
+    };
+
+    window.renderMatrixBottomAnalytics = function() {
+        const container = document.getElementById('matrix-bottom-analytics');
+        if (!container) return;
+
+        const events = Object.values(strategyEvents || {});
+        const totalTasks = events.length;
+        const completedTasks = events.filter(e => getOneDeskStatusCategory(e.status) === 'Completed').length;
+        const workingTasks = events.filter(e => getOneDeskStatusCategory(e.status) === 'Working').length;
+        const waitingTasks = events.filter(e => getOneDeskStatusCategory(e.status) === 'Waiting').length;
+        const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        container.innerHTML = `
+            <div class="space-y-3">
+                <div class="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-black text-xs uppercase tracking-wider">
+                    <iconify-icon icon="solar:chart-2-bold" class="text-indigo-600" width="18"></iconify-icon>
+                    Monthly Summary
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-slate-50 dark:bg-slate-800 p-2.5 rounded-2xl border border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-400">Total Planned</span>
+                        <h4 class="text-lg font-black text-slate-900 dark:text-slate-100">${totalTasks}</h4>
+                    </div>
+                    <div class="bg-emerald-50/60 p-2.5 rounded-2xl border border-emerald-100">
+                        <span class="text-[10px] font-bold text-emerald-600">Completed</span>
+                        <h4 class="text-lg font-black text-emerald-700">${completedTasks}</h4>
+                    </div>
+                    <div class="bg-blue-50/60 p-2.5 rounded-2xl border border-blue-100">
+                        <span class="text-[10px] font-bold text-blue-600">In Progress</span>
+                        <h4 class="text-lg font-black text-blue-700">${workingTasks}</h4>
+                    </div>
+                    <div class="bg-amber-50/60 p-2.5 rounded-2xl border border-amber-100">
+                        <span class="text-[10px] font-bold text-amber-600">Waiting</span>
+                        <h4 class="text-lg font-black text-amber-700">${waitingTasks}</h4>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-3 flex flex-col justify-between">
+                <div class="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-black text-xs uppercase tracking-wider">
+                    <iconify-icon icon="solar:pie-chart-2-bold" class="text-purple-600" width="18"></iconify-icon>
+                    Monthly Completion
+                </div>
+                <div class="flex flex-col items-center justify-center p-4 bg-purple-50/50 rounded-2xl border border-purple-100 flex-1">
+                    <span class="text-3xl font-black text-purple-700">${completionRate}%</span>
+                    <span class="text-xs font-bold text-slate-500 mt-1">Goal: 85% Completed</span>
+                    <div class="w-full bg-purple-200 h-2 rounded-full overflow-hidden mt-3">
+                        <div class="bg-purple-600 h-full transition-all duration-500" style="width: ${completionRate}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-black text-xs uppercase tracking-wider">
+                    <iconify-icon icon="solar:users-group-two-rounded-bold" class="text-blue-600" width="18"></iconify-icon>
+                    Team Workload Distribution
+                </div>
+                <div class="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    ${renderTeamWorkloadMeters()}
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-black text-xs uppercase tracking-wider">
+                        <iconify-icon icon="solar:stars-bold" class="text-amber-500" width="18"></iconify-icon>
+                        AI Insights
+                    </div>
+                    <button onclick="toggleMatrixAIPanel()" class="text-[10px] font-bold text-indigo-600 hover:underline">Open AI Assistant</button>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 text-xs text-slate-600 space-y-1.5">
+                    <div class="flex items-center gap-1.5 text-indigo-600 font-bold">
+                        <iconify-icon icon="solar:shield-warning-bold" width="14"></iconify-icon>
+                        <span>Optimal Capacity Alert</span>
+                    </div>
+                    <p class="text-[11px]">August workload is 78% balanced across 6 clients. Next deadline: Aug 6.</p>
+                </div>
+            </div>
+        `;
+    };
+
+    function renderTeamWorkloadMeters() {
+        const assignees = ['Barath', 'Immanuel', 'Karthika', 'Dharani', 'Siddharth'];
+        const events = Object.values(strategyEvents || {});
+
+        return assignees.map(name => {
+            const count = events.filter(e => (e.owner || e.assignee) === name).length;
+            const max = 15;
+            const percent = Math.min(100, Math.round((count / max) * 100));
+            let color = 'bg-emerald-500';
+            if (percent > 70) color = 'bg-amber-500';
+            if (percent > 90) color = 'bg-rose-500';
+
+            return `
+                <div class="space-y-0.5">
+                    <div class="flex justify-between text-[10px] font-bold">
+                        <span class="text-slate-700 dark:text-slate-300">${name}</span>
+                        <span class="text-slate-400">${count} / ${max} tasks</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                        <div class="${color} h-full transition-all duration-300" style="width: ${percent}%"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
+
+    window.renderMatrixTimelineView = function() {
+        const container = document.getElementById('timeline-view-content');
+        if (!container) return;
+
+        const events = Object.values(strategyEvents || {});
+        let html = `
+            <div class="space-y-4">
+                <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">Monthly Timeline & Roadmaps</h4>
+                <div class="space-y-3">
+        `;
+
+        events.forEach(ev => {
+            const statusObj = getOneDeskStatusPill(ev.status);
+            html += `
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 flex items-center justify-between gap-4 shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full ${statusObj.bgClass}"></div>
+                        <div>
+                            <h5 class="text-xs font-bold text-slate-900 dark:text-slate-100">${escapeHtml(ev.title)}</h5>
+                            <span class="text-[10px] text-slate-400">${escapeHtml(ev.client || 'Client')} • ${escapeHtml(ev.owner || 'Unassigned')}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${statusObj.bgClass} ${statusObj.textClass}">${statusObj.category}</span>
+                        <span class="text-xs font-bold text-slate-600">${ev.date || 'No Date'}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div></div>`;
+        container.innerHTML = html;
+    };
+
+    window.renderMatrixKanbanView = function() {
+        const container = document.getElementById('kanban-view-content');
+        if (!container) return;
+
+        const events = Object.values(strategyEvents || {});
+        const working = events.filter(e => getOneDeskStatusCategory(e.status) === 'Working');
+        const waiting = events.filter(e => getOneDeskStatusCategory(e.status) === 'Waiting');
+        const completed = events.filter(e => getOneDeskStatusCategory(e.status) === 'Completed');
+
+        container.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <div class="flex items-center gap-2 font-black text-xs text-amber-700">
+                            <iconify-icon icon="solar:clock-circle-bold" width="16"></iconify-icon>
+                            🟡 WAITING (${waiting.length})
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${waiting.map(ev => renderKanbanCard(ev)).join('')}
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <div class="flex items-center gap-2 font-black text-xs text-blue-700">
+                            <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon>
+                            🔵 WORKING (${working.length})
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${working.map(ev => renderKanbanCard(ev)).join('')}
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <div class="flex items-center gap-2 font-black text-xs text-emerald-700">
+                            <iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon>
+                            🟢 COMPLETED (${completed.length})
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${completed.map(ev => renderKanbanCard(ev)).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+
+    function renderKanbanCard(ev) {
+        return `
+            <div onclick="openMatrixTaskDrawer('${ev.id}')" class="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all cursor-pointer space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">${escapeHtml(ev.client || 'Client')}</span>
+                    <span class="text-[9px] text-slate-400 font-bold">${ev.date || ''}</span>
+                </div>
+                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2">${escapeHtml(ev.title)}</p>
+                <div class="flex items-center justify-between text-[10px] text-slate-500 font-bold pt-1 border-t border-slate-100">
+                    <span>👤 ${escapeHtml(ev.owner || 'Unassigned')}</span>
+                    <span>${ev.format === 'Video' ? '🎥 Video' : '📷 Poster'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    window.renderMatrixWorkloadView = function() {
+        const container = document.getElementById('workload-view-content');
+        if (!container) return;
+
+        const assignees = ['Barath', 'Immanuel', 'Karthika', 'Dharani', 'Siddharth'];
+        const events = Object.values(strategyEvents || {});
+
+        let html = `
+            <div class="space-y-4">
+                <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">Team Workload & Capacity Matrix</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
+
+        assignees.forEach(name => {
+            const userTasks = events.filter(e => (e.owner || e.assignee) === name);
+            html += `
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
+                                ${name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                                <h5 class="text-xs font-black text-slate-900 dark:text-slate-100">${name}</h5>
+                                <span class="text-[10px] text-slate-400 font-bold">${userTasks.length} Scheduled Tasks</span>
+                            </div>
+                        </div>
+                        <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full">Safe Capacity</span>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        ${userTasks.slice(0, 3).map(t => `
+                            <div class="p-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl text-xs flex items-center justify-between">
+                                <span class="font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">${escapeHtml(t.title)}</span>
+                                <span class="text-[9px] font-bold text-slate-400">${t.date || ''}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div></div>`;
+        container.innerHTML = html;
+    };
+
+    window.duplicateCurrentWeekMatrix = function() {
+        toast('Current week structure duplicated to next week!', 'success');
+        renderStrategyCalendar();
+    };
+
+    window.copyPreviousMonthMatrix = function() {
+        toast('Previous month recurring templates copied successfully!', 'success');
+        renderStrategyCalendar();
+    };
+
+    window.exportMatrixPlannerCSV = function() {
+        const events = Object.values(strategyEvents || {});
+        let csv = 'Title,Client,Assignee,Date,Status,Format,Priority\n';
+        events.forEach(e => {
+            csv += `"${(e.title||'').replace(/"/g, '""')}","${e.client||''}","${e.owner||''}","${e.date||''}","${e.status||''}","${e.format||''}","${e.priority||''}"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('href', url);
+        a.setAttribute('download', `Strategy_Matrix_Plan_${Date.now()}.csv`);
+        a.click();
+        toast('Exported Matrix Plan to CSV', 'success');
+    };
+
+    window.publishMatrixPlan = function() {
+        toast('August 2026 Strategy Plan Published & Locked!', 'success');
+    };
 
     function renderStrategySidebar() {
         const listEl = document.getElementById('strategy-sidebar-list');

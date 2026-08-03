@@ -118,6 +118,58 @@
             border-radius: 10px;
         }
 
+        /* ── MATRIX PLANNER STYLES ── */
+        .matrix-sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 25;
+            background: #ffffff;
+        }
+        .dark .matrix-sticky-col {
+            background: #0f172a;
+        }
+        .matrix-sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: #f8fafc;
+        }
+        .dark .matrix-sticky-header {
+            background: #1e293b;
+        }
+        .matrix-sticky-top-left {
+            position: sticky;
+            top: 0;
+            left: 0;
+            z-index: 40;
+            background: #f1f5f9;
+        }
+        .dark .matrix-sticky-top-left {
+            background: #0f172a;
+        }
+        .matrix-cell {
+            min-width: 140px;
+            min-height: 90px;
+            transition: background-color 0.15s ease;
+        }
+        .matrix-cell:hover {
+            background-color: #f8fafc;
+        }
+        .dark .matrix-cell:hover {
+            background-color: #1e293b;
+        }
+        .matrix-task-card {
+            transition: all 0.15s ease-in-out;
+            cursor: grab;
+        }
+        .matrix-task-card:active {
+            cursor: grabbing;
+        }
+        .matrix-task-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
         /* ── UNIFIED NAV ACTIVE STATES ── */
         .nav-active {
             background: #f1f5f9;
@@ -4371,64 +4423,137 @@
                 </div>
             </div>
 
-            <!-- ════ STRATEGY CALENDAR VIEW ════ -->
-            <div id="view-strategy-calendar-panel" class="hidden space-y-6 fade-in overflow-y-auto"
-                style="max-height: calc(100vh - 100px);">
-                <!-- Top Info bar -->
-                <div
-                    class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                            <iconify-icon icon="solar:calendar-mark-bold-duotone" width="24"></iconify-icon>
+            <!-- ════ MATRIX PLANNING WORKSPACE (REDESIGNED MONTHLY PLANNER) ════ -->
+            <div id="view-strategy-calendar-panel" class="hidden space-y-5 fade-in overflow-y-auto"
+                style="max-height: calc(100vh - 90px);">
+                
+                <!-- TOP HEADER BAR: Month Selector, Title, View Switcher -->
+                <div class="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
+                            <iconify-icon icon="solar:widget-3-bold-duotone" width="24"></iconify-icon>
                         </div>
                         <div>
-                            <h3 class="text-base font-black text-slate-900">Strategy Calendar</h3>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Plan
-                                campaigns, events, and business pitches</p>
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-lg font-black text-slate-900 tracking-tight">Matrix Planning Workspace</h3>
+                                <span class="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-indigo-100">Monthly Team Planner</span>
+                            </div>
+                            <p class="text-xs text-slate-400 font-medium mt-0.5">Google Sheets speed + Airtable data + Jira Roadmaps capacity matrix</p>
                         </div>
                     </div>
-                    <!-- Format Counts -->
-                    <div class="flex items-center gap-3 flex-wrap">
 
-                        <!-- Add Button (only visible to permitted users) -->
-                        <div id="strategy-action-buttons" class="hidden">
-                            <button onclick="openAddStrategyEventModal()"
-                                class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-5 py-2.5 text-xs font-bold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2">
-                                <iconify-icon icon="solar:calendar-add-bold" width="16"></iconify-icon> Add
-                                Campaign/Event
+                    <!-- Month Selector & View Switcher Pills -->
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <!-- Navigation Month Selector -->
+                        <div class="flex items-center bg-slate-50 rounded-2xl p-1 border border-slate-200/60 shadow-inner">
+                            <button onclick="navigateStrategyCalendar(-1)" class="p-2 rounded-xl text-slate-500 hover:bg-white hover:text-slate-800 transition-all">
+                                <iconify-icon icon="solar:alt-arrow-left-linear" width="18"></iconify-icon>
+                            </button>
+                            <span id="strategy-calendar-title" class="text-xs font-black text-slate-800 px-3 py-1">August 2026</span>
+                            <button onclick="navigateStrategyCalendar(1)" class="p-2 rounded-xl text-slate-500 hover:bg-white hover:text-slate-800 transition-all">
+                                <iconify-icon icon="solar:alt-arrow-right-linear" width="18"></iconify-icon>
+                            </button>
+                            <button onclick="navigateStrategyCalendar(0)" class="text-[11px] font-bold text-indigo-600 hover:bg-white px-2.5 py-1 rounded-xl transition-all ml-1">Today</button>
+                        </div>
+
+                        <!-- View Switcher Pills -->
+                        <div class="flex items-center bg-slate-100 p-1 rounded-2xl gap-1 border border-slate-200/50">
+                            <button onclick="setMatrixPlannerView('matrix')" id="matrix-view-btn-matrix" class="matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white text-indigo-600 shadow-sm flex items-center gap-1.5">
+                                <iconify-icon icon="solar:grid-3-bold" width="16"></iconify-icon> Matrix
+                            </button>
+                            <button onclick="setMatrixPlannerView('calendar')" id="matrix-view-btn-calendar" class="matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+                                <iconify-icon icon="solar:calendar-bold" width="16"></iconify-icon> Calendar
+                            </button>
+                            <button onclick="setMatrixPlannerView('timeline')" id="matrix-view-btn-timeline" class="matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+                                <iconify-icon icon="solar:chart-square-bold" width="16"></iconify-icon> Timeline
+                            </button>
+                            <button onclick="setMatrixPlannerView('kanban')" id="matrix-view-btn-kanban" class="matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+                                <iconify-icon icon="solar:column-tabs-bold" width="16"></iconify-icon> Kanban
+                            </button>
+                            <button onclick="setMatrixPlannerView('workload')" id="matrix-view-btn-workload" class="matrix-view-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+                                <iconify-icon icon="solar:users-group-two-rounded-bold" width="16"></iconify-icon> Workload
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Client Filter Tabs -->
-                <div id="strategy-client-tabs-container"
-                    class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 flex flex-wrap gap-2 items-center">
+                <!-- TOOLBAR: Search, Filters, AI Plan, Quick Actions -->
+                <div class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-3">
+                    <div class="flex items-center gap-2 flex-wrap flex-1">
+                        <!-- Real-time Search Input -->
+                        <div class="relative min-w-[200px]">
+                            <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
+                            <input id="matrix-search-input" onkeyup="filterMatrixPlanner()" type="text" placeholder="Search tasks, clients, assignee..." class="w-full bg-slate-50 text-xs font-semibold pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                        </div>
+
+                        <!-- Client Filter Dropdown -->
+                        <select id="matrix-filter-client" onchange="filterMatrixPlanner()" class="bg-slate-50 text-xs font-semibold text-slate-700 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none">
+                            <option value="All">All Clients</option>
+                        </select>
+
+                        <!-- Assignee Filter Dropdown -->
+                        <select id="matrix-filter-assignee" onchange="filterMatrixPlanner()" class="bg-slate-50 text-xs font-semibold text-slate-700 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none">
+                            <option value="All">All Assignees</option>
+                        </select>
+
+                        <!-- Status Filter Dropdown -->
+                        <select id="matrix-filter-status" onchange="filterMatrixPlanner()" class="bg-slate-50 text-xs font-semibold text-slate-700 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none">
+                            <option value="All">All Statuses</option>
+                            <option value="Working">🔵 Working</option>
+                            <option value="Waiting">🟡 Waiting</option>
+                            <option value="Completed">🟢 Completed</option>
+                        </select>
+
+                        <!-- Format Filter Dropdown -->
+                        <select id="matrix-filter-format" onchange="filterMatrixPlanner()" class="bg-slate-50 text-xs font-semibold text-slate-700 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none">
+                            <option value="All">All Formats</option>
+                            <option value="Video">🎥 Video</option>
+                            <option value="Poster">📷 Poster</option>
+                        </select>
+                    </div>
+
+                    <!-- Quick Action Buttons -->
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div id="strategy-action-buttons" class="hidden">
+                            <!-- Controlled by permissions -->
+                        </div>
+                        <button onclick="openAddStrategyEventModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-3.5 py-2 text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5">
+                            <iconify-icon icon="solar:add-circle-bold" width="16"></iconify-icon> Add Task
+                        </button>
+                        <button onclick="toggleMatrixAIPanel()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl px-3.5 py-2 text-xs font-bold shadow-md shadow-purple-100 transition-all flex items-center gap-1.5">
+                            <iconify-icon icon="solar:stars-bold" width="16"></iconify-icon> 🤖 AI Plan
+                        </button>
+                        <button onclick="duplicateCurrentWeekMatrix()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all flex items-center gap-1">
+                            <iconify-icon icon="solar:copy-bold" width="15"></iconify-icon> Duplicate Week
+                        </button>
+                        <button onclick="copyPreviousMonthMatrix()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all flex items-center gap-1">
+                            <iconify-icon icon="solar:history-bold" width="15"></iconify-icon> Copy Last Month
+                        </button>
+                        <button onclick="exportMatrixPlannerCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-3 py-2 text-xs font-bold transition-all flex items-center gap-1">
+                            <iconify-icon icon="solar:export-bold" width="15"></iconify-icon> Export
+                        </button>
+                        <button onclick="publishMatrixPlan()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-3.5 py-2 text-xs font-bold shadow-md shadow-emerald-100 transition-all flex items-center gap-1">
+                            <iconify-icon icon="solar:check-read-bold" width="16"></iconify-icon> Publish Plan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CLIENT TABS (Quick Filters) -->
+                <div id="strategy-client-tabs-container" class="bg-white rounded-3xl p-3 shadow-xl border border-slate-100 flex flex-wrap gap-2 items-center">
                     <!-- Populated dynamically by JS -->
                 </div>
 
-                <!-- Main Calendar Section -->
-                <div class="grid grid-cols-1 gap-6 items-start">
-                    <!-- Calendar Board Grid -->
-                    <div
-                        class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                        <div class="p-6 border-b border-slate-50 flex items-center justify-between">
-                            <div id="strategy-calendar-header" class="flex items-center gap-4">
-                                <button onclick="navigateStrategyCalendar(-1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-left-linear" width="20"></iconify-icon></button>
-                                <h3 id="strategy-calendar-title"
-                                    class="text-lg font-black text-slate-900 tracking-tight">Month Year</h3>
-                                <button onclick="navigateStrategyCalendar(1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-right-linear" width="20"></iconify-icon></button>
-                            </div>
-                            <button onclick="navigateStrategyCalendar(0)"
-                                class="text-xs font-bold text-indigo-600 hover:underline">Today</button>
-                        </div>
-                        <!-- Weekdays Header -->
-                        <div class="grid grid-cols-7 border-b border-slate-50 text-center bg-slate-50/50 py-3">
+                <!-- MAIN WORKSPACE VIEWS CONTAINER -->
+                <div id="matrix-workspace-container" class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden relative">
+                    
+                    <!-- 1. MATRIX VIEW (GRID CLIENT X DATES) -->
+                    <div id="matrix-view-content" class="matrix-view-panel overflow-x-auto overflow-y-auto max-h-[620px]">
+                        <!-- Populated dynamically by renderMatrixPlanner() -->
+                    </div>
+
+                    <!-- 2. CALENDAR VIEW (Traditional 7-column Calendar) -->
+                    <div id="calendar-view-content" class="matrix-view-panel hidden">
+                        <div class="grid grid-cols-7 border-b border-slate-100 text-center bg-slate-50/50 py-3">
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mon</span>
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tue</span>
@@ -4438,11 +4563,158 @@
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
                         </div>
                         <div id="strategy-calendar-grid" class="grid grid-cols-7 max-h-[600px] overflow-y-auto">
-                            <!-- Calendar grid populated by JS -->
+                            <!-- Populated dynamically by renderStrategyCalendar() -->
                         </div>
                     </div>
 
+                    <!-- 3. TIMELINE VIEW (Gantt Chart across Month Days) -->
+                    <div id="timeline-view-content" class="matrix-view-panel hidden p-6 overflow-x-auto">
+                        <!-- Populated dynamically by renderMatrixTimelineView() -->
+                    </div>
 
+                    <!-- 4. KANBAN VIEW (Board by Status) -->
+                    <div id="kanban-view-content" class="matrix-view-panel hidden p-6">
+                        <!-- Populated dynamically by renderMatrixKanbanView() -->
+                    </div>
+
+                    <!-- 5. WORKLOAD VIEW (Employee Matrix) -->
+                    <div id="workload-view-content" class="matrix-view-panel hidden p-6">
+                        <!-- Populated dynamically by renderMatrixWorkloadView() -->
+                    </div>
+                </div>
+
+                <!-- BOTTOM ANALYTICS & RESOURCE CAPACITY PANEL -->
+                <div id="matrix-bottom-analytics" class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <!-- Populated dynamically by renderMatrixBottomAnalytics() -->
+                </div>
+            </div>
+
+            <!-- RIGHT SLIDING PLANNING DRAWER (Detailed Task Drawer) -->
+            <div id="matrix-task-drawer" class="fixed inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out border-l border-slate-200 flex flex-col hidden">
+                <!-- Header -->
+                <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div class="flex items-center gap-3">
+                        <span id="drawer-format-badge" class="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold">🎥 Video</span>
+                        <h3 class="text-base font-black text-slate-900">Task Details</h3>
+                    </div>
+                    <button onclick="closeMatrixTaskDrawer()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                        <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
+                    </button>
+                </div>
+
+                <!-- Content Area -->
+                <div class="p-6 space-y-6 overflow-y-auto flex-1">
+                    <input type="hidden" id="drawer-task-id">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Task Title</label>
+                        <input id="drawer-task-title" type="text" class="w-full text-base font-bold text-slate-900 mt-1 p-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Client</label>
+                            <select id="drawer-task-client" class="w-full text-xs font-semibold text-slate-700 mt-1 p-2.5 rounded-xl border border-slate-200">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignee</label>
+                            <select id="drawer-task-assignee" class="w-full text-xs font-semibold text-slate-700 mt-1 p-2.5 rounded-xl border border-slate-200">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
+                            <select id="drawer-task-status" class="w-full text-xs font-semibold text-slate-700 mt-1 p-2.5 rounded-xl border border-slate-200">
+                                <!-- OneDesk Status Options -->
+                                <optgroup label="🔵 Working">
+                                    <option value="Content In Progress">Content In Progress</option>
+                                    <option value="Design In Progress">Design In Progress</option>
+                                    <option value="Quality Check">Quality Check</option>
+                                    <option value="Thumbnail Waiting">Thumbnail Waiting</option>
+                                    <option value="Rework Designs">Rework Designs</option>
+                                </optgroup>
+                                <optgroup label="🟡 Waiting">
+                                    <option value="To Do">To Do</option>
+                                    <option value="Shoot Needed">Shoot Needed</option>
+                                    <option value="Client Content Approval">Client Content Approval</option>
+                                    <option value="Design To Do">Design To Do</option>
+                                    <option value="Design Hold">Design Hold</option>
+                                </optgroup>
+                                <optgroup label="🟢 Completed">
+                                    <option value="Done">Done</option>
+                                    <option value="Posted">Posted</option>
+                                    <option value="Analytics">Analytics</option>
+                                    <option value="Client Sent">Client Sent</option>
+                                    <option value="Client Approved">Client Approved</option>
+                                    <option value="Design Completed">Design Completed</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
+                            <select id="drawer-task-priority" class="w-full text-xs font-semibold text-slate-700 mt-1 p-2.5 rounded-xl border border-slate-200">
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Due / Post Date</label>
+                            <input id="drawer-task-date" type="date" class="w-full text-xs font-semibold text-slate-700 mt-1 p-2.5 rounded-xl border border-slate-200">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description & Strategy Notes</label>
+                        <textarea id="drawer-task-desc" rows="3" class="w-full text-xs text-slate-700 mt-1 p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Campaign brief, social caption, requirements..."></textarea>
+                    </div>
+
+                    <!-- AI SUGGESTIONS SECTION AT BOTTOM OF DRAWER -->
+                    <div class="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-100 space-y-3">
+                        <div class="flex items-center gap-2 text-indigo-700 text-xs font-bold">
+                            <iconify-icon icon="solar:stars-bold" width="18"></iconify-icon>
+                            <span>AI Assistant Recommendations</span>
+                        </div>
+                        <div id="drawer-ai-suggestions" class="text-xs text-slate-600 space-y-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+                    <button onclick="deleteTaskFromDrawer()" class="px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-all">Delete Task</button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="closeMatrixTaskDrawer()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all">Cancel</button>
+                        <button onclick="saveTaskFromDrawer()" class="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FLOATING AI PLANNER PANEL -->
+            <div id="matrix-ai-panel" class="fixed bottom-6 right-6 w-96 bg-white shadow-2xl rounded-3xl border border-slate-200 z-50 p-5 hidden space-y-4 fade-in">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                            <iconify-icon icon="solar:stars-bold" width="18"></iconify-icon>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-black text-slate-900">AI Planner Assistant</h4>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Automated Month Insights</p>
+                        </div>
+                    </div>
+                    <button onclick="toggleMatrixAIPanel()" class="text-slate-400 hover:text-slate-600">
+                        <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                    </button>
+                </div>
+
+                <div id="matrix-ai-insights-list" class="space-y-3 text-xs text-slate-600 max-h-80 overflow-y-auto">
+                    <!-- Populated dynamically -->
                 </div>
             </div>
             <!-- ════ PRODUCTION CONTROL CENTER VIEW ════ -->
