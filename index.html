@@ -11250,7 +11250,25 @@
                 }
                 return dateStr;
             }
+
+            function calculatePostDate4DaysAfter(dateStr) {
+                if (!dateStr) return '';
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    const y = parseInt(parts[0], 10);
+                    const m = parseInt(parts[1], 10) - 1;
+                    const d = parseInt(parts[2], 10);
+                    const dateObj = new Date(y, m, d);
+                    dateObj.setDate(dateObj.getDate() + 4);
+                    const resY = dateObj.getFullYear();
+                    const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const resD = String(dateObj.getDate()).padStart(2, '0');
+                    return `${resY}-${resM}-${resD}`;
+                }
+                return dateStr;
+            }
             window.calculateDueDate4DaysBefore = calculateDueDate4DaysBefore;
+            window.calculatePostDate4DaysAfter = calculatePostDate4DaysAfter;
 
             const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree'];
             window.CLIENTS = CLIENTS;
@@ -15622,11 +15640,12 @@
                             }
                         }
 
-                        // Group by due date (if task has a due date in this month/year)
-                        if (task.duedate) {
-                            const [ty, tm, td] = task.duedate.split('-').map(Number);
+                        // Group by post date (if task has a due date, post date is 4 days after due date)
+                        const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
+                        if (targetPostDate) {
+                            const [ty, tm, td] = targetPostDate.split('-').map(Number);
                             if (tm - 1 === month && ty === year) {
-                                const dateStr = task.duedate;
+                                const dateStr = targetPostDate;
                                 
                                 // Deduplication check: Skip if task is linked to a Strategy Event
                                 const lowerTaskId = task.id.toLowerCase().trim();
@@ -16136,9 +16155,12 @@
                 if (!ev && typeof tasks !== 'undefined' && tasks) {
                     const matchedJiraTask = tasks.find(t => t.id.toLowerCase() === eventId.toLowerCase());
                     if (matchedJiraTask) {
+                        const calculatedPostDate = matchedJiraTask.postDate || calculatePostDate4DaysAfter(matchedJiraTask.duedate) || matchedJiraTask.duedate || '';
                         ev = {
                             title: matchedJiraTask.desc || matchedJiraTask.id,
-                            date: matchedJiraTask.duedate || '',
+                            date: calculatedPostDate,
+                            postDate: calculatedPostDate,
+                            duedate: matchedJiraTask.duedate || '',
                             owner: matchedJiraTask.assignee || '',
                             client: matchedJiraTask.client || '',
                             status: matchedJiraTask.status || 'To Do',

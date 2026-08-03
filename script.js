@@ -179,6 +179,25 @@ if (initializeApp) {
         return dateStr;
     }
 
+    function calculatePostDate4DaysAfter(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            const dateObj = new Date(y, m, d);
+            dateObj.setDate(dateObj.getDate() + 4);
+            const resY = dateObj.getFullYear();
+            const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const resD = String(dateObj.getDate()).padStart(2, '0');
+            return `${resY}-${resM}-${resD}`;
+        }
+        return dateStr;
+    }
+    window.calculateDueDate4DaysBefore = calculateDueDate4DaysBefore;
+    window.calculatePostDate4DaysAfter = calculatePostDate4DaysAfter;
+
     const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
 
     // Leave Approval Chains - Different employees have different approval hierarchies
@@ -2608,9 +2627,12 @@ if (initializeApp) {
         if (!ev && typeof tasks !== 'undefined' && tasks) {
             const matchedJiraTask = tasks.find(t => t.id.toLowerCase() === eventId.toLowerCase());
             if (matchedJiraTask) {
+                const calculatedPostDate = matchedJiraTask.postDate || calculatePostDate4DaysAfter(matchedJiraTask.duedate) || matchedJiraTask.duedate || '';
                 ev = {
                     title: matchedJiraTask.desc || matchedJiraTask.id,
-                    date: matchedJiraTask.duedate || '',
+                    date: calculatedPostDate,
+                    postDate: calculatedPostDate,
+                    duedate: matchedJiraTask.duedate || '',
                     owner: matchedJiraTask.assignee || '',
                     client: matchedJiraTask.client || '',
                     status: matchedJiraTask.status || 'To Do',
