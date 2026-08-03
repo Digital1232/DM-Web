@@ -38,6 +38,7 @@ if (initializeApp) {
     window.db = db;
     window.storage = storage;
     window.firebaseAuth = auth; // Alias for shim compatibility
+    window.rtdb = { ref, set, push, update, remove, onValue, get };
 
     /**
      * Get Firebase ID Token for API authentication
@@ -1242,7 +1243,6 @@ if (initializeApp) {
             // Force redirect anyway
             window.location.href = '/';
         }
-    }
         localStorage.removeItem('worksync_user');
         localStorage.removeItem('worksync_timerState');
         localStorage.removeItem('worksync_checkInTime');
@@ -2127,6 +2127,22 @@ if (initializeApp) {
 
     // VIEW NAVIGATION
     function switchView(view) {
+        if (view === 'dailyplan') {
+            switchView('tasks');
+            switchTasksTab('dailyplan');
+            return;
+        }
+        if (view === 'internal-tasks') {
+            switchView('tasks');
+            switchTasksTab('internal');
+            return;
+        }
+        if (view === 'completed') {
+            switchView('tasks');
+            switchTasksTab('completed');
+            return;
+        }
+
         if (view === 'reports' && !canViewReports()) view = 'dashboard';
         if (view === 'daily-summary' && !canViewDailySummary()) view = 'dashboard';
         if (view === 'projects' && !canViewProjects()) view = 'dashboard';
@@ -2176,7 +2192,10 @@ if (initializeApp) {
         };
         document.getElementById('view-title').textContent = titles[view] || 'WorkSync';
 
-        if (view === 'shoots') {
+        if (view === 'tasks') {
+            switchTasksTab(activeTasksTab || 'jira');
+        }
+        else if (view === 'shoots') {
             renderShootCalendar();
         }
         else if (view === 'projects') {
@@ -3384,7 +3403,7 @@ if (initializeApp) {
         }
     }
 
-    function openAddStrategyEventModal(dateStr) {
+    function openAddStrategyEventModal(dateStr, clientStr) {
         if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
 
         document.getElementById('strategy-modal-title').textContent = 'Add Strategy Event';
@@ -3393,7 +3412,7 @@ if (initializeApp) {
         document.getElementById('strategy-date').value = dateStr || '';
         document.getElementById('strategy-owner').value = '';
         
-        const defaultClient = (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '';
+        const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
         if (typeof populateStrategyClientDropdown === 'function') {
             populateStrategyClientDropdown(defaultClient);
         } else {
@@ -12376,6 +12395,131 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.openNewGroupModal = openNewGroupModal; window.createGroup = createGroup;
     window.openEditGroupModal = openEditGroupModal; window.updateGroup = updateGroup; window.deleteGroup = deleteGroup; window.processGroupPhoto = processGroupPhoto;
     window.sendAnnouncement = sendAnnouncement; window.deleteAnnouncement = deleteAnnouncement;
+
+
+    function toggleInternalTaskViewMode() {
+        const listContainer = document.getElementById('internal-task-list-container');
+        const kanbanContainer = document.getElementById('internal-task-kanban-container');
+        const btn = document.getElementById('internal-view-toggle-btn');
+        if (!listContainer || !kanbanContainer) return;
+
+        const isKanbanHidden = kanbanContainer.classList.contains('hidden');
+        if (isKanbanHidden) {
+            listContainer.classList.add('hidden');
+            kanbanContainer.classList.remove('hidden');
+            if (btn) btn.innerHTML = `<iconify-icon icon="solar:list-bold" width="18"></iconify-icon> Table View`;
+            renderInternalKanbanBoard();
+        } else {
+            kanbanContainer.classList.add('hidden');
+            listContainer.classList.remove('hidden');
+            if (btn) btn.innerHTML = `<iconify-icon icon="solar:board-linear" width="18"></iconify-icon> Board View`;
+            renderInternalTasks();
+        }
+    }
+
+    function saveInternalBoardSettings() {
+        const settings = {
+            assignee: currentInternalAssigneeFilter,
+            client: currentInternalClientFilter,
+            status: currentInternalStatusFilter,
+            dueDate: currentInternalDueDateFilter
+        };
+        localStorage.setItem('worksync_internal_settings', JSON.stringify(settings));
+        toast('Internal board settings saved as default', 'success');
+    }
+
+    function renderInternalKanbanBoard() {
+        const container = document.getElementById('internal-task-kanban-container');
+        if (!container) return;
+        const internalTasks = tasks.filter(isInternalTask);
+        const statuses = ['To Do', 'Working', 'Waiting', 'Completed'];
+
+        container.innerHTML = statuses.map(st => {
+            const colTasks = internalTasks.filter(t => (t.status || 'To Do').toLowerCase().includes(st.toLowerCase()));
+            return `
+                <div class="flex-1 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm min-w-[260px]">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                        <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider">${st}</h4>
+                        <span class="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${colTasks.length}</span>
+                    </div>
+                    <div class="space-y-3">
+                        ${colTasks.map(t => `
+                            <div class="p-3 bg-slate-50 border border-slate-200/80 rounded-xl hover:border-indigo-300 transition-all shadow-sm">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase">${t.id} • ${t.client || 'Internal'}</span>
+                                <p class="text-xs font-bold text-slate-800 mt-1 line-clamp-2">${escapeHtml(t.desc || t.title || 'Untitled')}</p>
+                                <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-medium">
+                                    <span>${assigneeName(t)}</span>
+                                    <span>${t.duedate || 'No due date'}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    let activeTasksTab = 'jira';
+
+    function switchTasksTab(tab) {
+        try {
+            const jiraTab = document.getElementById('tasks-tab-jira');
+            const intTab = document.getElementById('tasks-tab-internal');
+            const dpTab = document.getElementById('tasks-tab-dailyplan');
+            const completedTab = document.getElementById('tasks-tab-completed');
+
+            const btnJira = document.getElementById('tab-btn-jira');
+            const btnInt = document.getElementById('tab-btn-internal');
+            const btnDp = document.getElementById('tab-btn-dailyplan');
+            const btnCompleted = document.getElementById('tab-btn-completed');
+
+            const activeStyle = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
+            const inactiveStyle = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0';
+
+            if (jiraTab) jiraTab.classList.add('hidden');
+            if (intTab) intTab.classList.add('hidden');
+            if (dpTab) dpTab.classList.add('hidden');
+            if (completedTab) completedTab.classList.add('hidden');
+
+            if (btnJira) btnJira.className = inactiveStyle;
+            if (btnInt) btnInt.className = inactiveStyle;
+            if (btnDp) btnDp.className = inactiveStyle;
+            if (btnCompleted) btnCompleted.className = inactiveStyle;
+
+            activeTasksTab = tab || 'jira';
+
+            if (tab === 'jira') {
+                if (jiraTab) jiraTab.classList.remove('hidden');
+                if (btnJira) btnJira.className = activeStyle;
+                try { populateClientFilter(); populateAssigneeFilter(); } catch (e) {}
+                if (typeof renderTasks === 'function') renderTasks();
+            } else if (tab === 'internal') {
+                if (intTab) intTab.classList.remove('hidden');
+                if (btnInt) btnInt.className = activeStyle;
+                try { populateInternalClientFilter(); populateInternalAssigneeFilter(); } catch (e) {}
+                if (typeof renderInternalTasks === 'function') renderInternalTasks();
+            } else if (tab === 'dailyplan') {
+                if (dpTab) dpTab.classList.remove('hidden');
+                if (btnDp) btnDp.className = activeStyle;
+                if (typeof renderDailyPlan === 'function') renderDailyPlan();
+            } else if (tab === 'completed') {
+                if (completedTab) completedTab.classList.remove('hidden');
+                if (btnCompleted) btnCompleted.className = activeStyle;
+                if (typeof renderCompletedTasks === 'function') renderCompletedTasks();
+                else if (typeof switchCompletedDateRange === 'function') switchCompletedDateRange('today');
+            }
+        } catch (err) {
+            console.error('switchTasksTab failed:', err);
+        }
+    }
+
+    function showFiveThirtyTaskPopup() {
+        switchView('tasks');
+        switchTasksTab('completed');
+    }
+
+    window.showFiveThirtyTaskPopup = showFiveThirtyTaskPopup;
+    window.switchTasksTab = switchTasksTab;
     window.switchDprTab = switchDprTab; window.submitDpr = submitDpr; window.renderDpr = renderDpr; window.exportDprCsv = exportDprCsv; window.handleReportFilterChange = handleReportFilterChange; window.populateReportUserFilter = populateReportUserFilter;
     window.switchReportTab = switchReportTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.exportSummaryReport = exportSummaryReport;
     window.exportSummaryReportPdf = exportSummaryReportPdf;
@@ -12385,7 +12529,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.selectSaturday = (val, btn) => { selectedSaturday = val; document.querySelectorAll('.sat-btn').forEach(b => b.classList.remove('bg-indigo-600', 'text-white')); btn.classList.add('bg-indigo-600', 'text-white'); };
     window.sendReportEmail = sendReportEmail; window.toggleEmailReportSetting = toggleEmailReportSetting;
     window.holdTask = holdTask; window.resumeTaskTimer = resumeTaskTimer; window.endTask = endTask;
-    window.openAddTaskModal = openAddTaskModal; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.deleteManualTask = deleteManualTask;
+    window.openAddTaskModal = openAddTaskModal; window.toggleInternalTaskViewMode = toggleInternalTaskViewMode; window.saveInternalBoardSettings = saveInternalBoardSettings; window.renderInternalKanbanBoard = renderInternalKanbanBoard; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.deleteManualTask = deleteManualTask;
     window.openScheduleDiscussionModal = openScheduleDiscussionModal; window.submitScheduleDiscussion = submitScheduleDiscussion; window.joinDiscussion = joinDiscussion; window.dismissDiscussionPopup = dismissDiscussionPopup;
     window.loadUsersList = loadUsersList; window.openAdminUserModal = openAdminUserModal; window.saveAdminUser = saveAdminUser; window.auUploadPhoto = auUploadPhoto; window.deleteAdminUser = deleteAdminUser;
     window.saveNote = saveNote; window.editNote = editNote; window.deleteNote = deleteNote; window.clearNoteForm = clearNoteForm;

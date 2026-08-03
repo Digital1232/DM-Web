@@ -2656,13 +2656,13 @@
                         Completed Tasks
                     </button>
                     <button onclick="switchView('dailyplan')" id="nav-dailyplan" data-label="Daily Plan" aria-label="Daily Plan"
-                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:calendar-add-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Daily Plan
                     </button>
                     <button onclick="switchView('monthly-plan')" id="nav-monthly-plan" data-label="Monthly Plan" aria-label="Monthly Plan"
-                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:calendar-bold-duotone" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Monthly Plan
@@ -4159,9 +4159,134 @@
         </div><!-- /view-tasks-panel -->
         <div id="view-dailyplan-panel" class="hidden"></div>
 
-            <!-- ════ MONTHLY PLAN VIEW ════ -->
-            <div id="view-monthly-plan-panel" class="hidden space-y-6 fade-in">
-                <!-- Monthly Plan will be rendered here -->
+            <!-- ════ STRATEGY CALENDAR VIEW ════ -->
+            <div id="view-strategy-calendar-panel" class="hidden space-y-6 fade-in overflow-y-auto"
+                style="max-height: calc(100vh - 100px);">
+                <!-- Top Info bar -->
+                <div
+                    class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                            <iconify-icon icon="solar:calendar-mark-bold-duotone" width="24"></iconify-icon>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">Strategy Calendar</h3>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Plan
+                                campaigns, events, and business pitches</p>
+                        </div>
+                    </div>
+                    <!-- Format Counts -->
+                    <div class="flex items-center gap-3 flex-wrap">
+
+                        <!-- Add Button (only visible to permitted users) -->
+                        <div id="strategy-action-buttons" class="hidden">
+                            <button onclick="openAddStrategyEventModal()"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-5 py-2.5 text-xs font-bold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2">
+                                <iconify-icon icon="solar:calendar-add-bold" width="16"></iconify-icon> Add
+                                Campaign/Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Client Filter Tabs -->
+                <div id="strategy-client-tabs-container"
+                    class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 flex flex-wrap gap-2 items-center">
+                    <!-- Populated dynamically by JS -->
+                </div>
+
+                <!-- Main Calendar Section -->
+                <div class="grid grid-cols-1 gap-6 items-start">
+                    <!-- Calendar Board Grid -->
+                    <div
+                        class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                        <div class="p-6 border-b border-slate-50 flex items-center justify-between">
+                            <div id="strategy-calendar-header" class="flex items-center gap-4">
+                                <button onclick="navigateStrategyCalendar(-1)"
+                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
+                                        icon="solar:alt-arrow-left-linear" width="20"></iconify-icon></button>
+                                <h3 id="strategy-calendar-title"
+                                    class="text-lg font-black text-slate-900 tracking-tight">Month Year</h3>
+                                <button onclick="navigateStrategyCalendar(1)"
+                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
+                                        icon="solar:alt-arrow-right-linear" width="20"></iconify-icon></button>
+                            </div>
+                            <button onclick="navigateStrategyCalendar(0)"
+                                class="text-xs font-bold text-indigo-600 hover:underline">Today</button>
+                        </div>
+                        <!-- Weekdays Header -->
+                        <div class="grid grid-cols-7 border-b border-slate-50 text-center bg-slate-50/50 py-3">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mon</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tue</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wed</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thu</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fri</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
+                        </div>
+                        <div id="strategy-calendar-grid" class="grid grid-cols-7 max-h-[600px] overflow-y-auto">
+                            <!-- Calendar grid populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════ MONTHLY PLAN VIEW (MATRIX PLANNING WORKSPACE) ════ -->
+            <div id="view-monthly-plan-panel" class="hidden space-y-5 fade-in overflow-y-auto"
+                style="max-height: calc(100vh - 90px);">
+                
+
+
+                <!-- CLIENT TABS (Quick Filters) -->
+                <div id="monthly-plan-client-tabs-container" class="bg-white rounded-3xl p-3 shadow-xl border border-slate-100 flex flex-wrap gap-2 items-center">
+                    <!-- Populated dynamically by JS -->
+                </div>
+
+                <!-- MAIN WORKSPACE VIEWS CONTAINER -->
+                <div id="matrix-workspace-container" class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden relative">
+                    
+                    <!-- 1. MATRIX VIEW (GRID CLIENT X DATES) -->
+                    <div id="matrix-view-content" class="matrix-view-panel overflow-x-auto overflow-y-auto max-h-[620px]">
+                        <!-- Populated dynamically by renderMatrixPlanner() -->
+                    </div>
+
+                    <!-- 2. CALENDAR VIEW (Traditional 7-column Calendar) -->
+                    <div id="calendar-view-content" class="matrix-view-panel hidden">
+                        <div class="grid grid-cols-7 border-b border-slate-100 text-center bg-slate-50/50 py-3">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mon</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tue</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wed</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thu</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fri</span>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
+                        </div>
+                        <div id="monthly-plan-calendar-grid" class="grid grid-cols-7 max-h-[600px] overflow-y-auto">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+
+                    <!-- 3. TIMELINE VIEW (Gantt Chart across Month Days) -->
+                    <div id="timeline-view-content" class="matrix-view-panel hidden p-6 overflow-x-auto">
+                        <!-- Populated dynamically by renderMatrixTimelineView() -->
+                    </div>
+
+                    <!-- 4. KANBAN VIEW (Board by Status) -->
+                    <div id="kanban-view-content" class="matrix-view-panel hidden p-6">
+                        <!-- Populated dynamically by renderMatrixKanbanView() -->
+                    </div>
+
+                    <!-- 5. WORKLOAD VIEW (Employee Matrix) -->
+                    <div id="workload-view-content" class="matrix-view-panel hidden p-6">
+                        <!-- Populated dynamically by renderMatrixWorkloadView() -->
+                    </div>
+                </div>
+
+                <!-- BOTTOM ANALYTICS & RESOURCE CAPACITY PANEL -->
+                <div id="matrix-bottom-analytics" class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <!-- Populated dynamically by renderMatrixBottomAnalytics() -->
+                </div>
             </div>
 
             <!-- ════ QC PORTAL VIEW ════ -->
@@ -9639,6 +9764,78 @@
             <button type="button" onclick="submitAssignPlan()"
                 class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
                 <iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon> Assign to Plan
+            </button>
+        </div>
+    </dialog>
+
+    <!-- Modal: Assign Task to Monthly Plan -->
+    <dialog id="assignMonthlyPlanModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden">
+        <div class="p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-black text-slate-900 tracking-tight">Assign Task to Monthly Plan</h3>
+                <button type="button" onclick="this.closest('dialog').close()"
+                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Select Strategy Task</label>
+                    <div class="relative mb-2">
+                        <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-3 text-slate-400"
+                            width="16"></iconify-icon>
+                        <input id="amp-task-search" type="search" placeholder="Search strategy tasks..." oninput="filterAssignMonthlyPlanTasks()"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <select id="amp-client-filter" onchange="filterAssignMonthlyPlanTasks()"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
+                            <option value="">All Clients</option>
+                        </select>
+                        <select id="amp-status-filter" onchange="filterAssignMonthlyPlanTasks()"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
+                            <option value="">All Status</option>
+                        </select>
+                    </div>
+                    <div id="amp-task-list"
+                        class="bg-white border border-slate-200 rounded-xl max-h-48 overflow-y-auto space-y-1 p-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Selected Tasks Section -->
+                <div class="border-t border-slate-200 pt-5">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Selected Tasks</label>
+                    <div id="amp-selected-tasks" class="flex flex-wrap gap-2 min-h-[40px] p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p class="text-xs text-slate-400 italic self-center">No tasks selected</p>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-200 pt-5">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Assignment Details</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Assignee</label>
+                            <select id="amp-user" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Client</label>
+                            <select id="amp-client" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Target Date</label>
+                            <input id="amp-date" type="date" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button type="button" onclick="submitAssignMonthlyPlan()"
+                class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
+                <iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon> Assign to Monthly Plan
             </button>
         </div>
     </dialog>
@@ -16375,7 +16572,7 @@
                 }
             });
 
-            function openAddStrategyEventModal(dateStr) {
+            function openAddStrategyEventModal(dateStr, clientStr) {
                 if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
 
                 document.getElementById('strategy-modal-title').textContent = 'Add Strategy Event';
@@ -16384,7 +16581,7 @@
                 document.getElementById('strategy-date').value = dateStr || '';
                 document.getElementById('strategy-owner').value = '';
                 
-                const defaultClient = (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '';
+                const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
                 populateStrategyClientDropdown(defaultClient);
 
                 document.getElementById('strategy-status').value = 'To Do';
@@ -33631,7 +33828,7 @@
 
                 const assigneeSelect = document.getElementById('mt-assignee');
                 assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + Array.from(allUsersMap.values()).map(u => `<option value="${u.email}">${u.name}</option>`).join('');
-                assigneeSelect.value = currentUser.email;
+                assigneeSelect.value = currentUser ? currentUser.email : '';
 
                 document.getElementById('mt-status').innerHTML = MANUAL_TASK_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
                 document.getElementById('mt-internal-status').innerHTML = INTERNAL_TASK_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -35775,14 +35972,10 @@
                         <p class="text-xs text-slate-900 mt-1 max-w-xs whitespace-normal break-words leading-snug">${escapeHtml(t.desc)}</p>
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
-                    <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
                     <td class="px-6 py-4">${formatTaskDueDateHtml(t.duedate, t.status)}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">
-                        <div class="flex flex-col gap-0.5">
-                            <span>${escapeHtml(assigneeNameStr)}</span>
-                            <span class="text-[10px] text-slate-500">${escapeHtml(t.client || '—')}</span>
-                        </div>
-                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
+                    <td class="px-6 py-4 hidden xl:table-cell text-xs text-slate-500 font-medium max-w-[200px] truncate" title="${escapeHtml(t.notes || t.description || '')}">${escapeHtml(t.notes || t.description || '—')}</td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-1">
                             ${activeTaskId === t.id ? `
@@ -37827,172 +38020,15 @@
             async function initMonthlyPlan() {
                 const panel = document.getElementById('view-monthly-plan-panel');
                 if (!panel) return;
-
-                // Clear existing content
-                panel.innerHTML = '';
-
-                // Build the Monthly Plan UI with 2-column layout
-                panel.innerHTML = `
-                    <div class="space-y-6">
-                        <!-- Header with Controls -->
-                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
-                            <div class="flex items-center justify-between flex-wrap gap-4">
-                                <div class="flex items-center gap-4">
-                                    <input type="month" id="mp-month-picker" onchange="renderMonthlyPlan()" 
-                                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
-                                    <button onclick="navigateMonthlyPlan(-1)" class="p-2 rounded-lg hover:bg-slate-100 transition-colors">
-                                        <iconify-icon icon="solar:alt-arrow-left-linear" width="20"></iconify-icon>
-                                    </button>
-                                    <span id="mp-month-title" class="text-sm font-bold text-slate-600 min-w-[150px]">Month Year</span>
-                                    <button onclick="navigateMonthlyPlan(1)" class="p-2 rounded-lg hover:bg-slate-100 transition-colors">
-                                        <iconify-icon icon="solar:alt-arrow-right-linear" width="20"></iconify-icon>
-                                    </button>
-                                    <button onclick="navigateMonthlyPlan(0)" class="text-xs font-bold text-indigo-600 hover:underline">Today</button>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <select id="mp-team-filter" onchange="filterMonthlyPlanByTeamMember()" 
-                                        class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                        <option value="All">All Team Members</option>
-                                    </select>
-                                    <button onclick="toggleMonthlyPlanWorkloadDashboard()" class="p-2 rounded-lg hover:bg-slate-100 transition-colors" title="Toggle workload dashboard">
-                                        <iconify-icon icon="solar:chart-bold" width="20"></iconify-icon>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 2-Column Layout: Calendar + Workload Dashboard -->
-                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
-                            <!-- Calendar Grid -->
-                            <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 overflow-hidden">
-                                <div class="grid grid-cols-7 gap-px bg-slate-200">
-                                    <!-- Week Days Header -->
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sun</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Mon</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Tue</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Wed</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Thu</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Fri</div>
-                                    <div class="bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-400 uppercase">Sat</div>
-                                    
-                                    <!-- Day Cells -->
-                                    <div id="mp-calendar-grid" class="contents"></div>
-                                </div>
-                            </div>
-
-                            <!-- Workload Dashboard Sidebar -->
-                            <div id="mp-workload-dashboard" class="hidden lg:flex flex-col gap-4">
-                                <!-- Will be populated by renderMonthlyPlanWorkloadDashboard() -->
-                            </div>
-                        </div>
-
-                        <!-- Day Detail Panel (Hidden by default, shown on day click) -->
-                        <div id="mp-day-detail-panel" class="hidden bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-6">
-                            <!-- Will be populated dynamically -->
-                        </div>
-                    </div>
-                `;
-
-                // Set month picker to current month
-                const now = new Date();
-                const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                const picker = document.getElementById('mp-month-picker');
-                if (picker) picker.value = monthStr;
-
-                // Populate team member filter
-                await populateMonthlyPlanTeamFilter();
-
-                // Render the calendar
-                renderMonthlyPlan();
-            }
-
-            async function populateMonthlyPlanTeamFilter() {
-                const select = document.getElementById('mp-team-filter');
-                if (!select) return;
-
-                const teamMembers = Array.from(allUsersMap.values())
-                    .filter(u => u.email && u.email !== '123')
-                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-                select.innerHTML = '<option value="All">All Team Members</option>' +
-                    teamMembers.map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`).join('');
-            }
-
-            function navigateMonthlyPlan(direction) {
-                if (direction === 0) {
-                    monthlyPlanCurrentDate = new Date();
-                } else {
-                    monthlyPlanCurrentDate.setMonth(monthlyPlanCurrentDate.getMonth() + direction);
+                if (typeof renderMatrixPlanner === 'function') {
+                    renderMatrixPlanner();
                 }
-                const monthStr = `${monthlyPlanCurrentDate.getFullYear()}-${String(monthlyPlanCurrentDate.getMonth() + 1).padStart(2, '0')}`;
-                const picker = document.getElementById('mp-month-picker');
-                if (picker) picker.value = monthStr;
-                renderMonthlyPlan();
-            }
-
-            function filterMonthlyPlanByTeamMember() {
-                const select = document.getElementById('mp-team-filter');
-                if (select) monthlyPlanTeamFilter = select.value;
-                renderMonthlyPlan();
             }
 
             function renderMonthlyPlan() {
-                const picker = document.getElementById('mp-month-picker');
-                if (!picker || !picker.value) return;
-
-                const [year, month] = picker.value.split('-').map(Number);
-                monthlyPlanCurrentDate = new Date(year, month - 1, 1);
-
-                const grid = document.getElementById('mp-calendar-grid');
-                if (!grid) return;
-
-                // Update month title
-                const titleEl = document.getElementById('mp-month-title');
-                if (titleEl) {
-                    titleEl.textContent = monthlyPlanCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+                if (typeof renderMatrixPlanner === 'function') {
+                    renderMatrixPlanner();
                 }
-
-                const firstDay = new Date(year, month - 1, 1).getDay();
-                const daysInMonth = new Date(year, month, 0).getDate();
-                const today = todayIso();
-
-                let html = '';
-
-                // Blank days before month starts
-                for (let i = 0; i < firstDay; i++) {
-                    html += `<div class="bg-slate-50/30 min-h-[100px] border-r border-b border-slate-100"></div>`;
-                }
-
-                // Days of month - empty calendar ready for planning
-                for (let d = 1; d <= daysInMonth; d++) {
-                    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                    const isToday = dateStr === today;
-
-                    html += `
-                        <div class="relative p-2 border-r border-b border-slate-100 min-h-[100px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : 'bg-white'} hover:bg-slate-50/50 transition-colors cursor-pointer overflow-hidden"
-                            onclick="openPlanDayModal('${dateStr}')">
-                            <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
-                                ${d}
-                            </span>
-                            <div class="mt-2 flex-1 flex items-center justify-center text-slate-300">
-                                <iconify-icon icon="solar:add-circle-linear" width="24"></iconify-icon>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // Blank days after month ends
-                const totalCells = firstDay + daysInMonth;
-                const remainingCells = (7 - (totalCells % 7)) % 7;
-                for (let i = 0; i < remainingCells; i++) {
-                    html += `<div class="bg-slate-50/30 min-h-[100px] border-r border-b border-slate-100"></div>`;
-                }
-
-                grid.innerHTML = html;
-
-                // Don't render workload dashboard for now
-                const dashboard = document.getElementById('mp-workload-dashboard');
-                if (dashboard) dashboard.classList.add('hidden');
             }
 
             // Open modal to plan tasks for a specific day
@@ -40212,103 +40248,126 @@
                 modal.showModal();
             }
 
-            window.sendLeaveAlertToAdmins = sendLeaveAlertToAdmins;
-            window.showAiQcSuggestion = showAiQcSuggestion;
-            window.switchPerfMode = switchPerfMode;
-            window.saveOrganiserAllocations = saveOrganiserAllocations;
-            window.moveBoardColumn = moveBoardColumn;
-            window.onProjectPeriodModeChange = onProjectPeriodModeChange;
-            window.sendLearningMissedNotification = sendLearningMissedNotification;
-            window.submitMissedLearningReason = submitMissedLearningReason;
-            window.navigateProjectCalendar = navigateProjectCalendar;
-            window.submitDmContentIdea = submitDmContentIdea;
-            window.navigateStrategyCalendar = navigateStrategyCalendar;
-            window.openAddStrategyEventModal = openAddStrategyEventModal;
-            window.openEditStrategyEventModal = openEditStrategyEventModal;
-            window.closeStrategyEventModal = closeStrategyEventModal;
-            window.selectStrategyFormat = selectStrategyFormat;
-            window.handleBreakExceededResume = handleBreakExceededResume;
-            window.saveStrategyEvent = saveStrategyEvent;
-            window.deleteStrategyEvent = deleteStrategyEvent;
-            window.setStrategyClientFilter = setStrategyClientFilter;
-            window.initMonthlyPlan = initMonthlyPlan;
-            window.navigateMonthlyPlan = navigateMonthlyPlan;
-            window.filterMonthlyPlanByTeamMember = filterMonthlyPlanByTeamMember;
-            window.expandMonthlyPlanDay = expandMonthlyPlanDay;
-            window.closeMonthlyPlanDayDetail = closeMonthlyPlanDayDetail;
-            window.openMonthlyPlanTaskMenu = openMonthlyPlanTaskMenu;
-            window.toggleMonthlyPlanWorkloadDashboard = toggleMonthlyPlanWorkloadDashboard;
-            window.openPlanDayModal = openPlanDayModal;
-            window.savePlannedTask = savePlannedTask;
-            window.selectSuggestedTask = selectSuggestedTask;
+            // Safe window assignments to prevent Uncaught ReferenceError
+            const safeExpose = (prop, getter) => {
+                Object.defineProperty(window, prop, {
+                    get: function() {
+                        try {
+                            const val = getter();
+                            if (typeof val === 'undefined') {
+                                console.warn(`[window.${prop}] Warning: property getter returned undefined`);
+                                return null;
+                            }
+                            return val;
+                        } catch (e) {
+                            console.warn(`[window.${prop}] Warning: Reference error caught for ${prop}`);
+                            return null;
+                        }
+                    },
+                    configurable: true,
+                    enumerable: true
+                });
+            };
+
+            safeExpose('sendLeaveAlertToAdmins', () => sendLeaveAlertToAdmins);
+            safeExpose('showAiQcSuggestion', () => showAiQcSuggestion);
+            safeExpose('switchPerfMode', () => switchPerfMode);
+            safeExpose('saveOrganiserAllocations', () => saveOrganiserAllocations);
+            safeExpose('moveBoardColumn', () => moveBoardColumn);
+            safeExpose('onProjectPeriodModeChange', () => onProjectPeriodModeChange);
+            safeExpose('sendLearningMissedNotification', () => sendLearningMissedNotification);
+            safeExpose('submitMissedLearningReason', () => submitMissedLearningReason);
+            safeExpose('navigateProjectCalendar', () => navigateProjectCalendar);
+            safeExpose('submitDmContentIdea', () => submitDmContentIdea);
+            safeExpose('navigateStrategyCalendar', () => navigateStrategyCalendar);
+            safeExpose('openAddStrategyEventModal', () => openAddStrategyEventModal);
+            safeExpose('openEditStrategyEventModal', () => openEditStrategyEventModal);
+            safeExpose('closeStrategyEventModal', () => closeStrategyEventModal);
+            safeExpose('selectStrategyFormat', () => selectStrategyFormat);
+            safeExpose('handleBreakExceededResume', () => handleBreakExceededResume);
+            safeExpose('saveStrategyEvent', () => saveStrategyEvent);
+            safeExpose('deleteStrategyEvent', () => deleteStrategyEvent);
+            safeExpose('setStrategyClientFilter', () => setStrategyClientFilter);
+            safeExpose('initMonthlyPlan', () => initMonthlyPlan);
+            safeExpose('navigateMonthlyPlan', () => navigateMonthlyPlan);
+            safeExpose('filterMonthlyPlanByTeamMember', () => filterMonthlyPlanByTeamMember);
+            safeExpose('expandMonthlyPlanDay', () => expandMonthlyPlanDay);
+            safeExpose('closeMonthlyPlanDayDetail', () => closeMonthlyPlanDayDetail);
+            safeExpose('openMonthlyPlanTaskMenu', () => openMonthlyPlanTaskMenu);
+            safeExpose('toggleMonthlyPlanWorkloadDashboard', () => toggleMonthlyPlanWorkloadDashboard);
+            safeExpose('openPlanDayModal', () => openPlanDayModal);
+            safeExpose('savePlannedTask', () => savePlannedTask);
+            safeExpose('selectSuggestedTask', () => selectSuggestedTask);
+            
             // Phase 4: Carry-Forward Automation
-            window.shouldTaskCarryForward = shouldTaskCarryForward;
-            window.getTaskCarryForwardCount = getTaskCarryForwardCount;
-            window.createCarryForwardLogEntry = createCarryForwardLogEntry;
-            window.performDailyTransition = performDailyTransition;
-            window.sendCarryForwardNotifications = sendCarryForwardNotifications;
-            window.manuallyCarryForwardTask = manuallyCarryForwardTask;
-            window.getTaskCarryForwardHistory = getTaskCarryForwardHistory;
-            window.openCarryForwardHistoryModal = openCarryForwardHistoryModal;
-            window.closeCarryForwardHistoryModal = closeCarryForwardHistoryModal;
+            safeExpose('shouldTaskCarryForward', () => shouldTaskCarryForward);
+            safeExpose('getTaskCarryForwardCount', () => getTaskCarryForwardCount);
+            safeExpose('createCarryForwardLogEntry', () => createCarryForwardLogEntry);
+            safeExpose('performDailyTransition', () => performDailyTransition);
+            safeExpose('sendCarryForwardNotifications', () => sendCarryForwardNotifications);
+            safeExpose('manuallyCarryForwardTask', () => manuallyCarryForwardTask);
+            safeExpose('getTaskCarryForwardHistory', () => getTaskCarryForwardHistory);
+            safeExpose('openCarryForwardHistoryModal', () => openCarryForwardHistoryModal);
+            safeExpose('closeCarryForwardHistoryModal', () => closeCarryForwardHistoryModal);
+            
             // Phase 5: Bulk Operations
-            window.toggleTaskSelection = toggleTaskSelection;
-            window.selectAllMonthlyPlanTasks = selectAllMonthlyPlanTasks;
-            window.updateBulkActionUI = updateBulkActionUI;
-            window.clearBulkSelection = clearBulkSelection;
-            window.bulkCarryForwardTasks = bulkCarryForwardTasks;
-            window.bulkRescheduleTasks = bulkRescheduleTasks;
-            window.confirmBulkReschedule = confirmBulkReschedule;
-            window.bulkReassignTasks = bulkReassignTasks;
-            window.confirmBulkReassign = confirmBulkReassign;
-            window.undoLastBulkOperation = undoLastBulkOperation;
-            window.initSocialAnalytics = initSocialAnalytics;
-            window.filterSocialAnalytics = filterSocialAnalytics;
-            window.renderSaDashboard = renderSaDashboard;
-            window.openAddAnalyticsModal = openAddAnalyticsModal;
-            window.saveAnalyticsEntry = saveAnalyticsEntry;
-            window.editAnalyticsEntry = editAnalyticsEntry;
-            window.deleteAnalyticsEntry = deleteAnalyticsEntry;
-            window.updateSaBulkActionsUI = updateSaBulkActionsUI;
-            window.toggleSelectAllAnalytics = toggleSelectAllAnalytics;
-            window.confirmBulkDeleteAnalytics = confirmBulkDeleteAnalytics;
-            window.bulkDeleteAnalyticsEntries = bulkDeleteAnalyticsEntries;
-            window.showSaTaskPicker = showSaTaskPicker;
-            window.hideSaTaskPicker = hideSaTaskPicker;
-            window.toggleSaTaskPicker = toggleSaTaskPicker;
-            window.filterSaTaskPicker = filterSaTaskPicker;
-            window.renderSaTaskPickerList = renderSaTaskPickerList;
-            window.selectSaPickerTask = selectSaPickerTask;
-            window.showTopPostsReport = showTopPostsReport;
-            window.downloadTopPostsReport = downloadTopPostsReport;
-            window.openMonthlyReportDialog = openMonthlyReportDialog;
-            window.openPremiumAnalyticsDashboard = openPremiumAnalyticsDashboard;
-            window.generateAndDownloadMonthlyReport = generateAndDownloadMonthlyReport;
-            window.handleSocialAnalyticsImport = handleSocialAnalyticsImport;
-            window.initFilesManager = initFilesManager;
-            window.fmSearchSystem = fmSearchSystem;
-            window.fmOpenAddSystemModal = fmOpenAddSystemModal;
-            window.fmSelectSystem = fmSelectSystem;
-            window.fmSelectDrive = fmSelectDrive;
-            window.fmEditSystem = fmEditSystem;
-            window.fmDeleteSystem = fmDeleteSystem;
-            window.fmAddFolder = fmAddFolder;
-            window.fmEditFolder = fmEditFolder;
-            window.fmSaveSystem = fmSaveSystem;
-            window.fmCloseSystemModal = fmCloseSystemModal;
-            window.fmSaveFolder = fmSaveFolder;
-            window.fmCloseFolderModal = fmCloseFolderModal;
-            window.fmDeleteFolder = fmDeleteFolder;
-            window.fmAddDriveRow = fmAddDriveRow;
-            window.fmFolderClientChange = fmFolderClientChange;
-            window.fmRenderClientReport = fmRenderClientReport;
-            window.fmExportClientReport = fmExportClientReport;
-            window.renderDiscussionsView = renderDiscussionsView;
-            window.saveLiveDiscussionNotes = saveLiveDiscussionNotes;
-            window.endCurrentDiscussionLive = endCurrentDiscussionLive;
-            window.holdCurrentDiscussionLive = holdCurrentDiscussionLive;
-            window.resumeCurrentDiscussionLive = resumeCurrentDiscussionLive;
-            window.togglePastDiscussionNotes = togglePastDiscussionNotes;
+            safeExpose('toggleTaskSelection', () => toggleTaskSelection);
+            safeExpose('selectAllMonthlyPlanTasks', () => selectAllMonthlyPlanTasks);
+            safeExpose('updateBulkActionUI', () => updateBulkActionUI);
+            safeExpose('clearBulkSelection', () => clearBulkSelection);
+            safeExpose('bulkCarryForwardTasks', () => bulkCarryForwardTasks);
+            safeExpose('bulkRescheduleTasks', () => bulkRescheduleTasks);
+            safeExpose('confirmBulkReschedule', () => confirmBulkReschedule);
+            safeExpose('bulkReassignTasks', () => bulkReassignTasks);
+            safeExpose('confirmBulkReassign', () => confirmBulkReassign);
+            safeExpose('undoLastBulkOperation', () => undoLastBulkOperation);
+            safeExpose('initSocialAnalytics', () => initSocialAnalytics);
+            safeExpose('filterSocialAnalytics', () => filterSocialAnalytics);
+            safeExpose('renderSaDashboard', () => renderSaDashboard);
+            safeExpose('openAddAnalyticsModal', () => openAddAnalyticsModal);
+            safeExpose('saveAnalyticsEntry', () => saveAnalyticsEntry);
+            safeExpose('editAnalyticsEntry', () => editAnalyticsEntry);
+            safeExpose('deleteAnalyticsEntry', () => deleteAnalyticsEntry);
+            safeExpose('updateSaBulkActionsUI', () => updateSaBulkActionsUI);
+            safeExpose('toggleSelectAllAnalytics', () => toggleSelectAllAnalytics);
+            safeExpose('confirmBulkDeleteAnalytics', () => confirmBulkDeleteAnalytics);
+            safeExpose('bulkDeleteAnalyticsEntries', () => bulkDeleteAnalyticsEntries);
+            safeExpose('showSaTaskPicker', () => showSaTaskPicker);
+            safeExpose('hideSaTaskPicker', () => hideSaTaskPicker);
+            safeExpose('toggleSaTaskPicker', () => toggleSaTaskPicker);
+            safeExpose('filterSaTaskPicker', () => filterSaTaskPicker);
+            safeExpose('renderSaTaskPickerList', () => renderSaTaskPickerList);
+            safeExpose('selectSaPickerTask', () => selectSaPickerTask);
+            safeExpose('showTopPostsReport', () => showTopPostsReport);
+            safeExpose('downloadTopPostsReport', () => downloadTopPostsReport);
+            safeExpose('openMonthlyReportDialog', () => openMonthlyReportDialog);
+            safeExpose('openPremiumAnalyticsDashboard', () => openPremiumAnalyticsDashboard);
+            safeExpose('generateAndDownloadMonthlyReport', () => generateAndDownloadMonthlyReport);
+            safeExpose('handleSocialAnalyticsImport', () => handleSocialAnalyticsImport);
+            safeExpose('initFilesManager', () => initFilesManager);
+            safeExpose('fmSearchSystem', () => fmSearchSystem);
+            safeExpose('fmOpenAddSystemModal', () => fmOpenAddSystemModal);
+            safeExpose('fmSelectSystem', () => fmSelectSystem);
+            safeExpose('fmSelectDrive', () => fmSelectDrive);
+            safeExpose('fmEditSystem', () => fmEditSystem);
+            safeExpose('fmDeleteSystem', () => fmDeleteSystem);
+            safeExpose('fmAddFolder', () => fmAddFolder);
+            safeExpose('fmEditFolder', () => fmEditFolder);
+            safeExpose('fmSaveSystem', () => fmSaveSystem);
+            safeExpose('fmCloseSystemModal', () => fmCloseSystemModal);
+            safeExpose('fmSaveFolder', () => fmSaveFolder);
+            safeExpose('fmCloseFolderModal', () => fmCloseFolderModal);
+            safeExpose('fmDeleteFolder', () => fmDeleteFolder);
+            safeExpose('fmAddDriveRow', () => fmAddDriveRow);
+            safeExpose('fmFolderClientChange', () => fmFolderClientChange);
+            safeExpose('fmRenderClientReport', () => fmRenderClientReport);
+            safeExpose('fmExportClientReport', () => fmExportClientReport);
+            safeExpose('renderDiscussionsView', () => renderDiscussionsView);
+            safeExpose('saveLiveDiscussionNotes', () => saveLiveDiscussionNotes);
+            safeExpose('endCurrentDiscussionLive', () => endCurrentDiscussionLive);
+            safeExpose('holdCurrentDiscussionLive', () => holdCurrentDiscussionLive);
+            safeExpose('resumeCurrentDiscussionLive', () => resumeCurrentDiscussionLive);
+            safeExpose('togglePastDiscussionNotes', () => togglePastDiscussionNotes);
 
             // ══════════════════════════════════════════════════════════════════
             // SOCIAL MEDIA ANALYTICS DASHBOARD
@@ -43139,58 +43198,62 @@
                 if (pending.length > 0) showPendingTasksModal(pending);
             }
 
-            window.previewUpload = previewUpload;
-            window.openImagePreview = openImagePreview;
-            window.openChatImageGallery = openChatImageGallery;
-            window.closeChatImageGallery = closeChatImageGallery;
-            window.stepChatImageGallery = stepChatImageGallery;
-            window.downloadChatGalleryImage = downloadChatGalleryImage;
-            window.zoomChatImage = zoomChatImage;
-            window.resetChatImageZoom = resetChatImageZoom;
-            window.updateZoomDisplay = updateZoomDisplay;
-            window.handleChatGalleryKeydown = handleChatGalleryKeydown;
-            window.removeStagedAttachment = removeStagedAttachment;
-            window.showCheckInPendingTasksReminder = showCheckInPendingTasksReminder;
+
+
+            safeExpose('previewUpload', () => previewUpload);
+            safeExpose('openImagePreview', () => openImagePreview);
+            safeExpose('openChatImageGallery', () => openChatImageGallery);
+            safeExpose('closeChatImageGallery', () => closeChatImageGallery);
+            safeExpose('stepChatImageGallery', () => stepChatImageGallery);
+            safeExpose('downloadChatGalleryImage', () => downloadChatGalleryImage);
+            safeExpose('zoomChatImage', () => zoomChatImage);
+            safeExpose('resetChatImageZoom', () => resetChatImageZoom);
+            safeExpose('updateZoomDisplay', () => updateZoomDisplay);
+            safeExpose('handleChatGalleryKeydown', () => handleChatGalleryKeydown);
+            safeExpose('removeStagedAttachment', () => removeStagedAttachment);
+            safeExpose('showCheckInPendingTasksReminder', () => showCheckInPendingTasksReminder);
 
             // Task Tab & Drag-and-Drop exports
-            window.switchTasksTab = switchTasksTab;
-            window.taskRowDragStart = taskRowDragStart;
-            window.taskRowDragEnd = taskRowDragEnd;
-            window.taskRowDragOver = taskRowDragOver;
-            window.taskRowDragEnter = taskRowDragEnter;
-            window.taskRowDragLeave = taskRowDragLeave;
-            window.taskRowDrop = taskRowDrop;
+            safeExpose('switchTasksTab', () => switchTasksTab);
+            safeExpose('taskRowDragStart', () => taskRowDragStart);
+            safeExpose('taskRowDragEnd', () => taskRowDragEnd);
+            safeExpose('taskRowDragOver', () => taskRowDragOver);
+            safeExpose('taskRowDragEnter', () => taskRowDragEnter);
+            safeExpose('taskRowDragLeave', () => taskRowDragLeave);
+            safeExpose('taskRowDrop', () => taskRowDrop);
 
             // Completed Tasks exports
-            window.initCompletedTasksTab = initCompletedTasksTab;
-            window.switchCompletedDateRange = switchCompletedDateRange;
-            window.loadCompletedTasks = loadCompletedTasks;
-            window.filterCompletedTasks = filterCompletedTasks;
-            window.changeCompletedEmployee = changeCompletedEmployee;
-            window.changeCompletedClient = changeCompletedClient;
-            window.exportCompletedTasksPDF = exportCompletedTasksPDF;
-            window.exportCompletedTasksExcel = exportCompletedTasksExcel;
+            safeExpose('initCompletedTasksTab', () => initCompletedTasksTab);
+            safeExpose('switchCompletedDateRange', () => switchCompletedDateRange);
+            safeExpose('loadCompletedTasks', () => loadCompletedTasks);
+            safeExpose('filterCompletedTasks', () => filterCompletedTasks);
+            safeExpose('changeCompletedEmployee', () => changeCompletedEmployee);
+            safeExpose('changeCompletedClient', () => changeCompletedClient);
+            safeExpose('exportCompletedTasksPDF', () => exportCompletedTasksPDF);
+            safeExpose('exportCompletedTasksExcel', () => exportCompletedTasksExcel);
+            safeExpose('openAddStrategyEventModal', () => openAddStrategyEventModal);
+            safeExpose('openEditStrategyEventModal', () => openEditStrategyEventModal);
             // -- Floating Chat Popup: expose shared state & helpers --
             // The floating chat lives in a separate script tag and cannot access
             // block-scoped (let/const) variables from this closure directly.
-            window._fcpGetCurrentUser = function () { return currentUser; };
-            window._fcpGetAllUsersMap = function () { return allUsersMap; };
-            window._fcpSetAllUsersMap = function (m) { allUsersMap = m; };
-            window._fcpGetChatConvs = function () { return chatConversations; };
-            window._fcpGetUnreadCounts = function () { return unreadCounts; };
-            window._fcpGetAllUsers = getAllUsers;
-            window._fcpEKey = eKey;
-            window._fcpDmId = dmId;
-            window._fcpEscapeHtml = escapeHtml;
-            window._fcpDb = function () { return db; };
-            window._fcpRef = function (path) { return ref(db, path); };
-            window._fcpOnValue = onValue;
-            window._fcpQuery = query;
-            window._fcpLimitToLast = limitToLast;
-            window._fcpGet = get;
-            window._fcpSet = set;
-            window._fcpPush = push;
-            window._fcpUpdate = update;
+            window._fcpGetCurrentUser = function () { return typeof currentUser !== 'undefined' ? currentUser : null; };
+            window._fcpGetAllUsersMap = function () { return typeof allUsersMap !== 'undefined' ? allUsersMap : {}; };
+            window._fcpSetAllUsersMap = function (m) { if (typeof allUsersMap !== 'undefined') allUsersMap = m; };
+            window._fcpGetChatConvs = function () { return typeof chatConversations !== 'undefined' ? chatConversations : []; };
+            window._fcpGetUnreadCounts = function () { return typeof unreadCounts !== 'undefined' ? unreadCounts : {}; };
+            safeExpose('_fcpGetAllUsers', () => getAllUsers);
+            safeExpose('_fcpEKey', () => eKey);
+            safeExpose('_fcpDmId', () => dmId);
+            safeExpose('_fcpEscapeHtml', () => escapeHtml);
+            window._fcpDb = function () { return typeof db !== 'undefined' ? db : null; };
+            window._fcpRef = function (path) { return typeof db !== 'undefined' && typeof ref !== 'undefined' ? ref(db, path) : null; };
+            safeExpose('_fcpOnValue', () => onValue);
+            safeExpose('_fcpQuery', () => query);
+            safeExpose('_fcpLimitToLast', () => limitToLast);
+            safeExpose('_fcpGet', () => get);
+            safeExpose('_fcpSet', () => set);
+            safeExpose('_fcpPush', () => push);
+            safeExpose('_fcpUpdate', () => update);
             window._fcpToast = function (msg, type) { if (typeof toast === 'function') toast(msg, type); };
             window._fcpUpload = typeof uploadToCloudinary !== 'undefined' ? uploadToCloudinary : null;
             window._fcpFileToBase64 = typeof fileToBase64 !== 'undefined' ? fileToBase64 : null;
@@ -43630,15 +43693,6 @@
                 return isCompletedTask(status);
             }
 
-            // Export completed tasks functions to window
-            window.initCompletedTasksTab = initCompletedTasksTab;
-            window.switchCompletedDateRange = switchCompletedDateRange;
-            window.loadCompletedTasks = loadCompletedTasks;
-            window.filterCompletedTasks = filterCompletedTasks;
-            window.changeCompletedEmployee = changeCompletedEmployee;
-            window.changeCompletedClient = changeCompletedClient;
-            window.exportCompletedTasksPDF = exportCompletedTasksPDF;
-            window.exportCompletedTasksExcel = exportCompletedTasksExcel;
         }
     </script>
     <!-- 5:30 Daily Completed Tasks Popup Modal -->
@@ -46550,7 +46604,7 @@
             });
         })();
     </script>
-
+    <script src="js/matrix_planner.js"></script>
 </body>
 
 </html>
