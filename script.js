@@ -2589,8 +2589,38 @@ if (initializeApp) {
     }
 
     function openEditStrategyEventModal(eventId) {
-        const ev = strategyEvents[eventId];
-        if (!ev) return;
+        let ev = typeof strategyEvents !== 'undefined' ? strategyEvents[eventId] : null;
+        let realEventId = eventId;
+
+        // Search by jiraId if not found directly
+        if (!ev && typeof strategyEvents !== 'undefined' && strategyEvents) {
+            const foundEntry = Object.entries(strategyEvents).find(([k, e]) =>
+                (e.jiraId && e.jiraId.toLowerCase() === eventId.toLowerCase()) ||
+                (e.jiraTaskId && e.jiraTaskId.toLowerCase() === eventId.toLowerCase())
+            );
+            if (foundEntry) {
+                realEventId = foundEntry[0];
+                ev = foundEntry[1];
+            }
+        }
+
+        // If still not found, check if it's a Jira task (e.g., JULY-123 or AUG-45)
+        if (!ev && typeof tasks !== 'undefined' && tasks) {
+            const matchedJiraTask = tasks.find(t => t.id.toLowerCase() === eventId.toLowerCase());
+            if (matchedJiraTask) {
+                ev = {
+                    title: matchedJiraTask.desc || matchedJiraTask.id,
+                    date: matchedJiraTask.duedate || '',
+                    owner: matchedJiraTask.assignee || '',
+                    client: matchedJiraTask.client || '',
+                    status: matchedJiraTask.status || 'To Do',
+                    jiraTaskId: matchedJiraTask.id,
+                    isJiraOnly: true
+                };
+            }
+        }
+
+        if (!ev) return toast('Event not found', 'error');
 
         // Sneha, Murugesh and Admin can edit. Others can only view!
         const canWrite = canViewStrategyCalendar();
@@ -2831,14 +2861,37 @@ if (initializeApp) {
         if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
 
         const id = document.getElementById('strategy-event-id').value;
-        if (!id) return;
+        const jiraId = document.getElementById('strategy-jira-id').value?.trim();
+        if (!id && !jiraId) return;
 
-        if (!confirm('Are you sure you want to delete this strategy campaign?')) return;
+        if (!confirm('Are you sure you want to delete this strategy campaign and its Jira task?')) return;
 
         try {
-            await remove(ref(db, `worksync/strategy_events/${id}`));
-            toast('Strategy event removed!', 'success');
+            if (id && typeof strategyEvents !== 'undefined' && strategyEvents[id]) {
+                await remove(ref(db, `worksync/strategy_events/${id}`));
+            } else if (id && !id.includes('-')) {
+                await remove(ref(db, `worksync/strategy_events/${id}`));
+            }
+
+            const targetJiraKey = jiraId || (id && id.includes('-') ? id : null);
+            if (targetJiraKey) {
+                try {
+                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(targetJiraKey)}`;
+                    await jiraRequest(jiraUrl, 'delete');
+                } catch (jiraErr) {
+                    console.warn('Failed to delete Jira issue directly:', jiraErr);
+                }
+
+                if (typeof tasks !== 'undefined' && tasks) {
+                    const idx = tasks.findIndex(t => t.id.toLowerCase() === targetJiraKey.toLowerCase());
+                    if (idx !== -1) tasks.splice(idx, 1);
+                }
+            }
+
+            toast('Strategy event & Jira task deleted!', 'success');
             closeStrategyEventModal();
+            if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
+            if (typeof renderTasks === 'function') renderTasks();
         } catch (err) {
             console.error(err);
             toast('Failed to delete event', 'error');
