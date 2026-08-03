@@ -158,6 +158,28 @@ if (initializeApp) {
         useLocalApi: false
     };
 
+    function getJiraProjectKeyForDate(dateStr) {
+        if (dateStr) {
+            let mNum = null;
+            if (typeof dateStr === 'string' && dateStr.includes('-')) {
+                mNum = parseInt(dateStr.split('-')[1], 10);
+            } else {
+                const d = new Date(dateStr);
+                if (!isNaN(d.getTime())) mNum = d.getMonth() + 1;
+            }
+            if (mNum === 8) return 'AUG';
+            if (mNum === 7) return 'JULY';
+            if (mNum === 6) return 'JUN';
+            if (mNum === 5) return 'MAY';
+        }
+        const currentMonth = new Date().getMonth() + 1;
+        if (currentMonth === 8) return 'AUG';
+        if (currentMonth === 7) return 'JULY';
+        if (currentMonth === 6) return 'JUN';
+        if (currentMonth === 5) return 'MAY';
+        return JIRA.projectKey || 'AUG';
+    }
+
     const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
 
     // Leave Approval Chains - Different employees have different approval hierarchies
@@ -2702,10 +2724,7 @@ if (initializeApp) {
                         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     };
                     const taskDueDate = date;
-                    const isAug = date && date.split('-')[1] === '08';
-                    const isJuly = date && date.split('-')[1] === '07';
-                    const isJune = date && date.split('-')[1] === '06';
-                    const projectKey = isAug ? 'AUG' : (isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey));
+                    const projectKey = getJiraProjectKeyForDate(date);
                     const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                     const jiraPayload = {
                         fields: {
@@ -9262,8 +9281,8 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             let createdTaskId = null;
 
             if (platform === 'jira') {
-                const curMonth = new Date().getMonth(); // 7 is August
-                const projectKey = curMonth === 7 ? 'AUG' : (curMonth === 6 ? 'JULY' : (curMonth === 5 ? 'JUN' : JIRA.projectKey));
+                const taskDueDate = document.getElementById('task-duedate')?.value || '';
+                const projectKey = getJiraProjectKeyForDate(taskDueDate);
                 const url = `https://${JIRA.domain}/rest/api/3/issue`;
                 const payload = {
                     fields: {
