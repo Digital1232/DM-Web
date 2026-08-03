@@ -12549,7 +12549,15 @@
                 });
 
                 tasks
-                    .filter(task => DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .filter(task => {
+                        if (!DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) || !assigneeMatches(task, userEmail)) return false;
+                        if (task.duedate) {
+                            const taskDue = new Date(task.duedate);
+                            taskDue.setHours(0, 0, 0, 0);
+                            if (taskDue.getTime() > selectedDate.getTime()) return false;
+                        }
+                        return true;
+                    })
                     .forEach(task => {
                         plannedTasks.push({
                             ...task,
@@ -12561,7 +12569,15 @@
                     });
 
                 tasks
-                    .filter(task => isInternalTask(task) && INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .filter(task => {
+                        if (!isInternalTask(task) || !INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) || !assigneeMatches(task, userEmail)) return false;
+                        if (task.duedate) {
+                            const taskDue = new Date(task.duedate);
+                            taskDue.setHours(0, 0, 0, 0);
+                            if (taskDue.getTime() > selectedDate.getTime()) return false;
+                        }
+                        return true;
+                    })
                     .forEach(task => {
                         plannedTasks.push({
                             ...task,
