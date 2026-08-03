@@ -3192,28 +3192,57 @@ document.addEventListener('click', function(e) {
     }
 });
 
-async function jiraRequest(jiraUrl, method = 'get', payload = null) {
-        const body = { jiraUrl, method };
-        if (payload !== null) body.payload = payload;
-        console.log('🎯 Target URL:', jiraUrl);
+async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2) {
+    const body = { jiraUrl, method };
+    if (payload !== null) body.payload = payload;
+    console.log('🎯 Target URL:', jiraUrl);
 
-        if (!JIRA.useLocalApi) {
-            return jiraAppsScriptRequest(body);
-        }
-
+    for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            return await jiraProxyFetch(JIRA.apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-        } catch (primaryErr) {
-            console.warn('Primary Jira proxy failed, trying Google Apps Script proxy:', primaryErr);
-            if (!JIRA.gsUrl) throw primaryErr;
+            let res;
+            if (!JIRA.useLocalApi) {
+                res = await jiraAppsScriptRequest(body);
+            } else {
+                try {
+                    res = await jiraProxyFetch(JIRA.apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                } catch (primaryErr) {
+                    console.warn('Primary Jira proxy failed, trying Google Apps Script proxy:', primaryErr);
+                    if (!JIRA.gsUrl) throw primaryErr;
+                    res = await jiraAppsScriptRequest(body);
+                }
+            }
 
-            return jiraAppsScriptRequest(body);
+            const errStr = (res && !res.success) ? (res.error || (res.data?.errorMessages ? res.data.errorMessages.join(' ') : '')) : '';
+            const isTransientError = errStr.includes('Address unavailable') ||
+                                    errStr.includes('DNS') ||
+                                    errStr.includes('timed out') ||
+                                    errStr.includes('502') ||
+                                    errStr.includes('503') ||
+                                    errStr.includes('504');
+
+            if (isTransientError && attempt < retries) {
+                console.warn(`[jiraRequest] Transient proxy error ("${errStr}"). Retrying attempt ${attempt + 1}/${retries}...`);
+                await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+                continue;
+            }
+
+            return res;
+        } catch (err) {
+            const errStr = err.message || '';
+            const isTransient = errStr.includes('Address unavailable') || errStr.includes('Failed to fetch') || errStr.includes('NetworkError');
+            if (isTransient && attempt < retries) {
+                console.warn(`[jiraRequest] Network error ("${errStr}"). Retrying attempt ${attempt + 1}/${retries}...`);
+                await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+                continue;
+            }
+            if (attempt === retries) throw err;
         }
     }
+}
 
     async function jiraAppsScriptRequest(body) {
         if (!JIRA.gsUrl) {
