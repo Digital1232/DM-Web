@@ -152,31 +152,13 @@ if (initializeApp) {
     const JIRA = {
         domain: 'vilpowerdigitalmarketing.atlassian.net',
         projectKey: 'AUG',
-        projectKeys: ['MAY', 'JUN', 'JULY', 'AUG'],
+        projectKeys: ['AUG'],
         apiUrl: '/api/jira',
         gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
         useLocalApi: false
     };
 
     function getJiraProjectKeyForDate(dateStr) {
-        if (dateStr) {
-            let mNum = null;
-            if (typeof dateStr === 'string' && dateStr.includes('-')) {
-                mNum = parseInt(dateStr.split('-')[1], 10);
-            } else {
-                const d = new Date(dateStr);
-                if (!isNaN(d.getTime())) mNum = d.getMonth() + 1;
-            }
-            if (mNum === 8) return 'AUG';
-            if (mNum === 7) return 'JULY';
-            if (mNum === 6) return 'JUN';
-            if (mNum === 5) return 'MAY';
-        }
-        const currentMonth = new Date().getMonth() + 1;
-        if (currentMonth === 8) return 'AUG';
-        if (currentMonth === 7) return 'JULY';
-        if (currentMonth === 6) return 'JUN';
-        if (currentMonth === 5) return 'MAY';
         return JIRA.projectKey || 'AUG';
     }
 
@@ -3312,7 +3294,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null) {
             if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
         }
         try {
-            const projectKeys = JIRA.projectKeys || ['MAY', 'JUN', 'JULY', 'AUG'];
+            const projectKeys = JIRA.projectKeys || ['AUG'];
             const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
             const manualTasks = tasks.filter(t => t.manual);
 
