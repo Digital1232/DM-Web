@@ -2592,7 +2592,8 @@ if (initializeApp) {
         document.getElementById('strategy-title').value = '';
         document.getElementById('strategy-date').value = dateStr || '';
         document.getElementById('strategy-owner').value = '';
-        document.getElementById('strategy-desc').value = '';
+        const descEl = document.getElementById('strategy-desc');
+        if (descEl) descEl.value = '';
 
         // Reset format to Poster and enable buttons
         const posterBtn = document.getElementById('strategy-format-poster');
@@ -2653,7 +2654,8 @@ if (initializeApp) {
         document.getElementById('strategy-jira-id').value = ev.jiraTaskId || '';
         document.getElementById('strategy-date').value = ev.date || '';
         document.getElementById('strategy-owner').value = ev.owner || '';
-        document.getElementById('strategy-desc').value = ev.desc || '';
+        const descEl = document.getElementById('strategy-desc');
+        if (descEl) descEl.value = ev.desc || '';
 
         // Restore format value
         selectStrategyFormat(ev.format || 'Poster');
@@ -2715,7 +2717,7 @@ if (initializeApp) {
         const jiraId = document.getElementById('strategy-jira-id').value.trim();
         const date = document.getElementById('strategy-date').value;
         let owner = document.getElementById('strategy-owner').value;
-        const desc = document.getElementById('strategy-desc').value.trim();
+        const desc = document.getElementById('strategy-desc')?.value?.trim() || '';
         const format = document.getElementById('strategy-format').value;
 
         if (!title || !date) {

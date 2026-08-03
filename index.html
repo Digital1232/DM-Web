@@ -10486,21 +10486,6 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Videos Count</label>
-                    <input id="strategy-videos-count" type="number" min="0" placeholder="0"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                </div>
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Posters Count</label>
-                    <input id="strategy-posters-count" type="number" min="0" placeholder="0"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label
                         class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</label>
                     <select id="strategy-client"
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
@@ -10528,14 +10513,6 @@
                         <option value="Done">Done</option>
                     </select>
                 </div>
-            </div>
-
-            <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Goal / Brief
-                    Description</label>
-                <textarea id="strategy-desc" rows="3"
-                    placeholder="Describe the campaign objectives, content theme, links..."
-                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 resize-none"></textarea>
             </div>
 
             <div class="flex justify-between items-center pt-2">
@@ -16099,9 +16076,12 @@
                 document.getElementById('strategy-owner').value = '';
                 document.getElementById('strategy-client').value = '';
                 document.getElementById('strategy-status').value = 'To Do';
-                document.getElementById('strategy-desc').value = '';
-                document.getElementById('strategy-videos-count').value = '';
-                document.getElementById('strategy-posters-count').value = '';
+                const descEl = document.getElementById('strategy-desc');
+                if (descEl) descEl.value = '';
+                const vcEl = document.getElementById('strategy-videos-count');
+                if (vcEl) vcEl.value = '';
+                const pcEl = document.getElementById('strategy-posters-count');
+                if (pcEl) pcEl.value = '';
 
                 // Clear Jira selection
                 document.getElementById('strategy-jira-id').value = '';
@@ -16226,7 +16206,8 @@
                     if (dropdown) dropdown.classList.add('hidden');
 
                     document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
-                    document.getElementById('strategy-desc').value = ev.desc || '';
+                    const descEl = document.getElementById('strategy-desc');
+                    if (descEl) descEl.value = ev.desc || '';
                     
                     console.log('[openEditStrategyEventModal] Form fields populated:', {
                         title: ev.title,
@@ -16368,11 +16349,11 @@
                 let owner = document.getElementById('strategy-owner').value;
                 const client = document.getElementById('strategy-client').value;
                 const status = document.getElementById('strategy-status').value;
-                const desc = document.getElementById('strategy-desc').value.trim();
+                const desc = document.getElementById('strategy-desc')?.value?.trim() || '';
                 const format = document.getElementById('strategy-format').value;
                 const jiraId = document.getElementById('strategy-jira-id').value || '';
-                const videosCount = parseInt(document.getElementById('strategy-videos-count').value) || 0;
-                const postersCount = parseInt(document.getElementById('strategy-posters-count').value) || 0;
+                const videosCount = parseInt(document.getElementById('strategy-videos-count')?.value) || 0;
+                const postersCount = parseInt(document.getElementById('strategy-posters-count')?.value) || 0;
 
                 if (!title || !date) {
                     return toast('Please fill in title and date.', 'error');
