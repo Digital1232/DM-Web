@@ -162,6 +162,23 @@ if (initializeApp) {
         return JIRA.projectKey || 'AUG';
     }
 
+    function calculateDueDate4DaysBefore(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            const dateObj = new Date(y, m, d);
+            dateObj.setDate(dateObj.getDate() - 4);
+            const resY = dateObj.getFullYear();
+            const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const resD = String(dateObj.getDate()).padStart(2, '0');
+            return `${resY}-${resM}-${resD}`;
+        }
+        return dateStr;
+    }
+
     const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
 
     // Leave Approval Chains - Different employees have different approval hierarchies
@@ -2668,9 +2685,13 @@ if (initializeApp) {
 
         try {
             const userEmail = (typeof currentUser !== 'undefined') ? currentUser.email : 'system';
+            const postDate = date;
+            const calculatedDueDate = calculateDueDate4DaysBefore(postDate);
             const evPayload = {
                 title,
-                date,
+                date: postDate,
+                postDate: postDate,
+                duedate: calculatedDueDate,
                 platform: '',
                 category: '',
                 owner,
@@ -2700,12 +2721,7 @@ if (initializeApp) {
 
                 // Auto-create a task with details in Jira asynchronously in background
                 (async () => {
-                    const addDays = (dateStr, days) => {
-                        const d = new Date(dateStr + 'T00:00:00');
-                        d.setDate(d.getDate() + days);
-                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    };
-                    const taskDueDate = date;
+                    const taskDueDate = calculatedDueDate;
                     const projectKey = getJiraProjectKeyForDate(date);
                     const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                     const jiraPayload = {
@@ -11170,19 +11186,56 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         const userEmail = document.getElementById('ap-user').value;
         const searchLower = (term || '').toLowerCase();
 
-        let filtered = tasks.filter(t => DAILY_PLAN_ALLOCATION_STATUSES.includes(t.status));
+        let allTaskPool = [...tasks];
+        if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+            Object.entries(strategyEvents).forEach(([id, ev]) => {
+                if (!ev || !ev.title) return;
+                const existingInTasks = allTaskPool.some(t =>
+                    (ev.jiraId && t.id && t.id.toLowerCase() === ev.jiraId.toLowerCase()) ||
+                    (t.desc && ev.title && t.desc.toLowerCase() === ev.title.toLowerCase())
+                );
+                if (!existingInTasks) {
+                    const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                    allTaskPool.push({
+                        id: ev.jiraId || id,
+                        desc: ev.title,
+                        summary: ev.title,
+                        status: ev.status || 'To Do',
+                        client: ev.client || '',
+                        assignee: ev.owner || '',
+                        owner: ev.owner || '',
+                        duedate: calculatedDue,
+                        postDate: ev.date,
+                        isStrategyEvent: true,
+                        eventId: id
+                    });
+                }
+            });
+        }
+
+        let filtered = allTaskPool.filter(t => {
+            if (!t) return false;
+            const s = (t.status || '').trim().toLowerCase();
+            if (s === 'done' || s === 'completed' || s === 'closed' || s === 'resolved' || s === 'cancelled') return false;
+            return true;
+        });
 
         if (term) {
             const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
             if (terms.length > 0) {
                 filtered = filtered.filter(t => {
-                    const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''}`.toLowerCase();
+                    const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''} ${t.summary || ''} ${assigneeName(t) || ''} ${t.owner || ''}`.toLowerCase();
                     return terms.every(word => searchableText.includes(word));
                 });
             }
         } else {
             // Show tasks for selected user OR unassigned tasks so admin can assign them
-            filtered = filtered.filter(t => (assigneeMatches(t, userEmail) || !t.assignee || t.assignee === 'Unassigned'));
+            filtered = filtered.filter(t => (
+                assigneeMatches(t, userEmail) ||
+                (t.owner && t.owner.toLowerCase() === (userEmail || '').toLowerCase()) ||
+                !t.assignee ||
+                t.assignee === 'Unassigned'
+            ));
         }
 
         filtered.sort((a, b) => {
@@ -11192,7 +11245,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             return new Date(a.duedate) - new Date(b.duedate);
         });
 
-        filtered = filtered.slice(0, 50);
+        filtered = filtered.slice(0, 500);
 
         if (!filtered.length) {
             list.innerHTML = `<p class="p-4 text-center text-xs text-slate-400 italic">No tasks found.</p>`;

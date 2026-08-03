@@ -11234,6 +11234,24 @@
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
+            function calculateDueDate4DaysBefore(dateStr) {
+                if (!dateStr) return '';
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    const y = parseInt(parts[0], 10);
+                    const m = parseInt(parts[1], 10) - 1;
+                    const d = parseInt(parts[2], 10);
+                    const dateObj = new Date(y, m, d);
+                    dateObj.setDate(dateObj.getDate() - 4);
+                    const resY = dateObj.getFullYear();
+                    const resM = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const resD = String(dateObj.getDate()).padStart(2, '0');
+                    return `${resY}-${resM}-${resD}`;
+                }
+                return dateStr;
+            }
+            window.calculateDueDate4DaysBefore = calculateDueDate4DaysBefore;
+
             const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree'];
             window.CLIENTS = CLIENTS;
 
@@ -12458,8 +12476,10 @@
             }
 
             function taskEligibleForDailyPlanAllocation(task) {
-                if (isInternalTask(task)) return INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES.includes(task.status);
-                return DAILY_PLAN_ALLOCATION_STATUSES.includes(task.status);
+                if (!task) return false;
+                const s = (task.status || '').trim().toLowerCase();
+                if (s === 'done' || s === 'completed' || s === 'closed' || s === 'resolved' || s === 'cancelled') return false;
+                return true;
             }
 
             function collectAllTodayTasksForUser(userEmail, dateStr = todayIso()) {
@@ -15544,19 +15564,7 @@
                 const today = new Date();
                 const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-                // Sync any strategy event due dates that were offset in Jira back to the original strategy event date
-                if (strategyEvents && tasks && tasks.length > 0) {
-                    Object.entries(strategyEvents).forEach(([id, ev]) => {
-                        if (!ev.date) return;
-                        const matchedTask = tasks.find(t => (ev.jiraId && t.id.toLowerCase() === ev.jiraId.toLowerCase()) || (t.desc && ev.title && t.desc.toLowerCase() === ev.title.toLowerCase()));
-                        if (matchedTask && matchedTask.duedate && matchedTask.duedate !== ev.date) {
-                            console.log(`[Auto-Revert] Reverting task ${matchedTask.id} due date from ${matchedTask.duedate} to ${ev.date}`);
-                            matchedTask.duedate = ev.date;
-                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(matchedTask.id)}`;
-                            jiraRequest(jiraUrl, 'put', { fields: { duedate: ev.date } }).catch(e => console.error('Failed to sync Jira duedate:', e));
-                        }
-                    });
-                }
+                // Strategy Calendar Event dates are Publishing/Post Dates, with Task Due Dates set 4 days prior
 
                 // Build calendar from Strategy Events and Jira tasks (excluding internal & duplicates)
                 const tasksByDate = {};
@@ -16328,9 +16336,13 @@
                 }
 
                 try {
+                    const postDate = date;
+                    const calculatedDueDate = calculateDueDate4DaysBefore(postDate);
                     const evPayload = {
                         title,
-                        date,
+                        date: postDate,
+                        postDate: postDate,
+                        duedate: calculatedDueDate,
                         platform: '',
                         category: '',
                         owner,
@@ -16353,12 +16365,19 @@
                         // Close modal immediately so UI is snappy!
                         closeStrategyEventModal();
 
-                        // Background sync of task status
+                        // Background sync of task status & due date
                         (async () => {
                             try {
                                 const matchedTask = findMatchedStrategyTask(title, desc, jiraId);
-                                if (matchedTask && matchedTask.status !== status) {
-                                    await updateTaskStatus(matchedTask.id, status);
+                                if (matchedTask) {
+                                    if (matchedTask.status !== status) {
+                                        await updateTaskStatus(matchedTask.id, status);
+                                    }
+                                    if (matchedTask.duedate !== calculatedDueDate) {
+                                        matchedTask.duedate = calculatedDueDate;
+                                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(matchedTask.id)}`;
+                                        jiraRequest(jiraUrl, 'put', { fields: { duedate: calculatedDueDate } }).catch(e => console.error('Failed to sync Jira duedate:', e));
+                                    }
                                 }
                             } catch (bgErr) {
                                 console.error('Background task status sync error:', bgErr);
@@ -16377,7 +16396,7 @@
                         // Perform Jira task creation & sync asynchronously in background!
                         (async () => {
                             try {
-                                const taskDueDate = date;
+                                const taskDueDate = calculatedDueDate;
                                 const projectKey = getJiraProjectKeyForDate(date);
                                 const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
                                 const jiraPayload = {
@@ -37169,7 +37188,35 @@
                 const dueDateFrom = document.getElementById('ap-due-from')?.value || '';
                 const dueDateTo = document.getElementById('ap-due-to')?.value || '';
 
-                let filtered = tasks.filter(taskEligibleForDailyPlanAllocation);
+                // Pool all tasks including Strategy Events
+                let allTaskPool = [...tasks];
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    Object.entries(strategyEvents).forEach(([id, ev]) => {
+                        if (!ev || !ev.title) return;
+                        const existingInTasks = allTaskPool.some(t =>
+                            (ev.jiraId && t.id && t.id.toLowerCase() === ev.jiraId.toLowerCase()) ||
+                            (t.desc && ev.title && t.desc.toLowerCase() === ev.title.toLowerCase())
+                        );
+                        if (!existingInTasks) {
+                            const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                            allTaskPool.push({
+                                id: ev.jiraId || id,
+                                desc: ev.title,
+                                summary: ev.title,
+                                status: ev.status || 'To Do',
+                                client: ev.client || '',
+                                assignee: ev.owner || '',
+                                owner: ev.owner || '',
+                                duedate: calculatedDue,
+                                postDate: ev.date,
+                                isStrategyEvent: true,
+                                eventId: id
+                            });
+                        }
+                    });
+                }
+
+                let filtered = allTaskPool.filter(taskEligibleForDailyPlanAllocation);
 
                 if (clientFilter) filtered = filtered.filter(t => t.client === clientFilter);
                 if (statusFilter) filtered = filtered.filter(t => t.status === statusFilter);
@@ -37185,17 +37232,21 @@
                     });
                 }
 
-                // By default (when no filters/search are set), show tasks assigned to the target user or unassigned.
-                // If any filter/search is active, lift the assignee restriction to let user search/find any matching task.
+                // By default (when no filters/search are set), show tasks assigned to the target user, strategy events owned by user, or unassigned.
                 if (!term && !clientFilter && !statusFilter && !dueDateFrom && !dueDateTo) {
-                    filtered = filtered.filter(t => (assigneeMatches(t, userEmail) || !t.assignee || t.assignee === 'Unassigned'));
+                    filtered = filtered.filter(t => (
+                        assigneeMatches(t, userEmail) ||
+                        (t.owner && t.owner.toLowerCase() === (userEmail || '').toLowerCase()) ||
+                        !t.assignee ||
+                        t.assignee === 'Unassigned'
+                    ));
                 }
 
                 if (term) {
                     const terms = term.toLowerCase().split(/\s+/).filter(Boolean);
                     if (terms.length > 0) {
                         filtered = filtered.filter(t => {
-                            const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''} ${assigneeName(t) || ''}`.toLowerCase();
+                            const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''} ${t.summary || ''} ${assigneeName(t) || ''} ${t.owner || ''}`.toLowerCase();
                             return terms.every(word => searchableText.includes(word));
                         });
                     }
