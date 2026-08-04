@@ -17276,8 +17276,15 @@
                                     if (newEventId && parentKey) {
                                         try {
                                             await update(ref(db, `worksync/strategy_events/${newEventId}`), { jiraId: parentKey });
-                                            if (typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[newEventId]) {
-                                                strategyEvents[newEventId].jiraId = parentKey;
+                                            // Eagerly update local cache so syncTasks can correctly identify
+                                            // this Jira task as strategy-linked and skip internal task creation
+                                            if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                                if (!strategyEvents[newEventId]) {
+                                                    // New event not yet in local cache – populate it fully
+                                                    strategyEvents[newEventId] = { ...evPayload, jiraId: parentKey };
+                                                } else {
+                                                    strategyEvents[newEventId].jiraId = parentKey;
+                                                }
                                             }
                                         } catch (e) {
                                             console.error('Failed to update strategy event jiraId:', e);
@@ -23625,6 +23632,9 @@
                             status: newStatus,
                             updatedAt: Date.now()
                         });
+                        if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
                         toast('Status updated', 'success');
                         return true;
                     } else {
@@ -23636,6 +23646,9 @@
                             renderInternalTasks();
                             updateStats();
                             return false;
+                        }
+                        if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                         }
                         return true;
                     }
@@ -36423,6 +36436,36 @@
                 }
             }
 
+            async function sendDesignCompletedNotification(task, changedBy) {
+                if (!db || !task) return;
+                const targetEmails = ['murugeshvilpower@gmail.com'];
+                const title = '🎨 Task Moved to Design Completed';
+                const taskTitle = task.desc || task.summary || task.id || 'Task';
+                const clientStr = task.client ? ` (${task.client})` : '';
+                const body = `Task "${taskTitle}"${clientStr} is marked as Design Completed. Please send this task to the client to get approved!`;
+
+                const notifData = {
+                    type: 'design_completed',
+                    taskId: task.id,
+                    taskDesc: taskTitle,
+                    client: task.client || '',
+                    newStatus: 'Design Completed',
+                    changedBy: changedBy || currentUser?.name || currentUser?.email || 'System',
+                    notifyEmails: targetEmails,
+                    title,
+                    body,
+                    timestamp: Date.now(),
+                    readBy: {}
+                };
+
+                try {
+                    await push(ref(db, 'worksync/task_notifications'), notifData);
+                    console.log(`[Design Completed Notif] Sent notification for ${task.id} to Murugesh (${targetEmails.join(', ')})`);
+                } catch (e) {
+                    console.error('Failed to send Design Completed notification:', e);
+                }
+            }
+
             function openReworkQcModal(data) {
                 const modal = document.getElementById('reworkQcModal');
                 const container = document.getElementById('rework-qc-modal-content');
@@ -38063,6 +38106,11 @@
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
+                        // Design Completed notification for Murugesh
+                        if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
+
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
@@ -38098,6 +38146,11 @@
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
+                        // Design Completed notification for Murugesh
+                        if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
+
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
@@ -38114,12 +38167,19 @@
                     return;
                 }
 
-                // Skip if task is linked to a Strategy Event
+                // Skip if this is already a Jira subtask (has a parentId) — strategy events create their own Jira subtasks
+                if (task.parentId) {
+                    return;
+                }
+
+                // Skip if task is linked to a Strategy Event (by jiraId or by title)
                 if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const taskDesc = String(task.desc || task.summary || '').toLowerCase().trim();
+                    const taskId = String(task.id || '').toLowerCase();
                     const isLinkedToStrategy = Object.values(strategyEvents).some(ev =>
                         ev && (
-                            (ev.jiraId && task.id && String(ev.jiraId).toLowerCase() === String(task.id).toLowerCase()) ||
-                            (ev.title && task.desc && String(ev.title).toLowerCase().trim() === String(task.desc).toLowerCase().trim())
+                            (ev.jiraId && taskId && String(ev.jiraId).toLowerCase() === taskId) ||
+                            (ev.title && taskDesc && String(ev.title).toLowerCase().trim() === taskDesc)
                         )
                     );
                     if (isLinkedToStrategy) {
