@@ -84,8 +84,8 @@ function initClientsAndAssignees() {
     populateMatrixFilterDropdowns();
 }
 
-let rawStrategyEventsData = null;
-let rawManualTasksData = null;
+function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
+let rawMonthlyPlansData = null;
 
 /**
  * Robust Date Normalizer to ISO YYYY-MM-DD
@@ -150,24 +150,13 @@ function setupFirebaseRealtimeListener() {
     isFirebaseConnected = true;
 
     try {
-        // 1. Listen to worksync/strategy_events
-        const eventsRef = rtdb.ref(db, 'worksync/strategy_events');
-        rtdb.onValue(eventsRef, (snapshot) => {
-            rawStrategyEventsData = snapshot.val();
+        const plansRef = rtdb.ref(db, 'worksync/monthly_plans');
+        rtdb.onValue(plansRef, (snapshot) => {
+            rawMonthlyPlansData = snapshot.val();
             mergeAndRenderAllStrategyTasks();
         }, (error) => {
-            console.error('[MatrixEngine] Strategy Events Sync Error:', error);
+            console.error('[MatrixEngine] Monthly Plans Sync Error:', error);
         });
-
-        // 2. Listen to worksync/manual_tasks (Daily Plan Strategy Tasks)
-        const manualTasksRef = rtdb.ref(db, 'worksync/manual_tasks');
-        rtdb.onValue(manualTasksRef, (snapshot) => {
-            rawManualTasksData = snapshot.val();
-            mergeAndRenderAllStrategyTasks();
-        }, (error) => {
-            console.error('[MatrixEngine] Manual Tasks Sync Error:', error);
-        });
-
     } catch (err) {
         console.error('[MatrixEngine] Failed to setup RTDB listeners:', err);
     }
@@ -232,54 +221,27 @@ function isExcludedTask(t) {
 function mergeAndRenderAllStrategyTasks() {
     matrixTasksMap.clear();
 
-    // 1. Merge worksync/strategy_events
-    if (rawStrategyEventsData && typeof rawStrategyEventsData === 'object') {
-        Object.entries(rawStrategyEventsData).forEach(([key, val]) => {
-            if (isExcludedTask(val)) return;
+    if (rawMonthlyPlansData && typeof rawMonthlyPlansData === 'object') {
+        Object.entries(rawMonthlyPlansData).forEach(([userKey, userMonths]) => {
+            if (userMonths && typeof userMonths === 'object') {
+                Object.entries(userMonths).forEach(([monthYear, monthData]) => {
+                    if (monthData && monthData.tasks && typeof monthData.tasks === 'object') {
+                        Object.entries(monthData.tasks).forEach(([pushId, taskVal]) => {
+                            if (isExcludedTask(taskVal)) return;
 
-            const task = parseTaskObject(key, val);
-            const isJira = task && (task.jiraId || isJiraKey(task.id));
-            if (task && isJira) {
-                matrixTasksMap.set(task.id, task);
-            }
-        });
-    }
-
-    // 2. Merge worksync/manual_tasks (Daily Plan Tasks)
-    if (rawManualTasksData && typeof rawManualTasksData === 'object') {
-        Object.entries(rawManualTasksData).forEach(([userKey, userTasks]) => {
-            if (userTasks && typeof userTasks === 'object') {
-                Object.entries(userTasks).forEach(([taskId, taskVal]) => {
-                    if (isExcludedTask(taskVal)) return;
-                    
-                    const task = parseTaskObject(taskId, taskVal, userKey);
-                    const isJira = task && (task.jiraId || isJiraKey(task.id));
-                    if (task && isJira) {
-                        if (!matrixTasksMap.has(task.id)) {
+                            const task = {
+                                ...taskVal,
+                                id: taskVal.id || pushId,
+                                pushId: pushId,
+                                userKey: userKey
+                            };
                             matrixTasksMap.set(task.id, task);
-                        }
+                        });
                     }
                 });
             }
         });
     }
-
-    // 3. Merge window.tasks (Global app tasks)
-    if (Array.isArray(window.tasks)) {
-        window.tasks.forEach(t => {
-            if (isExcludedTask(t)) return;
-
-            const isJira = t.jiraId || isJiraKey(t.id);
-            if (t && t.id && isJira && !matrixTasksMap.has(t.id)) {
-                const task = parseTaskObject(t.id, t);
-                if (task && task.date && task.client) {
-                    matrixTasksMap.set(task.id, task);
-                }
-            }
-        });
-    }
-
-
 
     // Dynamic client discovery
     matrixTasksMap.forEach(taskObj => {
@@ -289,7 +251,7 @@ function mergeAndRenderAllStrategyTasks() {
     });
     matrixClientsList.sort();
 
-    console.log(`[MatrixEngine] Multi-Source Realtime Sync: Loaded ${matrixTasksMap.size} Strategy Calendar & Daily Plan tasks across ${matrixClientsList.length} clients.`);
+    console.log(`[MatrixEngine] Multi-Source Realtime Sync: Loaded ${matrixTasksMap.size} Monthly Plan tasks across ${matrixClientsList.length} clients.`);
     populateMatrixFilterDropdowns();
     renderMatrixPlanner();
     if (typeof renderMatrixTable === 'function') renderMatrixTable();
@@ -332,40 +294,77 @@ async function saveMatrixTaskToFirebase(taskId, updatedFields) {
 
     // Local state update immediately (optimistic UI update)
     let existingTask = matrixTasksMap.get(taskId) || {};
+    
+    // Determine the old key and path
+    const oldEmail = existingTask.assigneeEmail || existingTask.assignee || '';
+    const oldDate = existingTask.duedate || existingTask.date || existingTask.dueDate || existingTask.postDate || '';
+    
     let mergedTask = { ...existingTask, ...updatedFields, updatedAt: Date.now() };
 
     // Standardize date fields
     if (updatedFields.date) {
+        mergedTask.date = updatedFields.date;
+        mergedTask.duedate = updatedFields.date;
         mergedTask.dueDate = updatedFields.date;
         mergedTask.postDate = updatedFields.date;
+    }
+    if (updatedFields.assigneeEmail) {
+        mergedTask.assigneeEmail = updatedFields.assigneeEmail;
     }
 
     matrixTasksMap.set(taskId, mergedTask);
 
-    // Persist to window.tasks if available
-    if (Array.isArray(window.tasks)) {
-        const idx = window.tasks.findIndex(t => t.id === taskId);
-        if (idx >= 0) window.tasks[idx] = mergedTask;
-        else window.tasks.unshift(mergedTask);
-    }
-
     // Re-render instantly across all active views
     renderMatrixPlanner();
 
-    // Firebase DB Persist
     if (rtdb && db) {
         try {
-            const taskRef = rtdb.ref(db, `worksync/strategy_events/${taskId}`);
-            await rtdb.update(taskRef, mergedTask);
-
-            // Also update manual_tasks node if userKey is present
-            if (mergedTask.userKey) {
-                const manualRef = rtdb.ref(db, `worksync/manual_tasks/${mergedTask.userKey}/${taskId}`);
-                await rtdb.update(manualRef, mergedTask);
+            let pushId = existingTask.pushId;
+            const newEmail = mergedTask.assigneeEmail || oldEmail;
+            const newDate = mergedTask.duedate || mergedTask.date || oldDate;
+            
+            if (oldEmail && oldDate && newEmail && newDate) {
+                const [oldYear, oldMonth] = oldDate.split('-');
+                const oldMonthYear = `${oldYear}-${oldMonth}`;
+                
+                const [newYear, newMonth] = newDate.split('-');
+                const newMonthYear = `${newYear}-${newMonth}`;
+                
+                const oldPlanKey = `${eKey(oldEmail)}/${oldMonthYear}`;
+                const newPlanKey = `${eKey(newEmail)}/${newMonthYear}`;
+                
+                if (oldPlanKey !== newPlanKey) {
+                    // Task moved to a different user/month!
+                    // Delete from old path
+                    if (pushId) {
+                        const oldTaskRef = rtdb.ref(db, `worksync/monthly_plans/${oldPlanKey}/tasks/${pushId}`);
+                        await rtdb.remove(oldTaskRef);
+                    }
+                    
+                    // Create in new path
+                    const newTasksRef = rtdb.ref(db, `worksync/monthly_plans/${newPlanKey}/tasks`);
+                    const newPushRef = rtdb.push(newTasksRef);
+                    pushId = newPushRef.key;
+                    mergedTask.pushId = pushId;
+                    await rtdb.set(newPushRef, mergedTask);
+                } else {
+                    // Same user/month - just update the existing pushId
+                    if (pushId) {
+                        const taskRef = rtdb.ref(db, `worksync/monthly_plans/${newPlanKey}/tasks/${pushId}`);
+                        await rtdb.update(taskRef, mergedTask);
+                    } else {
+                        // If no pushId exists, push it
+                        const newTasksRef = rtdb.ref(db, `worksync/monthly_plans/${newPlanKey}/tasks`);
+                        const newPushRef = rtdb.push(newTasksRef);
+                        pushId = newPushRef.key;
+                        mergedTask.pushId = pushId;
+                        await rtdb.set(newPushRef, mergedTask);
+                    }
+                }
             }
-            console.log(`[MatrixEngine] Saved task ${taskId} to Firebase:`, updatedFields);
+            console.log(`[MatrixEngine] Saved monthly plan task ${taskId} to Firebase:`, updatedFields);
         } catch (err) {
-            console.error(`[MatrixEngine] Error saving task ${taskId} to Firebase:`, err);
+            console.error(`[MatrixEngine] Error saving monthly plan task ${taskId} to Firebase:`, err);
         }
     }
 }
@@ -391,14 +390,19 @@ async function deleteMatrixTaskFromFirebase(taskId) {
     const db = window.db;
     if (rtdb && db) {
         try {
-            const taskRef = rtdb.ref(db, `worksync/strategy_events/${taskId}`);
-            await rtdb.remove(taskRef);
-
-            if (existingTask.userKey) {
-                const manualRef = rtdb.ref(db, `worksync/manual_tasks/${existingTask.userKey}/${taskId}`);
-                await rtdb.remove(manualRef);
+            const pushId = existingTask.pushId;
+            const email = existingTask.assigneeEmail || existingTask.assignee || '';
+            const date = existingTask.duedate || existingTask.date || existingTask.dueDate || existingTask.postDate || '';
+            
+            if (pushId && email && date) {
+                const [year, month] = date.split('-');
+                const monthYear = `${year}-${month}`;
+                const planKey = `${eKey(email)}/${monthYear}`;
+                
+                const taskRef = rtdb.ref(db, `worksync/monthly_plans/${planKey}/tasks/${pushId}`);
+                await rtdb.remove(taskRef);
+                console.log(`[MatrixEngine] Deleted monthly plan task from Firebase path: worksync/monthly_plans/${planKey}/tasks/${pushId}`);
             }
-            console.log(`[MatrixEngine] Deleted task ${taskId} from Firebase.`);
         } catch (err) {
             console.error(`[MatrixEngine] Error deleting task ${taskId} from Firebase:`, err);
         }
