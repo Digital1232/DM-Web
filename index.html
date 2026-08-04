@@ -10809,6 +10809,14 @@
         </div>
     </dialog>
 
+    <!-- Modal: Rework / QC Task Popup Notification -->
+    <dialog id="reworkQcModal"
+        class="rounded-3xl shadow-2xl p-0 w-full max-w-md border-none overflow-hidden backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+        <div id="rework-qc-modal-content">
+            <!-- Dynamically populated via openReworkQcModal JS -->
+        </div>
+    </dialog>
+
     <!-- Schedule Discussion Modal -->
     <dialog id="scheduleDiscussionModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
         <div class="bg-white rounded-3xl overflow-hidden">
@@ -13009,6 +13017,9 @@
                         }
 
                         toast('✓ Task moved', 'success');
+                        if (isReworkStatus(newStatusCategory) || isQcStatus(newStatusCategory)) {
+                            sendReworkOrQcNotification(task, newStatusCategory, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
                         if (newStatusCategory === 'Quality Check') {
                             sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
                         }
@@ -17104,7 +17115,8 @@
                         // Create
                         evPayload.createdAt = Date.now();
                         evPayload.createdBy = currentUser.email;
-                        await push(ref(db, 'worksync/strategy_events'), evPayload);
+                        const newEventRef = await push(ref(db, 'worksync/strategy_events'), evPayload);
+                        const newEventId = newEventRef?.key;
                         toast('Strategy event scheduled!', 'success');
 
                         // Close modal IMMEDIATELY so popup closes without delay!
@@ -17156,6 +17168,17 @@
                                 if (res.success && (res.data?.key || res.key)) {
                                     const parentKey = res.data?.key || res.key;
                                     toast(`Jira task ${parentKey} created!`, 'success');
+
+                                    if (newEventId && parentKey) {
+                                        try {
+                                            await update(ref(db, `worksync/strategy_events/${newEventId}`), { jiraId: parentKey });
+                                            if (typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[newEventId]) {
+                                                strategyEvents[newEventId].jiraId = parentKey;
+                                            }
+                                        } catch (e) {
+                                            console.error('Failed to update strategy event jiraId:', e);
+                                        }
+                                    }
 
                                     // Auto create a subtask thumbnail for video tasks and assign to Karthika
                                     if (format === 'Video') {
@@ -19615,6 +19638,9 @@
                     if (isInternalTabActive()) renderInternalTasks();
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                     if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                    if (typeof checkReworkAndQcTaskPopups === 'function') {
+                        checkReworkAndQcTaskPopups();
+                    }
                     if (!isAuto) {
                         toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}`, jiraTasks.length ? 'success' : 'info');
                     } else {
@@ -36234,6 +36260,211 @@
                 console.log('Thumbnail notification sent for', task.id, 'to Karthika & Palanirajan');
             }
 
+            function isReworkStatus(status) {
+                if (!status) return false;
+                const s = String(status).trim().toLowerCase();
+                return s.includes('rework') || s.includes('correction') || s === 'feedback' || s === 'revision';
+            }
+
+            function isQcStatus(status) {
+                if (!status) return false;
+                const s = String(status).trim().toLowerCase();
+                return s.includes('quality check') || s === 'qc' || s === 'qc pending' || s === 'under qc' || s === 'in review' || s === 'review';
+            }
+
+            async function sendReworkOrQcNotification(task, newStatus, changedBy) {
+                if (!db || !task) return;
+                const isRework = isReworkStatus(newStatus);
+                const isQc = isQcStatus(newStatus);
+                if (!isRework && !isQc) return;
+
+                let targetEmails = [];
+                let title = '';
+                let body = '';
+                let type = '';
+
+                if (isRework) {
+                    type = 'rework';
+                    const assignee = task.assigneeEmail || task.userId || task.owner;
+                    if (assignee) targetEmails.push(assignee.toLowerCase());
+                    title = '🔄 Task Received for Rework';
+                    body = `Task "${task.desc || task.summary || task.id}" (${task.client || 'Client'}) has been sent for rework/corrections.`;
+                } else if (isQc) {
+                    type = 'qc';
+                    targetEmails.push('snehavilpower@gmail.com');
+                    if (task.assigneeEmail) targetEmails.push(task.assigneeEmail.toLowerCase());
+                    title = '🔎 New Task Ready for QC';
+                    body = `Task "${task.desc || task.summary || task.id}" (${task.client || 'Client'}) is waiting for Quality Check.`;
+                }
+
+                const notifData = {
+                    type,
+                    taskId: task.id,
+                    taskDesc: task.desc || task.summary || '',
+                    client: task.client || '',
+                    newStatus: newStatus,
+                    changedBy: changedBy || currentUser?.name || currentUser?.email || 'System',
+                    notifyEmails: Array.from(new Set(targetEmails)),
+                    title,
+                    body,
+                    timestamp: Date.now(),
+                    readBy: {}
+                };
+
+                try {
+                    await push(ref(db, 'worksync/task_notifications'), notifData);
+                    console.log(`[Rework/QC Notif] Sent ${type} notification for ${task.id}`);
+                } catch (e) {
+                    console.error('Failed to send rework/QC notification:', e);
+                }
+            }
+
+            function openReworkQcModal(data) {
+                const modal = document.getElementById('reworkQcModal');
+                const container = document.getElementById('rework-qc-modal-content');
+                if (!modal || !container) return;
+
+                const isRework = isReworkStatus(data.newStatus || data.status);
+                const isQc = isQcStatus(data.newStatus || data.status);
+
+                const theme = isRework ? {
+                    headerBg: 'bg-gradient-to-r from-rose-600 via-amber-600 to-rose-700',
+                    badgeBg: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200',
+                    icon: 'solar:refresh-circle-bold-duotone',
+                    title: '🔄 Task Received for Rework',
+                    subtitle: 'Attention Required: This task needs edits / corrections!',
+                    btnBg: 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                } : {
+                    headerBg: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700',
+                    badgeBg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200',
+                    icon: 'solar:shield-check-bold-duotone',
+                    title: '🔎 New Task for Quality Check (QC)',
+                    subtitle: 'Action Needed: A new task is ready for QC review!',
+                    btnBg: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                };
+
+                const taskId = data.taskId || data.id || '';
+                const taskTitle = data.taskDesc || data.desc || data.summary || 'Task Details';
+                const client = data.client || 'Others';
+                const status = data.newStatus || data.status || (isRework ? 'Rework' : 'Quality Check');
+                const movedBy = data.changedBy ? `Moved by ${data.changedBy}` : '';
+
+                container.innerHTML = `
+                    <div class="${theme.headerBg} p-6 text-white relative">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                                    <iconify-icon icon="${theme.icon}" width="28" class="text-white"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-black tracking-tight leading-tight">${theme.title}</h3>
+                                    <p class="text-xs text-white/80 font-medium mt-0.5">${theme.subtitle}</p>
+                                </div>
+                            </div>
+                            <button onclick="document.getElementById('reworkQcModal').close()" class="w-8 h-8 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-white transition-colors">
+                                <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6 space-y-5 bg-white dark:bg-slate-900">
+                        <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-black border ${theme.badgeBg}">${taskId}</span>
+                                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-700/60 px-2.5 py-1 rounded-lg">${client}</span>
+                            </div>
+                            
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Task Details</p>
+                                <p class="text-sm font-bold text-slate-900 dark:text-white leading-snug">${escapeHtml(taskTitle)}</p>
+                            </div>
+
+                            <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-350">
+                                <span class="inline-flex items-center gap-1.5 font-bold">
+                                    <span class="w-2 h-2 rounded-full ${isRework ? 'bg-rose-500' : 'bg-indigo-500'}"></span>
+                                    Status: <strong class="text-slate-900 dark:text-white">${status}</strong>
+                                </span>
+                                ${movedBy ? `<span class="text-[11px] text-slate-400">${movedBy}</span>` : ''}
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button onclick="document.getElementById('reworkQcModal').close()" class="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                Dismiss
+                            </button>
+                            <button onclick="document.getElementById('reworkQcModal').close(); handleOpenAlertTask('${taskId}')" class="flex-1 py-3 px-4 rounded-xl ${theme.btnBg} text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+                                <iconify-icon icon="solar:eye-bold" width="16"></iconify-icon>
+                                View Task Details
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                try {
+                    modal.showModal();
+                } catch(e) {
+                    console.warn('Could not show reworkQcModal:', e);
+                }
+            }
+
+            function handleOpenAlertTask(taskId) {
+                if (!taskId) return;
+                if (typeof isSnehaUser === 'function' && isSnehaUser() && typeof loadQcTaskDetails === 'function') {
+                    const qcSelect = document.getElementById('qc-task-select');
+                    if (qcSelect) {
+                        qcSelect.value = taskId;
+                        loadQcTaskDetails(taskId);
+                        return;
+                    }
+                }
+                if (typeof openEditTaskModal === 'function') {
+                    openEditTaskModal(taskId);
+                }
+            }
+
+            let poppedAlertTaskIds = new Set(JSON.parse(sessionStorage.getItem('worksync_popped_alert_task_ids') || '[]'));
+
+            function checkReworkAndQcTaskPopups() {
+                if (!currentUser || !tasks || tasks.length === 0) return;
+                const myEmail = currentUser.email.toLowerCase();
+
+                // 1. If QC user (Sneha), check for tasks in QC status
+                if (typeof isSnehaUser === 'function' && isSnehaUser()) {
+                    const qcTask = tasks.find(t => isQcStatus(t.status) && !poppedAlertTaskIds.has(t.id));
+                    if (qcTask) {
+                        poppedAlertTaskIds.add(qcTask.id);
+                        sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                        openReworkQcModal({
+                            taskId: qcTask.id,
+                            taskDesc: qcTask.desc || qcTask.summary,
+                            client: qcTask.client,
+                            newStatus: qcTask.status,
+                            changedBy: qcTask.assignee || 'Team Member'
+                        });
+                        return;
+                    }
+                }
+
+                // 2. Check for Rework tasks assigned to current user
+                const reworkTask = tasks.find(t => 
+                    typeof assigneeMatches === 'function' && assigneeMatches(t, myEmail) && 
+                    isReworkStatus(t.status) && 
+                    !poppedAlertTaskIds.has(t.id)
+                );
+
+                if (reworkTask) {
+                    poppedAlertTaskIds.add(reworkTask.id);
+                    sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                    openReworkQcModal({
+                        taskId: reworkTask.id,
+                        taskDesc: reworkTask.desc || reworkTask.summary,
+                        client: reworkTask.client,
+                        newStatus: reworkTask.status,
+                        changedBy: 'QC / Reviewer'
+                    });
+                }
+            }
+
             let taskNotifUnsub = null;
             function initTaskNotifications() {
                 if (!db || !currentUser) return;
@@ -36261,6 +36492,11 @@
 
                         shownTaskNotifIds.add(id);
                         localStorage.setItem('worksync_toasted_notifs', JSON.stringify(Array.from(shownTaskNotifIds)));
+
+                        // Trigger Popup Modal for Rework and QC notifications!
+                        if (notif.type === 'rework' || notif.type === 'qc' || isReworkStatus(notif.newStatus) || isQcStatus(notif.newStatus)) {
+                            openReworkQcModal(notif);
+                        }
 
                         const openNotif = () => {
                             window.focus();
@@ -37718,6 +37954,11 @@
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
+                        // Rework or QC modal popup notification
+                        if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
+                            sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
+
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
@@ -37748,6 +37989,11 @@
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
+                        // Rework or QC modal popup notification
+                        if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
+                            sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
+                        }
+
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
@@ -37758,9 +38004,34 @@
             async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail) {
                 if (!task || !newAssigneeEmail) return;
 
+                // Skip thumbnail creation for Strategy Calendar events (Strategy Calendar manages its own Jira tasks & subtasks)
+                if (task.isStrategyEvent || task.eventId) {
+                    console.log('Skipping thumbnail creation for Strategy Event task:', task.id);
+                    return;
+                }
+
+                // Skip if task is linked to a Strategy Event
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const isLinkedToStrategy = Object.values(strategyEvents).some(ev =>
+                        ev && (
+                            (ev.jiraId && task.id && String(ev.jiraId).toLowerCase() === String(task.id).toLowerCase()) ||
+                            (ev.title && task.desc && String(ev.title).toLowerCase().trim() === String(task.desc).toLowerCase().trim())
+                        )
+                    );
+                    if (isLinkedToStrategy) {
+                        console.log('Skipping thumbnail creation for task linked to Strategy Event:', task.id);
+                        return;
+                    }
+                }
+
                 // Skip thumbnail creation for Poster format tasks
                 if (task.format === 'Poster') {
                     console.log('Skipping thumbnail creation for Poster format task:', task.id);
+                    return;
+                }
+
+                // Do not auto-create internal manual subtasks if the task is not a Jira task and not explicitly a manual task
+                if (!isJiraCloudTask(task) && !task.manual) {
                     return;
                 }
 
