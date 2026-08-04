@@ -2771,31 +2771,45 @@ if (initializeApp) {
                     const formatIcon = ev.format === 'Video' ? '🎥' : '📷';
                     const assigneeName = ev.owner || ev.assignee || 'Unassigned';
 
+                    let userAvatar = '';
+                    if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                        const foundUser = Array.from(allUsersMap.values()).find(u => 
+                            (u.name || '').toLowerCase().trim() === assigneeName.toLowerCase().trim() ||
+                            (u.email || '').toLowerCase().trim() === assigneeName.toLowerCase().trim()
+                        );
+                        if (foundUser && foundUser.profilePicture) {
+                            userAvatar = foundUser.profilePicture;
+                        }
+                    }
+                    if (!userAvatar) {
+                        userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(assigneeName)}`;
+                    }
+
                     tableHtml += `
                         <div id="matrix-card-${ev.id}" 
                              draggable="true" 
                              ondragstart="handleMatrixDragStart(event, '${ev.id}')"
                              onclick="event.stopPropagation(); openMatrixTaskDrawer('${ev.id}')"
-                             class="matrix-task-card bg-white dark:bg-slate-800 rounded-xl p-2.5 shadow-sm border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer group">
+                             class="matrix-task-card bg-white dark:bg-slate-800 rounded-xl p-2.5 shadow-sm border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer group flex items-start gap-2">
                             
-                            <div class="flex items-center justify-between gap-1 mb-1">
-                                <span class="text-[10px] font-extrabold text-slate-500">${formatIcon} ${escapeHtml(ev.format || 'Task')}</span>
-                                <span class="px-2 py-0.5 rounded-full text-[8px] font-black ${statusObj.bgClass} ${statusObj.textClass} flex items-center gap-1">
-                                    <iconify-icon icon="${statusObj.icon}" width="10"></iconify-icon>
-                                    ${statusObj.category}
-                                </span>
-                            </div>
-
-                            <p class="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-tight">${escapeHtml(ev.title)}</p>
-                            
-                            <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-700/50">
-                                <div class="flex items-center gap-1">
-                                    <div class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 text-[8px] font-bold flex items-center justify-center">
-                                        ${assigneeName.substring(0, 1).toUpperCase()}
-                                    </div>
-                                    <span class="text-[9px] font-bold text-slate-500 truncate max-w-[70px]">${escapeHtml(assigneeName)}</span>
+                            <div class="flex-grow min-w-0">
+                                <div class="flex items-center justify-between gap-1 mb-1">
+                                    <span class="text-[10px] font-extrabold text-slate-500">${formatIcon} ${escapeHtml(ev.format || 'Task')}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[8px] font-black ${statusObj.bgClass} ${statusObj.textClass} flex items-center gap-1 flex-shrink-0">
+                                        <iconify-icon icon="${statusObj.icon}" width="10"></iconify-icon>
+                                        ${statusObj.category}
+                                    </span>
                                 </div>
-                                <iconify-icon icon="solar:pen-bold" class="text-slate-300 group-hover:text-indigo-600 transition-colors" width="12"></iconify-icon>
+
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-tight">${escapeHtml(ev.title)}</p>
+                                
+                                <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-700/50">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <img src="${userAvatar}" class="w-4 h-4 rounded-full object-cover bg-slate-100 border border-slate-200" alt="">
+                                        <span class="text-[9px] font-bold text-slate-500 truncate max-w-[70px]">${escapeHtml(assigneeName)}</span>
+                                    </div>
+                                    <iconify-icon icon="solar:pen-bold" class="text-slate-300 group-hover:text-indigo-600 transition-colors" width="12"></iconify-icon>
+                                </div>
                             </div>
                         </div>
                     `;

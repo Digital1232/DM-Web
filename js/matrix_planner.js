@@ -885,21 +885,38 @@ function renderMatrixTaskBadge(t) {
         `;
     }
 
+    const assigneeName = t.assignee || 'Unassigned';
+    let userAvatar = '';
+    if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+        const foundUser = Array.from(allUsersMap.values()).find(u => 
+            (u.name || '').toLowerCase().trim() === assigneeName.toLowerCase().trim() ||
+            (u.email || '').toLowerCase().trim() === assigneeName.toLowerCase().trim()
+        );
+        if (foundUser && foundUser.profilePicture) {
+            userAvatar = foundUser.profilePicture;
+        }
+    }
+    if (!userAvatar) {
+        userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(assigneeName)}`;
+    }
+
     return `
         <div 
             id="task-badge-${t.id}"
             draggable="true"
             ondragstart="handleMatrixDragStart(event, '${t.id}')"
             onclick="startTaskEdit('${t.id}')"
-            class="${statusStyle} border rounded-xl p-1.5 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group/badge relative overflow-hidden"
+            class="${statusStyle} border rounded-xl p-1.5 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group/badge relative overflow-hidden flex items-center gap-1.5"
             title="Click to edit • Drag to move date or client"
         >
-            <div class="flex items-center justify-between gap-1 mb-0.5">
-                <span class="text-[10px] font-black truncate text-slate-800 leading-tight">${formatIcon} ${t.title || t.desc}</span>
-            </div>
-            <div class="flex items-center justify-between text-[9px] text-slate-500 font-semibold">
-                <span class="truncate max-w-[70px]">${t.assignee || 'Unassigned'}</span>
-                <span class="font-bold text-slate-600 bg-white/60 px-1 rounded">${t.estHours || 2}h</span>
+            <img src="${userAvatar}" class="w-5 h-5 rounded-full object-cover bg-slate-100 border border-slate-200/80 flex-shrink-0" alt="">
+            <div class="flex-grow min-w-0">
+                <div class="text-[9px] font-black truncate text-slate-800 leading-tight mb-0.5" title="${escapeHtml(t.title || t.desc)}">
+                    ${formatIcon} ${escapeHtml(t.title || t.desc)}
+                </div>
+                <div class="text-[8px] text-slate-500 font-bold truncate leading-none">
+                    ${escapeHtml(assigneeName)}
+                </div>
             </div>
         </div>
     `;
@@ -1681,33 +1698,46 @@ function renderWeeklyTaskCard(t) {
     else if (t.contentType === 'Reel') contentBadgeStyle = 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50';
     else if (t.contentType === 'Carousel') contentBadgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50';
 
+    const assigneeName = t.assignee || 'Unassigned';
+    let userAvatar = '';
+    if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+        const foundUser = Array.from(allUsersMap.values()).find(u => 
+            (u.name || '').toLowerCase().trim() === assigneeName.toLowerCase().trim() ||
+            (u.email || '').toLowerCase().trim() === assigneeName.toLowerCase().trim()
+        );
+        if (foundUser && foundUser.profilePicture) {
+            userAvatar = foundUser.profilePicture;
+        }
+    }
+    if (!userAvatar) {
+        userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(assigneeName)}`;
+    }
+
     return `
         <div 
             id="weekly-task-${t.id}"
             draggable="true"
             ondragstart="weeklyMatrixDragStart(event, '${t.id}')"
             onclick="weeklyMatrixEditTask('${t.id}')"
-            class="matrix-task-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing select-none relative"
+            class="matrix-task-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing select-none relative flex items-start gap-2"
             title="Click to edit • Drag to schedule"
         >
-            <div class="flex items-start justify-between gap-1.5 mb-1.5">
-                <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">${escapeHtml(t.title || t.desc)}</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5">
-                <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md ${contentBadgeStyle}">
-                    ${formatIcon} ${t.contentType || 'Poster'}
-                </span>
-                <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md border ${statusStyle}">
-                    ${t.status || 'Working'}
-                </span>
-            </div>
-            <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-[10px] text-slate-400">
-                <span class="truncate font-semibold max-w-[80px]" title="${escapeHtml(t.assignee || 'Unassigned')}">
-                    👤 ${escapeHtml(t.assignee || 'Unassigned')}
-                </span>
-                <span class="font-extrabold text-slate-500 dark:text-slate-400">
-                    ⏱️ ${t.estHours || 2}h
-                </span>
+            <img src="${userAvatar}" class="w-6 h-6 rounded-full object-cover bg-slate-100 border border-slate-200/80 flex-shrink-0" alt="">
+            <div class="flex-grow min-w-0">
+                <div class="flex items-start justify-between gap-1.5 mb-1.5">
+                    <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">${escapeHtml(t.title || t.desc)}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md ${contentBadgeStyle}">
+                        ${formatIcon} ${t.contentType || 'Poster'}
+                    </span>
+                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md border ${statusStyle}">
+                        ${t.status || 'Working'}
+                    </span>
+                </div>
+                <div class="text-[10px] text-slate-500 font-semibold truncate pt-1.5 border-t border-slate-100 dark:border-slate-700/50">
+                    ${escapeHtml(assigneeName)}
+                </div>
             </div>
         </div>
     `;
