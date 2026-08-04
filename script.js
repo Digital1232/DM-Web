@@ -694,7 +694,7 @@ if (initializeApp) {
         try {
             // Update the task status to either Completed or Rework based on action
             const qcTaskId = task.id;
-            const targetStatus = isApprove ? 'Completed' : 'Rework';
+            const targetStatus = isApprove ? 'Design Completed' : 'Rework';
 
             // Check if it's an internal or manual task vs normal Jira task to invoke the correct update function
             let updateSuccess = false;
@@ -716,7 +716,7 @@ if (initializeApp) {
                 push(ref(db, 'worksync/timelogs'), timeLog)
             ]);
 
-            toast(isApprove ? 'QC Approved & Task Completed!' : 'QC Rejected & Task Sent to Rework!', 'success');
+            toast(isApprove ? 'QC Approved & Task Moved to Design Completed!' : 'QC Rejected & Task Sent to Rework!', 'success');
             document.getElementById('qc-task-select').value = '';
             loadQcTaskDetails('');
             qcStartTime = null;
