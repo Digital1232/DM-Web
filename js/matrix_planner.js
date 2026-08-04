@@ -1562,9 +1562,21 @@ function renderAmpSelectedTasks() {
     }
 
     const sourceTasks = Array.isArray(window.tasks) ? window.tasks : [];
+    const stratEvents = window.strategyEvents || {};
     container.innerHTML = Array.from(ampSelectedTasks).map(id => {
-        const ev = sourceTasks.find(t => t.id === id) || matrixTasksMap.get(id) || {};
-        const title = ev.title || ev.desc || id;
+        let found = sourceTasks.find(t => t.id === id) || matrixTasksMap.get(id);
+        if (!found && stratEvents) {
+            // Direct Firebase key lookup
+            const se = stratEvents[id];
+            if (se && se.title) {
+                found = { title: se.title, desc: se.title };
+            } else {
+                // Fallback: search by jiraId
+                const byJira = Object.values(stratEvents).find(e => e && e.jiraId === id);
+                if (byJira && byJira.title) found = { title: byJira.title, desc: byJira.title };
+            }
+        }
+        const title = (found && (found.title || found.desc)) || id;
         return `
             <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[11px] font-bold pl-2.5 pr-1.5 py-1 rounded-full border border-indigo-100">
                 <span class="truncate max-w-[120px]">${escapeHtml(title)}</span>

@@ -1002,6 +1002,20 @@
         }
 
         /* ── DARK MODE: Main Chat Message Bubbles ── */
+        /* Self message bubble (light mode) */
+        #messages-area .self-message {
+            background-color: #f1f1f1 !important;
+            color: #1e293b !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+
+        /* Self message bubble (dark mode) */
+        html.dark #messages-area .self-message {
+            background-color: #253347 !important;
+            color: #f1f5f9 !important;
+            border-color: #334155 !important;
+        }
+
         /* Received message bubble (bg-white) */
         html.dark #messages-area .bg-white.text-slate-900 {
             background: #253347 !important;
@@ -11429,7 +11443,7 @@
             window.db = db;
             window.storage = storage;
             window.firebaseAuth = auth; // Alias for shim compatibility
-            window.rtdb = { ref, onValue, update, remove, set };
+            window.rtdb = { ref, onValue, update, remove, set, push };
             console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage, window.rtdb');
 
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
@@ -18878,7 +18892,6 @@
             async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2) {
                 const body = { jiraUrl, method };
                 if (payload !== null) body.payload = payload;
-                console.log('🎯 Target URL:', jiraUrl);
 
                 for (let attempt = 0; attempt <= retries; attempt++) {
                     try {
@@ -18961,8 +18974,6 @@
                     throw new Error(jiraErrorMessage(result));
                 }
 
-                console.log('📨 Proxy Response Status:', result.status);
-                console.log('📨 Proxy Response Data:', previewJson(result.data ?? result));
                 return result;
             }
 
@@ -24933,7 +24944,7 @@
                 <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
                     ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} min-w-0 w-full">
-                        <div class="message-bubble px-4 py-2.5 rounded-2xl text-sm shadow-sm min-w-0 ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
+                        <div class="message-bubble px-4 py-2.5 rounded-2xl text-sm shadow-sm min-w-0 ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'self-message rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
                             ${replyToHtml}
                             ${attachmentHtml}
                             ${text ? `<div class="message-text whitespace-pre-wrap break-all">${text}</div>` : ''}
@@ -24994,12 +25005,12 @@
                 if (!text) return '';
                 const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                 let linkified = text.replace(urlRegex, (url) => {
-                    const colorClass = isMe ? 'text-white underline font-bold hover:text-indigo-200' : 'text-indigo-600 underline font-bold hover:text-indigo-800';
+                    const colorClass = 'text-indigo-600 dark:text-indigo-400 underline font-bold hover:text-indigo-800 dark:hover:text-indigo-300';
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${url}</a>`;
                 });
                 const wwwRegex = /(^|[^\/])(www\.[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-]+[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                 linkified = linkified.replace(wwwRegex, (match, prefix, wwwUrl) => {
-                    const colorClass = isMe ? 'text-white underline font-bold hover:text-indigo-200' : 'text-indigo-600 underline font-bold hover:text-indigo-800';
+                    const colorClass = 'text-indigo-600 dark:text-indigo-400 underline font-bold hover:text-indigo-800 dark:hover:text-indigo-300';
                     return `${prefix}<a href="http://${wwwUrl}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${wwwUrl}</a>`;
                 });
 
@@ -25071,7 +25082,7 @@
                     const hue = Math.abs(hash) % 360;
                     const color = `hsl(${hue}, 70%, 50%)`;
 
-                    const hoverClass = isMe ? 'hover:text-indigo-200' : 'hover:text-indigo-800';
+                    const hoverClass = 'hover:text-indigo-800 dark:hover:text-indigo-400';
                     const html = `<span class="mention-link cursor-pointer underline font-bold ${hoverClass}" style="color:${color}" onclick="window.openChatFromMention('${item.email}')">@${item.name}</span>`;
                     linkified = linkified.split(placeholder).join(html);
                 });
@@ -37975,7 +37986,12 @@
                 const selectedTasksHtml = Array.from(apSelectedTasks).map(taskId => {
                     let task = tasks.find(t => t.id === taskId);
                     if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
-                        const ev = strategyEvents[taskId];
+                        // Try direct Firebase key lookup first
+                        let ev = strategyEvents[taskId];
+                        // Fallback: search by jiraId if taskId is a Jira key
+                        if (!ev) {
+                            ev = Object.values(strategyEvents).find(e => e && e.jiraId && e.jiraId === taskId);
+                        }
                         if (ev) {
                             task = {
                                 desc: ev.title
