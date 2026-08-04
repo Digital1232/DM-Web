@@ -15903,28 +15903,22 @@
 
             function renderStrategyClientTabs() {
                 const container = document.getElementById('strategy-client-tabs-container');
-                if (!container) {
+                const containerMonthly = document.getElementById('monthly-plan-client-tabs-container');
+                if (!container && !containerMonthly) {
                     console.warn('[renderStrategyClientTabs] Container not found');
                     return;
                 }
 
-                // CRITICAL FIX: Get unique clients from BOTH Jira tasks AND strategy events
+                // Get unique clients exclusively from Jira tasks (only Jira, not internal)
                 const uniqueClients = new Set();
                 
-                // From Jira tasks (only Jira, not internal)
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
                         if (!task.manual && !isInternalTask(task) && task.client && task.client !== 'Others') {
-                            uniqueClients.add(task.client);
-                        }
-                    });
-                }
-
-                // From strategy events (your manually created plans)
-                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
-                    Object.values(strategyEvents).forEach(ev => {
-                        if (ev.client && ev.client !== 'General') {
-                            uniqueClients.add(ev.client);
+                            const clientUpper = task.client.trim().toUpperCase();
+                            if (clientUpper !== 'VILPOWER' && clientUpper !== 'GENERAL') {
+                                uniqueClients.add(task.client);
+                            }
                         }
                     });
                 }
@@ -15935,15 +15929,14 @@
                 const tabs = ['All'];
 
                 // Add "Others" if there are Jira tasks without specific client
-                const hasOthers = (tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client === 'Others'))) ||
-                                 (strategyEvents && Object.values(strategyEvents).some(ev => !ev.client));
+                const hasOthers = tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client === 'Others'));
                 if (hasOthers) {
                     tabs.push('Others');
                 }
 
                 sortedClients.forEach(c => tabs.push(c));
                 
-                console.log('[renderStrategyClientTabs] Rendering tabs from Jira + Strategy Events:', tabs.length, 'tabs');
+                console.log('[renderStrategyClientTabs] Rendering tabs from Jira:', tabs.length, 'tabs');
 
                 // Ensure the active filter is still valid (if not, reset to 'All')
                 if (!tabs.includes(activeStrategyClientFilter)) {
@@ -15961,8 +15954,9 @@
                 }).join('');
 
                 // Set HTML in one operation (not incremental)
-                container.innerHTML = tabsHtml;
-                console.log('[renderStrategyClientTabs] Container updated with', tabs.length, 'tabs');
+                if (container) container.innerHTML = tabsHtml;
+                if (containerMonthly) containerMonthly.innerHTML = tabsHtml;
+                console.log('[renderStrategyClientTabs] Containers updated with', tabs.length, 'tabs');
             }
 
             function setStrategyClientFilter(client) {
