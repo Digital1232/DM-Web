@@ -17143,19 +17143,6 @@
                                         }
                                     }
 
-                                    // If title was renamed, update any associated thumbnail subtasks in Jira
-                                    if (oldTitle && oldTitle !== title && typeof tasks !== 'undefined' && tasks) {
-                                        const subtasks = tasks.filter(t => (t.parentId === jiraKey || t.parentKey === jiraKey || t.parent === jiraKey));
-                                        for (const sub of subtasks) {
-                                            if (sub.id && (sub.summary || sub.desc || '').startsWith('Thumbnail –')) {
-                                                const newSubSummary = `Thumbnail – ${title}`;
-                                                const subJiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(sub.id)}`;
-                                                jiraRequest(subJiraUrl, 'put', { fields: { summary: newSubSummary } }).catch(e => console.error('Failed to update Jira subtask summary:', e));
-                                                sub.summary = newSubSummary;
-                                                sub.desc = newSubSummary;
-                                            }
-                                        }
-                                    }
                                 } else if (matchedTask && (matchedTask.manual || isInternalTask(matchedTask))) {
                                     // 3. If manual/internal task, update desc/summary in Firebase manual_tasks
                                     const assigneeKey = eKey(matchedTask.assigneeEmail || matchedTask.userId || '');
@@ -17168,7 +17155,52 @@
                                     }
                                 }
 
-                                // 4. Update in-memory task object for immediate UI responsiveness
+                                // 4. Update any associated thumbnail subtasks (Jira or Internal) with the new main task title
+                                if (oldTitle && oldTitle !== title && typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                                    const parentIds = new Set();
+                                    if (jiraKey) parentIds.add(jiraKey);
+                                    if (matchedTask && matchedTask.id) parentIds.add(matchedTask.id);
+                                    if (id) parentIds.add(id);
+
+                                    const newSubSummary = `Thumbnail – ${title}`;
+
+                                    const subtasks = tasks.filter(t => {
+                                        if (!t) return false;
+                                        const isLinkedByParent = parentIds.has(t.parentId) || parentIds.has(t.parentKey) || parentIds.has(t.parentTaskId) || parentIds.has(t.parent);
+                                        const text = (t.summary || t.desc || '').toLowerCase();
+                                        const isThumbnailText = text.includes('thumbnail');
+                                        const matchesOldTitle = oldTitle && text.includes(oldTitle.toLowerCase());
+                                        return (isLinkedByParent && isThumbnailText) || (isThumbnailText && matchesOldTitle);
+                                    });
+
+                                    for (const sub of subtasks) {
+                                        if (!sub || !sub.id) continue;
+                                        console.log(`Updating thumbnail subtask ${sub.id} summary to: ${newSubSummary}`);
+                                        
+                                        // Update in-memory
+                                        sub.summary = newSubSummary;
+                                        sub.desc = newSubSummary;
+
+                                        if (sub.manual || isInternalTask(sub)) {
+                                            // Update internal manual task in Firebase
+                                            const subAssigneeKey = eKey(sub.assigneeEmail || sub.userId || '');
+                                            if (subAssigneeKey) {
+                                                update(ref(db, `worksync/manual_tasks/${subAssigneeKey}/${sub.id}`), {
+                                                    desc: newSubSummary,
+                                                    summary: newSubSummary
+                                                }).catch(e => console.error('Failed to update internal thumbnail subtask:', e));
+                                            }
+                                        } else {
+                                            // Update Jira subtask issue
+                                            const subJiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(sub.id)}`;
+                                            jiraRequest(subJiraUrl, 'put', { fields: { summary: newSubSummary } })
+                                                .then(res => console.log(`Jira thumbnail subtask ${sub.id} updated successfully`))
+                                                .catch(e => console.error('Failed to update Jira thumbnail subtask:', e));
+                                        }
+                                    }
+                                }
+
+                                // 5. Update in-memory task object for immediate UI responsiveness
                                 if (matchedTask) {
                                     matchedTask.desc = title;
                                     matchedTask.summary = title;
