@@ -1446,18 +1446,21 @@ function filterAssignMonthlyPlanTasks() {
 
     const strategyTasks = [];
 
-    // Pull tasks directly from the global strategyEvents if defined, otherwise fallback to local map
-    const sourceEvents = window.strategyEvents || rawStrategyEventsData || {};
-    Object.entries(sourceEvents).forEach(([id, ev]) => {
-        if (!ev || !ev.title) return;
+    // Pull JIRA tasks from window.tasks
+    const sourceTasks = Array.isArray(window.tasks) ? window.tasks : [];
+    sourceTasks.forEach(t => {
+        if (!t || !t.id) return;
+        const isJira = t.jiraId || isJiraKey(t.id);
+        if (!isJira) return;
+
         strategyTasks.push({
-            id: id,
-            title: ev.title,
-            desc: ev.title,
-            client: ev.client || '',
-            status: ev.status || 'To Do',
-            date: ev.date || ev.postDate || '',
-            assignee: ev.assignee || ev.assigneeName || 'Unassigned'
+            id: t.id,
+            title: t.title || t.desc || '',
+            desc: t.desc || t.title || '',
+            client: t.client || 'General',
+            status: t.status || 'To Do',
+            date: t.date || t.dueDate || t.postDate || '',
+            assignee: t.assignee || t.assigneeName || 'Unassigned'
         });
     });
 
@@ -1531,10 +1534,10 @@ function renderAmpSelectedTasks() {
         return;
     }
 
-    const sourceEvents = window.strategyEvents || rawStrategyEventsData || {};
+    const sourceTasks = Array.isArray(window.tasks) ? window.tasks : [];
     container.innerHTML = Array.from(ampSelectedTasks).map(id => {
-        const ev = sourceEvents[id] || matrixTasksMap.get(id) || {};
-        const title = ev.title || id;
+        const ev = sourceTasks.find(t => t.id === id) || matrixTasksMap.get(id) || {};
+        const title = ev.title || ev.desc || id;
         return `
             <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[11px] font-bold pl-2.5 pr-1.5 py-1 rounded-full border border-indigo-100">
                 <span class="truncate max-w-[120px]">${escapeHtml(title)}</span>
@@ -1564,12 +1567,16 @@ async function submitAssignMonthlyPlan() {
     const rtdb = window.rtdb;
     const db = window.db;
 
-    const sourceEvents = window.strategyEvents || rawStrategyEventsData || {};
+    const sourceTasks = Array.isArray(window.tasks) ? window.tasks : [];
+    const [year, month] = dateStr.split('-');
+    const monthYear = `${year}-${month}`;
+
     const promises = Array.from(ampSelectedTasks).map(async (taskId) => {
-        const existingTask = sourceEvents[taskId] || matrixTasksMap.get(taskId) || {};
+        const existingTask = sourceTasks.find(t => t.id === taskId) || matrixTasksMap.get(taskId) || {};
         const updatedFields = {
             client: client,
             date: dateStr,
+            duedate: dateStr,
             dueDate: dateStr,
             postDate: dateStr,
             assignee: assignee,
@@ -1577,20 +1584,27 @@ async function submitAssignMonthlyPlan() {
             updatedAt: Date.now()
         };
 
-        const mergedTask = { ...existingTask, ...updatedFields, id: taskId, strategyEvent: true };
+        const mergedTask = { ...existingTask, ...updatedFields, id: taskId };
 
         // Save locally
         matrixTasksMap.set(taskId, mergedTask);
-        if (Array.isArray(window.tasks)) {
-            const idx = window.tasks.findIndex(t => t.id === taskId);
-            if (idx >= 0) window.tasks[idx] = mergedTask;
-            else window.tasks.unshift(mergedTask);
-        }
 
-        // Firebase Sync
+        // Firebase Sync to worksync/monthly_plans
         if (rtdb && db) {
-            const taskRef = rtdb.ref(db, `worksync/strategy_events/${taskId}`);
-            await rtdb.update(taskRef, mergedTask);
+            let pushId = existingTask.pushId || (matrixTasksMap.get(taskId) || {}).pushId;
+            const assigneeEmail = existingTask.assigneeEmail || existingTask.assignee || assignee;
+            const planKey = `${eKey(assigneeEmail)}/${monthYear}`;
+
+            if (pushId) {
+                const taskRef = rtdb.ref(db, `worksync/monthly_plans/${planKey}/tasks/${pushId}`);
+                await rtdb.update(taskRef, mergedTask);
+            } else {
+                const newTasksRef = rtdb.ref(db, `worksync/monthly_plans/${planKey}/tasks`);
+                const newPushRef = rtdb.push(newTasksRef);
+                pushId = newPushRef.key;
+                mergedTask.pushId = pushId;
+                await rtdb.set(newPushRef, mergedTask);
+            }
         }
     });
 
@@ -1608,7 +1622,6 @@ async function submitAssignMonthlyPlan() {
         renderMatrixPlanner();
     } catch (err) {
         console.error('[MatrixEngine] Error during bulk assignment:', err);
-        if (typeof window.toast === 'function') window.toast('Error during assignment: ' + err.message, 'error');
     }
 }
 
@@ -1883,8 +1896,8 @@ function renderMatrixTable() {
         ? matrixClientsList 
         : matrixClientsList.filter(c => c === clientFilter);
 
-    // Get all tasks
-    const allTasks = Array.from(matrixTasksMap.values());
+    // Get all tasks - JIRA tasks only for Weekly Matrix Planner
+    const allTasks = Array.from(matrixTasksMap.values()).filter(t => t.jiraId || isJiraKey(t.id));
 
     // Group tasks
     const grouped = {};
