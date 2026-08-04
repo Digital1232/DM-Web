@@ -235,8 +235,13 @@ function mergeAndRenderAllStrategyTasks() {
     // 1. Merge worksync/strategy_events
     if (rawStrategyEventsData && typeof rawStrategyEventsData === 'object') {
         Object.entries(rawStrategyEventsData).forEach(([key, val]) => {
+            if (isExcludedTask(val)) return;
+
             const task = parseTaskObject(key, val);
-            if (task && task.title) matrixTasksMap.set(task.id, task);
+            const isJira = task && (task.jiraId || isJiraKey(task.id));
+            if (task && isJira) {
+                matrixTasksMap.set(task.id, task);
+            }
         });
     }
 
@@ -249,8 +254,7 @@ function mergeAndRenderAllStrategyTasks() {
                     
                     const task = parseTaskObject(taskId, taskVal, userKey);
                     const isJira = task && (task.jiraId || isJiraKey(task.id));
-                    const isStrat = task && (task.strategyEvent || String(task.id).startsWith('STRAT-'));
-                    if (task && (isJira || isStrat)) {
+                    if (task && isJira) {
                         if (!matrixTasksMap.has(task.id)) {
                             matrixTasksMap.set(task.id, task);
                         }
@@ -266,8 +270,7 @@ function mergeAndRenderAllStrategyTasks() {
             if (isExcludedTask(t)) return;
 
             const isJira = t.jiraId || isJiraKey(t.id);
-            const isStrat = t.strategyEvent || String(t.id).startsWith('STRAT-');
-            if (t && t.id && (isJira || isStrat) && !matrixTasksMap.has(t.id)) {
+            if (t && t.id && isJira && !matrixTasksMap.has(t.id)) {
                 const task = parseTaskObject(t.id, t);
                 if (task && task.date && task.client) {
                     matrixTasksMap.set(task.id, task);
