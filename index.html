@@ -13071,7 +13071,26 @@
 
                 // 1. Daily Plan entries (including completed if exact date is today)
                 Object.entries(userPlans).forEach(([taskId, planData]) => {
-                    const task = tasks.find(t => t.id === taskId);
+                    let task = tasks.find(t => t.id === taskId);
+                    if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                        const ev = strategyEvents[taskId];
+                        if (ev) {
+                            const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                            task = {
+                                id: ev.jiraId || taskId,
+                                desc: ev.title,
+                                summary: ev.title,
+                                status: ev.status || 'To Do',
+                                client: ev.client || '',
+                                assignee: ev.owner || '',
+                                owner: ev.owner || '',
+                                duedate: calculatedDue,
+                                postDate: ev.date,
+                                isStrategyEvent: true,
+                                eventId: taskId
+                            };
+                        }
+                    }
                     if (!task) return;
 
                     const planDate = new Date(planData.date);
@@ -13127,7 +13146,26 @@
                 let plannedTasks = [];
 
                 Object.entries(userPlans).forEach(([taskId, planData]) => {
-                    const task = tasks.find(t => t.id === taskId);
+                    let task = tasks.find(t => t.id === taskId);
+                    if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                        const ev = strategyEvents[taskId];
+                        if (ev) {
+                            const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                            task = {
+                                id: ev.jiraId || taskId,
+                                desc: ev.title,
+                                summary: ev.title,
+                                status: ev.status || 'To Do',
+                                client: ev.client || '',
+                                assignee: ev.owner || '',
+                                owner: ev.owner || '',
+                                duedate: calculatedDue,
+                                postDate: ev.date,
+                                isStrategyEvent: true,
+                                eventId: taskId
+                            };
+                        }
+                    }
                     if (!task) return;
 
                     const planDate = new Date(planData.date);
@@ -37921,8 +37959,18 @@
                 }
 
                 const selectedTasksHtml = Array.from(apSelectedTasks).map(taskId => {
-                    const task = tasks.find(t => t.id === taskId);
-                    const taskLabel = task ? `${taskId}: ${task.desc?.substring(0, 30)}...` : taskId;
+                    let task = tasks.find(t => t.id === taskId);
+                    if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                        const ev = strategyEvents[taskId];
+                        if (ev) {
+                            task = {
+                                desc: ev.title
+                            };
+                        }
+                    }
+                    const taskLabel = task 
+                        ? (taskId.startsWith('-') ? `${task.desc?.substring(0, 30)}...` : `${taskId}: ${task.desc?.substring(0, 30)}...`)
+                        : taskId;
                     return `
                         <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-rose-200 rounded-full text-xs font-semibold text-slate-700 shadow-sm">
                             ${escapeHtml(taskLabel)}
@@ -38093,7 +38141,26 @@
                     const jiraErrors = [];
 
                     for (const taskId of selectedTaskIds) {
-                        const task = tasks.find(t => t.id === taskId);
+                        let task = tasks.find(t => t.id === taskId);
+                        if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                            const ev = strategyEvents[taskId];
+                            if (ev) {
+                                const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                                task = {
+                                    id: ev.jiraId || taskId,
+                                    desc: ev.title,
+                                    summary: ev.title,
+                                    status: ev.status || 'To Do',
+                                    client: ev.client || '',
+                                    assignee: ev.owner || '',
+                                    owner: ev.owner || '',
+                                    duedate: calculatedDue,
+                                    postDate: ev.date,
+                                    isStrategyEvent: true,
+                                    eventId: taskId
+                                };
+                            }
+                        }
                         if (!task) continue;
 
                         // Trigger thumbnail subtask auto assign to Karthika if assigned to a video editor
@@ -38113,9 +38180,16 @@
                                 applyLocalTaskAssignee(taskId, userEmail);
                             }
                         } else {
-                            const oldUserEmail = task.assigneeEmail || task.userId || currentUser.email;
+                            const oldUserEmail = task.assigneeEmail || task.userId || task.owner || currentUser.email;
                             applyLocalTaskAssignee(taskId, userEmail);
-                            if (task.manual) {
+                            if (task.isStrategyEvent) {
+                                try {
+                                    const eventRef = ref(db, `worksync/strategy_events/${taskId}`);
+                                    await update(eventRef, { owner: userEmail });
+                                } catch (e) {
+                                    console.error('Failed to update strategy event owner:', e);
+                                }
+                            } else if (task.manual) {
                                 const oldUserKey = eKey(oldUserEmail);
                                 const newUserKey = eKey(userEmail);
                                 if (oldUserKey !== newUserKey) {
