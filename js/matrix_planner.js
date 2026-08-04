@@ -279,16 +279,7 @@ function mergeAndRenderAllStrategyTasks() {
         });
     }
 
-    // Auto-seed August 2026 Strategy Plan if empty
-    const year = matrixCurrentDate.getFullYear();
-    const monthStr = String(matrixCurrentDate.getMonth() + 1).padStart(2, '0');
-    const augustPrefix = `${year}-${monthStr}`;
 
-    const augustTasks = Array.from(matrixTasksMap.values()).filter(t => t.date && t.date.startsWith(augustPrefix));
-    if (augustTasks.length === 0) {
-        console.log('[MatrixEngine] Seeding initial August 2026 Strategy Calendar tasks...');
-        seedInitialAugustStrategyTasks();
-    }
 
     // Dynamic client discovery
     matrixTasksMap.forEach(taskObj => {
