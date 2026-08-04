@@ -1446,7 +1446,7 @@ function filterAssignMonthlyPlanTasks() {
 
     const strategyTasks = [];
 
-    // Pull JIRA tasks from window.tasks
+    // 1. Pull JIRA tasks from window.tasks
     const sourceTasks = Array.isArray(window.tasks) ? window.tasks : [];
     sourceTasks.forEach(t => {
         if (!t || !t.id) return;
@@ -1460,7 +1460,29 @@ function filterAssignMonthlyPlanTasks() {
             client: t.client || 'General',
             status: t.status || 'To Do',
             date: t.date || t.dueDate || t.postDate || '',
-            assignee: t.assignee || t.assigneeName || 'Unassigned'
+            assignee: t.assignee || t.assigneeName || 'Unassigned',
+            isJira: true
+        });
+    });
+
+    // 2. Pull Strategy Calendar Events (from window.strategyEvents or rawStrategyEventsData)
+    const sourceEvents = window.strategyEvents || rawStrategyEventsData || {};
+    Object.entries(sourceEvents).forEach(([id, ev]) => {
+        if (!ev || !ev.title) return;
+        
+        // Avoid duplicate entry if this strategy event is already linked to a Jira task
+        const alreadyInTasks = strategyTasks.some(t => t.id === ev.jiraId);
+        if (alreadyInTasks) return;
+
+        strategyTasks.push({
+            id: id,
+            title: ev.title,
+            desc: ev.title,
+            client: ev.client || 'General',
+            status: ev.status || 'To Do',
+            date: ev.date || ev.postDate || '',
+            assignee: ev.assignee || ev.assigneeName || 'Unassigned',
+            isJira: false
         });
     });
 
@@ -1491,11 +1513,16 @@ function filterAssignMonthlyPlanTasks() {
     list.innerHTML = filtered.map(t => {
         const isSelected = ampSelectedTasks.has(t.id);
         const selectedClass = isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50/70 border-indigo-200' : 'border-transparent hover:bg-slate-50';
+        
+        const idDisplay = (t.id && !t.id.startsWith('-')) 
+            ? `<span class="text-indigo-600 font-mono text-[10px] font-black">${t.id}</span>` 
+            : '';
+
         return `
             <div onclick="addTaskToAmpSelection('${t.id}')" class="p-2.5 rounded-xl cursor-pointer transition-all border ${selectedClass} mb-1 flex justify-between items-center">
                 <div class="min-w-0 flex-1 pr-2">
                     <div class="flex items-center gap-1.5 mb-0.5">
-                        <span class="text-indigo-600 font-mono text-[10px] font-black">${t.id}</span>
+                        ${idDisplay}
                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">${escapeHtml(t.status)}</span>
                     </div>
                     <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(t.title)}</p>
