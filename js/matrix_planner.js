@@ -272,6 +272,7 @@ function mergeAndRenderAllStrategyTasks() {
     console.log(`[MatrixEngine] Multi-Source Realtime Sync: Loaded ${matrixTasksMap.size} Strategy Calendar & Daily Plan tasks across ${matrixClientsList.length} clients.`);
     populateMatrixFilterDropdowns();
     renderMatrixPlanner();
+    if (typeof renderMatrixTable === 'function') renderMatrixTable();
 }
 
 /**
@@ -1598,3 +1599,356 @@ document.addEventListener('DOMContentLoaded', () => {
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
     initMatrixPlannerEngine();
 }
+
+/* ==========================================================================
+   ═══════════════ WEEKLY MATRIX PLANNER EXTENSION ═══════════════
+   ========================================================================== */
+
+// STATE
+let weeklyMatrixCurrentDate = new Date(2026, 7, 3); // August 3, 2026 as reference (or current date)
+let weeklyDraggedTaskId = null;
+
+// Helpers
+function getStartOfWeek(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    // Adjust Sunday (0) to be index 6, Monday (1) to be index 0
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff));
+}
+
+function getWeekDates(startOfWeek) {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        dates.push(d);
+    }
+    return dates;
+}
+
+function formatWeekRange(start, end) {
+    const opt = { month: 'short', day: 'numeric', year: 'numeric' };
+    return `${start.toLocaleDateString('default', opt)} - ${end.toLocaleDateString('default', opt)}`;
+}
+function populateWeeklyMatrixDropdowns() {
+    const clientSelect = document.getElementById('matrix-client-filter');
+    if (clientSelect) {
+        const currVal = clientSelect.value || 'All';
+        let html = '<option value="All">All Clients</option>';
+        matrixClientsList.forEach(c => {
+            html += `<option value="${escapeHtml(c)}" ${c === currVal ? 'selected' : ''}>${escapeHtml(c)}</option>`;
+        });
+        clientSelect.innerHTML = html;
+    }
+
+    const assigneeSelect = document.getElementById('matrix-assignee-filter');
+    if (assigneeSelect) {
+        const currVal = assigneeSelect.value || 'All';
+        let html = '<option value="All">All Assignees</option>';
+        matrixAssigneesList.forEach(a => {
+            html += `<option value="${escapeHtml(a.name)}" ${a.name === currVal ? 'selected' : ''}>${escapeHtml(a.name)}</option>`;
+        });
+        assigneeSelect.innerHTML = html;
+    }
+}
+// Render task card
+function renderWeeklyTaskCard(t) {
+    const formatIcon = FORMAT_ICONS[t.contentType || t.format] || '📷';
+    const statusStyle = STATUS_STYLES[t.status] || STATUS_STYLES['Working'];
+    
+    let contentBadgeStyle = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    if (t.contentType === 'Video') contentBadgeStyle = 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900/50';
+    else if (t.contentType === 'Reel') contentBadgeStyle = 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50';
+    else if (t.contentType === 'Carousel') contentBadgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50';
+
+    return `
+        <div 
+            id="weekly-task-${t.id}"
+            draggable="true"
+            ondragstart="weeklyMatrixDragStart(event, '${t.id}')"
+            onclick="weeklyMatrixEditTask('${t.id}')"
+            class="matrix-task-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing select-none relative"
+            title="Click to edit • Drag to schedule"
+        >
+            <div class="flex items-start justify-between gap-1.5 mb-1.5">
+                <span class="text-xs font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">${escapeHtml(t.title || t.desc)}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md ${contentBadgeStyle}">
+                    ${formatIcon} ${t.contentType || 'Poster'}
+                </span>
+                <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md border ${statusStyle}">
+                    ${t.status || 'Working'}
+                </span>
+            </div>
+            <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-[10px] text-slate-400">
+                <span class="truncate font-semibold max-w-[80px]" title="${escapeHtml(t.assignee || 'Unassigned')}">
+                    👤 ${escapeHtml(t.assignee || 'Unassigned')}
+                </span>
+                <span class="font-extrabold text-slate-500 dark:text-slate-400">
+                    ⏱️ ${t.estHours || 2}h
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+// Drag & Drop
+function weeklyMatrixDragStart(e, taskId) {
+    weeklyDraggedTaskId = taskId;
+    e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function weeklyMatrixDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const cell = e.currentTarget;
+    if (cell) {
+        cell.classList.add('bg-indigo-50/40', 'dark:bg-indigo-950/40', 'ring-2', 'ring-indigo-500', 'ring-inset');
+    }
+}
+
+function weeklyMatrixDragLeave(e) {
+    const cell = e.currentTarget;
+    if (cell) {
+        cell.classList.remove('bg-indigo-50/40', 'dark:bg-indigo-950/40', 'ring-2', 'ring-indigo-500', 'ring-inset');
+    }
+}
+
+async function weeklyMatrixDrop(e, targetClient, targetDateStr) {
+    e.preventDefault();
+    const cell = e.currentTarget;
+    if (cell) {
+        cell.classList.remove('bg-indigo-50/40', 'dark:bg-indigo-950/40', 'ring-2', 'ring-indigo-500', 'ring-inset');
+    }
+
+    const taskId = e.dataTransfer.getData('text/plain') || weeklyDraggedTaskId;
+    if (!taskId) return;
+
+    console.log(`[WeeklyMatrix] Drop Task ${taskId} -> Client: ${targetClient}, Date: ${targetDateStr}`);
+    
+    // If date is "backlog", we store it as empty string
+    const dateVal = targetDateStr === 'backlog' ? '' : targetDateStr;
+    
+    const existingTask = matrixTasksMap.get(taskId) || {};
+    let statusVal = existingTask.status || 'Working';
+    if (targetDateStr === 'backlog') {
+        statusVal = 'Backlog';
+    } else if (statusVal === 'Backlog') {
+        statusVal = 'Working';
+    }
+
+    const updatedFields = {
+        client: targetClient,
+        date: dateVal,
+        dueDate: dateVal,
+        postDate: dateVal,
+        status: statusVal
+    };
+
+    await saveMatrixTaskToFirebase(taskId, updatedFields);
+    renderMatrixTable();
+    
+    weeklyDraggedTaskId = null;
+}
+
+// Navigation & Actions
+function matrixChangeWeek(daysOffset) {
+    weeklyMatrixCurrentDate.setDate(weeklyMatrixCurrentDate.getDate() + daysOffset);
+    renderMatrixTable();
+}
+
+function matrixGoToCurrentWeek() {
+    weeklyMatrixCurrentDate = new Date();
+    renderMatrixTable();
+}
+
+function weeklyMatrixQuickCreate(client, dateStr) {
+    if (typeof window.openAddStrategyEventModal === 'function') {
+        window.openAddStrategyEventModal(dateStr, client);
+    } else {
+        console.error('openAddStrategyEventModal is not globally defined');
+    }
+}
+
+function weeklyMatrixEditTask(taskId) {
+    if (typeof window.openEditStrategyEventModal === 'function') {
+        window.openEditStrategyEventModal(taskId);
+    } else {
+        console.error('openEditStrategyEventModal is not globally defined');
+    }
+}
+
+// Core Init & Render
+function initWeeklyMatrix() {
+    console.log('[WeeklyMatrix] Initializing Weekly Matrix View...');
+    initClientsAndAssignees();
+    populateWeeklyMatrixDropdowns();
+    renderMatrixTable();
+}
+
+function renderMatrixTable() {
+    const tbody = document.getElementById('matrix-tbody');
+    if (!tbody) return;
+
+    // Initialize/update week headers and label
+    const monday = getStartOfWeek(weeklyMatrixCurrentDate);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    const weekLabelEl = document.getElementById('matrix-week-display');
+    if (weekLabelEl) {
+        weekLabelEl.textContent = formatWeekRange(monday, sunday);
+    }
+
+    // Populate columns headers
+    const weekDates = getWeekDates(monday);
+    const dateStrings = weekDates.map(d => d.toISOString().split('T')[0]);
+    
+    const dayHeaders = document.querySelectorAll('.matrix-day-date');
+    dayHeaders.forEach(el => {
+        const dayIndex = parseInt(el.getAttribute('data-day'));
+        let dateIndex = dayIndex - 1;
+        if (dayIndex === 0) dateIndex = 6;
+        const d = weekDates[dateIndex];
+        if (d) {
+            el.textContent = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+            el.dataset.fullDate = dateStrings[dateIndex];
+        }
+    });
+
+    // Populate clients dropdown
+    // Get filter states
+    const clientFilter = document.getElementById('matrix-client-filter')?.value || 'All';
+    const assigneeFilter = document.getElementById('matrix-assignee-filter')?.value || 'All';
+    const searchQuery = (document.getElementById('matrix-search')?.value || '').toLowerCase().trim();
+
+    // Filtered clients list
+    const visibleClients = clientFilter === 'All' 
+        ? matrixClientsList 
+        : matrixClientsList.filter(c => c === clientFilter);
+
+    // Get all tasks
+    const allTasks = Array.from(matrixTasksMap.values());
+
+    // Group tasks
+    const grouped = {};
+    visibleClients.forEach(c => {
+        grouped[c] = { backlog: [] };
+        dateStrings.forEach(ds => {
+            grouped[c][ds] = [];
+        });
+    });
+
+    allTasks.forEach(t => {
+        const client = t.client || 'Unassigned';
+        if (!grouped[client]) return; // client filtered out
+
+        // Apply assignee filter
+        if (assigneeFilter !== 'All') {
+            const taskAssignee = t.assignee || t.assigneeName || 'Unassigned';
+            if (taskAssignee !== assigneeFilter) {
+                return;
+            }
+        }
+
+        // Apply search query filter
+        if (searchQuery) {
+            const title = (t.title || t.desc || '').toLowerCase();
+            const assignee = (t.assignee || t.assigneeName || '').toLowerCase();
+            if (!title.includes(searchQuery) && !assignee.includes(searchQuery) && !client.toLowerCase().includes(searchQuery)) {
+                return;
+            }
+        }
+
+        const taskDate = t.date || t.dueDate || t.postDate || '';
+        if (!taskDate || t.status === 'Backlog') {
+            grouped[client].backlog.push(t);
+        } else if (dateStrings.includes(taskDate)) {
+            grouped[client][taskDate].push(t);
+        }
+    });
+
+    // Render Rows
+    let html = '';
+    visibleClients.forEach(client => {
+        const backlogTasks = grouped[client].backlog || [];
+        
+        html += `
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors group">
+                <!-- Client Sticky Cell -->
+                <td class="matrix-sticky-col p-4 border-r border-slate-100 dark:border-slate-700 font-extrabold text-slate-900 dark:text-white shadow-sm flex items-center justify-between min-h-[90px]">
+                    <div class="flex items-center gap-2 truncate max-w-[140px]" title="${escapeHtml(client)}">
+                        <div class="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-black border border-indigo-100 dark:border-indigo-900 flex-shrink-0">
+                            ${client.charAt(0)}
+                        </div>
+                        <span class="truncate text-xs font-black">${escapeHtml(client)}</span>
+                    </div>
+                </td>
+
+                <!-- Backlog Column Cell -->
+                <td 
+                    class="p-2 border-r border-slate-100 dark:border-slate-700 align-top min-w-[160px] bg-rose-50/10 dark:bg-rose-950/5 hover:bg-rose-50/20 dark:hover:bg-rose-950/10 transition-colors"
+                    data-client="${escapeHtml(client)}"
+                    data-date="backlog"
+                    ondragover="weeklyMatrixDragOver(event)"
+                    ondragleave="weeklyMatrixDragLeave(event)"
+                    ondrop="weeklyMatrixDrop(event, '${escapeHtml(client)}', 'backlog')"
+                >
+                    <div class="space-y-2 min-h-[70px] flex flex-col justify-between">
+                        <div class="space-y-1.5">
+                            ${backlogTasks.map(t => renderWeeklyTaskCard(t)).join('')}
+                        </div>
+                        <button onclick="weeklyMatrixQuickCreate('${escapeHtml(client)}', '')" class="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity bg-slate-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-extrabold text-[10px] py-1.5 px-2 rounded-xl border border-dashed border-rose-200 dark:border-rose-900 flex items-center justify-center gap-1 w-full mt-2">
+                            <iconify-icon icon="solar:add-circle-bold" width="13"></iconify-icon> Add to Backlog
+                        </button>
+                    </div>
+                </td>
+        `;
+
+        // Render Day Cells
+        dateStrings.forEach(ds => {
+            const dayTasks = grouped[client][ds] || [];
+            const isToday = ds === new Date().toISOString().split('T')[0];
+            
+            html += `
+                <td 
+                    class="p-2 border-r border-slate-100 dark:border-slate-700 align-top min-w-[140px] hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 transition-colors ${isToday ? 'bg-indigo-50/20 dark:bg-indigo-950/20' : ''}"
+                    data-client="${escapeHtml(client)}"
+                    data-date="${ds}"
+                    ondragover="weeklyMatrixDragOver(event)"
+                    ondragleave="weeklyMatrixDragLeave(event)"
+                    ondrop="weeklyMatrixDrop(event, '${escapeHtml(client)}', '${ds}')"
+                >
+                    <div class="space-y-2 min-h-[70px] flex flex-col justify-between">
+                        <div class="space-y-1.5">
+                            ${dayTasks.map(t => renderWeeklyTaskCard(t)).join('')}
+                        </div>
+                        <button onclick="weeklyMatrixQuickCreate('${escapeHtml(client)}', '${ds}')" class="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px] py-1.5 px-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 w-full mt-2">
+                            <iconify-icon icon="solar:add-circle-bold" width="13"></iconify-icon> Add Task
+                        </button>
+                    </div>
+                </td>
+            `;
+        });
+
+        html += `</tr>`;
+    });
+
+    tbody.innerHTML = html;
+}
+
+// Expose globals
+window.initWeeklyMatrix = initWeeklyMatrix;
+window.renderMatrixTable = renderMatrixTable;
+window.matrixChangeWeek = matrixChangeWeek;
+window.matrixGoToCurrentWeek = matrixGoToCurrentWeek;
+window.weeklyMatrixQuickCreate = weeklyMatrixQuickCreate;
+window.weeklyMatrixEditTask = weeklyMatrixEditTask;
+window.weeklyMatrixDragStart = weeklyMatrixDragStart;
+window.weeklyMatrixDragOver = weeklyMatrixDragOver;
+window.weeklyMatrixDragLeave = weeklyMatrixDragLeave;
+window.weeklyMatrixDrop = weeklyMatrixDrop;
+window.populateWeeklyMatrixDropdowns = populateWeeklyMatrixDropdowns;

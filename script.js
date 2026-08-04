@@ -598,13 +598,15 @@ if (initializeApp) {
                     <div class="space-y-2 flex-1">
                         ${allItems.map(item => ` 
                             <label class="flex items-start gap-3 p-3 bg-white border border-slate-100 rounded-xl cursor-pointer hover:border-indigo-200 transition-all group">
-                                <input type="checkbox" name="qc_item" value="${cat.category}|${item}" class="w-4 h-4 rounded mt-0.5 text-rose-600 focus:ring-rose-500">
+                                <input type="checkbox" name="qc_item" onchange="updateQcApproveButtonState()" value="${cat.category}|${item}" class="w-4 h-4 rounded mt-0.5 text-rose-600 focus:ring-rose-500">
                                 <span class="text-[11px] font-bold text-slate-700 group-hover:text-rose-600 transition-colors">${escapeHtml(item)}</span>
                             </label>
                         `).join('')}
                     </div>
                 </div>`;
         }).join('');
+
+        updateQcApproveButtonState(); // Update approve button state immediately upon render
     }
 
     function addQcCustomItem(category) {
@@ -615,10 +617,36 @@ if (initializeApp) {
         renderQcChecklist();
     }
 
-    async function submitQcReport() {
+    function updateQcApproveButtonState() {
+        const btn = document.getElementById('qc-approve-btn');
+        if (!btn) return;
+        
+        // Count number of checked issues
+        const checkedCount = [...document.querySelectorAll('input[name="qc_item"]:checked')].length;
+        
+        if (checkedCount > 0) {
+            btn.disabled = true;
+            btn.classList.add('opacity-40', 'cursor-not-allowed');
+            btn.setAttribute('title', 'All issues must be cleared to approve this task');
+        } else {
+            btn.disabled = false;
+            btn.classList.remove('opacity-40', 'cursor-not-allowed');
+            btn.removeAttribute('title');
+        }
+    }
+
+    async function submitQcReport(action) {
         const taskId = document.getElementById('qc-task-select').value;
         const task = tasks.find(t => t.id === taskId);
         if (!task) return toast('Select a task first', 'error');
+
+        const isApprove = action === 'approve';
+        const checkedCount = [...document.querySelectorAll('input[name="qc_item"]:checked')].length;
+
+        // Double check validation: Approve cannot be submitted with errors
+        if (isApprove && checkedCount > 0) {
+            return toast('Cannot approve task with issues. Please mark them as resolved or use Reject (Rework).', 'error');
+        }
 
         const qcEndTime = Date.now();
         const qcDurationSeconds = qcStartTime ? Math.floor((qcEndTime - qcStartTime) / 1000) : 0;
@@ -646,13 +674,14 @@ if (initializeApp) {
             totalCount: totalItems,
             qcScore,
             timestamp: Date.now(),
-            date: todayIso()
+            date: todayIso(),
+            actionStatus: isApprove ? 'Approved' : 'Rework' // Save QC action status on report
         };
 
         // Log duration to timelogs so it appears in Timing Reports
         const timeLog = {
             taskId: task.id,
-            taskDesc: `[QC] ${task.desc}`,
+            taskDesc: `[QC ${isApprove ? 'Approve' : 'Reject'}] ${task.desc}`,
             client: task.client || '',
             userId: currentUser.email,
             userName: currentUser.name,
@@ -663,16 +692,39 @@ if (initializeApp) {
         };
 
         try {
+            // Update the task status to either Completed or Rework based on action
+            const qcTaskId = task.id;
+            const targetStatus = isApprove ? 'Completed' : 'Rework';
+
+            // Check if it's an internal or manual task vs normal Jira task to invoke the correct update function
+            let updateSuccess = false;
+            if (task.manual || isInternalTask(task)) {
+                updateSuccess = await updateInternalTaskStatus(qcTaskId, targetStatus);
+            } else {
+                updateSuccess = await updateTaskStatus(qcTaskId, targetStatus);
+            }
+
+            if (!updateSuccess) {
+                // If status transition failed, abort submitting report
+                console.error(`QC Report submission aborted because task status transition to ${targetStatus} failed.`);
+                return;
+            }
+
+            // Save the QC report and the QC log
             await Promise.all([
                 push(ref(db, 'worksync/qc_reports'), report),
                 push(ref(db, 'worksync/timelogs'), timeLog)
             ]);
-            toast('QC Report Submitted Successfully!', 'success');
+
+            toast(isApprove ? 'QC Approved & Task Completed!' : 'QC Rejected & Task Sent to Rework!', 'success');
             document.getElementById('qc-task-select').value = '';
             loadQcTaskDetails('');
             qcStartTime = null;
             renderQcTasks(); // Refresh badge and dropdown
-        } catch (err) { toast('Failed to save QC report', 'error'); }
+        } catch (err) { 
+            console.error('Failed to save QC report:', err);
+            toast('Failed to save QC report', 'error'); 
+        }
     }
 
     function loadQcReports() {
@@ -5822,7 +5874,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     // Update status for internal tasks via the inline dropdown
     async function updateInternalTaskStatus(taskId, newStatus) {
         const taskIndex = tasks.findIndex(t => t.id === taskId);
-        if (taskIndex === -1) return;
+        if (taskIndex === -1) return false;
         const task = tasks[taskIndex];
         const oldStatus = task.status;
 
@@ -5840,6 +5892,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                     updatedAt: Date.now()
                 });
                 toast('Status updated', 'success');
+                return true;
             } else {
                 // Jira task - sync to Jira
                 toast('Syncing to Jira...', 'info');
@@ -5848,7 +5901,9 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                     task.status = oldStatus;
                     renderInternalTasks();
                     updateStats();
+                    return false;
                 }
+                return true;
             }
         } catch (err) {
             console.error('Failed to update internal task status:', err);
@@ -5856,6 +5911,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             renderInternalTasks();
             updateStats();
             toast('Failed to update status: ' + err.message, 'error');
+            return false;
         }
     }
 
@@ -10455,7 +10511,14 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             console.log(`Available transitions for ${taskId}:`, transitions.map(t => t.name));
 
             // 2. Find the transition that matches the target status name
-            const targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+            let targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+            if (!targetTransition) {
+                if (newStatusName.toLowerCase() === 'rework designs') {
+                    targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework');
+                } else if (newStatusName.toLowerCase() === 'rework') {
+                    targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework designs');
+                }
+            }
 
             if (!targetTransition) {
                 toast(`Transition to "${newStatusName}" not available for this task in Jira.`, 'error');
@@ -12053,7 +12116,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
     async function updateTaskStatus(taskId, newStatus) {
         const taskIndex = tasks.findIndex(t => t.id === taskId);
-        if (taskIndex === -1) return;
+        if (taskIndex === -1) return false;
         const task = tasks[taskIndex];
         const oldStatus = task.status;
 
@@ -12075,7 +12138,11 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (newStatus.toLowerCase() === 'thumbnail' && oldStatus.toLowerCase() !== 'thumbnail') {
                     sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                 }
-            } catch (err) { toast('Failed to update status', 'error'); }
+                return true;
+            } catch (err) { 
+                toast('Failed to update status', 'error');
+                return false;
+            }
         } else {
             // Jira task: update locally first, then sync to Jira
             task.status = newStatus;
@@ -12093,11 +12160,13 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 renderTasks();
                 if (activeView === 'internal-tasks') renderInternalTasks();
                 updateStats();
+                return false;
             } else {
                 // Thumbnail notification on successful Jira sync
                 if (newStatus.toLowerCase() === 'thumbnail' && oldStatus.toLowerCase() !== 'thumbnail') {
                     sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                 }
+                return true;
             }
         }
     }

@@ -2638,6 +2638,12 @@
                         <span id="task-badge"
                             class="hidden ml-auto bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                     </button>
+                    <button onclick="switchView('weekly-matrix')" id="nav-weekly-matrix" data-label="Weekly Matrix" aria-label="Weekly Matrix"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <iconify-icon icon="solar:calendar-date-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform"></iconify-icon>
+                        Weekly Matrix
+                    </button>
                     <button onclick="switchView('shoots')" id="nav-shoots" data-label="Shoot Calendar" aria-label="Shoot Calendar"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:camera-bold-duotone" width="20"
@@ -4367,11 +4373,18 @@
                                     </div>
                                 </div>
                             </div>
-                            <button onclick="submitQcReport()"
-                                class="w-full lg:w-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
-                                <iconify-icon icon="solar:diskette-bold" width="18"></iconify-icon>
-                                Submit QC Report
-                            </button>
+                            <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                                <button id="qc-approve-btn" onclick="submitQcReport('approve')"
+                                    class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3.5 text-sm font-bold shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2">
+                                    <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon>
+                                    Approve QC
+                                </button>
+                                <button id="qc-rework-btn" onclick="submitQcReport('rework')"
+                                    class="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white rounded-xl px-6 py-3.5 text-sm font-bold shadow-lg shadow-rose-100 transition-all flex items-center justify-center gap-2">
+                                    <iconify-icon icon="solar:refresh-bold" width="18"></iconify-icon>
+                                    Send to Rework
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -7564,6 +7577,91 @@
                     </div>
                 </div>
             </div><!-- /view-meta-integration-panel -->
+
+            <!-- ════ WEEKLY MATRIX PLANNER VIEW ════ -->
+            <div id="view-weekly-matrix-panel" class="hidden space-y-6 fade-in overflow-y-auto" style="max-height: calc(100vh - 100px);">
+                <!-- Header Card with Premium Layout -->
+                <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <iconify-icon icon="solar:calendar-date-bold-duotone" width="24"></iconify-icon>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-black text-slate-900 dark:text-white">Weekly Matrix Planner</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Drag & drop tasks across clients and days of the week to schedule operations.</p>
+                        </div>
+                    </div>
+
+                    <!-- Navigation and Actions -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Week Switcher -->
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-xl p-1 gap-1">
+                            <button onclick="matrixChangeWeek(-7)" class="p-2 hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Previous Week">
+                                <iconify-icon icon="solar:alt-arrow-left-linear" width="16"></iconify-icon>
+                            </button>
+                            <span id="matrix-week-display" class="text-xs font-extrabold px-3 text-slate-700 dark:text-slate-200 min-w-[180px] text-center">Loading week...</span>
+                            <button onclick="matrixChangeWeek(7)" class="p-2 hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Next Week">
+                                <iconify-icon icon="solar:alt-arrow-right-linear" width="16"></iconify-icon>
+                            </button>
+                            <button onclick="matrixGoToCurrentWeek()" class="px-3 py-1.5 hover:bg-white dark:hover:bg-slate-600 text-xs font-black text-indigo-600 dark:text-indigo-400 rounded-lg transition-all">
+                                Today
+                            </button>
+                        </div>
+
+                        <!-- Client Filter -->
+                        <select id="matrix-client-filter" onchange="renderMatrixTable()" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-bold rounded-xl px-3 py-2.5 outline-none transition-all text-slate-700 dark:text-slate-200">
+                            <option value="All">All Clients</option>
+                        </select>
+
+                        <!-- Assignee Filter -->
+                        <select id="matrix-assignee-filter" onchange="renderMatrixTable()" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-bold rounded-xl px-3 py-2.5 outline-none transition-all text-slate-700 dark:text-slate-200">
+                            <option value="All">All Assignees</option>
+                        </select>
+
+                        <!-- Search Input -->
+                        <div class="relative">
+                            <iconify-icon icon="solar:magnifer-linear" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" width="16"></iconify-icon>
+                            <input id="matrix-search" type="text" oninput="renderMatrixTable()" placeholder="Search tasks..." class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2.5 outline-none transition-all w-48 focus:w-64">
+                        </div>
+
+                        <!-- Reset/Sync Button -->
+                        <button onclick="renderMatrixTable()" class="p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl transition-all" title="Refresh Matrix">
+                            <iconify-icon icon="solar:restart-linear" width="16" class="hover:rotate-180 transition-transform duration-500"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Matrix Board Scrollable Area -->
+                <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl overflow-hidden">
+                    <div class="overflow-x-auto no-scrollbar">
+                        <table class="w-full border-collapse text-left min-w-[1200px]">
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                                    <!-- Sticky Top-Left Corner for Client Header -->
+                                    <th class="matrix-sticky-top-left p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[180px]">
+                                        Client
+                                    </th>
+                                    <!-- Backlog Column Header -->
+                                    <th class="p-4 text-[10px] font-black text-rose-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[160px]">
+                                        Backlog / Unassigned
+                                    </th>
+                                    <!-- Day Headers (Mon to Sun) -->
+                                    <th class="p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Mon <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="1">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Tue <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="2">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Wed <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="3">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Thu <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="4">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Fri <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="5">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">Sat <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="6">-</span></th>
+                                    <th class="p-4 text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest w-[140px]">Sun <span class="matrix-day-date text-[9px] font-medium block mt-0.5" data-day="0">-</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="matrix-tbody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                <!-- Dynamic client rows loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div><!-- /view-weekly-matrix-panel -->
 
             <!-- ════ REPORTS VIEW ════ -->
             <div id="view-reports-panel" class="hidden fade-in space-y-6 overflow-y-auto"
@@ -11351,7 +11449,8 @@
             window.db = db;
             window.storage = storage;
             window.firebaseAuth = auth; // Alias for shim compatibility
-            console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage');
+            window.rtdb = { ref, onValue, update, remove, set };
+            console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage, window.rtdb');
 
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
             const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
@@ -11383,6 +11482,7 @@
                 { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
                 { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' }
             ];
+            window.USERS = USERS;
 
             function isAdmin() {
                 if (!currentUser) return false;
@@ -11780,6 +11880,16 @@
                 console.error("FCP: Failed to restore currentUser from localStorage:", e);
             }
             let tasks = [];
+            Object.defineProperty(window, 'currentUser', {
+                get: () => currentUser,
+                set: (val) => { currentUser = val; },
+                configurable: true
+            });
+            Object.defineProperty(window, 'tasks', {
+                get: () => tasks,
+                set: (val) => { tasks = val; },
+                configurable: true
+            });
             let currentStatusFilter = 'all';
             let currentAssigneeFilter = 'me';
             let currentClientFilter = 'all';
@@ -11967,7 +12077,7 @@
                         'in progress', 'content in progress', 'design in progress',
                         'quality check', 'qc', 'thumbnail waiting', 'rework designs',
                         'in review', 'review', 'testing', 'qa', 'shoot in progress',
-                        'thumbnail', 'discussion', 'learnings', 'learning'
+                        'thumbnail', 'discussion', 'learnings', 'learning', 'rework'
                     ]
                 },
                 WAITING: {
@@ -12014,15 +12124,15 @@
                 </span>`;
             }
 
-            const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
-            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed'];
+            const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done', 'Rework'];
+            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed', 'Quality Check', 'Rework'];
 
-            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs'];
-            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings'];
-            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Rework'];
+            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs', 'Rework'];
+            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Rework'];
+            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Quality Check', 'Rework'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Quality Check', 'Rework'];
+            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Quality Check', 'Rework'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
 
@@ -12279,6 +12389,13 @@
                 renderQcChecklist();
             }
 
+            function updateQcApproveButtonState() {
+                const approveBtn = document.getElementById('qc-approve-btn');
+                if (!approveBtn) return;
+                const checkedCount = document.querySelectorAll('input[name="qc_item"]:checked').length;
+                approveBtn.disabled = checkedCount > 0;
+            }
+
             function renderQcChecklist() {
                 const type = document.getElementById('qc-type').value;
                 const grid = document.getElementById('qc-checklist-grid');
@@ -12300,13 +12417,15 @@
                     <div class="space-y-2 flex-1">
                         ${allItems.map(item => ` 
                             <label class="flex items-start gap-3 p-3 bg-white border border-slate-100 rounded-xl cursor-pointer hover:border-indigo-200 transition-all group">
-                                <input type="checkbox" name="qc_item" value="${cat.category}|${item}" class="w-4 h-4 rounded mt-0.5 text-rose-600 focus:ring-rose-500">
+                                <input type="checkbox" name="qc_item" value="${cat.category}|${item}" onchange="updateQcApproveButtonState()" class="w-4 h-4 rounded mt-0.5 text-rose-600 focus:ring-rose-500">
                                 <span class="text-[11px] font-bold text-slate-700 group-hover:text-rose-600 transition-colors">${escapeHtml(item)}</span>
                             </label>
                         `).join('')}
                     </div>
                 </div>`;
                 }).join('');
+
+                updateQcApproveButtonState();
             }
 
             function addQcCustomItem(category) {
@@ -12317,7 +12436,7 @@
                 renderQcChecklist();
             }
 
-            async function submitQcReport() {
+            async function submitQcReport(action) {
                 const taskId = document.getElementById('qc-task-select').value;
                 const task = tasks.find(t => t.id === taskId);
                 if (!task) return toast('Select a task first', 'error');
@@ -12353,7 +12472,8 @@
                     totalCount: totalItems,
                     qcScore,
                     timestamp: Date.now(),
-                    date: todayIso()
+                    date: todayIso(),
+                    status: action === 'approve' ? 'Approved' : 'Rework'
                 };
 
                 // Log duration to timelogs so it appears in Timing Reports
@@ -12370,16 +12490,32 @@
                 };
 
                 try {
-                    await Promise.all([
-                        push(ref(db, 'worksync/qc_reports'), report),
-                        push(ref(db, 'worksync/timelogs'), timeLog)
-                    ]);
-                    toast('QC Report Submitted Successfully!', 'success');
-                    document.getElementById('qc-task-select').value = '';
-                    loadQcTaskDetails('');
-                    qcStartTime = null;
-                    renderQcTasks(); // Refresh badge and dropdown
-                } catch (err) { toast('Failed to save QC report', 'error'); }
+                    // Update Task status
+                    let statusUpdated = false;
+                    const targetStatus = action === 'approve' ? 'Completed' : 'Rework';
+                    if (isInternalTask(task)) {
+                        statusUpdated = await updateInternalTaskStatus(task.id, targetStatus);
+                    } else {
+                        statusUpdated = await updateTaskStatus(task.id, targetStatus);
+                    }
+
+                    if (statusUpdated) {
+                        await Promise.all([
+                            push(ref(db, 'worksync/qc_reports'), report),
+                            push(ref(db, 'worksync/timelogs'), timeLog)
+                        ]);
+                        toast(action === 'approve' ? 'QC Approved & Task Completed!' : 'QC Rejected & Task Sent to Rework!', 'success');
+                        document.getElementById('qc-task-select').value = '';
+                        loadQcTaskDetails('');
+                        qcStartTime = null;
+                        renderQcTasks(); // Refresh badge and dropdown
+                    } else {
+                        toast('Failed to update task status in Jira/database.', 'error');
+                    }
+                } catch (err) { 
+                    console.error('Failed to save QC report:', err);
+                    toast('Failed to save QC report', 'error'); 
+                }
             }
 
             function loadSnehaSelections() {
@@ -15008,7 +15144,7 @@
                     'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org',
                     'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org',
                     'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads',
-                    'marketing-hub', 'meta-integration'
+                    'marketing-hub', 'meta-integration', 'weekly-matrix'
                 ];
 
                 allPanelIds.forEach(id => {
@@ -15071,7 +15207,8 @@
                     'strategy-calendar': 'Strategy Calendar',
                     'plan-tracking': 'Production Control Center',
                     'files-manager': 'Files Manager',
-                    discussions: 'Discussion History & Schedule'
+                    discussions: 'Discussion History & Schedule',
+                    'weekly-matrix': 'Weekly Matrix Planner'
                 };
                 document.getElementById('view-title').textContent = titles[view] || 'One Desk';
 
@@ -15118,6 +15255,7 @@
                     else if (view === 'meta-ads') { loadMetaAdsData(); }
                     else if (view === 'marketing-hub') { initMarketingHub(); }
                     else if (view === 'meta-integration') { initMetaIntegration(); }
+                    else if (view === 'weekly-matrix') { initWeeklyMatrix(); }
 
                     // Manage Live Board Timers for Admin
                     if ((view === 'dashboard' || view === 'dailyplan') && isAdmin()) {
@@ -15476,6 +15614,11 @@
             // --- Strategy Calendar JS Functions ---
             let strategyCurrentDate = new Date();
             let strategyEvents = {};
+            Object.defineProperty(window, 'strategyEvents', {
+                get: () => strategyEvents,
+                set: (val) => { strategyEvents = val; },
+                configurable: true
+            });
             let strategyEventsUnsub = null;
             let activeStrategyClientFilter = 'All';
 
@@ -21770,16 +21913,29 @@
                 }
 
                 // For internal task, update status to 'In Progress' (except recurring morning learning)
+                const userRole = (currentUser?.role || '').toLowerCase();
+                const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
+                let resolvedStartStatus = startStatus;
+                if (isVideoEditorOrDesigner) {
+                    resolvedStartStatus = 'Design In Progress';
+                }
+
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
-                    await updateInternalTaskStatus(id, startStatus);
+                    await updateInternalTaskStatus(id, resolvedStartStatus);
                 } else if (task && !isInternalTask(task)) {
                     // For Jira tasks, update to "Design In Progress" or appropriate status
                     const currentStatus = (task.status || '').toLowerCase();
-                    const isDesignTask = currentStatus.includes('design');
-                    const newJiraStatus = isDesignTask ? 'Design In Progress' : 'In Progress';
+                    let newJiraStatus = 'In Progress';
+                    if (isVideoEditorOrDesigner) {
+                        newJiraStatus = 'Design In Progress';
+                    } else {
+                        const isDesignTask = currentStatus.includes('design');
+                        newJiraStatus = isDesignTask ? 'Design In Progress' : 'In Progress';
+                    }
 
                     // Only update if not already in progress
-                    if (!currentStatus.includes('in progress')) {
+                    if ((newJiraStatus === 'Design In Progress' && currentStatus !== 'design in progress') ||
+                        (newJiraStatus === 'In Progress' && !currentStatus.includes('in progress'))) {
                         try {
                             await updateTaskStatus(id, newJiraStatus);
                         } catch (err) {
@@ -21901,8 +22057,17 @@
                 }
 
                 const t = tasks.find(t => t.id === activeTaskId);
+                const userRole = (currentUser?.role || '').toLowerCase();
+                const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
+
                 if (t && isMorningLearningTask(t)) {
                     await completeMorningLearningTask(t);
+                } else if (t && isVideoEditorOrDesigner) {
+                    if (isInternalTask(t)) {
+                        await updateInternalTaskStatus(activeTaskId, 'Quality Check');
+                    } else {
+                        await updateTaskStatus(activeTaskId, 'Quality Check');
+                    }
                 } else if (t && isInternalTask(t)) {
                     await updateInternalTaskStatus(activeTaskId, 'Completed');
                 }
@@ -23272,7 +23437,7 @@
             // Update status for internal tasks via the inline dropdown
             async function updateInternalTaskStatus(taskId, newStatus) {
                 const taskIndex = tasks.findIndex(t => t.id === taskId);
-                if (taskIndex === -1) return;
+                if (taskIndex === -1) return false;
                 const task = tasks[taskIndex];
                 const oldStatus = task.status;
 
@@ -23282,14 +23447,14 @@
                         task.status = oldStatus;
                         renderInternalTasks();
                         renderDailyPlan();
-                        return;
+                        return false;
                     }
                     if (newStatus === 'Skipped') {
                         openMorningLearningSkipModal(task);
                         task.status = oldStatus;
                         renderInternalTasks();
                         renderDailyPlan();
-                        return;
+                        return false;
                     }
                 }
 
@@ -23308,6 +23473,7 @@
                             updatedAt: Date.now()
                         });
                         toast('Status updated', 'success');
+                        return true;
                     } else {
                         // Jira task - sync to Jira
                         toast('Syncing to Jira...', 'info');
@@ -23316,7 +23482,9 @@
                             task.status = oldStatus;
                             renderInternalTasks();
                             updateStats();
+                            return false;
                         }
+                        return true;
                     }
                 } catch (err) {
                     console.error('Failed to update internal task status:', err);
@@ -23324,6 +23492,7 @@
                     renderInternalTasks();
                     updateStats();
                     toast('Failed to update status: ' + err.message, 'error');
+                    return false;
                 }
             }
 
@@ -34254,7 +34423,14 @@
                     console.log(`✓ Available transitions for ${taskId}:`, transitions.map(t => t.name).join(', '));
 
                     // 2. Find the transition that matches the target status name
-                    const targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+                    let targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+                    if (!targetTransition) {
+                        if (newStatusName.toLowerCase() === 'rework designs') {
+                            targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework');
+                        } else if (newStatusName.toLowerCase() === 'rework') {
+                            targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework designs');
+                        }
+                    }
 
                     if (!targetTransition) {
                         console.warn(`✗ Transition to "${newStatusName}" not found. Available:`, transitions.map(t => t.name).join(', '));
@@ -37481,7 +37657,7 @@
 
             async function updateTaskStatus(taskId, newStatus) {
                 const taskIndex = tasks.findIndex(t => t.id === taskId);
-                if (taskIndex === -1) return;
+                if (taskIndex === -1) return false;
                 const task = tasks[taskIndex];
                 const oldStatus = task.status; if (task.manual) {
                     try {
@@ -37507,7 +37683,11 @@
 
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
-                    } catch (err) { toast('Failed to update status', 'error'); }
+                        return true;
+                    } catch (err) { 
+                        toast('Failed to update status', 'error');
+                        return false;
+                    }
                 } else {
                     // Jira task: update locally first, then sync to Jira
                     task.status = newStatus;
@@ -37524,6 +37704,7 @@
                         renderTasks();
                         if (isInternalTabActive()) renderInternalTasks();
                         updateStats();
+                        return false;
                     } else {
                         // Thumbnail notification on successful Jira sync
                         if (newStatus.toLowerCase() === 'thumbnail waiting' && oldStatus.toLowerCase() !== 'thumbnail waiting') {
@@ -37532,6 +37713,7 @@
 
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
+                        return true;
                     }
                 }
             }
