@@ -17086,29 +17086,98 @@
                     };
 
                     if (id) {
-                        // Update
+                        // Capture existing strategy event data before update
+                        const existingEv = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents[id] : null;
+                        const oldTitle = existingEv ? existingEv.title : null;
+                        const targetJiraId = jiraId || (existingEv ? existingEv.jiraId : null);
+
+                        // Update Strategy Event in Firebase
                         await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
                         toast('Strategy event updated!', 'success');
 
                         // Close modal immediately so UI is snappy!
                         closeStrategyEventModal();
 
-                        // Background sync of task status & due date
+                        // Background sync of task status, title (summary), due date & subtasks to Jira/Database
                         (async () => {
                             try {
-                                const matchedTask = findMatchedStrategyTask(title, desc, jiraId);
-                                if (matchedTask) {
-                                    if (matchedTask.status !== status) {
-                                        await updateTaskStatus(matchedTask.id, status);
+                                // Find matched task using targetJiraId, new title, or old title
+                                let matchedTask = findMatchedStrategyTask(title, desc, targetJiraId);
+                                if (!matchedTask && oldTitle) {
+                                    matchedTask = findMatchedStrategyTask(oldTitle, desc, targetJiraId);
+                                }
+
+                                const jiraKey = targetJiraId || (matchedTask && isJiraCloudTask(matchedTask) ? matchedTask.id : null);
+
+                                // 1. Update status if changed
+                                if (matchedTask && matchedTask.status !== status) {
+                                    await updateTaskStatus(matchedTask.id, status);
+                                }
+
+                                // 2. Update Jira task fields (summary/title & due date) if Jira task exists
+                                if (jiraKey) {
+                                    const fieldsToUpdate = {};
+
+                                    // If title renamed or summary differs from strategy title
+                                    if (oldTitle && oldTitle !== title) {
+                                        fieldsToUpdate.summary = title;
+                                    } else if (matchedTask && (matchedTask.summary || matchedTask.desc) !== title) {
+                                        fieldsToUpdate.summary = title;
                                     }
-                                    if (matchedTask.duedate !== calculatedDueDate) {
-                                        matchedTask.duedate = calculatedDueDate;
-                                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(matchedTask.id)}`;
-                                        jiraRequest(jiraUrl, 'put', { fields: { duedate: calculatedDueDate } }).catch(e => console.error('Failed to sync Jira duedate:', e));
+
+                                    // If due date changed
+                                    if (!matchedTask || matchedTask.duedate !== calculatedDueDate) {
+                                        fieldsToUpdate.duedate = calculatedDueDate;
+                                    }
+
+                                    if (Object.keys(fieldsToUpdate).length > 0) {
+                                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(jiraKey)}`;
+                                        const jiraRes = await jiraRequest(jiraUrl, 'put', { fields: fieldsToUpdate });
+                                        if (jiraRes && jiraRes.success) {
+                                            console.log(`Successfully updated Jira task ${jiraKey} with:`, fieldsToUpdate);
+                                        } else {
+                                            console.error(`Failed to update Jira task ${jiraKey}:`, jiraErrorMessage(jiraRes));
+                                        }
+                                    }
+
+                                    // If title was renamed, update any associated thumbnail subtasks in Jira
+                                    if (oldTitle && oldTitle !== title && typeof tasks !== 'undefined' && tasks) {
+                                        const subtasks = tasks.filter(t => (t.parentId === jiraKey || t.parentKey === jiraKey || t.parent === jiraKey));
+                                        for (const sub of subtasks) {
+                                            if (sub.id && (sub.summary || sub.desc || '').startsWith('Thumbnail –')) {
+                                                const newSubSummary = `Thumbnail – ${title}`;
+                                                const subJiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(sub.id)}`;
+                                                jiraRequest(subJiraUrl, 'put', { fields: { summary: newSubSummary } }).catch(e => console.error('Failed to update Jira subtask summary:', e));
+                                                sub.summary = newSubSummary;
+                                                sub.desc = newSubSummary;
+                                            }
+                                        }
+                                    }
+                                } else if (matchedTask && (matchedTask.manual || isInternalTask(matchedTask))) {
+                                    // 3. If manual/internal task, update desc/summary in Firebase manual_tasks
+                                    const assigneeKey = eKey(matchedTask.assigneeEmail || matchedTask.userId || '');
+                                    if (assigneeKey) {
+                                        await update(ref(db, `worksync/manual_tasks/${assigneeKey}/${matchedTask.id}`), {
+                                            desc: title,
+                                            summary: title,
+                                            duedate: calculatedDueDate
+                                        });
                                     }
                                 }
+
+                                // 4. Update in-memory task object for immediate UI responsiveness
+                                if (matchedTask) {
+                                    matchedTask.desc = title;
+                                    matchedTask.summary = title;
+                                    matchedTask.duedate = calculatedDueDate;
+                                }
+
+                                // 5. Trigger tasks sync to update all calendar, kanban, and list views
+                                if (typeof syncTasks === 'function') {
+                                    await syncTasks(true);
+                                }
                             } catch (bgErr) {
-                                console.error('Background task status sync error:', bgErr);
+                                console.error('Background task title & status sync error:', bgErr);
                             }
                         })();
                     } else {
