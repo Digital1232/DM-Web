@@ -208,6 +208,24 @@ function parseTaskObject(key, val, defaultUserKey = null) {
     };
 }
 
+function isJiraKey(id) {
+    if (!id || typeof id !== 'string') return false;
+    const parts = id.split('-');
+    if (parts.length !== 2) return false;
+    const project = parts[0];
+    const num = parts[1];
+    return /^[A-Z0-9]+$/.test(project) && /^\d+$/.test(num) && project !== 'STRAT' && project !== 'LEARN';
+}
+
+function isExcludedTask(t) {
+    if (!t) return true;
+    const id = String(t.id || t.taskId || '').toUpperCase();
+    if (id.startsWith('LEARN-') || t.learningSession === true || t.isLearning === true) return true;
+    if (t.internal === true || String(t.taskType || '').toLowerCase() === 'internal') return true;
+    if (id.startsWith('CHECKIN') || id.startsWith('CHECKOUT') || id.startsWith('BREAK')) return true;
+    return false;
+}
+
 /**
  * Merge Strategy Calendar & Daily Plan tasks into single dataset
  */
@@ -227,8 +245,12 @@ function mergeAndRenderAllStrategyTasks() {
         Object.entries(rawManualTasksData).forEach(([userKey, userTasks]) => {
             if (userTasks && typeof userTasks === 'object') {
                 Object.entries(userTasks).forEach(([taskId, taskVal]) => {
+                    if (isExcludedTask(taskVal)) return;
+                    
                     const task = parseTaskObject(taskId, taskVal, userKey);
-                    if (task && (task.date || task.strategyEvent)) {
+                    const isJira = task && (task.jiraId || isJiraKey(task.id));
+                    const isStrat = task && (task.strategyEvent || String(task.id).startsWith('STRAT-'));
+                    if (task && (isJira || isStrat)) {
                         if (!matrixTasksMap.has(task.id)) {
                             matrixTasksMap.set(task.id, task);
                         }
@@ -241,7 +263,11 @@ function mergeAndRenderAllStrategyTasks() {
     // 3. Merge window.tasks (Global app tasks)
     if (Array.isArray(window.tasks)) {
         window.tasks.forEach(t => {
-            if (t && t.id && !matrixTasksMap.has(t.id)) {
+            if (isExcludedTask(t)) return;
+
+            const isJira = t.jiraId || isJiraKey(t.id);
+            const isStrat = t.strategyEvent || String(t.id).startsWith('STRAT-');
+            if (t && t.id && (isJira || isStrat) && !matrixTasksMap.has(t.id)) {
                 const task = parseTaskObject(t.id, t);
                 if (task && task.date && task.client) {
                     matrixTasksMap.set(task.id, task);
