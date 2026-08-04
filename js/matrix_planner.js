@@ -1589,7 +1589,6 @@ window.submitAssignMonthlyPlan = submitAssignMonthlyPlan;
 
 window.addMatrixTaskRowPrompt = addMatrixTaskRowPrompt;
 window.startInlineCreateTask = startInlineCreateTask;
-window.submitMatrixTaskCreateModal = submitMatrixTaskCreateModal;
 
 // Auto Initialize on DOM Ready or window load
 document.addEventListener('DOMContentLoaded', () => {
