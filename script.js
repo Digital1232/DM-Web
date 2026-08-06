@@ -3472,6 +3472,44 @@ if (initializeApp) {
         }
     }
 
+    function linkFileManagerSourceForStrategy() {
+        const currentPath = document.getElementById('strategy-folder-path')?.value || '';
+        const title = document.getElementById('strategy-title')?.value?.trim() || 'Campaign';
+        const client = document.getElementById('strategy-client')?.value || 'Quade';
+
+        let defaultSuggestion = currentPath || `Clients / ${client} / 2026 / August / ${title}`;
+
+        const newPath = prompt('Link File Manager Source Folder Path:', defaultSuggestion);
+        if (newPath !== null && newPath.trim() !== '') {
+            const cleanPath = newPath.trim();
+            updateStrategyFolderUI(cleanPath);
+            if (typeof toast === 'function') toast('✓ Source folder linked from File Manager', 'success');
+        }
+    }
+
+    function updateStrategyFolderUI(folderPath) {
+        const input = document.getElementById('strategy-folder-path');
+        const display = document.getElementById('strategy-folder-display');
+        const subtext = document.getElementById('strategy-folder-subtext');
+        const btnText = document.getElementById('strategy-folder-btn-text');
+
+        if (input) input.value = folderPath || '';
+
+        if (folderPath) {
+            if (display) {
+                display.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-extrabold">📂 ${typeof escapeHtml === 'function' ? escapeHtml(folderPath) : folderPath}</span>`;
+            }
+            if (subtext) {
+                subtext.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-600 font-bold text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Linked to File Manager</span>`;
+            }
+            if (btnText) btnText.textContent = 'Change Folder';
+        } else {
+            if (display) display.textContent = 'No folder linked';
+            if (subtext) subtext.textContent = 'Select source folder from File Manager';
+            if (btnText) btnText.textContent = 'Link Source Folder';
+        }
+    }
+
     function openAddStrategyEventModal(dateStr, clientStr) {
         if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
 
@@ -12648,7 +12686,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.moveBoardColumn = moveBoardColumn;
     window.submitDmContentIdea = submitDmContentIdea;
     window.navigateStrategyCalendar = navigateStrategyCalendar;
-    window.openAddStrategyEventModal = openAddStrategyEventModal;
+    window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent;
     window.openEditStrategyEventModal = openEditStrategyEventModal;
     window.closeStrategyEventModal = closeStrategyEventModal;
     window.selectStrategyFormat = selectStrategyFormat;
