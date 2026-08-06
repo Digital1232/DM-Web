@@ -11025,37 +11025,34 @@
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
             </div>
 
+            <!-- File Manager Source Folder Selector -->
             <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Jira Task ID
-                    <span class="text-slate-300">(Auto-fetch)</span></label>
-                <div class="relative">
-                    <div class="flex gap-2">
-                        <input id="strategy-jira-search" type="text" placeholder="Search or type Jira task ID..."
-                            class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10"
-                            oninput="searchJiraTasksForStrategy()">
-                        <button onclick="fetchJiraTasksForStrategy()" type="button"
-                            class="px-3 py-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-600 rounded-xl text-xs font-bold transition-all">
-                            <iconify-icon icon="solar:search-bold" width="16"></iconify-icon>
-                        </button>
-                        <button onclick="clearStrategyJiraSelection()" type="button" id="strategy-jira-clear-btn"
-                            class="hidden px-3 py-2.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl text-xs font-bold transition-all"
-                            title="Clear Jira selection">
-                            ✕
-                        </button>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    File Manager Source Folder
+                </label>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 overflow-hidden flex-1">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/50">
+                            <iconify-icon icon="solar:folder-with-files-bold-duotone" width="20"></iconify-icon>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p id="strategy-folder-display" class="text-xs font-bold text-slate-800 dark:text-white truncate">
+                                No folder linked
+                            </p>
+                            <p id="strategy-folder-subtext" class="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                                Select source folder from File Manager
+                            </p>
+                        </div>
                     </div>
-                    <input id="strategy-jira-id" type="hidden">
-                    <div id="strategy-jira-dropdown"
-                        class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
-                        <!-- Dropdown items will be populated here -->
-                    </div>
-                    <p id="strategy-jira-selected" class="text-[9px] text-slate-500 mt-1">No task selected</p>
+                    <input type="hidden" id="strategy-folder-path" value="">
+                    <button type="button" onclick="linkFileManagerSourceForStrategy()"
+                        class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100 dark:shadow-none hover:scale-[1.02]">
+                        <iconify-icon icon="solar:link-circle-bold" width="16"></iconify-icon>
+                        <span id="strategy-folder-btn-text">Link Source Folder</span>
+                    </button>
                 </div>
             </div>
-
-            <!-- Jira Task Status Display -->
-            <div id="strategy-jira-status" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-600">
-                <span class="text-xs text-slate-500">No task selected</span>
-            </div>
+            <input id="strategy-jira-id" type="hidden">
 
             <div>
                 <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
@@ -16819,6 +16816,7 @@
                 document.getElementById('strategy-event-id').value = '';
                 document.getElementById('strategy-title').value = '';
                 document.getElementById('strategy-date').value = dateStr || '';
+                updateStrategyFolderUI('');
                 document.getElementById('strategy-owner').value = '';
                 
                 const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
@@ -16915,6 +16913,7 @@
                     document.getElementById('strategy-title').value = ev.title || '';
                     document.getElementById('strategy-date').value = ev.date || '';
                     document.getElementById('strategy-owner').value = ev.owner || '';
+                    updateStrategyFolderUI(ev ? (ev.folderPath || ev.sourceFolder || '') : '');
                     
                     populateStrategyClientDropdown(ev.client || '');
                     
@@ -17138,6 +17137,7 @@
                         status,
                         desc,
                         format, // Save the content format
+                        folderPath: document.getElementById('strategy-folder-path')?.value || '', // Link File Manager Source Folder!
                         jiraId, // Explicitly save the JIRA Task ID link!
                         videosCount, // Save video count
                         postersCount, // Save poster count
@@ -41199,7 +41199,7 @@
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
-            window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+            window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
