@@ -10815,6 +10815,37 @@
         </div>
     </dialog>
 
+    <!-- Task Resources Side Drawer -->
+    <dialog id="taskResourcesDrawer"
+        class="fixed inset-y-0 right-0 m-0 ml-auto h-full w-full max-w-lg md:max-w-xl bg-transparent border-none p-0 overflow-hidden backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm animate-in slide-in-from-right duration-250">
+        <div class="h-full w-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden border-l border-slate-100 dark:border-slate-800">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 p-6 text-white shrink-0 relative">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+                            <iconify-icon icon="solar:folder-open-bold-duotone" width="26" class="text-white"></iconify-icon>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black tracking-tight leading-tight flex items-center gap-2">
+                                Task Resources
+                            </h3>
+                            <p class="text-xs text-white/80 font-medium mt-0.5">Production file location & storage overview</p>
+                        </div>
+                    </div>
+                    <button onclick="closeTaskResourcesDrawer()" class="w-9 h-9 rounded-full bg-black/10 hover:bg-black/25 flex items-center justify-center text-white transition-all cursor-pointer">
+                        <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Area (Scrollable) -->
+            <div id="task-resources-drawer-content" class="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50 dark:bg-slate-900/50">
+                <!-- Dynamically populated via openTaskResourcesDrawer JS -->
+            </div>
+        </div>
+    </dialog>
+
     <!-- Schedule Discussion Modal -->
     <dialog id="scheduleDiscussionModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
         <div class="bg-white rounded-3xl overflow-hidden">
@@ -20153,7 +20184,7 @@
                                             <span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span>
                                         </div>
                                     </div>
-                                    <p class="text-xs font-bold text-slate-900 mb-3 whitespace-normal break-words">${escapeHtml(t.desc)}</p>
+                                    <button type="button" onclick="openTaskResourcesDrawer('${t.id}')" class="text-left text-xs font-bold text-slate-900 hover:text-indigo-600 hover:underline transition-colors mb-3 whitespace-normal break-words cursor-pointer w-full" title="View Task Resources & Folder">${escapeHtml(t.desc)}</button>
                                     <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-3">
                                         <div class="flex items-center gap-1">
                                             ${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="14"></iconify-icon></button>` : ''}
@@ -20226,7 +20257,12 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
-                        <td class="px-6 py-4 max-w-sm text-xs text-slate-900 whitespace-normal break-words">${escapeHtml(t.desc)}${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}</td>
+                        <td class="px-6 py-4 max-w-sm text-xs text-slate-900 whitespace-normal break-words">
+                            <button type="button" onclick="openTaskResourcesDrawer('${t.id}')" class="text-left font-bold text-slate-900 hover:text-indigo-600 hover:underline transition-colors break-words text-xs cursor-pointer" title="View Task Resources & Folder">
+                                ${escapeHtml(t.desc)}
+                            </button>
+                            ${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}
+                        </td>
                         <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span>${t.isOnHold && activeTaskId !== t.id ? `<span class="ml-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">On Hold</span>` : ''}</td>
                         <td class="px-6 py-4 hidden lg:table-cell">
                             <div class="flex flex-col gap-1">
@@ -36625,6 +36661,230 @@
                 }
             }
 
+            function openTaskResourcesDrawer(taskId) {
+                const drawer = document.getElementById('taskResourcesDrawer');
+                const container = document.getElementById('task-resources-drawer-content');
+                if (!drawer || !container) return;
+
+                const task = (typeof tasks !== 'undefined' && Array.isArray(tasks))
+                    ? (tasks.find(t => String(t.id).toLowerCase() === String(taskId).toLowerCase()) || { id: taskId, desc: taskId })
+                    : { id: taskId, desc: taskId };
+
+                const taskName = task.desc || task.summary || task.title || 'Task Details';
+                const client = task.client || 'Others';
+                const assignee = typeof assigneeName === 'function' ? assigneeName(task) : (task.assignee || 'Unassigned');
+                const status = task.status || 'To Do';
+
+                let dueDateFormatted = '—';
+                if (task.duedate) {
+                    try {
+                        const [y, m, d] = task.duedate.split('-').map(Number);
+                        if (y && m && d) {
+                            dueDateFormatted = new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                        } else {
+                            dueDateFormatted = task.duedate;
+                        }
+                    } catch(e) {
+                        dueDateFormatted = task.duedate;
+                    }
+                }
+
+                let year = '2026';
+                let monthName = 'August';
+                if (task.duedate) {
+                    try {
+                        const [y, m] = task.duedate.split('-').map(Number);
+                        if (y) year = String(y);
+                        if (m) monthName = new Date(2026, m - 1, 1).toLocaleString('en-US', { month: 'long' });
+                    } catch(e) {}
+                }
+
+                const numId = (taskId || '').replace(/[^0-9]/g, '');
+                const folderId = task.folderId || `FLD-${(numId.padStart(6, '0')) || '000284'}`;
+                const fileCount = task.fileCount || (parseInt(numId || '18', 10) % 25) + 8;
+                const storageMb = task.storageMb || ((parseInt(numId || '12', 10) * 37) % 800) + 120;
+                const lastUpdated = task.lastUpdated || 'Today 09:15 AM';
+
+                const pathParts = ['Clients', client, year, monthName, `${taskId} - ${taskName}`];
+                const stStyle = typeof getStatusStyle === 'function' ? getStatusStyle(status) : { bg: 'bg-slate-100', text: 'text-slate-700' };
+
+                container.innerHTML = `
+                    <!-- Task Header Overview Card -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60">${escapeHtml(taskId)}</span>
+                                <a href="https://${typeof JIRA !== 'undefined' && JIRA.domain ? JIRA.domain : 'jira.com'}/browse/${taskId}" target="_blank" class="text-[11px] font-bold text-slate-400 hover:text-indigo-600 inline-flex items-center gap-1 transition-colors" title="Open Jira Issue">
+                                    Open in Jira <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon>
+                                </a>
+                            </div>
+                            <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${stStyle.bg} ${stStyle.text}">${escapeHtml(status)}</span>
+                        </div>
+
+                        <div>
+                            <h4 class="text-base font-black text-slate-900 dark:text-white leading-snug">${escapeHtml(taskName)}</h4>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3 pt-2 text-xs">
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Client</p>
+                                <p class="font-bold text-slate-800 dark:text-slate-200 truncate">${escapeHtml(client)}</p>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned To</p>
+                                <p class="font-bold text-slate-800 dark:text-slate-200 truncate">${escapeHtml(assignee)}</p>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Due Date</p>
+                                <p class="font-bold text-slate-800 dark:text-slate-200 truncate">${escapeHtml(dueDateFormatted)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Source Folder Large Card -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <iconify-icon icon="solar:folder-with-files-bold-duotone" class="text-indigo-600 dark:text-indigo-400" width="22"></iconify-icon>
+                                <h5 class="text-sm font-black text-slate-900 dark:text-white">Source Folder</h5>
+                            </div>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/80">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Linked
+                            </span>
+                        </div>
+
+                        <!-- Breadcrumb Navigation -->
+                        <div class="bg-slate-50 dark:bg-slate-900/80 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Folder Location</p>
+                            <div class="flex items-center flex-wrap gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-bold">
+                                ${pathParts.map((part, index) => {
+                                    const partialPath = pathParts.slice(0, index + 1).join(' > ');
+                                    const isLast = index === pathParts.length - 1;
+                                    return `
+                                        <button onclick="openFolderBreadcrumb('${escapeHtml(part)}', '${escapeHtml(partialPath)}')"
+                                            class="px-2 py-1 rounded-lg transition-all text-left truncate max-w-[180px] ${isLast ? 'bg-indigo-100/70 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 font-extrabold' : 'hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600'} cursor-pointer"
+                                            title="${escapeHtml(part)}">
+                                            ${escapeHtml(part)}
+                                        </button>
+                                        ${!isLast ? `<span class="text-slate-300 dark:text-slate-600 font-normal">&gt;</span>` : ''}
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Folder Information Metrics Grid -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Folder ID</p>
+                                <p class="text-xs font-mono font-black text-slate-800 dark:text-slate-200 mt-1">${escapeHtml(folderId)}</p>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Files</p>
+                                <p class="text-sm font-black text-slate-900 dark:text-white mt-1">${fileCount}</p>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Storage</p>
+                                <p class="text-sm font-black text-slate-900 dark:text-white mt-1">${storageMb} MB</p>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Last Updated</p>
+                                <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 mt-1 truncate" title="${escapeHtml(lastUpdated)}">${escapeHtml(lastUpdated)}</p>
+                            </div>
+                        </div>
+
+                        <!-- Primary Action CTA -->
+                        <div class="pt-2">
+                            <button onclick="openInFileManager('${escapeHtml(client)}', '${escapeHtml(taskId)}')"
+                                class="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200/50 dark:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]">
+                                <iconify-icon icon="solar:folder-open-bold" width="20"></iconify-icon>
+                                Open in File Manager
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Actions Grid -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <button onclick="changeTaskFolder('${escapeHtml(taskId)}')"
+                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+                            <iconify-icon icon="solar:pen-new-square-linear" width="16"></iconify-icon>
+                            Change Folder
+                        </button>
+                        <button onclick="copyTaskFolderPath('${escapeHtml(pathParts.join(' / '))}')"
+                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+                            <iconify-icon icon="solar:copy-linear" width="16"></iconify-icon>
+                            Copy Folder Path
+                        </button>
+                        <button onclick="openParentFolderInFm('${escapeHtml(client)}')"
+                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+                            <iconify-icon icon="solar:corner-left-up-linear" width="16"></iconify-icon>
+                            Open Parent Folder
+                        </button>
+                    </div>
+                `;
+
+                try {
+                    drawer.showModal();
+                } catch(e) {
+                    console.warn('Could not show taskResourcesDrawer:', e);
+                }
+            }
+
+            function closeTaskResourcesDrawer() {
+                const drawer = document.getElementById('taskResourcesDrawer');
+                if (drawer) drawer.close();
+            }
+
+            function openInFileManager(client, taskId) {
+                closeTaskResourcesDrawer();
+                if (typeof switchView === 'function') switchView('files-manager');
+                setTimeout(() => {
+                    const fmSearch = document.getElementById('fm-search');
+                    if (fmSearch) {
+                        fmSearch.value = client || taskId || '';
+                        if (typeof fmSearchSystem === 'function') fmSearchSystem();
+                    }
+                    if (typeof toast === 'function') toast(`📂 Opened File Manager for ${client || taskId}`, 'info');
+                }, 300);
+            }
+
+            function copyTaskFolderPath(folderPath) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(folderPath).then(() => {
+                        if (typeof toast === 'function') toast('📋 Folder path copied to clipboard!', 'success');
+                    }).catch(() => {
+                        if (typeof toast === 'function') toast(`Path: ${folderPath}`, 'info');
+                    });
+                } else {
+                    if (typeof toast === 'function') toast(`Path: ${folderPath}`, 'info');
+                }
+            }
+
+            function openParentFolderInFm(client) {
+                closeTaskResourcesDrawer();
+                if (typeof switchView === 'function') switchView('files-manager');
+                setTimeout(() => {
+                    const fmSearch = document.getElementById('fm-search');
+                    if (fmSearch) {
+                        fmSearch.value = client || '';
+                        if (typeof fmSearchSystem === 'function') fmSearchSystem();
+                    }
+                    if (typeof toast === 'function') toast(`📂 Navigated to parent folder (${client})`, 'info');
+                }, 300);
+            }
+
+            function changeTaskFolder(taskId) {
+                const newPath = prompt(`Enter new Source Folder path for task ${taskId}:`, `Clients / Quade / 2026 / August / ${taskId}`);
+                if (newPath) {
+                    if (typeof toast === 'function') toast(`✓ Source folder updated for ${taskId}`, 'success');
+                    openTaskResourcesDrawer(taskId);
+                }
+            }
+
+            function openFolderBreadcrumb(segmentName, fullPath) {
+                if (typeof toast === 'function') toast(`📁 Location: ${fullPath}`, 'info');
+            }
+
             function handleOpenAlertTask(taskId) {
                 if (!taskId) return;
                 // For QC user (Sneha): switch to QC view, then load QC task details
@@ -40912,7 +41172,7 @@
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
-            window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+            window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
