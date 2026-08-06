@@ -1,0 +1,1335 @@
+﻿            function navigateStrategyCalendar(direction) {
+                if (direction === 0) {
+                    strategyCurrentDate = new Date();
+                } else {
+                    strategyCurrentDate.setMonth(strategyCurrentDate.getMonth() + direction);
+                }
+                renderStrategyCalendar();
+                renderStrategySidebar();
+            }
+
+            // DEBUG FUNCTION - Call from console: debugStrategyCalendar()
+            function debugStrategyCalendar() {
+                console.group('≡ƒöì STRATEGY CALENDAR DEBUG INFO');
+                console.log('Total events:', Object.keys(strategyEvents).length);
+                console.log('Current filter:', activeStrategyClientFilter);
+                console.log('Current date:', strategyCurrentDate.toLocaleDateString());
+                
+                const eventsWithoutDate = Object.entries(strategyEvents).filter(([, e]) => !e.date);
+                if (eventsWithoutDate.length > 0) {
+                    console.warn(`ΓÜá∩╕Å ${eventsWithoutDate.length} events missing DATE field:`, eventsWithoutDate);
+                }
+                
+                const eventsByClient = {};
+                Object.values(strategyEvents).forEach(e => {
+                    const client = e.client || 'General';
+                    if (!eventsByClient[client]) eventsByClient[client] = 0;
+                    eventsByClient[client]++;
+                });
+                console.table(eventsByClient);
+                
+                console.log('Custom Clients:', customClients);
+                console.log('All Clients (CLIENTS array):', window.CLIENTS || 'Not accessible');
+                
+                // Sample events
+                const sample = Object.entries(strategyEvents).slice(0, 3).map(([id, e]) => ({ id, ...e }));
+                console.log('Sample events:', sample);
+                
+                console.groupEnd();
+            }
+            window.debugStrategyCalendar = debugStrategyCalendar;
+
+            // COMPREHENSIVE DIAGNOSTIC - Shows why tasks are not matching to events
+            function diagnosticStrategyTaskMatching() {
+                console.group('≡ƒöì STRATEGY CALENDAR TASK MATCHING DIAGNOSTIC');
+                
+                console.log(`≡ƒôè OVERVIEW:`);
+                console.log(`  ΓÇó Total Jira tasks loaded: ${tasks?.length || 0}`);
+                console.log(`  ΓÇó Total strategy events: ${Object.keys(strategyEvents).length}`);
+                console.log(`  ΓÇó Custom clients available: ${customClients?.length || 0}`);
+                
+                if (!tasks || tasks.length === 0) {
+                    console.warn('ΓÜá∩╕Å NO TASKS LOADED! Call syncTasks() first to load tasks from Jira.');
+                    console.groupEnd();
+                    return;
+                }
+                
+                console.log(`\n≡ƒôï FIRST 5 TASKS AVAILABLE:`);
+                tasks.slice(0, 5).forEach(t => {
+                    console.log(`  ΓÇó ${t.id}: "${t.desc}" [${t.client}]`);
+                });
+                
+                console.log(`\n≡ƒöù MATCHING ANALYSIS BY EVENT:`);
+                const unmatchedEvents = [];
+                const matchedEvents = [];
+                
+                Object.entries(strategyEvents).forEach(([eventId, event]) => {
+                    const matched = findMatchedStrategyTask(event.title, event.desc, event.jiraId, false);
+                    
+                    if (matched) {
+                        matchedEvents.push({
+                            title: event.title,
+                            matchedTo: `${matched.id}: ${matched.desc}`,
+                            client: event.client
+                        });
+                    } else {
+                        unmatchedEvents.push({
+                            title: event.title,
+                            client: event.client,
+                            desc: event.desc,
+                            jiraId: event.jiraId
+                        });
+                        
+                        // Debug this specific event
+                        console.log(`\n  Γ¥î EVENT UNMATCHED: "${event.title}" (Client: ${event.client})`);
+                        console.log(`     Description: "${event.desc}"`);
+                        console.log(`     Jira ID: "${event.jiraId}"`);
+                        
+                        // Try to match with debugging enabled
+                        const debugMatch = findMatchedStrategyTask(event.title, event.desc, event.jiraId, true);
+                        if (debugMatch) {
+                            console.log(`     Γ£à Debug found match: ${debugMatch.id}`);
+                        }
+                    }
+                });
+                
+                console.log(`\nΓ£à MATCHED EVENTS: ${matchedEvents.length}`);
+                if (matchedEvents.length > 0 && matchedEvents.length <= 10) {
+                    matchedEvents.forEach(m => {
+                        console.log(`  Γ£ô "${m.title}" ΓåÆ ${m.matchedTo}`);
+                    });
+                }
+                
+                console.log(`\nΓ¥î UNMATCHED EVENTS: ${unmatchedEvents.length}`);
+                if (unmatchedEvents.length > 0) {
+                    console.table(unmatchedEvents);
+                }
+                
+                console.log(`\n≡ƒÆí RECOMMENDATIONS:`);
+                if (unmatchedEvents.length > 0) {
+                    console.log(`  1. Check if Jira task titles exactly match event titles`);
+                    console.log(`  2. Use 'eventTitle = taskId' format for precise matching`);
+                    console.log(`  3. Verify tasks are using correct client names matching customClients`);
+                    console.log(`  4. Try manually selecting Jira tasks in the Strategy Calendar modal`);
+                }
+                
+                console.groupEnd();
+            }
+            window.diagnosticStrategyTaskMatching = diagnosticStrategyTaskMatching;
+
+            // TEST DATA HELPER - Creates sample strategy events for testing
+            async function createStrategyTestData() {
+                if (!db) {
+                    console.error('Firebase not connected');
+                    return;
+                }
+                
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const nextWeek = new Date(today);
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                
+                const dateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                
+                const testEvents = [
+                    {
+                        id: 'test-event-1',
+                        title: 'Test Campaign Launch',
+                        date: dateStr(today),
+                        client: 'Ashmithasree',
+                        status: 'To Do',
+                        desc: 'Test campaign for verification',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-2',
+                        title: 'Design Review',
+                        date: dateStr(tomorrow),
+                        client: 'NTT',
+                        status: 'In Progress',
+                        desc: 'Design checkpoint',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-3',
+                        title: 'Social Media Planning',
+                        date: dateStr(nextWeek),
+                        client: 'Einstein',
+                        status: 'To Do',
+                        desc: 'Plan social content',
+                        owner: currentUser?.email || 'test@example.com'
+                    },
+                    {
+                        id: 'test-event-4',
+                        title: 'General Event (No Client)',
+                        date: dateStr(today),
+                        client: null,
+                        status: 'Done',
+                        desc: 'Event without specific client',
+                        owner: currentUser?.email || 'test@example.com'
+                    }
+                ];
+                
+                console.log('Creating test strategy events...');
+                
+                for (const event of testEvents) {
+                    try {
+                        await set(ref(db, `worksync/strategy_events/${event.id}`), event);
+                        console.log(`Γ£ô Created: ${event.title}`);
+                    } catch (err) {
+                        console.error(`Γ£ù Failed to create ${event.title}:`, err.message);
+                    }
+                }
+                
+                console.log('Test data creation complete. Calendar should update automatically.');
+            }
+            window.createStrategyTestData = createStrategyTestData;
+
+            function renderStrategyClientTabs() {
+                const container = document.getElementById('strategy-client-tabs-container');
+                if (!container) {
+                    console.warn('[renderStrategyClientTabs] Container not found');
+                    return;
+                }
+
+                // CRITICAL FIX: Get unique clients from BOTH Jira tasks AND strategy events
+                const uniqueClients = new Set();
+                
+                // From Jira tasks (only Jira, not internal)
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        if (!task.manual && !isInternalTask(task) && task.client && task.client !== 'Others') {
+                            uniqueClients.add(task.client);
+                        }
+                    });
+                }
+
+                // From strategy events (your manually created plans)
+                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        if (ev.client && ev.client !== 'General') {
+                            uniqueClients.add(ev.client);
+                        }
+                    });
+                }
+
+                const sortedClients = Array.from(uniqueClients).sort();
+
+                // Build tab list starting with "All"
+                const tabs = ['All'];
+
+                // Add "Others" if there are Jira tasks without specific client
+                const hasOthers = (tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client === 'Others'))) ||
+                                 (strategyEvents && Object.values(strategyEvents).some(ev => !ev.client));
+                if (hasOthers) {
+                    tabs.push('Others');
+                }
+
+                sortedClients.forEach(c => tabs.push(c));
+                
+                console.log('[renderStrategyClientTabs] Rendering tabs from Jira + Strategy Events:', tabs.length, 'tabs');
+
+                // Ensure the active filter is still valid (if not, reset to 'All')
+                if (!tabs.includes(activeStrategyClientFilter)) {
+                    activeStrategyClientFilter = 'All';
+                }
+
+                // CRITICAL: Build HTML with performance optimization
+                const tabsHtml = tabs.map(tab => {
+                    const isActive = activeStrategyClientFilter === tab;
+                    const activeClass = isActive
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 hover:border-slate-200';
+
+                    return `<button onclick="setStrategyClientFilter(this.getAttribute('data-client'))" data-client="${escapeHtml(tab)}" class="px-4 py-2 rounded-2xl text-xs font-bold transition-all ${activeClass}">${escapeHtml(tab)}</button>`;
+                }).join('');
+
+                // Set HTML in one operation (not incremental)
+                container.innerHTML = tabsHtml;
+                console.log('[renderStrategyClientTabs] Container updated with', tabs.length, 'tabs');
+            }
+
+            function setStrategyClientFilter(client) {
+                activeStrategyClientFilter = client;
+                renderStrategyClientTabs();
+                renderStrategyCalendar();
+                renderStrategySidebar();
+            }
+
+            function getStrategyStatusColor(statusName, format = 'solid') {
+                const normalized = (statusName || '').toLowerCase().trim();
+
+                // Status Categorization (3-color system)
+                // NOT COMPLETED (Red) - Statuses: 'To Do','Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Design Hold'
+                // COMPLETED (Green) - Statuses: 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved'
+                // POSTED (Blue) - Statuses: 'Posted', 'Analytics', 'Done'
+
+                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
+                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
+                const postedStatuses = ['posted', 'analytics', 'done'];
+
+                let colorObj = {
+                    solid: 'bg-slate-500 text-white',
+                    pill: 'bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-800'
+                };
+
+                // Check if status matches any of the NOT COMPLETED statuses (Red)
+                if (notCompletedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                    colorObj = {
+                        solid: 'bg-red-500 text-white',
+                        pill: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50'
+                    };
+                }
+                // Check if status matches any of the COMPLETED statuses (Green)
+                else if (completedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                    colorObj = {
+                        solid: 'bg-emerald-500 text-white',
+                        pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50'
+                    };
+                }
+                // Check if status matches any of the POSTED statuses (Blue)
+                else if (postedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                    colorObj = {
+                        solid: 'bg-blue-500 text-white',
+                        pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50'
+                    };
+                }
+
+                return colorObj[format];
+            }
+
+            function getStrategyClientColor(clientName, format = 'solid') {
+                if (!clientName) return format === 'pill' ? 'bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-800' : 'bg-slate-500 text-white';
+
+                const colors = [
+                    { solid: 'bg-indigo-500 text-white', pill: 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50' },
+                    { solid: 'bg-emerald-500 text-white', pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50' },
+                    { solid: 'bg-rose-500 text-white', pill: 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50' },
+                    { solid: 'bg-amber-500 text-white', pill: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50' },
+                    { solid: 'bg-blue-500 text-white', pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50' },
+                    { solid: 'bg-fuchsia-500 text-white', pill: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/50' },
+                    { solid: 'bg-teal-500 text-white', pill: 'bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/50' },
+                    { solid: 'bg-violet-500 text-white', pill: 'bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/50' },
+                ];
+
+                let hash = 0;
+                for (let i = 0; i < clientName.length; i++) {
+                    hash = clientName.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const index = Math.abs(hash) % colors.length;
+                return colors[index][format];
+            }
+
+            function findMatchedStrategyTask(eventTitle, eventDesc, eventJiraId, debugMode = false) {
+                if (!tasks || tasks.length === 0) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] Γ¥î No tasks available (tasks.length = ${tasks?.length})`);
+                    return null;
+                }
+
+                // 0. Explicit saved Jira ID match
+                if (eventJiraId) {
+                    const matched = tasks.find(t => t.id.toLowerCase() === eventJiraId.toLowerCase());
+                    if (matched) {
+                        if (debugMode) console.log(`[findMatchedStrategyTask] Γ£à Matched by Jira ID: ${eventJiraId}`);
+                        return matched;
+                    }
+                    if (debugMode) console.log(`[findMatchedStrategyTask] Γ¥î Jira ID not found: ${eventJiraId}`);
+                }
+
+                const title = (eventTitle || '').toLowerCase().trim();
+                const desc = (eventDesc || '').toLowerCase().trim();
+
+                // 1. Direct Jira ID match (if title/desc contains Jira key)
+                let matched = tasks.find(t => title.includes(t.id.toLowerCase()) || desc.includes(t.id.toLowerCase()));
+                if (matched) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] Γ£à Matched by ID in text: ${matched.id}`);
+                    return matched;
+                }
+
+                // 2. Exact Title match
+                matched = tasks.find(t => (t.desc || '').toLowerCase().trim() === title);
+                if (matched) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] Γ£à Matched by exact title: ${matched.id}`);
+                    return matched;
+                }
+
+                // 3. Partial word matching (case-insensitive, word boundaries)
+                const titleWords = title.split(/\s+/).filter(w => w.length > 2);
+                if (titleWords.length > 0) {
+                    for (const t of tasks) {
+                        const taskDesc = (t.desc || '').toLowerCase();
+                        const matchCount = titleWords.filter(word => taskDesc.includes(word)).length;
+                        const matchRatio = matchCount / titleWords.length;
+                        
+                        // Match if 50% of significant words are in the task
+                        if (matchRatio >= 0.5) {
+                            if (debugMode) console.log(`[findMatchedStrategyTask] Γ£à Matched by word ratio (${(matchRatio*100).toFixed(0)}%): ${matched.id}`);
+                            return t;
+                        }
+                    }
+                }
+
+                // 4. Jaccard Similarity matching (as fallback)
+                const stopWords = new Set(['english', 'and', 'the', 'for', 'with', 'you', 'your', 'our', 'this', 'that', 'with', 'from', 'version', 'video', 'post', 'image']);
+                const getSignificantTokens = (str) => {
+                    return new Set(
+                        str.split(/\s+/)
+                            .map(word => word.replace(/[^a-z0-9]/g, ''))
+                            .filter(word => word.length > 2 && !stopWords.has(word))
+                    );
+                };
+
+                const eventTokens = getSignificantTokens(title);
+                if (eventTokens.size === 0) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] Γ¥î No significant tokens in event title`);
+                    return null;
+                }
+
+                let bestMatch = null;
+                let bestSimilarity = 0;
+
+                for (const t of tasks) {
+                    const taskDesc = (t.desc || '').toLowerCase();
+                    const taskTokens = getSignificantTokens(taskDesc);
+                    if (taskTokens.size === 0) continue;
+
+                    let intersectionSize = 0;
+                    for (const tok of eventTokens) {
+                        if (taskTokens.has(tok)) intersectionSize++;
+                    }
+
+                    const unionSize = eventTokens.size + taskTokens.size - intersectionSize;
+                    const similarity = intersectionSize / unionSize;
+
+                    if (similarity > bestSimilarity) {
+                        bestSimilarity = similarity;
+                        bestMatch = t;
+                    }
+
+                    if (similarity >= 0.5) {
+                        if (debugMode) console.log(`[findMatchedStrategyTask] Γ£à Matched by Jaccard (${(similarity*100).toFixed(0)}%): ${t.id}`);
+                        return t;
+                    }
+                }
+
+                if (debugMode && bestMatch) {
+                    console.log(`[findMatchedStrategyTask] ΓÜá∩╕Å Best match below threshold (${(bestSimilarity*100).toFixed(0)}%): ${bestMatch.id}`);
+                }
+                if (debugMode && !bestMatch) {
+                    console.log(`[findMatchedStrategyTask] Γ¥î No matches found. Available tasks: ${tasks.length}`);
+                }
+
+                return null;
+            }
+
+            function normalizeStrategyStatus(statusName) {
+                const raw = (statusName || 'To Do').trim();
+                const s = raw.toLowerCase();
+                // Map Jira statuses to display labels
+                if (s === 'planned') return 'To Do';
+                if (s === 'to do' || s === 'todo') return 'To Do';
+                if (s === 'in progress' || s === 'inprogress') return 'In Progress';
+                if (s === 'in review' || s === 'review' || s === 'code review') return 'In Review';
+                if (s === 'done' || s === 'closed' || s === 'resolved') return 'Completed';
+                if (s === 'completed') return 'Completed';
+                if (s === 'client sent' || s === 'client send') return 'Client Sent';
+                if (s === 'on hold' || s === 'hold' || s === 'blocked') return 'On Hold';
+                if (s === 'cancelled' || s === 'canceled' || s === 'wont do' || s === "won't do") return 'Cancelled';
+                if (s === 'design to do' || s === 'design') return 'Design';
+                if (s === 'learnings' || s === 'learning') return 'Learning';
+                return raw;
+            }
+
+            function renderStrategyCalendar() {
+                const grid = document.getElementById('strategy-calendar-grid');
+                const title = document.getElementById('strategy-calendar-title');
+                if (!grid || !title) {
+                    console.error('Strategy calendar grid or title element not found!');
+                    return;
+                }
+
+                const month = strategyCurrentDate.getMonth();
+                const year = strategyCurrentDate.getFullYear();
+
+                title.textContent = strategyCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                grid.innerHTML = '';
+
+                // Blank days for start of month
+                for (let i = 0; i < firstDay; i++) {
+                    grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[90px]"></div>`;
+                }
+
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                // CRITICAL CHANGE: Build calendar from JIRA tasks ONLY (exclude internal tasks)
+                // Get all tasks and group by due date
+                const tasksByDate = {};
+                
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        // Filter: Only Jira tasks (not manual, not internal)
+                        if (task.manual || isInternalTask(task)) {
+                            return; // Skip manual and internal tasks
+                        }
+
+                        // Filter by client (if not "All")
+                        if (activeStrategyClientFilter !== 'All') {
+                            const taskClient = task.client || 'Others';
+                            if (taskClient !== activeStrategyClientFilter) {
+                                return; // Skip this task
+                            }
+                        }
+
+                        // Group by due date (if task has a due date in this month/year)
+                        if (task.duedate) {
+                            const [ty, tm, td] = task.duedate.split('-').map(Number);
+                            if (tm - 1 === month && ty === year) {
+                                const dateStr = task.duedate;
+                                if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+                                tasksByDate[dateStr].push({
+                                    id: task.id,
+                                    title: task.desc || task.id,
+                                    client: task.client || 'Others',
+                                    status: task.status,
+                                    assignee: task.assignee || '',
+                                    isJiraTask: true
+                                });
+                            }
+                        }
+                    });
+                }
+
+                // Also include strategy events (for backwards compatibility)
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+                    if (!ev.date) return;
+
+                    // Filter by client
+                    if (activeStrategyClientFilter !== 'All') {
+                        const eventClient = ev.client || 'General';
+                        if (eventClient !== activeStrategyClientFilter) {
+                            return; // Skip this event
+                        }
+                    }
+
+                    // Only include if date is in current month
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    const dateStr = ev.date;
+                    if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+                    
+                    // Check if this event is already added from Jira
+                    const alreadyAdded = tasksByDate[dateStr].some(t => t.id === ev.jiraId && t.isJiraTask);
+                    if (!alreadyAdded) {
+                        tasksByDate[dateStr].push({
+                            id: id,
+                            title: ev.title,
+                            client: ev.client || 'General',
+                            status: ev.status || 'To Do',
+                            jiraId: ev.jiraId,
+                            isStrategyEvent: true
+                        });
+                    }
+                });
+
+                const totalTasks = Object.values(tasksByDate).reduce((sum, arr) => sum + arr.length, 0);
+                console.log(`[renderStrategyCalendar] Showing ${totalTasks} Jira tasks (Filter: ${activeStrategyClientFilter})`);
+
+                // Render days
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const isToday = dateStr === todayStr;
+                    const dayTasks = tasksByDate[dateStr] || [];
+
+                    let tasksHtml = '';
+                    dayTasks.forEach(task => {
+                        // For Jira tasks, use task.status directly (already synced from Jira)
+                        // For strategy events, try to find matching Jira task
+                        let finalStatus = task.status || 'To Do';
+                        if (task.isStrategyEvent && task.jiraId) {
+                            const matchedJiraTask = tasks?.find(t => t.id === task.jiraId);
+                            if (matchedJiraTask) {
+                                finalStatus = matchedJiraTask.status;
+                            }
+                        }
+                        finalStatus = normalizeStrategyStatus(finalStatus);
+
+                        const badgeClass = getStrategyStatusColor(finalStatus, 'pill');
+                        const clientName = task.client || 'Others';
+
+                        tasksHtml += `
+                        <div onclick="event.stopPropagation(); ${task.isStrategyEvent ? `openEditStrategyEventModal('${task.id}')` : `openJiraTaskDetail('${task.id}')`}" 
+                             class="${badgeClass} px-2 py-1.5 rounded-xl text-[9px] font-black shadow-sm transition-all hover:scale-105 active:scale-95 truncate mb-1 cursor-pointer" 
+                             title="${escapeHtml(task.title)} [${escapeHtml(finalStatus)}] [${escapeHtml(clientName)}]">
+                            <div class="truncate">${escapeHtml(task.title)}</div>
+                            <div class="text-[8px] opacity-75 truncate">${escapeHtml(clientName)}</div>
+                        </div>
+                    `;
+                    });
+
+                    grid.innerHTML += `
+                    <div onclick="openAddStrategyEventModal('${dateStr}')" 
+                         class="relative p-3 border-r border-b border-slate-100 min-h-[90px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer">
+                        <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
+                            ${d}
+                        </span>
+                        <div class="mt-2 flex-1">
+                            ${tasksHtml}
+                        </div>
+                    </div>
+                `;
+                }
+
+                // Fill empty cells at the end to keep layout clean
+                const totalCellsSoFar = firstDay + daysInMonth;
+                const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
+                for (let i = 0; i < remainingCells; i++) {
+                    grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[90px]"></div>`;
+                }
+            }
+
+            function renderStrategySidebar() {
+                const listEl = document.getElementById('strategy-sidebar-list');
+                if (!listEl) return;
+
+                const month = strategyCurrentDate.getMonth();
+                const year = strategyCurrentDate.getFullYear();
+
+                // Collect JIRA tasks for current month (EXCLUDE INTERNAL TASKS)
+                const activeMonthTasks = [];
+                
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        // Filter: Skip manual and internal tasks
+                        if (task.manual || isInternalTask(task)) {
+                            return; // Skip internal tasks
+                        }
+
+                        if (!task.duedate) return;
+                        
+                        const [ty, tm, td] = task.duedate.split('-').map(Number);
+                        if (tm - 1 !== month || ty !== year) return;
+
+                        // Filter by client
+                        if (activeStrategyClientFilter !== 'All') {
+                            const taskClient = task.client || 'Others';
+                            if (taskClient !== activeStrategyClientFilter) return;
+                        }
+
+                        activeMonthTasks.push({
+                            id: task.id,
+                            date: task.duedate,
+                            title: task.desc || task.id,
+                            client: task.client || 'Others',
+                            status: task.status,
+                            desc: `Jira: ${task.id}`,
+                            owner: task.assignee || 'Unassigned',
+                            isJiraTask: true
+                        });
+                    });
+                }
+
+                // Also collect strategy events (for backwards compatibility)
+                if (strategyEvents && Object.keys(strategyEvents).length > 0) {
+                    Object.entries(strategyEvents).forEach(([id, ev]) => {
+                        if (!ev.date) return;
+                        
+                        const [ey, em, ed] = ev.date.split('-').map(Number);
+                        if (em - 1 !== month || ey !== year) return;
+
+                        // Filter by client
+                        if (activeStrategyClientFilter !== 'All') {
+                            const eventClient = ev.client || 'General';
+                            if (eventClient !== activeStrategyClientFilter) return;
+                        }
+
+                        // Check if this event is already added from Jira
+                        const alreadyAdded = activeMonthTasks.some(t => t.id === ev.jiraId && t.isJiraTask);
+                        if (!alreadyAdded) {
+                            activeMonthTasks.push({
+                                id: id,
+                                date: ev.date,
+                                title: ev.title,
+                                client: ev.client || 'General',
+                                status: ev.status || 'To Do',
+                                desc: ev.desc || 'No goal described.',
+                                owner: ev.owner,
+                                isStrategyEvent: true
+                            });
+                        }
+                    });
+                }
+
+                // Sort by date
+                activeMonthTasks.sort((a, b) => a.date.localeCompare(b.date));
+
+                if (activeMonthTasks.length === 0) {
+                    listEl.innerHTML = `
+                    <div class="text-center py-8">
+                        <iconify-icon icon="solar:info-circle-linear" class="text-slate-300 mb-2" width="32"></iconify-icon>
+                        <p class="text-xs text-slate-400 italic">No Jira tasks scheduled for this month.</p>
+                    </div>
+                `;
+                    return;
+                }
+
+                listEl.innerHTML = activeMonthTasks.map(task => {
+                    // Get owner/assignee name
+                    let ownerName = task.owner || 'Unassigned';
+                    if (task.isJiraTask) {
+                        const user = allUsersMap.get(task.owner?.toLowerCase());
+                        ownerName = user?.name || task.owner || 'Unassigned';
+                    }
+
+                    const finalStatus = normalizeStrategyStatus(task.status);
+                    const pillColor = getStrategyStatusColor(finalStatus, 'pill');
+                    const clientColor = getStrategyClientColor(task.client, 'pill');
+
+                    const [ty, tm, td] = task.date.split('-').map(Number);
+                    const dateStr = new Date(ty, tm - 1, td).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+                    const statusHtml = finalStatus ? `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-bold border border-indigo-100">${escapeHtml(finalStatus)}</span>` : '';
+
+                    return `
+                    <div onclick="event.stopPropagation(); ${task.isStrategyEvent ? `openEditStrategyEventModal('${task.id}')` : ''}" 
+                         class="p-4 bg-slate-50 hover:bg-white border border-slate-200 rounded-2xl ${task.isStrategyEvent ? 'cursor-pointer' : ''} transition-all hover:scale-[1.01] space-y-2 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest">${dateStr}</span>
+                            <div class="flex items-center gap-1">
+                                ${statusHtml}
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${clientColor}">${escapeHtml(task.client)}</span>
+                            </div>
+                        </div>
+                        <h5 class="text-xs font-black text-slate-900 truncate">${escapeHtml(task.title)}</h5>
+                        <p class="text-[10px] text-slate-600 line-clamp-2">${escapeHtml(task.desc)}</p>
+                        <div class="flex items-center justify-between pt-1 border-t border-slate-100/50 text-[9px] text-slate-400 font-bold uppercase">
+                            <span class="text-slate-600">Assignee: ${escapeHtml(ownerName)}</span>
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            }
+
+            function selectStrategyFormat(format, autoUpdateCounts = false) {
+                const posterBtn = document.getElementById('strategy-format-poster');
+                const videoBtn = document.getElementById('strategy-format-video');
+                const input = document.getElementById('strategy-format');
+                if (!posterBtn || !videoBtn || !input) return;
+
+                input.value = format;
+                if (format === 'Poster') {
+                    posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
+                    videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+                } else {
+                    posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+                    videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
+                }
+            }
+
+            // Search Jira tasks as user types for Strategy Event Creator
+            function searchJiraTasksForStrategy() {
+                const searchField = document.getElementById('strategy-jira-search');
+                const searchTerm = searchField ? searchField.value.trim() : '';
+                
+                // Auto-trigger search after 2 characters
+                if (searchTerm.length >= 2) {
+                    fetchJiraTasksForStrategy();
+                } else {
+                    const dropdown = document.getElementById('strategy-jira-dropdown');
+                    if (dropdown) dropdown.classList.add('hidden');
+                }
+            }
+            window.searchJiraTasksForStrategy = searchJiraTasksForStrategy;
+
+            // Fetch Jira tasks via API for Strategy Event Creator
+            async function fetchJiraTasksForStrategy() {
+                const searchField = document.getElementById('strategy-jira-search');
+                const dropdown = document.getElementById('strategy-jira-dropdown');
+                if (!searchField || !dropdown) return;
+                
+                try {
+                    const title = document.getElementById('strategy-title').value.trim();
+                    const searchTerm = searchField.value.trim() || title;
+                    
+                    if (!searchTerm) {
+                        toast('Enter a search term or task title', 'warning');
+                        return;
+                    }
+
+                    // Show loading state
+                    dropdown.innerHTML = '<div class="p-3 text-center"><iconify-icon icon="svg-spinners:ring-resize" width="20" class="text-indigo-400"></iconify-icon><p class="text-xs text-slate-500 mt-1">Searching Jira...</p></div>';
+                    dropdown.classList.remove('hidden');
+
+                    // Build JQL query to search for matching tasks safely
+                    let jql;
+                    if (/^[A-Za-z0-9]+-\d+$/i.test(searchTerm)) {
+                        const escapedKey = escapeJqlValue(searchTerm);
+                        jql = `key = "${escapedKey}" OR summary ~ "${escapedKey}" OR description ~ "${escapedKey}" ORDER BY updated DESC`;
+                    } else {
+                        // Replace JQL special characters with spaces to prevent parser syntax errors on text search
+                        const sanitized = searchTerm.replace(/[\\+\-&|!(){}\[\]^~*?:"]/g, ' ').trim().replace(/\s+/g, ' ');
+                        const escapedTerm = escapeJqlValue(sanitized);
+                        
+                        if (!escapedTerm) {
+                            dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No search term after sanitization</div>';
+                            return;
+                        }
+                        
+                        jql = `summary ~ "${escapedTerm}" OR description ~ "${escapedTerm}" ORDER BY updated DESC`;
+                    }
+                    const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=20&fields=key,summary,status,assignee`;
+                    
+                    const res = await jiraRequest(url, 'get');
+                    
+                    if (res.success && res.data?.issues) {
+                        const issues = res.data.issues;
+                        
+                        if (issues.length === 0) {
+                            dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No matching Jira tasks found</div>';
+                            return;
+                        }
+
+                        // Build dropdown HTML
+                        let html = '';
+                        issues.forEach(issue => {
+                            const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
+                            const status = issue.fields?.status?.name || 'Unknown';
+                            const summaryEscaped = escapeHtml(issue.fields.summary);
+                            const summaryJs = issue.fields.summary.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            html += `
+                                <div onclick="selectJiraTaskForStrategy('${issue.key}', '${summaryJs}')" 
+                                     class="p-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-[10px] font-bold text-indigo-600">${issue.key}</p>
+                                            <p class="text-xs text-slate-800 dark:text-slate-200 truncate">${summaryEscaped}</p>
+                                            <div class="flex gap-2 mt-1">
+                                                <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">≡ƒôî ${status}</span>
+                                                <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">≡ƒæñ ${escapeHtml(assignee)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        dropdown.innerHTML = html;
+                    } else {
+                        const errMsg = jiraErrorMessage(res);
+                        dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Error: ${escapeHtml(errMsg)}</div>`;
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch Jira tasks:', err);
+                    dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Failed to search Jira: ${escapeHtml(err.message || err)}</div>`;
+                }
+            }
+            window.fetchJiraTasksForStrategy = fetchJiraTasksForStrategy;
+
+            // Select a Jira task from dropdown for Strategy Event Creator
+            async function selectJiraTaskForStrategy(taskId, taskSummary) {
+                console.log('selectJiraTaskForStrategy called with:', { taskId, taskSummary });
+                
+                document.getElementById('strategy-jira-id').value = taskId;
+                document.getElementById('strategy-jira-search').value = `${taskId}: ${taskSummary}`;
+                document.getElementById('strategy-jira-selected').innerHTML = `Γ£à Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
+                document.getElementById('strategy-jira-clear-btn').classList.remove('hidden');
+                document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+                
+                // Fetch detailed task info to sync with existing Status and Assignee fields
+                try {
+                    const url = `https://${JIRA.domain}/rest/api/3/issue/${taskId}?fields=status,assignee`;
+                    console.log('Fetching Jira task from:', url);
+                    const res = await jiraRequest(url, 'get');
+                    
+                    if (res.success && res.data) {
+                        const status = res.data.fields?.status?.name || 'Unknown';
+                        const assigneeObj = res.data.fields?.assignee;
+                        const assigneeEmail = assigneeObj?.emailAddress || assigneeObj?.displayName || '';
+                        const assigneeName = assigneeObj?.displayName || 'Unassigned';
+                        
+                        console.log('Jira response:', { status, assigneeEmail, assigneeName, allUsersMapSize: allUsersMap.size });
+                        
+                        // Sync with existing Status field
+                        const statusField = document.getElementById('strategy-status');
+                        if (statusField) {
+                            const statusValue = normalizeStrategyStatus(status);
+                            statusField.value = statusValue;
+                            console.log('Γ£à Status synced to:', statusValue);
+                        } else {
+                            console.error('Status field not found!');
+                        }
+                        
+                        // Sync with existing Assignee dropdown - try to match with team members
+                        const assigneeField = document.getElementById('strategy-owner');
+                        if (assigneeField) {
+                            if (assigneeEmail) {
+                                // First try exact email match
+                                const userByEmail = Array.from(allUsersMap.values()).find(u => 
+                                    u.email.toLowerCase() === assigneeEmail.toLowerCase()
+                                );
+                                if (userByEmail) {
+                                    assigneeField.value = userByEmail.email;
+                                    console.log('Γ£à Assignee synced by email to:', userByEmail.email);
+                                } else {
+                                    // Try name match
+                                    const userByName = Array.from(allUsersMap.values()).find(u => 
+                                        u.name.toLowerCase() === assigneeName.toLowerCase()
+                                    );
+                                    if (userByName) {
+                                        assigneeField.value = userByName.email;
+                                        console.log('Γ£à Assignee synced by name to:', userByName.email);
+                                    } else {
+                                        console.log('ΓÜá∩╕Å No user match found, users available:', Array.from(allUsersMap.values()).map(u => ({ name: u.name, email: u.email })));
+                                    }
+                                }
+                            }
+                        } else {
+                            console.error('Assignee field not found!');
+                        }
+                    } else {
+                        console.error('Jira request failed:', res);
+                        toast('Failed to fetch Jira task details', 'error');
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch task details:', err);
+                    toast('Failed to sync Jira task details: ' + err.message, 'error');
+                }
+                
+                toast(`Γ£à Linked to Jira task ${taskId} - Status and Assignee synced!`, 'success');
+            }
+            window.selectJiraTaskForStrategy = selectJiraTaskForStrategy;
+
+            // Clear Jira selection for Strategy Event Creator
+            function clearStrategyJiraSelection() {
+                document.getElementById('strategy-jira-id').value = '';
+                document.getElementById('strategy-jira-search').value = '';
+                document.getElementById('strategy-jira-selected').innerHTML = 'No task selected';
+                document.getElementById('strategy-jira-clear-btn').classList.add('hidden');
+                document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+                toast('Jira task selection cleared', 'info');
+            }
+            window.clearStrategyJiraSelection = clearStrategyJiraSelection;
+
+            // Close strategy JIRA dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                const dropdown = document.getElementById('strategy-jira-dropdown');
+                const searchInput = document.getElementById('strategy-jira-search');
+                const searchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
+                
+                if (dropdown && searchInput && searchBtn) {
+                    if (!dropdown.contains(e.target) && !searchInput.contains(e.target) && !searchBtn.contains(e.target)) {
+                        dropdown.classList.add('hidden');
+                    }
+                }
+            });
+
+            function openAddStrategyEventModal(dateStr) {
+                if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
+
+                document.getElementById('strategy-modal-title').textContent = 'Add Strategy Event';
+                document.getElementById('strategy-event-id').value = '';
+                document.getElementById('strategy-title').value = '';
+                document.getElementById('strategy-date').value = dateStr || '';
+                document.getElementById('strategy-owner').value = '';
+                document.getElementById('strategy-client').value = '';
+                document.getElementById('strategy-status').value = 'To Do';
+                document.getElementById('strategy-desc').value = '';
+                document.getElementById('strategy-videos-count').value = '';
+                document.getElementById('strategy-posters-count').value = '';
+
+                // Clear Jira selection
+                document.getElementById('strategy-jira-id').value = '';
+                document.getElementById('strategy-jira-search').value = '';
+                document.getElementById('strategy-jira-selected').innerHTML = 'No task selected';
+                
+                const clearBtn = document.getElementById('strategy-jira-clear-btn');
+                if (clearBtn) clearBtn.classList.add('hidden');
+                const dropdown = document.getElementById('strategy-jira-dropdown');
+                if (dropdown) dropdown.classList.add('hidden');
+
+                // Reset format to Poster and enable buttons
+                const posterBtn = document.getElementById('strategy-format-poster');
+                const videoBtn = document.getElementById('strategy-format-video');
+                if (posterBtn && videoBtn) {
+                    posterBtn.removeAttribute('disabled');
+                    videoBtn.removeAttribute('disabled');
+                }
+                selectStrategyFormat('Poster');
+
+                document.getElementById('strategy-delete-btn').classList.add('hidden');
+                document.getElementById('strategyEventModal').showModal();
+            }
+
+            function openEditStrategyEventModal(eventId) {
+                console.log('[openEditStrategyEventModal] Opening event:', eventId, 'Available events:', Object.keys(strategyEvents).length);
+                const ev = strategyEvents[eventId];
+                if (!ev) {
+                    console.error('[openEditStrategyEventModal] Event not found:', eventId, 'strategyEvents keys:', Object.keys(strategyEvents || {}));
+                    return toast('Event not found', 'error');
+                }
+
+                // Sneha, Murugesh and Admin can edit. Others can only view!
+                const canWrite = canViewStrategyCalendar();
+                console.log('[openEditStrategyEventModal] canWrite:', canWrite, 'currentUser:', currentUser?.email);
+
+                try {
+                    // Populate all form fields
+                    document.getElementById('strategy-modal-title').textContent = canWrite ? 'Edit Strategy Event' : 'View Strategy Event';
+                    document.getElementById('strategy-event-id').value = eventId;
+                    document.getElementById('strategy-title').value = ev.title || '';
+                    document.getElementById('strategy-date').value = ev.date || '';
+                    document.getElementById('strategy-owner').value = ev.owner || '';
+                    document.getElementById('strategy-client').value = ev.client || '';
+                    
+                    // Handle videos and posters count
+                    const videosCountEl = document.getElementById('strategy-videos-count');
+                    const postersCountEl = document.getElementById('strategy-posters-count');
+                    if (videosCountEl) videosCountEl.value = ev.videosCount || '';
+                    if (postersCountEl) postersCountEl.value = ev.postersCount || '';
+                    
+                    // Restore Jira ID if explicitly saved, otherwise auto-match
+                    const jiraId = ev.jiraId || '';
+                    document.getElementById('strategy-jira-id').value = jiraId;
+                    const jiraSearch = document.getElementById('strategy-jira-search');
+                    const jiraSelected = document.getElementById('strategy-jira-selected');
+                    const clearBtn2 = document.getElementById('strategy-jira-clear-btn');
+                    
+                    let matchedTask = null;
+                    if (jiraId) {
+                        matchedTask = tasks ? tasks.find(t => t.id.toLowerCase() === jiraId.toLowerCase()) : null;
+                        const summaryText = matchedTask && matchedTask.desc ? ` - ${matchedTask.desc}` : '';
+                        if (jiraSearch) jiraSearch.value = `${jiraId}${summaryText}`;
+                        if (jiraSelected) jiraSelected.innerHTML = `Γ£à Selected: <strong>${jiraId}</strong>${escapeHtml(summaryText)}`;
+                        if (clearBtn2) clearBtn2.classList.remove('hidden');
+                    } else {
+                        matchedTask = findMatchedStrategyTask(ev.title, ev.desc);
+                        if (matchedTask) {
+                            const mJiraId = matchedTask.id;
+                            document.getElementById('strategy-jira-id').value = mJiraId;
+                            if (jiraSearch) jiraSearch.value = `${mJiraId} - ${matchedTask.desc || ''}`;
+                            if (jiraSelected) jiraSelected.innerHTML = `ΓÜá∩╕Å Auto-Matched: <strong>${mJiraId}</strong> - ${escapeHtml(matchedTask.desc || '')}`;
+                            if (clearBtn2) clearBtn2.classList.remove('hidden');
+                        } else {
+                            if (jiraSearch) jiraSearch.value = '';
+                            if (jiraSelected) jiraSelected.innerHTML = 'No task selected';
+                            if (clearBtn2) clearBtn2.classList.add('hidden');
+                        }
+                    }
+                    const dropdown = document.getElementById('strategy-jira-dropdown');
+                    if (dropdown) dropdown.classList.add('hidden');
+
+                    document.getElementById('strategy-status').value = normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do'));
+                    document.getElementById('strategy-desc').value = ev.desc || '';
+                    
+                    console.log('[openEditStrategyEventModal] Form fields populated:', {
+                        title: ev.title,
+                        date: ev.date,
+                        client: ev.client,
+                        status: normalizeStrategyStatus(matchedTask ? matchedTask.status : (ev.status || 'To Do')),
+                        owner: ev.owner,
+                        videosCount: ev.videosCount,
+                        postersCount: ev.postersCount
+                    });
+
+                    // Sync Jira task Status and Assignee to existing fields if we have a matched task
+                    if (matchedTask) {
+                        const statusValue = normalizeStrategyStatus(matchedTask.status);
+                        document.getElementById('strategy-status').value = statusValue;
+                        console.log('Edit mode - synced status:', statusValue);
+                        
+                        if (matchedTask.assignee) {
+                            const assigneeName = matchedTask.assignee;
+                            const userByName = Array.from(allUsersMap.values()).find(u => 
+                                u.name.toLowerCase() === assigneeName.toLowerCase()
+                            );
+                            if (userByName) {
+                                document.getElementById('strategy-owner').value = userByName.email;
+                                console.log('Edit mode - synced assignee:', userByName.email);
+                            }
+                        }
+                    }
+
+                    // Restore format value
+                    selectStrategyFormat(ev.format || 'Poster');
+
+                    // Toggle readonly/disabled state depending on permissions
+                    const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status', 'strategy-videos-count', 'strategy-posters-count'];
+                    fields.forEach(f => {
+                        const el = document.getElementById(f);
+                        if (el) {
+                            if (canWrite) {
+                                el.removeAttribute('readonly');
+                                el.removeAttribute('disabled');
+                            } else {
+                                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                                    el.setAttribute('readonly', 'true');
+                                } else {
+                                    el.setAttribute('disabled', 'true');
+                                }
+                            }
+                        }
+                    });
+
+                    // Toggle format button disabled states
+                    const posterBtn = document.getElementById('strategy-format-poster');
+                    const videoBtn = document.getElementById('strategy-format-video');
+                    if (posterBtn && videoBtn) {
+                        if (canWrite) {
+                            posterBtn.style.pointerEvents = 'auto';
+                            posterBtn.style.opacity = '1';
+                            videoBtn.style.pointerEvents = 'auto';
+                            videoBtn.style.opacity = '1';
+                            posterBtn.classList.remove('opacity-50');
+                            videoBtn.classList.remove('opacity-50');
+                        } else {
+                            posterBtn.style.pointerEvents = 'none';
+                            posterBtn.style.opacity = '0.5';
+                            videoBtn.style.pointerEvents = 'none';
+                            videoBtn.style.opacity = '0.5';
+                            posterBtn.classList.add('opacity-50');
+                            videoBtn.classList.add('opacity-50');
+                        }
+                    }
+
+                    // Disable Jira search controls in view mode
+                    if (jiraSearch) {
+                        if (canWrite) {
+                            jiraSearch.removeAttribute('disabled');
+                        } else {
+                            jiraSearch.setAttribute('disabled', 'true');
+                        }
+                    }
+                    const jiraSearchBtn = document.querySelector('[onclick="fetchJiraTasksForStrategy()"]');
+                    if (jiraSearchBtn) {
+                        if (canWrite) {
+                            jiraSearchBtn.style.pointerEvents = 'auto';
+                            jiraSearchBtn.style.opacity = '1';
+                        } else {
+                            jiraSearchBtn.style.pointerEvents = 'none';
+                            jiraSearchBtn.style.opacity = '0.5';
+                        }
+                    }
+                    if (clearBtn2) {
+                        if (canWrite) {
+                            clearBtn2.style.pointerEvents = 'auto';
+                            clearBtn2.style.opacity = '1';
+                        } else {
+                            clearBtn2.style.pointerEvents = 'none';
+                            clearBtn2.style.opacity = '0.5';
+                        }
+                    }
+
+                    const delBtn = document.getElementById('strategy-delete-btn');
+                    if (delBtn) {
+                        delBtn.classList.toggle('hidden', !canWrite);
+                    }
+
+                    const saveBtn = document.getElementById('strategy-save-btn');
+                    if (saveBtn) {
+                        if (canWrite) {
+                            saveBtn.style.pointerEvents = 'auto';
+                            saveBtn.style.opacity = '1';
+                        } else {
+                            saveBtn.style.pointerEvents = 'none';
+                            saveBtn.style.opacity = '0.5';
+                        }
+                    }
+
+                    document.getElementById('strategyEventModal').showModal();
+                    console.log('[openEditStrategyEventModal] Modal opened successfully');
+                } catch (err) {
+                    console.error('[openEditStrategyEventModal] Error:', err, err.stack);
+                    toast('Error opening event: ' + err.message, 'error');
+                }
+            }
+
+            function closeStrategyEventModal() {
+                document.getElementById('strategyEventModal').close();
+            }
+
+            async function saveStrategyEvent() {
+                if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
+
+                const id = document.getElementById('strategy-event-id').value;
+                const title = document.getElementById('strategy-title').value.trim();
+                const date = document.getElementById('strategy-date').value;
+                let owner = document.getElementById('strategy-owner').value;
+                const client = document.getElementById('strategy-client').value;
+                const status = document.getElementById('strategy-status').value;
+                const desc = document.getElementById('strategy-desc').value.trim();
+                const format = document.getElementById('strategy-format').value;
+                const jiraId = document.getElementById('strategy-jira-id').value || '';
+                const videosCount = parseInt(document.getElementById('strategy-videos-count').value) || 0;
+                const postersCount = parseInt(document.getElementById('strategy-posters-count').value) || 0;
+
+                if (!title || !date) {
+                    return toast('Please fill in title and date.', 'error');
+                }
+
+                // If format is Poster, auto assign to Karthika
+                if (format === 'Poster') {
+                    owner = 'karthikavilpower@gmail.com';
+                    const ownerEl = document.getElementById('strategy-owner');
+                    if (ownerEl) ownerEl.value = owner;
+                }
+
+                try {
+                    const evPayload = {
+                        title,
+                        date,
+                        platform: '',
+                        category: '',
+                        owner,
+                        client,
+                        status,
+                        desc,
+                        format, // Save the content format
+                        jiraId, // Explicitly save the JIRA Task ID link!
+                        videosCount, // Save video count
+                        postersCount, // Save poster count
+                        updatedBy: currentUser.email,
+                        updatedAt: Date.now()
+                    };
+
+                    if (id) {
+                        // Update
+                        await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
+                        toast('Strategy event updated!', 'success');
+                    } else {
+                        // Create
+                        evPayload.createdAt = Date.now();
+                        evPayload.createdBy = currentUser.email;
+                        await push(ref(db, 'worksync/strategy_events'), evPayload);
+                        toast('Strategy event scheduled!', 'success');
+
+                        // Auto-create a task with details in Jira
+                        const taskDueDate = ptAddDays(date, -4);
+                        const isJuly = date && date.split('-')[1] === '07';
+                        const isJune = date && date.split('-')[1] === '06';
+                        const projectKey = isJuly ? 'JULY' : (isJune ? 'JUN' : JIRA.projectKey);
+                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
+                        const jiraPayload = {
+                            fields: {
+                                project: { key: projectKey },
+                                summary: title,
+                                issuetype: { name: 'Task' },
+                                labels: client ? [client.replace(/\s+/g, '_')] : [],
+                                duedate: taskDueDate
+                            }
+                        };
+
+                        if (desc) {
+                            jiraPayload.fields.description = {
+                                type: 'doc',
+                                version: 1,
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        content: [
+                                            {
+                                                type: 'text',
+                                                text: desc
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                        }
+
+                        if (owner) {
+                            const assigneeUser = allUsersMap.get(owner.toLowerCase()) || { email: owner, name: owner };
+                            const accountId = await findJiraAccountId(assigneeUser);
+                            if (accountId) {
+                                jiraPayload.fields.assignee = { id: accountId };
+                            }
+                        }
+
+                        try {
+                            const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
+                            if (res.success && (res.data?.key || res.key)) {
+                                const parentKey = res.data?.key || res.key;
+                                toast(`Jira task ${parentKey} created!`, 'success');
+
+                                // Auto create a subtask thumbnail for video tasks and assign to Karthika
+                                if (format === 'Video') {
+                                    const subtaskTitle = `Thumbnail ΓÇô ${title}`;
+                                    const subtaskPayload = {
+                                        fields: {
+                                            project: { key: projectKey },
+                                            parent: { key: parentKey },
+                                            summary: subtaskTitle,
+                                            issuetype: { name: 'Sub-task' },
+                                            duedate: taskDueDate || null,
+                                            labels: jiraPayload.fields.labels || []
+                                        }
+                                    };
+
+                                    const karthikaUser = allUsersMap.get('karthikavilpower@gmail.com') || { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
+                                    const karthikaAccountId = await findJiraAccountId(karthikaUser);
+                                    if (karthikaAccountId) {
+                                        subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                                    }
+
+                                    try {
+                                        const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                                        if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                            toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
+                                        } else {
+                                            console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
+                                            toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
+                                        }
+                                    } catch (subErr) {
+                                        console.error('Error auto-creating subtask:', subErr);
+                                        toast(`Failed to create subtask: ${subErr.message}`, 'warning');
+                                    }
+                                }
+
+                                if (typeof syncTasks === 'function') {
+                                    await syncTasks(true);
+                                }
+                            } else {
+                                console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
+                                toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
+                            }
+                        } catch (jiraErr) {
+                            console.error('Error auto-creating Jira task:', jiraErr);
+                            toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
+                        }
+                    }
+
+                    // Sync status to matched task if exists
+                    const matchedTask = findMatchedStrategyTask(title, desc, jiraId);
+                    if (matchedTask && matchedTask.status !== status) {
+                        await updateTaskStatus(matchedTask.id, status);
+                    }
+
+                    closeStrategyEventModal();
+                } catch (err) {
+                    console.error(err);
+                    toast('Failed to save strategy event', 'error');
+                }
+            }
+
+            async function deleteStrategyEvent() {
+                if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
+
+                const id = document.getElementById('strategy-event-id').value;
+                if (!id) return;
+
+                if (!confirm('Are you sure you want to delete this strategy campaign?')) return;
+
+                try {
+                    await remove(ref(db, `worksync/strategy_events/${id}`));
+                    toast('Strategy event removed!', 'success');
+                    closeStrategyEventModal();
+                } catch (err) {
+                    console.error(err);
+                    toast('Failed to delete event', 'error');
+                }
+            }

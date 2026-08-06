@@ -1,0 +1,59 @@
+const fs = require('fs');
+let html = fs.readFileSync('index.html', 'utf8');
+
+const sIdx = html.indexOf('function openEditStrategyEventModal(eventId)');
+const eIdx = html.indexOf('function closeStrategyEventModal()', sIdx);
+
+console.log('Current slice snippet:\n', html.substring(sIdx, eIdx));
+
+const fixedFn = `function openEditStrategyEventModal(eventId) {
+                try {
+                    const ev = (typeof strategyEvents !== 'undefined') ? strategyEvents[eventId] : null;
+                    if (!ev) {
+                        openAddTaskModal('manual');
+                        return;
+                    }
+                    const existingTask = (typeof tasks !== 'undefined') ? tasks.find(t => t.id === eventId || t.id === ev.taskId || t.desc === ev.title || t.id === ev.jiraTaskId) : null;
+                    if (existingTask && typeof openEditTaskModal === 'function') {
+                        openEditTaskModal(existingTask.id);
+                    } else {
+                        openAddTaskModal('manual');
+                        setTimeout(() => {
+                            if (ev.title) document.getElementById('mt-title').value = ev.title;
+                            if (ev.date) {
+                                const pd = document.getElementById('mt-postdate');
+                                if (pd) {
+                                    pd.value = ev.date;
+                                    if (typeof autoCalculateDatesFromPostDate === 'function') autoCalculateDatesFromPostDate('mt');
+                                }
+                            }
+                            if (ev.client) {
+                                const cl = document.getElementById('mt-client');
+                                if (cl) cl.value = ev.client;
+                            }
+                            if (ev.format) {
+                                const fmt = document.getElementById('mt-format');
+                                if (fmt) {
+                                    fmt.value = ev.format;
+                                    if (window.handleFormatChange) window.handleFormatChange('mt');
+                                    if (window.initJiraSelect) window.initJiraSelect('mt-format', 'standard');
+                                }
+                            }
+                            if (ev.owner) {
+                                const ass = document.getElementById('mt-assignee');
+                                if (ass) {
+                                    ass.value = ev.owner;
+                                    if (window.initJiraSelect) window.initJiraSelect('mt-assignee', 'assignee');
+                                }
+                            }
+                        }, 80);
+                    }
+                } catch (err) {
+                    console.error('[openEditStrategyEventModal] Error:', err, err.stack);
+                    toast('Error opening event: ' + err.message, 'error');
+                }
+            }\n\n            `;
+
+html = html.substring(0, sIdx) + fixedFn + html.substring(eIdx);
+fs.writeFileSync('index.html', html, 'utf8');
+console.log('Successfully fixed syntax error in index.html!');

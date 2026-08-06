@@ -1,0 +1,3801 @@
+﻿
+        let initializeApp, getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get;
+        let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
+        let getStorage, sRef, uploadBytes, getDownloadURL;
+
+        try {
+            ({ initializeApp } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"));
+            ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, equalTo, limitToLast, get } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"));
+            ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"));
+            ({ getStorage, ref: sRef, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js"));
+        } catch (err) {
+            document.documentElement.classList.remove('auth-pending');
+            document.getElementById('loading-view')?.classList.add('hidden');
+            document.getElementById('login-view')?.classList.remove('hidden');
+            alert('Unable to load app modules. Please use a modern browser and ensure network access to Firebase CDN.\n' + err.message);
+            console.error('Failed to load Firebase modules:', err);
+        }
+
+        if (initializeApp) {
+            // CONFIG
+            const FB_CONFIG = {
+            apiKey: "AIzaSyAL7Z1D_Lhbu-eW9qgiP4hs25ccv_hRu3w",
+            authDomain: "worksync-vilpower.firebaseapp.com",
+            databaseURL: "https://worksync-vilpower-default-rtdb.firebaseio.com",
+            projectId: "worksync-vilpower",
+            storageBucket: "worksync-vilpower.firebasestorage.app",
+            messagingSenderId: "738955842044",
+            appId: "1:738955842044:web:44d3a76012329578186279"
+        };
+
+        const app = initializeApp(FB_CONFIG);
+        const db = getDatabase(app);
+        const auth = getAuth(app);
+        const storage = getStorage(app);
+
+        const ADMIN_ROLES = ['System Admin', 'Administrator'];
+        const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
+        const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
+
+        const USERS = [
+            { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
+            { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
+            { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
+            { email: 'thanushvilpower@gmail.com', name: 'Thanush V', role: 'Manager - Digital Content Productions', avatar: 'Thanush' },
+            { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
+            { email: 'snehavilpower@gmail.com', name: 'Sneha V', role: 'Team Member', avatar: 'Sneha' },
+            { email: 'anithavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
+            { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
+            { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
+        ];
+
+        function isAdmin() {
+            if (!currentUser) return false;
+            const role = (currentUser.role || '').trim();
+            const email = (currentUser.email || '').toLowerCase();
+            return ADMIN_EMAILS.some(e => e.toLowerCase() === email) ||
+                   ADMIN_ROLES.includes(role);
+        }
+        function isManager() {
+            if (!currentUser) return false;
+            const role = (currentUser.role || '').trim();
+            const email = (currentUser.email || '').toLowerCase();
+            return role === 'Manager' || MANAGER_EMAILS.some(e => e.toLowerCase() === email);
+        }
+        function canViewReports() { return isAdmin() || isManager(); }
+        function canViewDailySummary() { return isAdmin() || isManager(); }
+        function canViewProjects() { return isAdmin() || isManager(); }
+        function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
+
+        const JIRA = {
+            domain: 'vilpowerdigitalmarketing.atlassian.net',
+            projectKey: 'JUN',
+            apiUrl: '/api/jira',
+            gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
+            useLocalApi: false
+        };
+
+        const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'AshmithaSree'];
+        
+        // Leave Approval Chains - Different employees have different approval hierarchies
+        const LEAVE_APPROVAL_CHAINS = {
+            // Immanuel: Thanush → Palani → Nanjil (final)
+            'immanuelvilpower@gmail.com': [
+                'thanushvilpower@gmail.com',      // 1st approval: Thanush
+                'digitalmarketing@vilpower.com',  // 2nd approval: Palani
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ],
+            // Barath, Karthika, Thanush, Alex: Palani → Nanjil (final)
+            'barathvilpower@gmail.com': [
+                'digitalmarketing@vilpower.com',  // 1st approval: Palani
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ],
+            'anithavilpower@gmail.com': [        // Karthika
+                'digitalmarketing@vilpower.com',  // 1st approval: Palani
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ],
+            'thanushvilpower@gmail.com': [
+                'digitalmarketing@vilpower.com',  // 1st approval: Palani
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ],
+            // Sneha, Ajith, Murugesh, Prince: Nanjil (final approval only)
+            'snehavilpower@gmail.com': [
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ],
+            'murugeshvilpower@gmail.com': [
+                'nanjil@vilpower.com'             // Final approval: Nanjil
+            ]
+        };
+
+        const REPORT_TABS = ['timing', 'task', 'analytics', 'summary', 'detailed', 'client-wide', 'performance', 'client'];
+        const TEAM_REPORT_ACCESS = {
+            Default: REPORT_TABS,
+            All: REPORT_TABS,
+            'Sales Team': REPORT_TABS,
+            'Marketing Team': REPORT_TABS,
+            'Creative Team': REPORT_TABS,
+            'Video Team': REPORT_TABS,
+            'Content Team': REPORT_TABS,
+            'QC Team': REPORT_TABS
+        };
+
+        // STATE
+        let currentUser = null;
+        let tasks = [];
+        let currentStatusFilter = 'all';
+        let currentAssigneeFilter = 'me';
+        let currentClientFilter = 'all';
+        let currentDueDateFilter = 'all';
+        let currentSearchTerm = '';
+        let currentInternalStatusFilter = 'all';
+        let currentInternalAssigneeFilter = 'me';
+        let currentInternalClientFilter = 'all';
+        let currentInternalDueDateFilter = 'all';
+        let currentInternalSearchTerm = '';
+        let internalTaskSortCol = null;
+        let internalTaskSortDir = 'asc';
+        let activeTaskId = null;
+        let shootCalendarDate = new Date();
+        let activeConvId = null;
+        let activeView = 'dashboard';
+        let isCheckedIn = false;
+        let timerRef = null;
+        let seconds = 0;
+        let unreadCounts = {};
+        let convListeners = {};
+        let msgListener = null;
+        let chatNotificationsMuted = localStorage.getItem('worksync_chat_muted') === 'true';
+        let selectedSaturday = null;
+        let pendingApprovalReq = null;
+        let taskTimerRef = null;
+        let taskSeconds = 0;
+        let taskOnHold = false;
+        let taskStartTime = null;
+        let currentWorkDetails = '';
+        let currentWorkUsers = [];
+        let currentWorkUnsub = null;
+        let currentWorkRefreshRef = null;
+        let currentWorkFilterKey = '';
+        let allUsersMap = new Map(); // Global map for all users
+        let todayTimeLogs = [];
+        let todayReportUnsub = null;
+        let announcementsUnsub = null;
+        let announcementNotifyUnsub = null;
+        let unreadAnnouncements = 0;
+        let dprEntries = [];
+        let dprUnsub = null;
+        let currentDprTab = 'my';
+        let attendanceEvents = [];
+        let attendanceUnsub = null;
+        let currentReportTab = 'timing';
+        let reportDateFrom = null;
+        let reportDateTo = null;
+        let reportSelectedUser = 'all';
+        let emailReportEnabled = false;
+        let checkInTime = null;
+        let breakStartTime = null;
+        let totalBreakDuration = 0;
+        let syncIntervalRef = null;
+        let currentTaskViewMode = 'list';
+        let stagedAttachment = null;
+        let notesUnsub = null;
+        let activeGroupMembers = [];
+        let allTimeLogs = [];
+        let allTimeLogsUnsub = null;
+        let mentionActive = false;
+        let mentionFilter = '';
+        let mentionIndex = 0;
+        let dailyPlans = {};
+        let dailyPlansUnsub = null;
+        let dpFilter = 'all';
+        let taskSortCol = null;
+        let taskSortDir = 'asc';
+        let dpSortCol = null;
+        let dpSortDir = 'asc';
+        let dailyReportSchedulerRef = null;
+        let appInitialized = false;
+        let allQcReports = [];
+        let liveBoardTimerRef = null;
+        let qcUserPerformance = {};
+
+        const REPORT_RECIPIENTS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
+        let qcReportDateFrom = null; // New state variable for QC reports filter
+        let qcReportDateTo = null;   // New state variable for QC reports filter
+        const MANUAL_TASK_STATUSES = ['To Do', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
+        const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
+        const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail', 'Content In Progress', 'Client Content Approval'];
+        const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail', 'Rework Designs'];
+        const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed'];
+        const DAILY_REPORT_TIMES = [
+            { hour: 12, minute: 55, label: 'Afternoon (1 PM)' },
+            { hour: 15, minute: 55, label: 'Evening (4 PM)' },
+            { hour: 18, minute: 55, label: 'Checkout (6 PM)' }
+        ];
+
+        function checkBirthdays() {
+            if (!appInitialized || !allUsersMap) return;
+            const now = new Date();
+            if (now.getHours() < 10) return; // Only after 10 AM
+
+            const todayMonthDay = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            const todayKey = now.toISOString().slice(0, 10);
+            
+            const usersWithBirthday = Array.from(allUsersMap.values()).filter(u => {
+                if (!u.birthday) return false;
+                const bMonthDay = u.birthday.slice(5, 10); // Extract MM-DD
+                return bMonthDay === todayMonthDay;
+            });
+
+            if (usersWithBirthday.length > 0) {
+                const shownBirthdays = JSON.parse(localStorage.getItem('worksync_shown_birthdays') || '{}');
+                
+                for (const bUser of usersWithBirthday) {
+                    const wishKey = `${todayKey}_${eKey(bUser.email)}`;
+                    if (!shownBirthdays[wishKey]) {
+                        showBirthdayModal(bUser);
+                        shownBirthdays[wishKey] = true;
+                        localStorage.setItem('worksync_shown_birthdays', JSON.stringify(shownBirthdays));
+                        break; 
+                    }
+                }
+            }
+        }
+
+        function showBirthdayModal(user) {
+            document.getElementById('birthday-avatar').src = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar || user.name}`;
+            document.getElementById('birthday-name').textContent = user.name;
+            const modal = document.getElementById('birthdayModal');
+            if (modal && !modal.matches(':popover-open') && !modal.open) {
+                modal.showModal();
+                showBirthdayNotification(user);
+            }
+        }
+
+        function showBirthdayNotification(user) {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification('Birthday reminder', {
+                            body: `${user.name} has a birthday today!`,
+                            icon: user.profilePicture || 'img/logo.png'
+                        });
+                    }
+                }).catch(() => {});
+                return;
+            }
+
+            if (Notification.permission === 'granted') {
+                new Notification('Birthday reminder', {
+                    body: `${user.name} has a birthday today!`,
+                    icon: user.profilePicture || 'img/logo.png'
+                });
+            }
+        }
+
+        // QUALITY CHECK PORTAL (New Section)
+        const QC_POSTER_CHECKLIST = [
+            { category: 'Content Check', items: ['Spelling & Grammar Check', 'Correct Content Placement', 'Offer/Price Accuracy', 'Contact Details Verification', 'CTA Visibility Check'] },
+            { category: 'Design Check', items: ['Alignment & Spacing', 'Font Consistency', 'Brand Color Consistency', 'Visual Hierarchy', 'Proper Margin & Padding', 'Image Cropping Check', 'Background Removal Quality', 'Shadow/Glow Consistency', 'No Overlapping Elements'] },
+            { category: 'Branding Check', items: ['Logo Placement', 'Social Media Icons Check', 'QR Code Verification', 'Watermark Check'] },
+            { category: 'Technical Check', items: ['Correct Poster Size', 'Export Quality Check', 'High Resolution Output', 'File Format Correct', 'Safe Area Check'] },
+            { category: 'Final Approval', items: ['Client Revision Applied', 'Client Rejected' ] }
+        ];
+        
+        const QC_VIDEO_CHECKLIST = [
+            { category: 'Content Check', items: ['Spelling & Grammar Check', 'Subtitle Accuracy', 'Subtitle Sync Check', 'CTA Visibility Check', 'Thumbnail Added'] },
+            { category: 'Audio Check', items: ['Voice Clarity', 'Background Music Balance', 'No Background Noise', 'Audio Sync Check'] },
+            { category: 'Editing Check', items: ['Smooth Transitions', 'Animation Smoothness', 'Motion Graphics Check', 'Color Grading Check', 'No Frame Drops', 'No Black Screen Issue'] },
+            { category: 'Branding Check', items: ['Logo Visibility', 'Brand Color Consistency', 'Intro/Outro Added', 'End Card Added'] },
+            { category: 'End Card', items: ['Phone number', 'Logo', 'Animation', 'End Line Missing', 'End Line Spelling Mistake'] },
+            { category: 'Technical Check', items: ['Correct Video Dimension', 'Reel/YouTube Size Verification', 'Export Quality Check', 'Proper Rendering', 'File Format Correct'] },
+            { category: 'Final Approval', items: ['Client Revision Applied','Client Rejected' ] }
+        ];
+        
+        let qcRating = 0;
+        let qcCustomItems = {};
+
+        function setQcRating(r) {
+            qcRating = r;
+            const container = document.getElementById('qc-rating-stars');
+            if (!container) return;
+            container.innerHTML = [1,2,3,4,5].map(i => `
+                <button onclick="setQcRating(${i})" class="${i <= r ? 'text-amber-400' : 'text-slate-200'} hover:text-amber-400 transition-colors">
+                    <iconify-icon icon="solar:star-bold" width="24"></iconify-icon>
+                </button>
+            `).join('');
+        }
+        
+        let qcStartTime = null;
+        function renderQcTasks() {
+            const sel = document.getElementById('qc-task-select');
+            const badge = document.getElementById('qc-badge');
+            if (!sel) return;
+            
+            const currentVal = sel.value; // Preserve current selection
+            const qcTasks = tasks.filter(t => t.status === 'Quality Check');
+            
+            if (badge) {
+                badge.textContent = qcTasks.length;
+                badge.classList.toggle('hidden', qcTasks.length === 0);
+            }
+            
+           const optionsHtml = `<option value="">Select Task for QC (${qcTasks.length})...</option>` +
+                qcTasks.map(t => `<option value="${t.id}">${t.id} - ${escapeHtml(t.desc)}</option>`).join('');
+            
+            if (sel.innerHTML !== optionsHtml) sel.innerHTML = optionsHtml;
+            
+            if (currentVal && [...sel.options].some(o => o.value === currentVal)) sel.value = currentVal;
+        }
+
+        function loadQcTaskDetails(id) {
+            const task = tasks.find(t => t.id === id);
+            const container = document.getElementById('qc-form-container');
+            const empty = document.getElementById('qc-empty-state');
+
+            if (!id || !task) {
+                container.classList.add('hidden');
+                empty.classList.remove('hidden');
+                qcStartTime = null; 
+                return;
+            }
+
+            if (id && task) {
+                const sel = document.getElementById('qc-task-select');
+                if (sel) sel.value = id;
+                qcStartTime = Date.now(); // Start QC Timer
+            }
+            
+            container.classList.remove('hidden');
+            empty.classList.add('hidden');
+            
+            // Identify previous attempts for this specific task
+            const previousReviews = allQcReports.filter(r => r.taskId === id).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const reviewNumber = previousReviews.length + 1;
+
+            document.getElementById('qc-task-id').textContent = `${task.id} (Review #${reviewNumber})`;
+            document.getElementById('qc-task-desc').textContent = task.desc;
+            document.getElementById('qc-task-assignee').textContent = 'Assignee: ' + assigneeName(task);
+
+            const historyContainer = document.getElementById('qc-task-history');
+            const historyList = document.getElementById('qc-history-list');
+            
+            if (previousReviews.length > 0) {
+                historyContainer.classList.remove('hidden');
+                historyList.innerHTML = previousReviews.map((r, idx) => {
+                    const date = new Date(r.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                    const attemptNum = previousReviews.length - idx;
+                    return `
+                    <div class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-slate-100 text-slate-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Review #${attemptNum}</span>
+                                <span class="text-[10px] text-slate-400 font-bold">${date} by ${escapeHtml(r.qcUser)}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Score</p>
+                                    <p class="text-xs font-black text-indigo-600">${r.qcScore}%</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Rating</p>
+                                    <p class="text-xs font-black text-amber-500">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</p>
+                                </div>
+                            </div>
+                        </div>
+                        ${r.notes ? `<p class="text-xs text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100">"${escapeHtml(r.notes)}"</p>` : ''}
+                    </div>`;
+                }).join('');
+            } else {
+                historyContainer.classList.add('hidden');
+            }
+            
+            setQcRating(0); // Reset rating
+            qcCustomItems = {};
+            document.getElementById('qc-notes').value = '';
+
+            const isVideo = task.desc.toLowerCase().includes('video') || task.desc.toLowerCase().includes('reel');
+            document.getElementById('qc-type').value = isVideo ? 'video' : 'poster';
+            
+            renderQcChecklist();
+        }
+
+        function renderQcChecklist() {
+            const type = document.getElementById('qc-type').value;
+            const grid = document.getElementById('qc-checklist-grid');
+            const data = type === 'poster' ? QC_POSTER_CHECKLIST : QC_VIDEO_CHECKLIST;
+            
+            grid.innerHTML = data.map(cat => {
+                const custom = qcCustomItems[cat.category] || []; // Custom items for this category
+                const allItems = [...cat.items, ...custom];
+                
+                return `
+                <div class="bg-slate-50/50 border border-slate-100 rounded-3xl p-5 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-4">
+                        <h5 class="text-xs font-black text-slate-900 uppercase tracking-widest">${cat.category}</h5>
+                        <button onclick="addQcCustomItem('${cat.category.replace(/'/g, "\\'")}')" class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors" title="Add tick">
+                            <iconify-icon icon="solar:add-circle-bold" width="14"></iconify-icon>
+                        </button>
+                    </div>
+                    <p class="text-[9px] font-bold text-rose-400 uppercase mb-3">Check if ISSUE found:</p>
+                    <div class="space-y-2 flex-1">
+                        ${allItems.map(item => ` 
+                            <label class="flex items-start gap-3 p-3 bg-white border border-slate-100 rounded-xl cursor-pointer hover:border-indigo-200 transition-all group">
+                                <input type="checkbox" name="qc_item" value="${cat.category}|${item}" class="w-4 h-4 rounded mt-0.5 text-rose-600 focus:ring-rose-500">
+                                <span class="text-[11px] font-bold text-slate-700 group-hover:text-rose-600 transition-colors">${escapeHtml(item)}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        
+        function addQcCustomItem(category) {
+            const newItem = prompt(`Add a custom check to ${category}:`);
+            if (!newItem || !newItem.trim()) return;
+            if (!qcCustomItems[category]) qcCustomItems[category] = [];
+            qcCustomItems[category].push(newItem.trim());
+            renderQcChecklist();
+        }
+        
+        async function submitQcReport() {
+            const taskId = document.getElementById('qc-task-select').value;
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return toast('Select a task first', 'error');
+
+            const qcEndTime = Date.now();
+            const qcDurationSeconds = qcStartTime ? Math.floor((qcEndTime - qcStartTime) / 1000) : 0;
+            const mistakeItems = [...document.querySelectorAll('input[name="qc_item"]:checked')].map(i => i.value);
+            const totalItems = [...document.querySelectorAll('input[name="qc_item"]')].length; 
+            
+            const passedCount = totalItems - mistakeItems.length;
+            const qcScore = totalItems > 0 ? Math.round((passedCount / totalItems) * 100) : 0;
+            // Automate rating: 0-20=1, 21-40=2, 41-60=3, 61-80=4, 81-100=5
+            const autoRating = Math.max(1, Math.ceil(qcScore / 20));
+
+            const report = {
+                taskId: task.id, 
+                taskDesc: task.desc, 
+                assignee: assigneeName(task), 
+                assigneeEmail: task.assigneeEmail || task.userId || '',
+                qcUser: currentUser.name, 
+                qcEmail: currentUser.email, 
+                type: document.getElementById('qc-type').value,
+                rating: autoRating, 
+                notes: document.getElementById('qc-notes').value.trim(),
+                durationSeconds: qcDurationSeconds,
+                mistakeItems: mistakeItems, // Store the actual mistake items
+                checkedCount: passedCount, // This stores "Passed" items for the report
+                totalCount: totalItems,
+                qcScore, 
+                timestamp: Date.now(), 
+                date: todayIso()
+            };
+
+            // Log duration to timelogs so it appears in Timing Reports
+            const timeLog = {
+                taskId: task.id,
+                taskDesc: `[QC] ${task.desc}`,
+                client: task.client || '',
+                userId: currentUser.email,
+                userName: currentUser.name,
+                startTime: qcStartTime,
+                endTime: qcEndTime,
+                durationSeconds: qcDurationSeconds,
+                durationFormatted: formatTime(qcDurationSeconds)
+            };
+
+            try {
+                await Promise.all([
+                    push(ref(db, 'worksync/qc_reports'), report),
+                    push(ref(db, 'worksync/timelogs'), timeLog)
+                ]);
+                toast('QC Report Submitted Successfully!', 'success');
+                document.getElementById('qc-task-select').value = '';
+                loadQcTaskDetails('');
+                qcStartTime = null;
+                renderQcTasks(); // Refresh badge and dropdown
+            } catch (err) { toast('Failed to save QC report', 'error'); }
+        }
+
+        function loadQcReports() {
+            if (!db) return;
+            onValue(ref(db, 'worksync/qc_reports'), snap => {
+                const data = snap.val() || {};
+                const allReports = Object.entries(data).map(([id, r]) => {
+                    const entry = { id, ...r };
+                    // Ensure qcScore and rating are always calculated or present
+                    if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
+                        entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
+                    } else if (entry.qcScore === undefined) {
+                        entry.qcScore = 0; // Default if no data to calculate
+                    }
+                    // Derive rating from qcScore if not explicitly set or if qcScore was just calculated
+                    if (entry.rating === undefined || entry.rating === null || isNaN(entry.rating)) {
+                        entry.rating = Math.max(1, Math.ceil(entry.qcScore / 20)); // Derive rating from qcScore
+                    }
+                    if (entry.qcScore === undefined) {
+                        const rScore = (entry.rating / 5) * 100;
+                        const cScore = entry.totalCount > 0 ? (entry.checkedCount / entry.totalCount) * 100 : 0;
+                        entry.qcScore = Math.round((rScore + cScore) / 2);
+                    }
+                    return entry;
+                });
+                allQcReports = allReports; // Cache globally for task history lookups
+                
+                // Apply date filters
+                let filteredReports = allQcReports;
+                if (qcReportDateFrom && qcReportDateTo) {
+                    const fromTs = new Date(qcReportDateFrom).getTime();
+                    const toTs = new Date(qcReportDateTo).getTime() + 86400000; // +1 day to include the end date
+                    filteredReports = filteredReports.filter(r => (r.timestamp || 0) >= fromTs && (r.timestamp || 0) < toTs);
+                }
+
+                const list = document.getElementById('qc-reports-list');
+                const countEl = document.getElementById('qc-report-count');
+                // Calculate Aggregate Performance per User
+                const userAggregates = {};
+                qcUserPerformance = {}; // Reset before re-calculation to avoid score inflation
+                allReports.forEach(r => {
+                    const email = (r.assigneeEmail || '').toLowerCase();
+                    if (!email) return;
+                    if (!userAggregates[email]) {
+                        const found = (currentWorkUsers || []).find(u => (u.email || '').toLowerCase() === email) || knownUserByEmail(email);
+                        userAggregates[email] = { 
+                            name: found?.name || r.assignee || email, 
+                            scoreSum: 0, 
+                            count: 0,
+                            avatar: found?.profilePicture || (found ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${found.avatar || found.name}` : '')
+                        };
+                    }
+                    userAggregates[email].scoreSum += r.qcScore;
+                    userAggregates[email].count++;
+                    if (!qcUserPerformance[email]) qcUserPerformance[email] = { scoreSum: 0, count: 0 };
+                    qcUserPerformance[email].scoreSum += r.qcScore;
+                    qcUserPerformance[email].count++;
+                });
+
+                const perfList = document.getElementById('qc-performance-list');
+                if (perfList) {
+                    const sortedUsers = Object.values(userAggregates).sort((a, b) => {
+                        const scoreA = a.count > 0 ? a.scoreSum / a.count : 0;
+                        const scoreB = b.count > 0 ? b.scoreSum / b.count : 0;
+                        return scoreB - scoreA;
+                    });
+                    perfList.innerHTML = sortedUsers.map(u => {
+                        const avg = u.count > 0 ? Math.round(u.scoreSum / u.count) : 0;
+                        let color = 'text-rose-600 bg-rose-50 border-rose-100';
+                        if (avg >= 85) color = 'text-emerald-600 bg-emerald-50 border-emerald-100';
+                        else if (avg >= 60) color = 'text-amber-600 bg-amber-50 border-amber-100';
+                        return `
+                        <div class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm flex items-center justify-between">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <img src="${u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`}" class="w-8 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100">
+                                <div class="min-w-0"><p class="text-xs font-black text-slate-900 truncate">${escapeHtml(u.name)}</p><p class="text-[9px] text-slate-400 font-bold uppercase">${u.count} Tasks</p></div>
+                            </div>
+                            <div class="${color} border px-3 py-1.5 rounded-xl text-center min-w-[70px]">
+                                <p class="text-[8px] font-bold uppercase tracking-tighter">Avg Score</p>
+                                <p class="text-sm font-black">${avg}%</p>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                const reports = filteredReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10);
+
+                if (countEl) countEl.textContent = `${Object.keys(data).length} Report${Object.keys(data).length !== 1 ? 's' : ''}`;
+
+                if (!reports.length) {
+                list.innerHTML = `<p class="p-8 text-center text-xs text-slate-400 italic">No QC reports submitted yet.</p>`;
+                return;
+            }
+
+            list.innerHTML = reports.map(r => `
+                <div onclick="openQcReportDetails('${r.id}')" class="p-4 hover:bg-slate-50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer">
+                    <div class="min-w-0">
+                        <p class="text-xs font-black text-slate-900"><span class="text-indigo-600 font-mono mr-2">${r.taskId}</span> ${escapeHtml(r.taskDesc)}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">QC: ${escapeHtml(r.qcUser)} · Assignee: ${escapeHtml(r.assignee)} · ${new Date(r.timestamp).toLocaleDateString()}</p>
+                    </div>
+                    <div class="flex items-center gap-4 shrink-0">
+                        <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Rating</p><p class="text-sm font-black text-amber-500">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</p></div>
+                        <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Checks</p><p class="text-sm font-black text-indigo-600">${r.checkedCount}/${r.totalCount}</p></div>
+                        <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black text-indigo-600">${r.qcScore}%</p></div>
+                    </div>
+                </div>
+            `).join('');
+        });
+        if (activeView === 'qc') initQcReportFilters();
+    }
+
+    async function openQcReportDetails(reportId) {
+        const report = allQcReports.find(r => r.id === reportId);
+        if (!report) return toast('Report not found', 'error');
+
+        const modal = document.getElementById('qcReportDetailModal');
+        const content = document.getElementById('qc-report-detail-content');
+        
+        const date = new Date(report.timestamp).toLocaleString();
+        
+        let mistakesHtml = '';
+        if (report.mistakeItems && report.mistakeItems.length > 0) {
+            mistakesHtml = `
+                <div class="mt-4">
+                    <p class="text-xs font-bold text-rose-600 uppercase mb-2">Issues Identified:</p>
+                    <ul class="space-y-1">
+                        ${report.mistakeItems.map(item => {
+                            const parts = item.split('|');
+                            const cat = parts[0];
+                            const name = parts.slice(1).join('|');
+                            return `<li class="text-xs text-slate-700 bg-rose-50 p-2 rounded-lg border border-rose-100 flex items-center gap-2">
+                                <iconify-icon icon="solar:danger-circle-bold" class="text-rose-500"></iconify-icon>
+                                <span><strong class="text-rose-700">${escapeHtml(cat)}:</strong> ${escapeHtml(name)}</span>
+                            </li>`;
+                        }).join('')}
+                    </ul>
+                </div>`;
+        } else {
+            mistakesHtml = `<p class="text-xs text-emerald-600 font-bold bg-emerald-50 p-3 rounded-lg border border-emerald-100 mt-4">✓ No issues found. Perfect score!</p>`;
+        }
+
+        content.innerHTML = `
+            <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Task</p><p class="text-xs font-black text-slate-900">${report.taskId}</p></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Review Date</p><p class="text-xs font-bold text-slate-700">${date}</p></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Assignee</p><p class="text-xs font-bold text-slate-700">${report.assignee}</p></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">QC Reviewer</p><p class="text-xs font-bold text-slate-700">${report.qcUser}</p></div>
+            </div>
+            <div class="grid grid-cols-3 gap-3 my-4">
+                <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[9px] font-bold text-indigo-400 uppercase">Score</p><p class="text-lg font-black text-indigo-600">${report.qcScore}%</p></div>
+                <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center"><p class="text-[9px] font-bold text-amber-400 uppercase">Rating</p><p class="text-lg font-black text-amber-500">${'★'.repeat(report.rating || 0)}</p></div>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Duration</p><p class="text-lg font-black text-slate-700">${formatTime(report.durationSeconds || 0)}</p></div>
+            </div>
+            <div class="space-y-4">
+                ${mistakesHtml}
+                ${report.notes ? `<div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Feedback Notes</p><p class="text-sm text-slate-600 italic">"${escapeHtml(report.notes)}"</p></div>` : ''}
+            </div>`;
+        modal.showModal();
+    }
+
+    async function sendAutomaticAnnouncement(title, body) {
+        if (!db || !currentUser) return;
+        await push(ref(db, 'worksync/announcements'), {
+            title: title,
+            body: body,
+            authorEmail: 'system@worksync.com',
+            authorName: 'WorkSync Automation',
+            createdAt: Date.now()
+        });
+    }
+
+        // KANBAN VIEW
+        function toggleTaskViewMode() {
+            currentTaskViewMode = currentTaskViewMode === 'list' ? 'kanban' : 'list';
+            const btn = document.getElementById('view-toggle-btn');
+            btn.innerHTML = currentTaskViewMode === 'list' 
+                ? `<iconify-icon icon="solar:board-linear" width="18"></iconify-icon> Board View` 
+                : `<iconify-icon icon="solar:list-linear" width="18"></iconify-icon> List View`;
+            
+            document.getElementById('task-list-container').classList.toggle('hidden', currentTaskViewMode === 'kanban');
+            document.getElementById('task-kanban-container').classList.toggle('hidden', currentTaskViewMode === 'list');
+            renderTasks();
+        }
+        
+        function dragTask(event, taskId) {
+            event.dataTransfer.setData('text/plain', taskId);
+        }
+        
+        async function dropTask(event, newStatusCategory) {
+            event.preventDefault();
+            const taskId = event.dataTransfer.getData('text/plain');
+            if (!taskId) return;
+            
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+            if (task.status === newStatusCategory || (newStatusCategory === 'To Do' && isTodo(task.status)) || (newStatusCategory === 'In Progress' && isInProgress(task.status)) || (newStatusCategory === 'Done' && isDone(task.status))) return;
+
+            task.status = newStatusCategory;
+            renderTasks(); updateStats();
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            
+            if (activeTaskId === taskId && (isDone(newStatusCategory))) {
+                await endTask();
+            }
+
+            if (task.manual) {
+                try {
+                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), { status: newStatusCategory });
+                    if (activeView === 'dailyplan') renderDailyPlan();
+                    toast('Task moved successfully', 'success');
+                    if (newStatusCategory === 'Quality Check') sendAutomaticAnnouncement('Task Ready for QC', `Task ${taskId} (${task.desc}) moved to Quality Check.`);
+                } catch (err) { toast('Failed to save status', 'error'); }
+            } else {
+                toast('Jira task status updated locally (Jira 2-way sync missing)', 'info');
+            }
+        }
+
+        // DAILY PLAN HELPER
+        function dailyPlanRowClass(s) {
+            if (isDone(s)) return 'bg-emerald-50/30';
+            if (isInProgress(s)) return 'bg-amber-50/30';
+            return 'bg-blue-50/30'; // Default for To Do or other statuses
+        }
+        // AUTH
+        async function handleLogin() {
+            const email = document.getElementById('email-input').value.trim();
+            const pass = document.getElementById('password-input').value.trim();
+            const errEl = document.getElementById('login-error');
+            const btn = document.getElementById('login-btn');
+            if (!email || !pass) { document.getElementById('error-text').textContent = 'Enter both fields.'; errEl.classList.remove('hidden'); return; }
+
+            document.getElementById('btn-text').textContent = 'Signing in...';
+            document.getElementById('btn-icon').setAttribute('icon', 'svg-spinners:ring-resize');
+            btn.disabled = true;
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+                const fbUser = userCredential.user;
+                const userSnap = await get(ref(db, `worksync/users/${eKey(fbUser.email)}`));
+                const hardcoded = knownUserByEmail(fbUser.email);
+                if (userSnap.exists()) {
+                    currentUser = { ...userSnap.val(), ...(hardcoded || {}), uid: fbUser.uid };
+                } else {
+                    currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : { email: fbUser.email, name: fbUser.email.split('@')[0], role: 'User', uid: fbUser.uid };
+                    await set(ref(db, `worksync/users/${eKey(fbUser.email)}`), currentUser);
+                }
+                localStorage.setItem('worksync_user', JSON.stringify(currentUser));
+                errEl.classList.add('hidden');
+                await finishLogin();
+            } catch (err) {
+                let msg = 'Incorrect credentials.';
+                if (err.code === 'auth/user-not-found') msg = 'User not found.';
+                if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
+                document.getElementById('error-text').textContent = msg;
+                errEl.classList.remove('hidden');
+            } finally {
+                document.getElementById('btn-text').textContent = 'Sign In';
+                document.getElementById('btn-icon').setAttribute('icon', 'solar:login-3-linear');
+                btn.disabled = false;
+            }
+        }
+
+        async function finishLogin() {
+            if (appInitialized) return;
+            appInitialized = true;
+            console.log("Initializing workspace for", currentUser.email);
+
+            try {
+                loadTasksFromCache();
+                applyUserUI();
+                loadBoardSettings();
+
+                // Explicitly show the dashboard and hide login
+                document.getElementById('login-view')?.classList.add('hidden');
+                document.getElementById('dashboard-view')?.classList.remove('hidden');
+
+                // Hide the loader as soon as UI state is ready
+                // document.documentElement.classList.remove('has-user'); // This should be done after allUsersMap is populated
+                document.getElementById('loading-view')?.classList.add('hidden');
+
+                const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
+                const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements'];
+                if (canViewProjects()) validViews.push('projects');
+                if (canViewReports()) validViews.push('reports');
+                if (canViewDailySummary()) validViews.push('daily-summary');
+                if (isAdmin()) validViews.push('users');
+                switchView(validViews.includes(lastView) ? lastView : 'dashboard');
+
+                initDailyPlan();
+                registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
+                restoreTimerState();
+                initDailyReportScheduler();
+                restoreActiveTask();
+                allUsersMap = await getAllUsers(); // Populate the global map
+                if (activeView === 'chat') renderDmList();
+                if (canViewDailySummary()) {
+                    if (currentWorkUnsub) {
+                        currentWorkUnsub();
+                        currentWorkUnsub = null;
+                    }
+                    loadEmployeeCurrentTasks();
+                    renderDailySummary();
+                }
+                setInterval(checkAutoCheckout, 60000);
+                setInterval(checkBirthdays, 60000); // Check for birthdays every minute
+                // Removed auto-update mechanism to stop page reloads
+                setTimeout(checkBirthdays, 5000); // Check shortly after login
+                setTimeout(() => { syncTasks(); loadManualTasks(); loadDiscussions(); }, 600);
+
+                // Apply saved sidebar state
+                if (localStorage.getItem('worksync_sidebar_collapsed') === 'true') {
+                    const sidebar = document.querySelector('aside');
+                    const toggleIcon = document.getElementById('sidebar-toggle-icon');
+                    if (sidebar) sidebar.classList.add('hidden-sidebar');
+                    if (toggleIcon) toggleIcon.setAttribute('icon', 'solar:alt-arrow-right-linear');
+                }
+                if (syncIntervalRef) clearInterval(syncIntervalRef);
+                syncIntervalRef = setInterval(() => syncTasks(true), 3 * 60 * 1000);
+                document.documentElement.classList.remove('has-user'); // Now safe to remove
+            } catch (err) {
+                console.error("Error during finishLogin:", err);
+                document.documentElement.classList.remove('has-user');
+                document.documentElement.classList.remove('auth-pending');
+                document.getElementById('dashboard-view')?.classList.add('hidden');
+                document.getElementById('login-view')?.classList.remove('hidden');
+                toast('Error loading workspace: ' + err.message, 'error');
+            } finally {
+                document.documentElement.classList.remove('has-user');
+                document.documentElement.classList.remove('auth-pending');
+                document.getElementById('loading-view')?.classList.add('hidden');
+            }
+        }
+
+        // Removed auto-update mechanism to stop page reloads
+        function getCurrentAppVersion() {
+            return document.querySelector('meta[name="app-version"]')?.content?.trim() || 'unknown';
+        }
+
+        function getResponseDeployId(response) {
+            return response.headers.get('x-vercel-id')
+                || response.headers.get('x-now-deployment')
+                || response.headers.get('etag')
+                || response.headers.get('last-modified')
+                || null;
+        }
+
+        async function fetchRemoteAppInfo(path) {
+            try {
+                const response = await fetch(`${path}?cache-bust=${Date.now()}`, { cache: 'no-store' });
+                if (!response.ok) return null;
+                const deployId = getResponseDeployId(response);
+                if (path.endsWith('.txt')) {
+                    return { version: (await response.text()).trim() || null, deployId };
+                }
+                const html = await response.text();
+                const match = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["'][^>]*>/i);
+                return { version: match ? match[1].trim() : null, deployId };
+            } catch (err) {
+                return null;
+            }
+        }
+
+        async function getRemoteAppInfo() {
+            return await fetchRemoteAppInfo('/version.txt') || await fetchRemoteAppInfo('/index.html');
+        }
+
+        let appUpdateNotified = false;
+        let currentDeployId = null;
+
+        function scheduleAppReload(remoteVersion) {
+            if (appUpdateNotified) return;
+            appUpdateNotified = true;
+            const message = remoteVersion
+                ? `New app version detected (${remoteVersion}). Reloading in 5 seconds...`
+                : 'New app version detected. Reloading in 5 seconds...';
+            toast(message, 'success', () => window.location.reload());
+            setTimeout(() => window.location.reload(), 5000);
+        }
+
+        /* async function checkForAppUpdate() { // Commented out to stop auto-reloading
+            if (!navigator.onLine) return;
+            const currentVersion = getCurrentAppVersion();
+            const remoteInfo = await getRemoteAppInfo();
+            if (!remoteInfo) return;
+
+            if (!currentDeployId && remoteInfo.deployId) {
+                currentDeployId = remoteInfo.deployId;
+            }
+
+            if (remoteInfo.version && remoteInfo.version !== currentVersion) {
+                scheduleAppReload(remoteInfo.version);
+                return;
+            }
+
+            if (remoteInfo.deployId && currentDeployId && remoteInfo.deployId !== currentDeployId) {
+                scheduleAppReload(remoteInfo.deployId);
+            }
+        } */
+
+        async function logout() {
+            if (db && currentUser) {
+                await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false);
+                await clearCurrentTask();
+            }
+            await signOut(auth);
+            Object.values(convListeners).forEach(off => off && off());
+            if (currentWorkUnsub) currentWorkUnsub();
+            if (todayReportUnsub) todayReportUnsub();
+            if (announcementsUnsub) announcementsUnsub();
+            if (announcementNotifyUnsub) announcementNotifyUnsub();
+            if (dprUnsub) dprUnsub();
+            if (notesUnsub) notesUnsub();
+            if (attendanceUnsub) attendanceUnsub();
+            if (allTimeLogsUnsub) allTimeLogsUnsub();
+            if (dailyPlansUnsub) dailyPlansUnsub();
+            if (dailyReportSchedulerRef) clearInterval(dailyReportSchedulerRef);
+            dailyReportSchedulerRef = null;
+            if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
+            liveBoardTimerRef = null;
+            dailyPlansUnsub = null; dailyPlans = {};
+            if (syncIntervalRef) clearInterval(syncIntervalRef);
+            clearInterval(currentWorkRefreshRef);
+            currentWorkUnsub = null;
+            todayReportUnsub = null;
+            announcementsUnsub = null;
+            announcementNotifyUnsub = null;
+            dprUnsub = null;
+            notesUnsub = null;
+            attendanceUnsub = null;
+            allTimeLogsUnsub = null;
+            currentWorkRefreshRef = null;
+            syncIntervalRef = null;
+            currentWorkFilterKey = '';
+            convListeners = {};
+            currentUser = null; tasks = []; dprEntries = []; attendanceEvents = []; activeTaskId = null; isCheckedIn = false;
+            clearInterval(timerRef); seconds = 0; activeConvId = null; unreadCounts = {}; unreadAnnouncements = 0;
+            localStorage.removeItem('worksync_user');
+            localStorage.removeItem('worksync_timerState');
+            localStorage.removeItem('worksync_checkInTime');
+            localStorage.removeItem('worksync_totalBreakDuration');
+            localStorage.removeItem('worksync_breakStartTime');
+            appInitialized = false;
+            document.documentElement.classList.remove('has-user');
+            document.documentElement.classList.remove('auth-pending');
+            resetTimerUI(); setTimerState('idle');
+            document.getElementById('dashboard-view').classList.add('hidden');
+            document.getElementById('login-view').classList.remove('hidden');
+        }
+
+        function loadTasksFromCache() {
+            try {
+                const cachedTasks = localStorage.getItem('worksync_tasks');
+                if (cachedTasks) {
+                    tasks = JSON.parse(cachedTasks);
+                    updateStats();
+                    renderTasks();
+                    if (activeView === 'internal-tasks') renderInternalTasks();
+                    if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                }
+            } catch (e) { console.error('Failed to load tasks from cache', e); }
+        }
+
+        function goToDashboard() {
+            const lv = document.getElementById('login-view');
+            const dv = document.getElementById('dashboard-view');
+            lv.classList.add('hidden'); dv.classList.remove('hidden');
+        }
+
+        function applyUserUI() {
+            if (!currentUser) return;
+            const avatar = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+            document.getElementById('user-avatar').src = avatar;
+            document.getElementById('user-name').textContent = currentUser.name;
+            document.getElementById('user-role').textContent = currentUser.role;
+
+            // Team-based report tab access
+            const teamAccess = TEAM_REPORT_ACCESS[currentUser.team] || TEAM_REPORT_ACCESS['Default'];
+            ['timing', 'task', 'analytics', 'summary', 'detailed', 'client-wide', 'performance', 'client'].forEach(tab => {
+                const btn = document.getElementById(`report-tab-${tab}`);
+                if (btn) btn.classList.toggle('hidden', !teamAccess.includes(tab));
+            });
+            
+            if (!teamAccess.includes(currentReportTab)) {
+                currentReportTab = teamAccess[0];
+            }
+
+            document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
+            document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
+            document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
+            document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
+            if (isManager() && !isAdmin()) {
+                document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
+                document.getElementById('report-tab-client')?.classList.remove('hidden');
+                currentReportTab = 'client';
+            } else {
+                ['timing', 'task', 'analytics', 'summary', 'detailed', 'client'].forEach(tab => {
+                    document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
+                });
+            }
+            if (isAdmin()) {
+                document.getElementById('hr-tab-approvals')?.classList.remove('hidden');
+                document.getElementById('admin-nav').classList.remove('hidden');
+                document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                document.getElementById('admin-workload-card')?.classList.remove('hidden');
+                document.getElementById('admin-report-card')?.classList.remove('hidden');
+                document.getElementById('group-create-btn')?.classList.remove('hidden');
+                document.getElementById('announcement-compose-card')?.classList.remove('hidden');
+                document.getElementById('dpr-tab-team')?.classList.remove('hidden');
+                loadEmployeeCurrentTasks();
+                document.getElementById('report-tab-performance')?.classList.remove('hidden');
+                loadTodayWorkSummary();
+            } else { // Non-admin users
+                document.getElementById('hr-tab-approvals')?.classList.add('hidden');
+                document.getElementById('admin-nav')?.classList.add('hidden');
+                document.getElementById('admin-current-work-card')?.classList.add('hidden');
+                document.getElementById('admin-workload-card')?.classList.add('hidden');
+                document.getElementById('admin-report-card')?.classList.add('hidden');
+                document.getElementById('group-create-btn')?.classList.add('hidden');
+                document.getElementById('announcement-compose-card')?.classList.add('hidden');
+                document.getElementById('dpr-tab-team')?.classList.add('hidden');
+                document.getElementById('report-tab-performance')?.classList.add('hidden');
+                if (canViewDailySummary()) {
+                    loadEmployeeCurrentTasks();
+                    loadTodayWorkSummary();
+                }
+            }
+        }
+
+        function saveBoardSettings() {
+            if (!currentUser) return;
+            const settings = {
+                status: currentStatusFilter,
+                assignee: currentAssigneeFilter,
+                client: currentClientFilter,
+                dueDate: currentDueDateFilter,
+                viewMode: currentTaskViewMode
+            };
+            localStorage.setItem(`worksync_board_settings_${eKey(currentUser.email)}`, JSON.stringify(settings));
+            toast('Default board filters saved', 'success');
+        }
+
+        function loadBoardSettings() {
+            if (!currentUser) return;
+            const saved = localStorage.getItem(`worksync_board_settings_${eKey(currentUser.email)}`);
+            if (!saved) return;
+            try {
+                const settings = JSON.parse(saved);
+                currentStatusFilter = settings.status ?? 'all';
+                currentAssigneeFilter = settings.assignee ?? 'me';
+                currentClientFilter = settings.client ?? 'all';
+                currentDueDateFilter = settings.dueDate ?? 'all';
+                currentTaskViewMode = settings.viewMode ?? 'list';
+                
+                applyBoardSettingsUI();
+            } catch (e) { console.error('Failed to load board settings', e); }
+        }
+
+        async function applyBoardSettingsUI() { // Made async to await populateAssigneeFilter
+            const allCheckbox = document.querySelector('#status-menu input[value="all"]');
+            if (allCheckbox) {
+                if (currentStatusFilter === 'all') {
+                    document.querySelectorAll('#status-menu input[type="checkbox"]').forEach(c => c.checked = (c.value === 'all'));
+                } else if (Array.isArray(currentStatusFilter)) {
+                    allCheckbox.checked = false;
+                    document.querySelectorAll('#status-menu input[type="checkbox"]:not([value="all"])').forEach(c => {
+                        c.checked = currentStatusFilter.includes(c.value);
+                    });
+                }
+            }
+            const label = document.getElementById('status-filter-label');
+            if (label) {
+                if (currentStatusFilter === 'all') label.textContent = 'All Status';
+                else if (!currentStatusFilter || currentStatusFilter.length === 0) label.textContent = 'No Status Selected';
+                else if (currentStatusFilter.length === 1) label.textContent = currentStatusFilter[0];
+                else label.textContent = `${currentStatusFilter.length} Selected`;
+            }
+            if (document.getElementById('assignee-filter')) document.getElementById('assignee-filter').value = currentAssigneeFilter;
+            if (document.getElementById('client-filter')) document.getElementById('client-filter').value = currentClientFilter; // populateClientFilter is called after syncTasks
+            if (document.getElementById('duedate-filter')) document.getElementById('duedate-filter').value = currentDueDateFilter;
+            
+            const btn = document.getElementById('view-toggle-btn');
+            if (btn) {
+                btn.innerHTML = currentTaskViewMode === 'list' ? `<iconify-icon icon="solar:board-linear" width="18"></iconify-icon> Board View` : `<iconify-icon icon="solar:list-linear" width="18"></iconify-icon> List View`;
+            }
+            document.getElementById('task-list-container').classList.toggle('hidden', currentTaskViewMode === 'kanban');
+            document.getElementById('task-kanban-container').classList.toggle('hidden', currentTaskViewMode === 'list');
+        }
+
+        // PROFILE
+        function openProfile() {
+            if (!currentUser) return;
+            document.getElementById('profile-pic').src = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+            document.getElementById('p-name').value = currentUser.name || '';
+            const roleSelect = document.getElementById('p-role');
+            let hasOption = Array.from(roleSelect.options).some(opt => opt.value === currentUser.role);
+            if (!hasOption && currentUser.role) {
+                const opt = document.createElement('option');
+                opt.value = currentUser.role;
+                opt.textContent = currentUser.role;
+                roleSelect.appendChild(opt);
+            }
+            roleSelect.value = currentUser.role || 'Employee';
+            document.getElementById('p-email').value = currentUser.email;
+            document.getElementById('p-phone').value = currentUser.phone || '';
+            document.getElementById('p-empid').value = currentUser.empId || '';
+            document.getElementById('p-birthday').value = currentUser.birthday || '';
+            document.getElementById('p-team').value = currentUser.team || 'All';
+            document.getElementById('profileModal').showModal();
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        async function uploadPhoto() {
+            const file = document.getElementById('photo-upload').files[0];
+            if (!file || !currentUser) return;
+            if (file.size > 2 * 1024 * 1024) return toast('Image must be less than 2MB', 'error');
+            toast('Uploading photo...', 'info');
+            try {
+                const base64Url = await fileToBase64(file);
+                currentUser.profilePicture = base64Url;
+                document.getElementById('profile-pic').src = base64Url;
+                document.getElementById('user-avatar').src = base64Url;
+                localStorage.setItem('worksync_user', JSON.stringify(currentUser));
+                await update(ref(db, `worksync/users/${eKey(currentUser.email)}`), { profilePicture: base64Url });
+                toast('Profile photo updated', 'success');
+            } catch (err) {
+                console.error("Photo upload error:", err);
+                toast('Upload failed: ' + err.message, 'error');
+            }
+        }
+
+        async function saveProfile() {
+            if (!currentUser) return;
+            currentUser.name = document.getElementById('p-name').value.trim() || currentUser.name;
+            currentUser.role = document.getElementById('p-role').value.trim() || currentUser.role;
+            currentUser.phone = document.getElementById('p-phone').value;
+            currentUser.empId = document.getElementById('p-empid').value.trim();
+            currentUser.birthday = document.getElementById('p-birthday').value;
+            currentUser.team = document.getElementById('p-team').value || 'All';
+            localStorage.setItem('worksync_user', JSON.stringify(currentUser));
+            await update(ref(db, `worksync/users/${eKey(currentUser.email)}`), { 
+                name: currentUser.name,
+                role: currentUser.role,
+                phone: currentUser.phone,
+                empId: currentUser.empId,
+                birthday: currentUser.birthday,
+                team: currentUser.team
+            });
+            applyUserUI();
+            toast('Profile saved', 'success');
+            document.getElementById('profileModal').close();
+        }
+
+        function getCheckoutLimit() {
+            // Hardcoded to 7:00 PM as per request.
+            return { hours: 19, mins: 0 };
+        }
+
+        function openSettings() {
+            document.getElementById('cfg-domain').textContent = JIRA.domain;
+            document.getElementById('cfg-project').textContent = 'Active: ' + JIRA.projectKey;
+            renderChatMuteToggle();
+            document.getElementById('setting-shift').value = localStorage.getItem('worksync_shift') || '18:00';
+            document.getElementById('settingsModal').showModal();
+        }
+
+        function renderChatMuteToggle() {
+            const toggle = document.getElementById('chat-mute-toggle');
+            const knob = document.getElementById('chat-mute-knob');
+            if (!toggle || !knob) return;
+            toggle.className = `w-12 h-7 rounded-full relative transition-colors shrink-0 ${chatNotificationsMuted ? 'bg-slate-300' : 'bg-emerald-500'}`;
+            knob.className = `absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${chatNotificationsMuted ? 'left-1' : 'right-1'}`;
+            toggle.setAttribute('aria-pressed', String(!chatNotificationsMuted));
+        }
+
+        async function toggleChatMute() {
+            chatNotificationsMuted = !chatNotificationsMuted;
+            localStorage.setItem('worksync_chat_muted', String(chatNotificationsMuted));
+            renderChatMuteToggle();
+            if (!chatNotificationsMuted && 'Notification' in window && Notification.permission === 'default') {
+                try { await Notification.requestPermission(); } catch { }
+            }
+            toast(chatNotificationsMuted ? 'Chat notifications muted' : 'Chat notifications enabled', 'info');
+        }
+
+        // TIMER
+        async function logAttendanceEvent(type, duration = 0) {
+            if (!currentUser || !db) return;
+            const event = {
+                userId: currentUser.email,
+                userName: currentUser.name,
+                type: type, // 'check_in', 'break_start', 'break_end', 'check_out'
+                timestamp: Date.now(),
+                date: new Date().toISOString().slice(0, 10),
+                duration: duration
+            };
+            await push(ref(db, 'worksync/attendance_events'), event);
+        }
+
+        function doCheckIn() {
+            const now = new Date();
+            if (now.getHours() >= 22) {
+                toast('Cannot check in after 10:00 PM', 'error');
+                return;
+            }
+            isCheckedIn = true;
+            checkInTime = Date.now();
+            breakStartTime = null;
+            totalBreakDuration = 0;
+            localStorage.setItem('worksync_timerState', 'running');
+            localStorage.setItem('worksync_checkInTime', String(checkInTime));
+            localStorage.setItem('worksync_totalBreakDuration', '0');
+            localStorage.removeItem('worksync_breakStartTime');
+            setTimerState('running');
+            timerRef = setInterval(tickTimer, 1000);
+            logAttendanceEvent('check_in');
+            toast('Checked In Successfully', 'success');
+            registerOnline();
+        }
+        function doBreak() {
+            clearInterval(timerRef);
+            breakStartTime = Date.now();
+            localStorage.setItem('worksync_timerState', 'paused');
+            localStorage.setItem('worksync_breakStartTime', String(breakStartTime));
+            setTimerState('paused');
+            logAttendanceEvent('break_start');
+            // Auto-hold any active task when going on break
+            if (activeTaskId && !taskOnHold) {
+                holdTask();
+                toast('Break started — active task put on hold', 'info');
+            } else {
+                toast('Break session started', 'info');
+            }
+        }
+        function doResume() {
+            if (breakStartTime) {
+                const breakDuration = Date.now() - breakStartTime;
+                totalBreakDuration += breakDuration;
+                localStorage.setItem('worksync_totalBreakDuration', String(totalBreakDuration));
+                localStorage.removeItem('worksync_breakStartTime');
+                logAttendanceEvent('break_end', breakDuration);
+                breakStartTime = null;
+            }
+            timerRef = setInterval(tickTimer, 1000);
+            localStorage.setItem('worksync_timerState', 'running');
+            setTimerState('running');
+            toast('Work session resumed', 'success');
+        }
+        function confirmCheckOut() {
+            if (confirm('Are you sure you want to Check Out for today?')) {
+                clearInterval(timerRef);
+                isCheckedIn = false;
+                holdActiveTaskForCheckout();
+                if (checkInTime) {
+                    const totalDuration = Date.now() - checkInTime;
+                    logAttendanceEvent('check_out', totalDuration);
+                    checkInTime = null;
+                }
+                setTimerState('idle');
+                localStorage.removeItem('worksync_timerState');
+                localStorage.removeItem('worksync_checkInTime');
+                localStorage.removeItem('worksync_totalBreakDuration');
+                localStorage.removeItem('worksync_breakStartTime');
+                resetTimerUI();
+                toast('Checked Out - Great job today!', 'success');
+            }
+        }
+        function setTimerState(state) {
+            const ci = document.getElementById('btn-checkin'), br = document.getElementById('btn-break'), co = document.getElementById('btn-checkout'), rs = document.getElementById('btn-resume');
+            ci.classList.add('hidden'); br.disabled = true; co.disabled = true; rs.classList.add('hidden');
+            if (state === 'idle') { ci.classList.remove('hidden'); }
+            if (state === 'running') { co.disabled = false; br.disabled = false; br.classList.remove('hidden'); }
+            if (state === 'paused') { co.disabled = false; rs.classList.remove('hidden'); br.classList.add('hidden'); }
+        }
+
+        function autoCheckOut() {
+            if (!isCheckedIn) return;
+            clearInterval(timerRef);
+            isCheckedIn = false;
+            if (checkInTime) {
+                const ciDate = new Date(checkInTime);
+                const limitDate = new Date(ciDate);
+                const limit = getCheckoutLimit();
+                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+                
+                let endTime = Date.now();
+                if (endTime > limitDate.getTime()) {
+                    endTime = limitDate.getTime();
+                }
+                
+                if (breakStartTime) {
+                    const breakDuration = Math.max(0, endTime - breakStartTime);
+                    logAttendanceEvent('break_end', breakDuration);
+                    breakStartTime = null;
+                }
+
+                const totalDuration = Math.max(0, (endTime - checkInTime) - totalBreakDuration);
+                logAttendanceEvent('check_out', totalDuration);
+                checkInTime = null;
+            }
+            holdActiveTaskForCheckout();
+            setTimerState('idle');
+            localStorage.removeItem('worksync_timerState');
+            localStorage.removeItem('worksync_checkInTime');
+            localStorage.removeItem('worksync_totalBreakDuration');
+            localStorage.removeItem('worksync_breakStartTime');
+            resetTimerUI();
+            toast('Auto-checked out at end of shift', 'info');
+        }
+
+        function checkAutoCheckout() {
+            if (!isCheckedIn || !checkInTime) return;
+            const now = new Date();
+            const limit = getCheckoutLimit();
+            const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
+            if (isPastTime || now.toDateString() !== new Date(checkInTime).toDateString()) {
+                autoCheckOut();
+            }
+        }
+
+        function tickTimer() {
+            if (!checkInTime) return;
+            const elapsedMs = Date.now() - checkInTime;
+            const workMs = elapsedMs - totalBreakDuration;
+            seconds = Math.floor(Math.max(0, workMs / 1000));
+            document.getElementById('timer-display').textContent = formatTime(seconds);
+            updateStats();
+        }
+        function formatTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return [h, m, sc].map(v => v.toString().padStart(2, '0')).join(':'); }
+        function resetTimerUI() { seconds = 0; document.getElementById('timer-display').textContent = '00:00:00'; }
+
+        function restoreTimerState() {
+            const state = localStorage.getItem('worksync_timerState');
+            const ciTime = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
+            if (!state || !ciTime) return;
+            isCheckedIn = true;
+            checkInTime = ciTime;
+            totalBreakDuration = parseInt(localStorage.getItem('worksync_totalBreakDuration'), 10) || 0;
+
+            const now = new Date();
+            const ciDate = new Date(ciTime);
+            const limit = getCheckoutLimit();
+            const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
+            if (isPastTime || now.toDateString() !== ciDate.toDateString()) {
+                if (state === 'paused') {
+                    breakStartTime = parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
+                }
+                autoCheckOut();
+                return;
+            }
+            
+            clearInterval(timerRef);
+            if (state === 'running') {
+                setTimerState('running');
+                timerRef = setInterval(tickTimer, 1000);
+                tickTimer(); // Run once immediately to update UI
+            } else if (state === 'paused') {
+                const bsTime = parseInt(localStorage.getItem('worksync_breakStartTime'), 10);
+                if (bsTime) {
+                    breakStartTime = bsTime;
+                    const workDurationMs = (breakStartTime - checkInTime) - totalBreakDuration;
+                    seconds = Math.floor(Math.max(0, workDurationMs / 1000));
+                    document.getElementById('timer-display').textContent = formatTime(seconds);
+                }
+                setTimerState('paused');
+            }
+        }
+
+        // VIEW NAVIGATION
+        function switchView(view) {
+            if (view === 'reports' && !canViewReports()) view = 'dashboard';
+            if (view === 'daily-summary' && !canViewDailySummary()) view = 'dashboard';
+            if (view === 'projects' && !canViewProjects()) view = 'dashboard';
+            if (view === 'users' && !isAdmin()) view = 'dashboard';
+            activeView = view;
+            localStorage.setItem('worksync_activeView', view);
+            ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'daily-summary'].forEach(v => {
+                document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
+                const navEl = document.getElementById(`nav-${v}`);
+                if (navEl) navEl.classList.remove('nav-active');
+            });
+            document.getElementById(`view-${view}-panel`)?.classList.remove('hidden');
+            document.getElementById(`nav-${view}`).classList.add('nav-active');
+            const titles = { dashboard: 'Dashboard Overview', tasks: 'Jira Task Board', 'internal-tasks': 'Internal Tasks', dailyplan: 'Daily Plan', projects: 'Project Overview', shoots: 'Client Shoot Calendar', qc: 'Quality Check Portal', notes: 'My Personal Notes', dpr: 'Daily Productivity Report', hr: 'HR Portal', chat: 'Team Chat', announcements: 'Announcements', reports: 'Reports & Analytics', users: 'User Management', 'daily-summary': 'Daily Status Summaries' };
+            document.getElementById('view-title').textContent = titles[view];
+            if (view === 'shoots') {
+                renderShootCalendar();
+            }
+            else if (view === 'projects') {
+                renderProjects();
+            }
+            else if (view === 'dailyplan') { renderDailyPlan(); }
+            else if (view === 'internal-tasks') { populateInternalClientFilter(); populateInternalAssigneeFilter(); renderInternalTasks(); }
+            else if (view === 'qc') { renderQcTasks(); loadQcReports(); }
+            else if (view === 'reports') { 
+                if (!reportDateFrom) initReportFilters();
+                loadAttendanceEvents(); 
+                loadAllTimeLogs();
+                if (isManager() && !isAdmin()) currentReportTab = 'client';
+                if (currentReportTab === 'client') setReportDatePreset('this_month');
+                switchReportTab(currentReportTab); 
+            } else if (view === 'dpr') { initDpr(); switchDprTab(currentDprTab); }
+            else if (view === 'hr') { loadMyRequests(); loadApprovals(); loadHrBadge(); }
+            else if (view === 'chat') { document.getElementById('chat-welcome').classList.remove('hidden'); renderDmList(); }
+            else if (view === 'announcements') { unreadAnnouncements = 0; renderAnnouncementBadge(); loadAnnouncements(); }
+            else if (view === 'users') { loadUsersList(); }
+            else if (view === 'notes') { loadNotes(); }
+            else if (view === 'daily-summary') { loadTodayWorkSummary(); renderDailySummary(); }
+            
+            // Manage Live Board Timers for Admin
+            if ((view === 'dashboard' || view === 'dailyplan') && isAdmin()) {
+                startLiveBoardTimers();
+            } else {
+                stopLiveBoardTimers();
+            }
+        }
+
+        function startLiveBoardTimers() {
+            if (liveBoardTimerRef) clearInterval(liveBoardTimerRef);
+            liveBoardTimerRef = setInterval(updateLiveBoardTimers, 1000);
+        }
+
+        function stopLiveBoardTimers() {
+            if (liveBoardTimerRef) {
+                clearInterval(liveBoardTimerRef);
+                liveBoardTimerRef = null;
+            }
+        }
+
+        // TASK STATUS HELPERS
+        function isDone(s) { return ['Done', 'Resolved', 'Closed', 'Completed', 'Design Completed', 'Client Approved', 'Posted'].includes(s); }
+        function isInProgress(s) { return ['In Progress', 'Active', 'Running', 'In Review', 'Content In Progress', 'Client Content Approval', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Quality Check', 'Client Sent', 'Analytics'].includes(s); }
+        function isTodo(s) { return ['To Do', 'Open', 'Backlog', 'New', 'Shoot Needed', 'Content To Do', 'Design To Do'].includes(s); }
+        function isInternalTodo(s) { return ['To do', 'To Do', 'Discussion'].includes(s); }
+        function isInternalInProgress(s) { return ['In Progress', 'Learnings', 'Learning'].includes(s); }
+        function isInternalDone(s) { return ['Completed', 'Done'].includes(s); }
+
+        async function getAllUsers() {
+            const snap = await get(ref(db, 'worksync/users'));
+            const fbUsers = snap.val() || {};
+            const merged = new Map();
+            USERS.forEach(u => merged.set(u.email.toLowerCase(), {...u}));
+            Object.values(fbUsers).forEach(u => {
+                if(u.email) {
+                    merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
+                }
+            });
+            return merged; // Return the map directly
+        }
+
+        // SHOOT CALENDAR
+        function navigateShootCalendar(direction) {
+            if (direction === 0) { // Today
+                shootCalendarDate = new Date();
+            } else {
+                shootCalendarDate.setMonth(shootCalendarDate.getMonth() + direction);
+            }
+            renderShootCalendar();
+        }
+
+        function renderShootCalendar() {
+            const grid = document.getElementById('shoot-calendar-grid');
+            const title = document.getElementById('shoot-calendar-title');
+            if (!grid || !title) return;
+
+            const month = shootCalendarDate.getMonth();
+            const year = shootCalendarDate.getFullYear();
+
+            title.textContent = shootCalendarDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            grid.innerHTML = '';
+
+            // Day headers
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayNames.forEach(day => {
+                grid.innerHTML += `<div class="text-center p-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-r border-slate-100">${day}</div>`;
+            });
+
+            // Blank days for the first week
+            for (let i = 0; i < firstDay; i++) {
+                grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/50"></div>`;
+            }
+
+            const shootTasks = tasks.filter(t => t.status === 'Shoot Needed' && t.duedate);
+            const tasksByDate = shootTasks.reduce((acc, task) => {
+                const date = task.duedate.slice(0, 10);
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(task);
+                return acc;
+            }, {});
+
+            const today = new Date();
+            const todayStr = today.toISOString().slice(0, 10);
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayTasks = tasksByDate[dateStr] || [];
+                const isToday = dateStr === todayStr;
+
+                let dayHtml = `<div onclick="openShootPlanModal('${dateStr}')" class="relative p-3 border-r border-b border-slate-100 min-h-[120px] flex flex-col group ${isToday ? 'bg-indigo-50/50' : ''} hover:bg-slate-100/50 transition-colors cursor-pointer"><time datetime="${dateStr}" class="font-black text-sm ${isToday ? 'text-indigo-600' : 'text-slate-700'}">${day}</time><div class="mt-2 space-y-1 overflow-y-auto flex-1">`;
+                dayTasks.forEach(task => { dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${task.id}')" class="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow hover:border-indigo-300"><p class="text-[10px] font-bold text-slate-800 truncate">${escapeHtml(task.desc)}</p><p class="text-[9px] text-slate-500 font-medium">${escapeHtml(task.client || 'No Client')}</p></div>`; });
+                dayHtml += `</div></div>`;
+                grid.innerHTML += dayHtml;
+            }
+        }
+
+        async function openShootPlanModal(date) {
+            document.getElementById('sp-date').value = date;
+            
+            const clientSelect = document.getElementById('sp-client');
+            clientSelect.innerHTML = '<option value="">Select client...</option>' + CLIENTS.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            const allUsers = Array.from(allUsersMap.values()); // Use the global map
+            const assigneeSelect = document.getElementById('sp-assignee');
+            assigneeSelect.innerHTML = '<option value="">Select assignee...</option>' + allUsers.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+            assigneeSelect.value = currentUser.email; // Default to current user
+
+            document.getElementById('sp-title').value = '';
+            document.getElementById('sp-notes').value = '';
+
+            document.getElementById('shootPlanModal').showModal();
+        }
+
+        async function saveShootPlan() {
+            const title = document.getElementById('sp-title').value.trim();
+            const client = document.getElementById('sp-client').value;
+            const date = document.getElementById('sp-date').value;
+            const assigneeEmail = document.getElementById('sp-assignee').value;
+            const notes = document.getElementById('sp-notes').value.trim();
+
+            if (!title || !client || !date || !assigneeEmail) return toast('Please fill all required fields.', 'error');
+
+            const assignee = allUsersMap.get(assigneeEmail.toLowerCase()); // Use the global map
+
+            const taskId = 'M-' + Date.now();
+            const task = { id: taskId, desc: title, client, status: 'Shoot Needed', priority: 'High', assignee: assignee?.name || 'Unassigned', assigneeEmail, duedate: date, notes, manual: true, taskType: 'internal', userId: assigneeEmail, createdAt: Date.now(), createdBy: currentUser.email };
+
+            // Save the task under the ASSIGNEE's path so they can see it.
+            await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail)}/${taskId}`), task);
+            tasks.unshift(task);
+            populateInternalClientFilter();
+            populateInternalAssigneeFilter();
+            renderTasks(); renderInternalTasks(); updateStats(); renderShootCalendar();
+            document.getElementById('shootPlanModal').close();
+            toast('Shoot plan created successfully!', 'success');
+        }
+
+        async function jiraRequest(jiraUrl, method = 'get', payload = null) {
+            const body = { jiraUrl, method };
+            if (payload !== null) body.payload = payload;
+            console.log('🎯 Target URL:', jiraUrl);
+
+            if (!JIRA.useLocalApi) {
+                return jiraAppsScriptRequest(body);
+            }
+
+            try {
+                return await jiraProxyFetch(JIRA.apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (primaryErr) {
+                console.warn('Primary Jira proxy failed, trying Google Apps Script proxy:', primaryErr);
+                if (!JIRA.gsUrl) throw primaryErr;
+
+                return jiraAppsScriptRequest(body);
+            }
+        }
+
+        async function jiraAppsScriptRequest(body) {
+            if (!JIRA.gsUrl) {
+                throw new Error('Google Apps Script Jira proxy URL is missing.');
+            }
+
+            return jiraProxyFetch(JIRA.gsUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ type: 'JIRA_PROXY', ...body })
+            });
+        }
+
+        async function jiraProxyFetch(proxyUrl, fetchOptions) {
+            let r;
+            try {
+                r = await fetch(proxyUrl, fetchOptions);
+            } catch (err) {
+                throw new Error(`Cannot reach Jira proxy ${proxyUrl}: ${err.message}`);
+            }
+
+            const responseText = await r.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (err) {
+                const preview = responseText.trim().replace(/\s+/g, ' ').slice(0, 180);
+                throw new Error(`Jira proxy ${proxyUrl} returned HTTP ${r.status} ${r.statusText || ''}, but not JSON.${preview ? ' Response: ' + preview : ''}`);
+            }
+
+            if (!r.ok) {
+                throw new Error(jiraErrorMessage(result));
+            }
+
+            console.log('📨 Proxy Response Status:', result.status);
+            console.log('📨 Proxy Response Data:', previewJson(result.data ?? result));
+            return result;
+        }
+
+        function jiraErrorMessage(res) {
+            if (!res) return 'No response from Jira proxy';
+            if (res.data?.raw) return res.data.raw;
+            if (res.error && res.error.includes('Unexpected token')) {
+                return `Google Apps Script proxy is not deployed with the current code. Redeploy GoogleAppsScript.gs as a Web App, then set Script Properties JIRA_AUTH_EMAIL and JIRA_TOKEN. Raw error: ${res.error}`;
+            }
+            if (res.error) return res.error;
+            if (res.data?.errorMessages?.length) return res.data.errorMessages.join('; ');
+            if (res.data?.errors) return Object.values(res.data.errors).join('; ');
+            if (res.data?.message) return res.data.message;
+            return `HTTP ${res.status || 'unknown'}`;
+        }
+
+        function previewJson(value, length = 200) {
+            const text = JSON.stringify(value);
+            return (text === undefined ? String(value) : text).substring(0, length) + '...';
+        }
+
+        async function fetchAllJiraIssues(jql, fields = 'summary,status,priority,labels,assignee,duedate') {
+            const issues = [];
+            const maxResults = 100;
+            let startAt = 0;
+            let total = null;
+
+            while (total === null || startAt < total) {
+                const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}&fields=${fields}`;
+                console.log(`📡 Fetching Jira issues: startAt=${startAt}, maxResults=${maxResults}`);
+                const res = await jiraRequest(url);
+                if (!res.success || res.data?.errorMessages || res.data?.message) {
+                    throw new Error(jiraErrorMessage(res));
+                }
+
+                const pageIssues = res.data?.issues || [];
+                issues.push(...pageIssues);
+                total = Number(res.data?.total ?? pageIssues.length);
+                startAt += Number(res.data?.maxResults ?? maxResults);
+
+                if (pageIssues.length === 0) break;
+            }
+
+            return issues;
+        }
+
+        function escapeJqlValue(v) {
+            return (v || '').toString().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        }
+
+        function jiraIdentityTerms(user) {
+            const known = knownUserByEmail(user?.email);
+            return [...new Set([user?.email, known?.email, user?.name, known?.name]
+                .map(v => (v || '').trim())
+                .filter(Boolean))];
+        }
+
+        async function findJiraAccountId(user) {
+            const terms = jiraIdentityTerms(user);
+            for (const term of terms) {
+                try {
+                    const url = `https://${JIRA.domain}/rest/api/3/user/search?query=${encodeURIComponent(term)}&maxResults=10`;
+                    const res = await jiraRequest(url);
+                    if (!res.success || !Array.isArray(res.data)) continue;
+                    const normalizedTerm = normalizeAssigneeValue(term);
+                    const match = res.data.find(u => {
+                        const emailMatch = (u.emailAddress || '').toLowerCase() === (user.email || '').toLowerCase();
+                        const displayName = normalizeAssigneeValue(u.displayName);
+                        const displayMatch = displayName && (displayName.includes(normalizedTerm) || normalizedTerm.includes(displayName));
+                        return emailMatch || displayMatch;
+                    }) || res.data[0];
+                    if (match?.accountId) return match.accountId;
+                } catch (e) {
+                    console.warn('Jira account lookup failed for', term, e);
+                }
+            }
+            return '';
+        }
+
+        function mapJiraIssues(issues) {
+            return (issues || []).map(i => ({
+                id: i.key,
+                desc: i.fields.summary,
+                status: i.fields.status.name,
+                priority: i.fields.priority?.name || 'Medium',
+                client: (i.fields.labels || []).join(', ') || '',
+                assignee: i.fields.assignee?.displayName || '',
+                assigneeEmail: i.fields.assignee?.emailAddress || '',
+                assigneeAccountId: i.fields.assignee?.accountId || '',
+                duedate: i.fields.duedate,
+                issueType: i.fields.issuetype?.name || '',
+                parentId: i.fields.parent?.key || ''
+            }));
+        }
+
+        function mergeTasksById(taskList) {
+            const map = new Map();
+            (taskList || []).forEach(task => {
+                if (!task?.id) return;
+                map.set(task.id, { ...(map.get(task.id) || {}), ...task });
+            });
+            return Array.from(map.values());
+        }
+
+        async function syncTasks(isAuto = false) {
+            const btn = document.getElementById('sync-btn'), icon = document.getElementById('sync-icon');
+            if (!isAuto) {
+                if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
+            }
+            try {
+                const { projectKey } = JIRA;
+                const manualTasks = tasks.filter(t => t.manual);
+                
+                // TEST 1: Verify token works with a simple endpoint
+                const testUrl = `https://${JIRA.domain}/rest/api/3/myself`;
+                console.log('🧪 Testing token with /myself endpoint...');
+                const testRes = await jiraRequest(testUrl);
+                
+                if (!testRes.success || testRes.data?.errorMessages) {
+                    const err = jiraErrorMessage(testRes);
+                    console.error('❌ Jira auth test failed:', err);
+                    if (!isAuto) {
+                        toast('Jira auth failed: ' + err, 'error');
+                    } else {
+                        updateSystemStatus(false, 'Jira Auth Failed', true);
+                    }
+                    return;
+                }
+                console.log('✅ Token is VALID - user:', testRes.data?.emailAddress);
+                
+                // Fetch all issues using REST API v3 JQL search
+                const lastSync = localStorage.getItem('worksync_lastSync');
+                let jql = `project=${projectKey} AND (issuetype in standardIssueTypes() OR issuetype in subTaskIssueTypes())`;
+                if (isAuto) { // For background syncs, get very recent changes.
+                    jql += ` AND updated >= -5m ORDER BY updated DESC`;
+                } else { // For a full sync, fetch every issue in the project.
+                    jql += ` ORDER BY updated DESC`;
+                }
+
+                const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent');
+                console.log(`📡 Fetched ${issues.length} Jira issues across pages.`);
+                let jiraTasks = mapJiraIssues(issues);
+                const subtaskCount = jiraTasks.filter(t => t.parentId).length;
+                console.log(`📌 Imported ${subtaskCount} Jira subtasks among ${jiraTasks.length} total tasks.`);
+                console.log(`📊 Mapped ${jiraTasks.length} tasks from Jira for ${isAuto ? 'auto-sync' : 'full-sync'}`);
+
+                const taskMap = new Map(tasks.map(t => [t.id, t]));
+                jiraTasks.forEach(jiraTask => {
+                    const existingTask = taskMap.get(jiraTask.id);
+                    if (existingTask) {
+                        // Preserve runtime state by manually updating properties from Jira
+                        existingTask.desc = jiraTask.desc;
+                        existingTask.status = jiraTask.status;
+                        existingTask.priority = jiraTask.priority;
+                        existingTask.client = jiraTask.client;
+                        existingTask.assignee = jiraTask.assignee;
+                        existingTask.assigneeEmail = jiraTask.assigneeEmail;
+                        existingTask.duedate = jiraTask.duedate;
+                    } else {
+                        // New task from Jira
+                        taskMap.set(jiraTask.id, jiraTask);
+                    }
+                });
+
+                // For a full sync (not auto), remove old Jira tasks that are no longer present
+                if (!isAuto) {
+                    const newJiraIds = new Set(jiraTasks.map(t => t.id));
+                    tasks.forEach(oldTask => {
+                        if (!oldTask.manual && !newJiraIds.has(oldTask.id)) {
+                            taskMap.delete(oldTask.id);
+                        }
+                    });
+                }
+
+                tasks = mergeTasksById(Array.from(taskMap.values()));
+
+                localStorage.setItem('worksync_tasks', JSON.stringify(tasks));
+                localStorage.setItem('worksync_lastSync', Date.now().toString());
+
+                populateAssigneeFilter();
+                renderTasks(); updateStats();
+                populateClientFilter(); // Call after renderTasks to ensure task data is updated
+                populateInternalAssigneeFilter();
+                populateInternalClientFilter();
+                if (activeView === 'internal-tasks') renderInternalTasks();
+                if (activeView === 'dailyplan') renderDailyPlan();
+                if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                if (!isAuto) {
+                    toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}`, jiraTasks.length ? 'success' : 'info');
+                } else {
+                    updateSystemStatus(true, `Synced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, true);
+                }
+            } catch (e) { 
+                console.error('🔴 Sync exception:', e); 
+                if (!isAuto) {
+                    toast('Sync failed: ' + e.message, 'error'); 
+                } else {
+                    updateSystemStatus(false, 'Sync Error', true);
+                }
+            }
+            finally { 
+                if (!isAuto) {
+                    if (btn) btn.disabled = false; 
+                    if (icon) icon.classList.remove('animate-spin'); 
+                }
+            }
+        }
+
+        function handleTaskSort(col) {
+            if (taskSortCol === col) {
+                taskSortDir = taskSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                taskSortCol = col;
+                taskSortDir = 'asc';
+            }
+            renderTasks();
+        }
+
+        function handleInternalTaskSort(col) {
+            if (internalTaskSortCol === col) {
+                internalTaskSortDir = internalTaskSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                internalTaskSortCol = col;
+                internalTaskSortDir = 'asc';
+            }
+            renderInternalTasks();
+        }
+
+        function handleDpSort(col) {
+            if (dpSortCol === col) {
+                dpSortDir = dpSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                dpSortCol = col;
+                dpSortDir = 'asc';
+            }
+            renderDailyPlan();
+        }
+
+        function updateSortIconUI(prefix, col, dir) {
+            document.querySelectorAll(`[id^="sort-${prefix}-"]`).forEach(icon => {
+                icon.setAttribute('icon', 'solar:sort-vertical-linear');
+                icon.classList.add('opacity-40');
+            });
+            const active = document.getElementById(`sort-${prefix}-${col}`);
+            if (active) {
+                active.setAttribute('icon', dir === 'asc' ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold');
+                active.classList.remove('opacity-40');
+                active.classList.add('text-indigo-600');
+            }
+        }
+
+        function renderTasks() {
+            const tbody = document.getElementById('tasks-tbody');
+            const kanban = document.getElementById('task-kanban-container');
+            let filtered = tasks.filter(t => !isInternalTask(t));
+            if (currentStatusFilter !== 'all') {
+                if (currentStatusFilter.length > 0) {
+                    filtered = filtered.filter(t => currentStatusFilter.includes(t.status));
+                } else {
+                    // If filter is an empty array (e.g. "All" unchecked), show no tasks.
+                    filtered = [];
+                }
+            }
+            if (currentAssigneeFilter !== 'all') filtered = filtered.filter(t => assigneeMatches(t, currentAssigneeFilter));
+            if (currentClientFilter !== 'all') {
+                filtered = filtered.filter(t => t.client === currentClientFilter);
+            }
+
+            if (currentDueDateFilter !== 'all') {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                if (currentDueDateFilter === 'overdue') {
+                    filtered = filtered.filter(t => {
+                        if (!t.duedate || isDone(t.status)) return false;
+                        const dueDate = new Date(t.duedate);
+                        return dueDate < today;
+                    });
+                } else if (currentDueDateFilter === 'today') {
+                    const todayStr = today.toISOString().slice(0, 10);
+                    filtered = filtered.filter(t => t.duedate === todayStr);
+                } else if (currentDueDateFilter === 'this_week') {
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday as start of week
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 6);
+                    endOfWeek.setHours(23, 59, 59, 999);
+
+                    filtered = filtered.filter(t => {
+                        if (!t.duedate) return false;
+                        const dueDate = new Date(t.duedate);
+                        return dueDate >= startOfWeek && dueDate <= endOfWeek;
+                    });
+                }
+            }
+            if (currentSearchTerm) filtered = filtered.filter(t => {
+                const searchLower = currentSearchTerm.toLowerCase();
+                return (t.id && t.id.toLowerCase().includes(searchLower)) ||
+                       (t.desc && t.desc.toLowerCase().includes(searchLower)) ||
+                       (t.assignee && t.assignee.toLowerCase().includes(searchLower));
+            });
+            
+            if (taskSortCol) {
+                updateSortIconUI('task', taskSortCol, taskSortDir);
+                filtered.sort((a, b) => {
+                    let valA, valB;
+                    if (taskSortCol === 'assignee') { valA = assigneeName(a); valB = assigneeName(b); }
+                    else { valA = a[taskSortCol] || ''; valB = b[taskSortCol] || ''; }
+                    
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    
+                    if (valA < valB) return taskSortDir === 'asc' ? -1 : 1;
+                    if (valA > valB) return taskSortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            if (currentTaskViewMode === 'kanban' && kanban) {
+                const allStatuses = currentStatusFilter === 'all'
+                    ? [...new Set(tasks.filter(t => !isInternalTask(t)).map(t => t.status).filter(Boolean))].sort()
+                    : [...currentStatusFilter].sort();
+                const statusColors = (s) => {
+                    if (isDone(s)) return { bg: 'bg-emerald-50/50', border: 'border-emerald-100', titleColor: 'text-emerald-600' };
+                    if (isInProgress(s)) return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
+                    return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
+                };
+                const cols = allStatuses.map(status => ({
+                    id: status.toLowerCase().replace(/\s/g, '-'),
+                    title: status,
+                    count: filtered.filter(t => t.status === status).length,
+                    ...statusColors(status)
+                }));
+
+                kanban.innerHTML = cols.map(col => {
+                    const colTasks = filtered.filter(t => t.status === col.title);
+                    return `
+                    <div class="flex flex-col rounded-2xl ${col.bg} border ${col.border} p-4 h-full min-h-[300px] w-80 flex-shrink-0" ondragover="event.preventDefault()" ondrop="dropTask(event, '${col.title}')">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-black ${col.titleColor}">${col.title}</h3>
+                            <span class="text-[10px] font-bold bg-white px-2.5 py-1 rounded-full text-slate-500 shadow-sm">${colTasks.length}</span>
+                        </div>
+                        <div class="flex-1 space-y-3 overflow-y-auto">
+                            ${colTasks.sort((a,b) => (a.duedate || '9999').localeCompare(b.duedate || '9999')).map(t => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const dueDate = t.duedate ? new Date(t.duedate) : null;
+                                const isOverdue = dueDate && dueDate < today && !isDone(t.status);
+
+                                let dueDateHtml = '';
+                                if (t.duedate) {
+                                    const dateStr = new Date(t.duedate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                                    if (isOverdue) {
+                                        dueDateHtml = `<span class="flex items-center gap-1 text-rose-600 font-bold text-[10px]">
+                                            <iconify-icon icon="solar:danger-triangle-bold" width="12"></iconify-icon>
+                                            ${dateStr}
+                                        </span>`;
+                                    } else {
+                                        dueDateHtml = `<span class="text-slate-500 font-medium text-[10px]">${dateStr}</span>`;
+                                    }
+                                }
+                                return `
+                                <div draggable="true" ondragstart="dragTask(event, '${t.id}')" class="bg-white p-4 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group ${isOverdue ? 'border-rose-200 bg-rose-50/50' : 'border-slate-100'}">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <span class="text-[10px] font-mono font-bold text-indigo-600">${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800">${t.id}</a>`}</span>
+                                        <div class="flex items-center gap-2">
+                                            ${dueDateHtml}
+                                            <span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs font-bold text-slate-900 mb-3">${escapeHtml(t.desc)}</p>
+                                    <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-3">
+                                        <div class="flex items-center gap-1">
+                                            ${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="14"></iconify-icon></button>` : ''}
+                                        </div>
+                                        
+                                        ${activeTaskId === t.id ? `
+                                            <div class="flex gap-2">
+                                                <button onclick="${taskOnHold ? `resumeTaskTimer()` : `holdTask()`}" class="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
+                                                    <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="14"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
+                                                </button>
+                                                <button onclick="endTask()" class="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-all bg-rose-600 hover:bg-rose-700 text-white">
+                                                    <iconify-icon icon="solar:stop-circle-bold" width="14"></iconify-icon> End
+                                                </button>
+                                            </div>
+                                        ` : `
+                                            <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1 rounded-lg transition-all bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600">
+                                                <iconify-icon icon="solar:play-circle-bold" width="14"></iconify-icon> Start
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>`;
+                }).join('');
+            } else {
+                if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found.</td></tr>`; return; }
+                tbody.innerHTML = filtered.map(t => {
+                    const editBtn = t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="16"></iconify-icon></button>` : '';
+                    const taskKeyHtml = t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>` : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+                    
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const dueDate = t.duedate ? new Date(t.duedate) : null;
+                    const isOverdue = dueDate && dueDate < today && !isDone(t.status);
+
+                    let dueDateHtml = '—';
+                    if (t.duedate) {
+                        const dateStr = new Date(t.duedate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                        if (isOverdue) {
+                            dueDateHtml = `<span class="flex items-center gap-1.5 text-rose-600 font-bold">
+                                <iconify-icon icon="solar:danger-triangle-bold" width="14"></iconify-icon>
+                                ${dateStr}
+                            </span>`;
+                        } else {
+                            dueDateHtml = `<span class="text-slate-600">${dateStr}</span>`;
+                        }
+                    }
+
+                    return `
+                    <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${isOverdue ? 'bg-rose-50/30' : ''}">
+                        <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
+                        <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">${escapeHtml(t.desc)}${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}</td>
+                        <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
+                        <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${t.client || '—'}</td>
+                        <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${assigneeName(t)}</td>
+                        <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span></td>
+                        <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                ${editBtn}
+                                ${activeTaskId === t.id ? `
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button onclick="${taskOnHold ? `resumeTaskTimer()` : `holdTask()`}" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
+                                            <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="16"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
+                                        </button>
+                                        <button onclick="endTask()" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-rose-600 hover:bg-rose-700 text-white shadow-lg">
+                                            <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End
+                                        </button>
+                                    </div>
+                                ` : `
+                                    <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600">
+                                        <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Start
+                                    </button>
+                                `}
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+            Object.entries(unreadCounts).forEach(([id, count]) => {
+                const badgeEl = document.getElementById(`unread-badge-${id}`);
+                const btnEl = document.getElementById(`dm-btn-${id}`);
+                if (badgeEl) {
+                    badgeEl.textContent = count;
+                    badgeEl.classList.toggle('hidden', count === 0);
+                }
+                if (btnEl) {
+                    if (count > 0) btnEl.classList.add('bg-indigo-50/50', 'border-l-2', 'border-indigo-600');
+                    else btnEl.classList.remove('bg-indigo-50/50', 'border-l-2', 'border-indigo-600');
+                }
+            });
+        }
+
+        function renderInternalTasks() {
+            const tbody = document.getElementById('internal-tasks-tbody');
+            if (!tbody) return;
+
+            let filtered = tasks.filter(isInternalTask);
+            if (currentInternalStatusFilter !== 'all') {
+                filtered = currentInternalStatusFilter.length
+                    ? filtered.filter(t => currentInternalStatusFilter.includes(t.status))
+                    : [];
+            }
+            if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => assigneeMatches(t, currentInternalAssigneeFilter));
+            if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => t.client === currentInternalClientFilter);
+            if (currentInternalDueDateFilter !== 'all') {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (currentInternalDueDateFilter === 'overdue') {
+                    filtered = filtered.filter(t => t.duedate && new Date(t.duedate) < today && !isDone(t.status));
+                } else if (currentInternalDueDateFilter === 'today') {
+                    filtered = filtered.filter(t => t.duedate === today.toISOString().slice(0, 10));
+                } else if (currentInternalDueDateFilter === 'this_week') {
+                    const startOfWeek = new Date(today);
+                    startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 6);
+                    endOfWeek.setHours(23, 59, 59, 999);
+                    filtered = filtered.filter(t => t.duedate && new Date(t.duedate) >= startOfWeek && new Date(t.duedate) <= endOfWeek);
+                }
+            }
+            if (currentInternalSearchTerm) {
+                const term = currentInternalSearchTerm.toLowerCase();
+                filtered = filtered.filter(t =>
+                    (t.id || '').toLowerCase().includes(term) ||
+                    (t.desc || '').toLowerCase().includes(term) ||
+                    (t.client || '').toLowerCase().includes(term) ||
+                    (assigneeName(t) || '').toLowerCase().includes(term)
+                );
+            }
+            if (internalTaskSortCol) {
+                updateSortIconUI('internal-task', internalTaskSortCol, internalTaskSortDir);
+                filtered.sort((a, b) => {
+                    let valA = internalTaskSortCol === 'assignee' ? assigneeName(a) : (a[internalTaskSortCol] || '');
+                    let valB = internalTaskSortCol === 'assignee' ? assigneeName(b) : (b[internalTaskSortCol] || '');
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    if (valA < valB) return internalTaskSortDir === 'asc' ? -1 : 1;
+                    if (valA > valB) return internalTaskSortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-xs text-slate-400">No internal tasks found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(t => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dueDate = t.duedate ? new Date(t.duedate) : null;
+                const isOverdue = dueDate && dueDate < today && !isDone(t.status);
+                const dueDateHtml = t.duedate
+                    ? `<span class="${isOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'}">${new Date(t.duedate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>`
+                    : '—';
+                return `
+                <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${isOverdue ? 'bg-rose-50/30' : ''}">
+                    <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600"><button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button></td>
+                    <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">${escapeHtml(t.desc || '')}${t.notes ? `<div class="text-[10px] text-slate-400 mt-1 truncate">${escapeHtml(t.notes)}</div>` : ''}</td>
+                    <td class="px-6 py-4">
+                        <select onchange="updateInternalTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer transition-all ${statusClass(t.status)}" style="background:transparent;" title="Change status">
+                            ${INTERNAL_TASK_STATUSES.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
+                    <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${escapeHtml(assigneeName(t))}</td>
+                    <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${escapeHtml(t.priority || 'Medium')}</span></td>
+                    <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            <button onclick="openEditTaskModal('${t.id}')" class="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="16"></iconify-icon></button>
+                            ${activeTaskId === t.id ? `
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick="${taskOnHold ? `resumeTaskTimer()` : `holdTask()`}" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
+                                        <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="16"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
+                                    </button>
+                                    <button onclick="endTask()" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-rose-600 hover:bg-rose-700 text-white shadow-lg">
+                                        <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End
+                                    </button>
+                                </div>
+                            ` : `
+                                <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600">
+                                    <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Start
+                                </button>
+                            `}
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function statusClass(s) {
+            if (isDone(s)) return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+            if (isInProgress(s)) return 'bg-amber-50 text-amber-600 border border-amber-100';
+            return 'bg-blue-50 text-blue-600 border border-blue-100';
+        }
+        function priorityClass(p) {
+            if (['High', 'Highest', 'Critical'].includes(p)) return 'text-rose-500';
+            if (['Low', 'Lowest'].includes(p)) return 'text-slate-400';
+            return 'text-slate-600';
+        }
+
+        function assigneeName(t) {
+            if (t.assignee) return t.assignee;
+            const email = t.assigneeEmail || t.userId;
+            const user = allUsersMap.get((email || '').toLowerCase()); // Use the global map
+            return user?.name || email || 'Unassigned'; // Fallback to email if name not found
+        }
+
+        function isInternalTask(t) {
+            return t?.taskType === 'internal' || t?.internal === true;
+        }
+
+        function normalizeAssigneeValue(v) {
+            return (v || '').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        function assigneeMatches(task, filterValue) {
+            if (!currentUser && filterValue === 'me') return false;
+            const filterUser = filterValue === 'me'
+                ? currentUser
+                : (allUsersMap.get((filterValue || '').toLowerCase()) || USERS.find(u => u.email === filterValue));
+            const filterEmail = (filterUser?.email || filterValue || '').toLowerCase();
+            const filterName = normalizeAssigneeValue(filterUser?.name || filterValue.replace(/^name:/, ''));
+            const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
+            const taskName = normalizeAssigneeValue(task.assignee || assigneeName(task));
+
+            // Fuzzy partial name matching (handles "Karthika K" vs "Karthika")
+            if (filterName && taskName) {
+                if (filterName.includes(taskName) || taskName.includes(filterName)) return true;
+            }
+
+            if (taskEmail && taskEmail === filterEmail) return true;
+            if (!filterName || !taskName) return false;
+            return taskName === filterName || taskName.includes(filterName) || filterName.includes(taskName);
+        }
+
+        function myPendingTasks() {
+            if (!currentUser) return [];
+            return tasks.filter(t => !isDone(t.status) && assigneeMatches(t, 'me'));
+        }
+
+        async function saveCurrentTaskState(state = 'working', details = null) {
+            if (!currentUser || !activeTaskId) return;
+            const task = tasks.find(t => t.id === activeTaskId);
+            if (!task) return;
+            
+            if (details !== null) currentWorkDetails = details;
+
+            const payload = {
+                taskId: activeTaskId,
+                taskDesc: task.desc || '',
+                status: task.status || '',
+                client: task.client || '',
+                priority: task.priority || '',
+                state,
+                startedAt: taskStartTime || Date.now(),
+                currentSeconds: taskSeconds || 0,
+                workDetails: currentWorkDetails || '',
+                updatedAt: Date.now()
+            };
+            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), payload);
+        }
+
+        async function restoreActiveTask() {
+            if (!currentUser) return;
+            const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
+            const currentTaskData = snap.val();
+
+            if (currentTaskData && currentTaskData.taskId) {
+                currentWorkDetails = currentTaskData.workDetails || '';
+                console.log('Restoring active task:', currentTaskData);                
+                const lastUpdated = currentTaskData.updatedAt || Date.now();
+                const elapsedSinceUpdate = Math.floor((Date.now() - lastUpdated) / 1000);
+                const savedSeconds = currentTaskData.currentSeconds || 0;
+                
+                // If the task was updated more than 12 hours ago, assume the session was abandoned.
+                // Restore it in a "held" state to prevent runaway timers.
+                const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
+
+                if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
+                    console.warn(`Task restore gap is too large (${elapsedSinceUpdate}s). Restoring in held state.`);
+                    activeTaskId = currentTaskData.taskId;
+                    taskOnHold = true; // Force to 'on hold' state
+                    taskSeconds = savedSeconds;
+                    toast('Task was restored on hold due to long inactivity.', 'info');
+                } else {
+                    activeTaskId = currentTaskData.taskId;
+                    taskOnHold = currentTaskData.state === 'on_hold';
+                    
+                    if (taskOnHold) {
+                        taskSeconds = savedSeconds;
+                    } else {
+                        // It was running, so add the elapsed time.
+                        taskSeconds = savedSeconds + elapsedSinceUpdate;
+                    }
+                }
+                
+                // Re-align taskStartTime for timer logic
+                taskStartTime = Date.now() - (taskSeconds * 1000);
+
+                if (!taskOnHold) {
+                    startTaskTimer();
+                }
+
+                renderTasks();
+                if (activeView === 'internal-tasks') renderInternalTasks();
+                renderActiveTaskCard();
+                renderDailyPlan();
+            }
+        }
+
+        async function clearCurrentTask() {
+            if (!currentUser) return;
+            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), null);
+        }
+
+        async function toggleActiveTask(id) {
+            // This function is called when clicking "Start" on a new task.
+
+            // If another task is active, log its time before switching.
+            if (activeTaskId && activeTaskId !== id) {
+                stopTaskTimer();
+                // Accurate final duration calculation before logging
+                if (!taskOnHold && taskStartTime) {
+                    taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+                }
+                
+                const oldTask = tasks.find(t => t.id === activeTaskId);
+                const log = {
+                    taskId: activeTaskId,
+                    taskDesc: oldTask?.desc || '',
+                    client: oldTask?.client || '',
+                    userId: currentUser.email,
+                    userName: currentUser.name,
+                    startTime: taskStartTime,
+                    endTime: Date.now(),
+                    durationSeconds: taskSeconds,
+                    durationFormatted: formatTime(taskSeconds)
+                };
+                await push(ref(db, 'worksync/timelogs'), log);
+                toast(`Task ${activeTaskId} ended — ${formatTime(taskSeconds)} logged`, 'info');
+                // Don't nullify activeTaskId yet, just stop the timer. The next lines will overwrite it.
+            }
+
+            // Now, start the new task.
+            activeTaskId = id;
+            taskSeconds = 0;
+            taskOnHold = false;
+            taskStartTime = Date.now();
+
+            // --- Bring active task to top of the list ---
+            const taskIndex = tasks.findIndex(t => t.id === id);
+            if (taskIndex > 0) { // No need to move if it's already at top or not found.
+                const [taskToMove] = tasks.splice(taskIndex, 1);
+                tasks.unshift(taskToMove);
+            }
+            // --- End of change ---
+
+            startTaskTimer();
+            renderTasks();
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            renderActiveTaskCard();
+            renderDailyPlan();
+            saveCurrentTaskState('working').catch(err => {
+                console.error('Failed to save current task state:', err);
+                toast('Task started locally, but live board sync failed: ' + err.message, 'error');
+            });
+            toast(`Task ${id} started — timer running`, 'success');
+        }
+
+        function startTaskTimer() {
+            if (taskTimerRef) clearInterval(taskTimerRef);
+            if (!taskOnHold && taskStartTime) {
+                taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+            }
+            const initialEl = document.getElementById('task-timer-display');
+            if (initialEl) initialEl.textContent = formatTime(taskSeconds);
+            taskTimerRef = setInterval(() => {
+                // Calculate actual elapsed time to avoid setInterval drift
+                if (!taskOnHold && taskStartTime) {
+                    taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+                }
+
+                const el = document.getElementById('task-timer-display');
+                if (el) el.textContent = formatTime(taskSeconds);
+                
+                // Periodic sync with DB every minute
+                if (taskSeconds > 0 && taskSeconds % 60 === 0) {
+                    saveCurrentTaskState('working');
+                }
+            }, 1000);
+        }
+
+        function stopTaskTimer() {
+            clearInterval(taskTimerRef);
+            taskTimerRef = null;
+        }
+
+        function holdTask() {
+            // Capture final accurate seconds before stopping the clock
+            if (taskStartTime) {
+                taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+            }
+            stopTaskTimer();
+            taskOnHold = true;
+            saveCurrentTaskState('on_hold');
+            renderTasks();
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            renderActiveTaskCard();
+            renderDailyPlan();
+            toast('Task on hold', 'info');
+        }
+
+        function holdActiveTaskForCheckout() {
+            if (!activeTaskId) return;
+            if (taskStartTime && !taskOnHold) {
+                taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+            }
+            stopTaskTimer();
+            taskOnHold = true;
+            saveCurrentTaskState('on_hold');
+            renderTasks();
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            renderActiveTaskCard();
+            renderDailyPlan();
+        }
+
+        function resumeTaskTimer() {
+            taskOnHold = false;
+            taskStartTime = Date.now() - (taskSeconds * 1000);
+            startTaskTimer();
+            saveCurrentTaskState('working');
+            renderTasks();
+            if (activeView === 'internal-tasks') renderInternalTasks();
+            renderActiveTaskCard();
+            renderDailyPlan();
+            toast('Task resumed', 'success');
+        }
+
+        async function endTask() {
+            if (!activeTaskId || !currentUser) return;
+            stopTaskTimer();
+            
+            // Final clock-based validation of total time
+            if (!taskOnHold && taskStartTime) {
+                taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+            }
+
+            const t = tasks.find(t => t.id === activeTaskId);
+            const log = {
+                taskId: activeTaskId,
+                taskDesc: t?.desc || '',
+                client: t?.client || '',
+                userId: currentUser.email,
+                userName: currentUser.name,
+                startTime: taskStartTime,
+                endTime: Date.now(),
+                durationSeconds: taskSeconds,
+                durationFormatted: formatTime(taskSeconds)
+            };
+            await push(ref(db, 'worksync/timelogs'), log);
+            await clearCurrentTask();
+            toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
+            activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
+            renderTasks(); if (activeView === 'internal-tasks') renderInternalTasks(); renderActiveTaskCard(); renderDailyPlan();
+        }
+
+        function renderActiveTaskCard() {
+            const el = document.getElementById('active-task-card');
+            if (!activeTaskId) {
+                el.innerHTML = `<p class="text-sm text-slate-400">No task selected. Pick one from Jira Tasks.</p>`;
+                return;
+            }
+            const t = tasks.find(t => t.id === activeTaskId);
+            if (!t) return;
+            const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+            el.innerHTML = `
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                            ${t.client ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${t.client}</span>` : ''}
+                        </div>
+                        <p class="text-sm font-bold text-slate-900">${t.desc}</p>
+                    </div>
+                    <button onclick="toggleActiveTask('${t.id}')" class="text-rose-400 p-1 hover:bg-rose-50 rounded-lg transition-colors shrink-0">
+                        <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
+                    </button>
+                </div>
+                <div class="border-t border-slate-100 pt-4 mt-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time on Task</p>
+                            <p id="task-timer-display" class="text-2xl font-black text-slate-900 font-mono">${formatTime(taskSeconds)}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="task-hold-btn" onclick="holdTask()" class="${taskOnHold ? 'hidden' : ''} flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                                <iconify-icon icon="solar:pause-circle-bold" width="16"></iconify-icon> Hold
+                            </button>
+                            <button id="task-resume-btn" onclick="resumeTaskTimer()" class="${taskOnHold ? '' : 'hidden'} flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                                <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Resume
+                            </button>
+                            <button onclick="endTask()" class="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-rose-100 transition-all">
+                                <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End Task
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // ════════════════════════════════════════════
+        // DISCUSSION SCHEDULING & MANAGEMENT
+        // ════════════════════════════════════════════
+        let discussions = [];
+        let discussionCheckInterval = null;
+        let currentDiscussion = null;
+        let discussionPopupShown = false;
+        let discussionJoinCountdown = null;
+
+        function openScheduleDiscussionModal() {
+            // Populate client select
+            const clientSelect = document.getElementById('disc-client');
+            clientSelect.innerHTML = `<option value="">Select client/department...</option>` + CLIENTS.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            // Populate participants checkboxes
+            const participantsDiv = document.getElementById('disc-participants');
+            participantsDiv.innerHTML = Array.from(allUsersMap.values()).map(u => `
+                <label class="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                    <input type="checkbox" value="${u.email}" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-xs text-slate-700"><span class="font-bold">${u.name}</span><br><span class="text-slate-500">${u.email}</span></span>
+                </label>
+            `).join('');
+
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('disc-date').value = today;
+            
+            // Set default time to now + 1 hour
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            document.getElementById('disc-time').value = now.toTimeString().slice(0, 5);
+
+            document.getElementById('scheduleDiscussionModal').showModal();
+        }
+
+        async function submitScheduleDiscussion() {
+            const title = document.getElementById('disc-title').value.trim();
+            const client = document.getElementById('disc-client').value;
+            const date = document.getElementById('disc-date').value;
+            const time = document.getElementById('disc-time').value;
+            const duration = parseInt(document.getElementById('disc-duration').value) || 30;
+            const description = document.getElementById('disc-description').value.trim();
+            
+            const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
+            const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+
+            // Validation
+            if (!title) return toast('Enter discussion title', 'error');
+            if (!client) return toast('Select a client/department', 'error');
+            if (!date) return toast('Select a date', 'error');
+            if (!time) return toast('Select a time', 'error');
+            if (participants.length === 0) return toast('Select at least one participant', 'error');
+
+            const btn = document.getElementById('disc-submit-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Scheduling...`;
+
+            try {
+                // Combine date and time
+                const dateTimeStr = `${date}T${time}:00`;
+                const scheduledTime = new Date(dateTimeStr).getTime();
+                const now = Date.now();
+
+                if (scheduledTime <= now) {
+                    toast('Discussion time must be in the future', 'error');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    return;
+                }
+
+                const discussionId = 'DISC-' + Date.now();
+                const discussion = {
+                    id: discussionId,
+                    title,
+                    client,
+                    scheduledTime,
+                    duration: duration * 60 * 1000, // Convert to milliseconds
+                    participants,
+                    description,
+                    createdBy: currentUser.email,
+                    createdAt: Date.now(),
+                    status: 'scheduled' // scheduled, in-progress, completed
+                };
+
+                await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
+                
+                // Notify all participants
+                participants.forEach(email => {
+                    const participantName = knownUserByEmail(email)?.name || email;
+                    toast(`Discussion "${title}" scheduled for ${date} at ${time}`, 'success');
+                });
+
+                document.getElementById('scheduleDiscussionModal').close();
+                discussions.push(discussion);
+                startDiscussionListener();
+                toast(`Discussion scheduled successfully!`, 'success');
+            } catch (err) {
+                console.error('Failed to schedule discussion:', err);
+                toast('Failed to schedule discussion: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        function startDiscussionListener() {
+            // Check for upcoming discussions every second
+            if (discussionCheckInterval) clearInterval(discussionCheckInterval);
+            
+            discussionCheckInterval = setInterval(() => {
+                const now = Date.now();
+                discussions.forEach(disc => {
+                    if (disc.status === 'scheduled') {
+                        const timeUntilStart = disc.scheduledTime - now;
+                        
+                        // Show popup 30 seconds before
+                        if (timeUntilStart <= 30000 && timeUntilStart > 0 && !discussionPopupShown) {
+                            discussionPopupShown = true;
+                            currentDiscussion = disc;
+                            showDiscussionJoinPopup(disc);
+                        }
+                        
+                        // Mark as in-progress when time arrives
+                        if (timeUntilStart <= 0 && disc.status === 'scheduled') {
+                            disc.status = 'in-progress';
+                            updateDiscussionStatus(disc.id, 'in-progress');
+                        }
+                    }
+                });
+            }, 1000);
+        }
+
+        function showDiscussionJoinPopup(discussion) {
+            const popup = document.getElementById('discussionJoinPopup');
+            const titleEl = popup.querySelector('#disc-popup-title');
+            const countdownEl = popup.querySelector('#disc-popup-countdown');
+            
+            titleEl.textContent = discussion.title;
+            
+            // Show popup
+            popup.showModal();
+
+            // Start countdown
+            let secondsLeft = 30;
+            countdownEl.textContent = secondsLeft;
+
+            if (discussionJoinCountdown) clearInterval(discussionJoinCountdown);
+            discussionJoinCountdown = setInterval(() => {
+                secondsLeft--;
+                countdownEl.textContent = secondsLeft;
+                
+                if (secondsLeft <= 0) {
+                    clearInterval(discussionJoinCountdown);
+                    popup.close();
+                    discussionPopupShown = false;
+                }
+            }, 1000);
+        }
+
+        async function joinDiscussion() {
+            if (!currentDiscussion) return;
+            
+            const popup = document.getElementById('discussionJoinPopup');
+            popup.close();
+            clearInterval(discussionJoinCountdown);
+
+            // Hold current task if one is active
+            if (activeTaskId) {
+                holdTask();
+                toast('Current task paused', 'info');
+            }
+
+            // Create a new discussion task
+            const discussionTask = {
+                id: 'DISC-' + Date.now(),
+                desc: currentDiscussion.title,
+                client: currentDiscussion.client,
+                status: 'Discussion',
+                priority: 'High',
+                assignee: currentUser.name,
+                assigneeEmail: currentUser.email,
+                manual: true,
+                taskType: 'internal',
+                userId: currentUser.email,
+                createdAt: Date.now(),
+                discussionId: currentDiscussion.id,
+                isDiscussionTask: true
+            };
+
+            // Save task
+            await set(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}/${discussionTask.id}`), discussionTask);
+            
+            // Set as active task
+            activeTaskId = discussionTask.id;
+            taskSeconds = 0;
+            taskStartTime = Date.now();
+            taskOnHold = false;
+            startTaskTimer();
+            
+            // Update discussion status in Firebase
+            await update(ref(db, `worksync/discussions/${currentDiscussion.id}`), {
+                status: 'in-progress',
+                joinedBy: [...(currentDiscussion.joinedBy || []), currentUser.email],
+                joinedAt: Date.now()
+            });
+
+            tasks = mergeTasksById([discussionTask, ...tasks]);
+            renderTasks();
+            renderInternalTasks();
+            renderActiveTaskCard();
+            updateStats();
+
+            toast(`Joined discussion: ${currentDiscussion.title}`, 'success');
+            discussionPopupShown = false;
+        }
+
+        function dismissDiscussionPopup() {
+            const popup = document.getElementById('discussionJoinPopup');
+            popup.close();
+            clearInterval(discussionJoinCountdown);
+            discussionPopupShown = false;
+            currentDiscussion = null;
+        }
+
+        async function updateDiscussionStatus(discussionId, status) {
+            try {
+                await update(ref(db, `worksync/discussions/${discussionId}`), { status });
+            } catch (err) {
+                console.error('Failed to update discussion status:', err);
+            }
+        }
+
+        function loadDiscussions() {
+            try {
+                onValue(ref(db, 'worksync/discussions'), (snapshot) => {
+                    discussions = [];
+                    snapshot.forEach(childSnapshot => {
+                        discussions.push(childSnapshot.val());
+                    });
+                    startDiscussionListener();
+                });
+            } catch (err) {
+                console.error('Failed to load discussions:', err);
+            }
+        }
+
+        function updateStats() {
+
+            // --- User-specific stats for "Today's Performance" card ---
+            const myTasks = tasks.filter(t => assigneeMatches(t, 'me'));
+            const myTotal = myTasks.length;
+            const myTodo = myTasks.filter(t => isTodo(t.status)).length;
+            const myInProgress = myTasks.filter(t => isInProgress(t.status)).length;
+            const myDone = myTasks.filter(t => isDone(t.status)).length;
+            const myPendingCount = myTasks.filter(t => !isDone(t.status)).length;
+            
+            const elTotal = document.getElementById('stat-total'); if (elTotal) elTotal.textContent = myTotal;
+            const elTodo = document.getElementById('stat-todo'); if (elTodo) elTodo.textContent = myTodo;
+            const elProg = document.getElementById('stat-progress'); if (elProg) elProg.textContent = myInProgress;
+            const elDone = document.getElementById('stat-done'); if (elDone) elDone.textContent = myDone;
+            
+            // --- User-specific task badge in sidebar ---
+            const badge = document.getElementById('task-badge');
+            if (badge) {
+                badge.textContent = myPendingCount;
+                badge.classList.toggle('hidden', myPendingCount === 0);
+            }
+
+            // --- Timer-based progress bar ---
+            const hours = (seconds / 3600).toFixed(1);
+            const hText = document.getElementById('hours-text'); if (hText) hText.textContent = `${hours} / 8.0 hrs`;
+            const pBar = document.getElementById('progress-bar'); if (pBar) pBar.style.width = Math.min((seconds / 28800) * 100, 100) + '%';
+            
+            renderRecentTasks();
+            // --- Global stats for Admin-only charts ---
+            renderQcTasks(); 
+            const total = tasks.length, todo = tasks.filter(t => isTodo(t.status)).length, inProg = tasks.filter(t => isInProgress(t.status)).length, done = tasks.filter(t => isDone(t.status)).length;
+            renderAdminReportChart({ total, todo, inProg, done });
+            renderWorkloadChart();
+        }
+
+        function renderAdminReportChart(stats = null) {
+            const card = document.getElementById('admin-report-card');
+            const canvas = document.getElementById('task-report-chart');
+            if (!card || !canvas || !isAdmin()) return;
+
+            const total = stats?.total ?? tasks.length;
+            const todo = stats?.todo ?? tasks.filter(t => isTodo(t.status)).length;
+            const inProg = stats?.inProg ?? tasks.filter(t => isInProgress(t.status)).length;
+            const done = stats?.done ?? tasks.filter(t => isDone(t.status)).length;
+            const other = Math.max(total - todo - inProg - done, 0);
+            const segments = [
+                { label: 'To Do', value: todo, color: '#2563eb', bg: 'bg-blue-50', text: 'text-blue-600' },
+                { label: 'In Progress', value: inProg, color: '#d97706', bg: 'bg-amber-50', text: 'text-amber-600' },
+                { label: 'Completed', value: done, color: '#059669', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+                { label: 'Other Status', value: other, color: '#e11d48', bg: 'bg-rose-50', text: 'text-rose-600' }
+            ];
+            const visibleSegments = segments.filter(s => s.value > 0);
+            const completion = total ? Math.round((done / total) * 100) : 0;
+            const open = Math.max(total - done, 0);
+
+            document.getElementById('admin-report-total').textContent = `${total} Task${total === 1 ? '' : 's'}`;
+            document.getElementById('admin-report-percent').textContent = `${completion}%`;
+            document.getElementById('admin-report-open').textContent = open;
+            document.getElementById('admin-report-completion').textContent = `${completion}%`;
+            document.getElementById('admin-report-legend').innerHTML = segments.map(s => {
+                const percent = total ? Math.round((s.value / total) * 100) : 0;
+                return `
+                    <div class="${s.bg} rounded-2xl p-4 border border-white">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${s.color}"></span>
+                                <p class="text-xs font-bold text-slate-700 truncate">${s.label}</p>
+                            </div>
+                            <span class="text-xs font-black ${s.text}">${s.value}</span>
+                        </div>
+                        <p class="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">${percent}% of tasks</p>
+                    </div>`;
+            }).join('');
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const size = Math.max(Math.floor(rect.width || 260), 220);
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = size * dpr;
+            canvas.height = size * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, size, size);
+
+            const cx = size / 2;
+            const cy = size / 2;
+            const radius = (size / 2) - 12;
+            const lineWidth = Math.max(size * 0.18, 34);
+
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius - lineWidth / 2, 0, Math.PI * 2);
+            ctx.stroke();
+
+            if (!total || !visibleSegments.length) return;
+
+            let start = -Math.PI / 2;
+            visibleSegments.forEach(segment => {
+                const angle = (segment.value / total) * Math.PI * 2;
+                const end = start + angle;
+                ctx.strokeStyle = segment.color;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius - lineWidth / 2, start + 0.02, end - 0.02);
+                ctx.stroke();
+                start = end;
+            });
+        }
+
+        function loadEmployeeCurrentTasks() {
+            if (!canViewDailySummary() || currentWorkUnsub) return;
+            currentWorkUnsub = onValue(ref(db, 'worksync/users'), snap => {
+                const liveData = snap.val() || {};
+                currentWorkUsers = Array.from(allUsersMap.values())
+                    .filter(u => u.email && u.email !== '123')
+                    .map(u => ({ ...u, ...(liveData[eKey(u.email)] || {}) })) // Merge live task/online data
+                    .sort((a, b) => {
+                        const aActive = a.currentTask ? 0 : 1;
+                        const bActive = b.currentTask ? 0 : 1;
+                        return aActive - bActive || (a.name || '').localeCompare(b.name || '');
+                    });
+                renderEmployeeCurrentTasks();
+                const nextFilterKey = currentWorkUsers.map(u => `${u.email}:${u.name}:${u.role}`).join('|');
+                if (nextFilterKey !== currentWorkFilterKey) {
+                    currentWorkFilterKey = nextFilterKey;
+                    populateReportUserFilter();
+                    populateDpUserFilter();
+                }
+                if (activeView === 'dailyplan') renderDailyPlan();
+                if (activeView === 'daily-summary') renderDailySummary();
+            });
+            clearInterval(currentWorkRefreshRef);
+            currentWorkRefreshRef = setInterval(renderEmployeeCurrentTasks, 60000);
+        }
+
+        function renderEmployeeCurrentTasks() {
+            if (activeView !== 'dashboard') return;
+            const list = document.getElementById('admin-current-work-list');
+            const countEl = document.getElementById('admin-current-work-count');
+            if (!list || !countEl || !isAdmin()) return;
+            const activeCount = currentWorkUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
+            countEl.textContent = `${activeCount} Active`;
+            if (!currentWorkUsers.length) {
+                list.innerHTML = `<p class="xl:col-span-2 p-5 text-center text-xs text-slate-400 italic">No employees found.</p>`;
+                return;
+            }
+            list.innerHTML = currentWorkUsers.map(u => {
+                const task = u.currentTask;
+                const online = !!u.online;
+                const elapsed = task?.startedAt ? formatTime(Math.max(Math.floor((Date.now() - task.startedAt) / 1000), 0)) : '00:00:00';
+                const working = task?.state === 'working';
+                const stateLabel = task ? (working ? 'Working' : 'On Hold') : 'Idle';
+                const stateClass = task
+                    ? (working ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100')
+                    : 'bg-slate-50 text-slate-400 border-slate-100';
+                return `
+                    <div class="rounded-2xl border border-slate-100 p-5 bg-slate-50/60">
+                        <div class="flex items-start justify-between gap-4 mb-4">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="relative shrink-0">
+                                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
+                                    <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 ${online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-black text-slate-900 truncate">${u.name || u.email}</p>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${u.role || 'Employee'}</p>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold px-2.5 py-1 rounded-full border ${stateClass}">${stateLabel}</span>
+                        </div>
+                        ${task ? `
+                            <div class="bg-white rounded-2xl border border-slate-100 p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-[10px] font-mono font-black text-indigo-600">${task.taskId.startsWith('M-') ? task.taskId : `<a href="https://${JIRA.domain}/browse/${task.taskId}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${task.taskId}</a>`}</span>
+                                    ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(task.status)}">${task.status}</span>` : ''}
+                                </div>
+                                <p class="text-sm font-bold text-slate-900 mb-3 line-clamp-2">${task.taskDesc || 'Task details unavailable'}</p>
+                                <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-50">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${task.client || 'No Client'}</span>
+                                    <span class="live-task-timer text-xs font-black text-slate-700 font-mono" 
+                                          data-started="${task.startedAt || 0}" 
+                                          data-state="${task.state || 'idle'}">${elapsed}</span>
+                                </div>
+                            </div>` : `
+                            <div class="bg-white rounded-2xl border border-dashed border-slate-200 p-4 text-center">
+                                <p class="text-xs text-slate-400 font-medium">No current task selected.</p>
+                            </div>`}
+                    </div>`;
+            }).join('');
+        }
+
+        function updateLiveBoardTimers() {
+            const timers = document.querySelectorAll('.live-task-timer');
+            timers.forEach(el => {
+                const startedAt = parseInt(el.dataset.started);
+                const state = el.dataset.state;
+                if (!startedAt || state !== 'working') return;
+                
+                const now = Date.now();
+                const elapsedSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+                el.textContent = formatTime(elapsedSeconds);
+            });
+        }
+
+        // Refresh the employee current work section manually
+        function refreshEmployeeCurrentTasks() {
+            const btn = document.getElementById('btn-refresh-current-work');
+            if (btn) {
+                btn.classList.add('animate-spin');
+                setTimeout(() => btn.classList.remove('animate-spin'), 800);
+            }
+            // Re-fetch from Firebase
+            if (!db) return;
+            get(ref(db, 'worksync/users')).then(snap => {
+                const liveData = snap.val() || {};
+                currentWorkUsers = Array.from(allUsersMap.values())
+                    .filter(u => u.email && u.email !== '123')
+                    .map(u => ({ ...u, ...(liveData[eKey(u.email)] || {}) }))
+                    .sort((a, b) => {
+                        const aActive = a.currentTask ? 0 : 1;
+                        const bActive = b.currentTask ? 0 : 1;
+                        return aActive - bActive || (a.name || '').localeCompare(b.name || '');
+                    });
+                renderEmployeeCurrentTasks();
+                toast('Employee tasks refreshed', 'success');
+            }).catch(err => {
+                console.error('Failed to refresh employee tasks:', err);
+                toast('Failed to refresh', 'error');
+            });
+        }
+
+        // Update status for internal tasks via the inline dropdown
+        async function updateInternalTaskStatus(taskId, newStatus) {
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+            if (taskIndex === -1) return;
+            const task = tasks[taskIndex];
+            const oldStatus = task.status;
+
+            // Optimistically update UI
+            task.status = newStatus;
+            renderInternalTasks();
+            updateStats();
+
+            try {
+                if (task.manual || isInternalTask(task)) {
+                    // Save to Firebase for manual/internal tasks
+                    await update(ref(db, `worksync/manual_tasks/${eKey(task.userId || currentUser.email)}/${taskId}`), { status: newStatus });
+                    toast('Status updated', 'success');
+                } else {
+                    // Jira task - sync to Jira
+                    toast('Syncing to Jira...', 'info');
+                    const ok = await updateJiraStatus(taskId, newStatus);
+                    if (!ok) {
+                        task.status = oldStatus;
+                        renderInternalTasks();
+                        updateStats();
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to update internal task status:', err);
+                task.status = oldStatus;
+                renderInternalTasks();
+                updateStats();
+                toast('Failed to update status: ' + err.message, 'error');
+            }
+        }
+
+        function todayStartTs() {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d.getTime();
+        }
+
+        function loadTodayWorkSummary() {
+            if (!canViewDailySummary()) return;
+            if (todayReportUnsub) return; // Only load once
+            const dbRef = ref(db, 'worksync/timelogs');
+            const q = canViewDailySummary() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+
+            todayReportUnsub = onValue(q, snap => {
+                const start = todayStartTs();
+                const end = start + 86400000;
+                todayTimeLogs = Object.values(snap.val() || {})
+                    .filter(log => canViewDailySummary() || log.userId === currentUser.email)
+                    .filter(log => (log.endTime || log.startTime || 0) >= start && (log.endTime || log.startTime || 0) < end)
+                    .sort((a, b) => (b.endTime || 0) - (a.endTime || 0));
+                
+                // Only render if the current view is dashboard or daily-summary
+                if (activeView === 'dashboard' || activeView === 'daily-summary') {
+                    renderDailySummary();
+                }
+            });
+        }
+
+        function buildDailySummaryRows() {
+            const rows = new Map();
+            const ensure = (email, name, role = '') => {
+                const key = email || name || 'unknown';
+                if (!rows.has(key)) rows.set(key, {
+                    email: key,
+                    name: name || email || 'Unknown',
+                    role,
+                    completedTasks: 0,
+                    loggedSeconds: 0,
+                    activeSeconds: 0,
+                    activeTask: null,
+                    online: false,
+                    assignedCount: 0,
+                    inProgressCount: 0,
+                    completedCount: 0
+                });
+                return rows.get(key);
+            };
+
+            todayTimeLogs.forEach(log => {
+                const row = ensure(log.userId, log.userName);
+                const task = tasks.find(t => t.id === log.taskId);
+                if (task && (task.status === 'Learnings' || task.status === 'Learning')) return;
+
+                row.completedTasks++;
+                row.loggedSeconds += Number(log.durationSeconds || 0);
+            });
+
+            currentWorkUsers.forEach(u => {
+                const row = ensure(u.email, u.name, u.role);
+                row.role = u.role || row.role;
+                row.online = !!u.online;
+                if (u.currentTask) {
+                    row.activeTask = u.currentTask;
+                    row.activeSeconds = Math.max(Math.floor((Date.now() - (u.currentTask.startedAt || Date.now())) / 1000), 0);
+                }
+
+                const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
+                row.assignedCount = ut.filter(t => isTodo(t.status) || (isInternalTask(t) && isInternalTodo(t.status))).length;
+                row.inProgressCount = ut.filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))).length;
+                row.completedCount = ut.filter(t => isDone(t.status) || (isInternalTask(t) && isInternalDone(t.status))).length;
+            });
+
+            return [...rows.values()].sort((a, b) => {
+                const activeSort = (b.activeTask ? 1 : 0) - (a.activeTask ? 1 : 0);
+                return activeSort || (b.loggedSeconds + b.activeSeconds) - (a.loggedSeconds + a.activeSeconds) || a.name.localeCompare(b.name);
+            });
+        }
+
+        function renderDailySummary() {
+            const list = document.getElementById('daily-summary-list');
+            const card = document.getElementById('admin-daily-summary-card');
+            const exportBtn = document.getElementById('export-daily-report-btn');
+            if (!list || !canViewDailySummary()) return;
+
+            if (!canViewDailySummary() && activeView !== 'daily-summary') {
+                card?.classList.add('hidden');
+                return;
+            } else {
+                card?.classList.remove('hidden');
+            }
+
+            let rows = buildDailySummaryRows();
+            const totalSeconds = rows.reduce((sum, row) => sum + row.loggedSeconds + row.activeSeconds, 0);
+            const loggedTasks = rows.reduce((sum, row) => sum + row.completedTasks, 0);
+            const activeCount = rows.filter(row => row.activeTask).length;
+
+            document.getElementById('daily-total-time').textContent = formatTime(totalSeconds);
+            document.getElementById('daily-task-count').textContent = loggedTasks;
+            document.getElementById('daily-active-count').textContent = activeCount;
+            document.getElementById('daily-employee-count').textContent = rows.length;
+
+            // Hide export button for non-admins
+            if (exportBtn) {
+                exportBtn.classList.toggle('hidden', !isAdmin());
+            }
+
+            if (!rows.length) {
+                list.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No work logged today yet.</p>`;
+                return;
+            }
+
+            list.innerHTML = rows.map(row => {
+                const total = row.loggedSeconds + row.activeSeconds;
+                return `
+                    <div class="py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-2.5 h-2.5 rounded-full shrink-0 ${row.online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                            <div class="min-w-0">
+                                <p class="text-sm font-black text-slate-900 truncate">${row.name}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${row.role || row.email}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 flex-1">
+                            <div class="bg-slate-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase">Total</p>
+                                <p class="text-xs font-black text-slate-900 font-mono">${formatTime(total)}</p>
+                            </div>
+                            <div class="bg-blue-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-blue-500 uppercase">Assigned</p>
+                                <p class="text-xs font-black text-blue-600">${row.assignedCount}</p>
+                            </div>
+                            <div class="bg-amber-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-amber-500 uppercase">Progress</p>
+                                <p class="text-xs font-black text-amber-600">${row.inProgressCount}</p>
+                            </div>
+                            <div class="bg-emerald-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-emerald-500 uppercase">Done</p>
+                                <p class="text-xs font-black text-emerald-600">${row.completedCount}</p>
+                            </div>
+                            <div class="bg-slate-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase">Logs</p>
+                                <p class="text-xs font-black text-slate-600">${row.completedTasks}</p>
+                            </div>
+                            <div class="bg-indigo-50/50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
+                                <p class="text-xs font-black text-indigo-600 font-mono">${row.activeTask ? formatTime(row.activeSeconds) : 'Idle'}</p>
+                            </div>
+                            <div class="bg-slate-50 rounded-xl px-3 py-2">
+                                <p class="text-[9px] font-bold text-slate-400 uppercase">Current</p>
+                                <p class="text-xs font-black text-slate-700 truncate">${row.activeTask ? (row.activeTask.taskId.startsWith('M-') ? row.activeTask.taskId : `<a href="https://${JIRA.domain}/browse/${row.activeTask.taskId}" target="_blank" class="hover:underline text-indigo-600" title="Open in Jira">${row.activeTask.taskId}</a>`) : 'None'}</p>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderWorkloadChart() {
+            const chart = document.getElementById('workload-chart');
+            const totalEl = document.getElementById('workload-total');
+            if (!chart || !totalEl || !isAdmin()) return;
+            
+            // Group by email to avoid duplicate names, then display normalized names
+            const emailToData = new Map(); // Map: email -> { name, count }
+            
+            tasks.forEach(task => {
+                const email = (task.assigneeEmail || task.userId || '').toLowerCase();
+                if (!email || email === 'unassigned') return;
+                
+                const name = assigneeName(task);
+                if (!name || name === 'Unassigned') return;
+                
+                if (!emailToData.has(email)) {
+                    emailToData.set(email, { 
+                        email, 
+                        name: knownUserByEmail(email)?.name || name,
+                        count: 0 
+                    });
+                }
+                emailToData.get(email).count += 1;
+            });
+            
+            const rows = [...emailToData.values()].sort((a, b) => b.count - a.count);
+            const total = rows.reduce((sum, item) => sum + item.count, 0);
+            const max = Math.max(...rows.map(item => item.count), 1);
+            
+            totalEl.textContent = `${total} Assigned`;
+            
+            if (!rows.length) {
+                chart.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No assigned tasks found after sync.</p>`;
+                return;
+            }
+            
+            chart.innerHTML = rows.map((item, idx) => {
+                const width = Math.max((item.count / max) * 100, 8);
+                const palette = ['bg-violet-600', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+                return `
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-xs font-bold text-slate-700">${item.name}</p>
+                            <p class="text-xs font-black text-slate-900">${item.count}</p>
+                        </div>
+                        <div class="h-3 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full ${palette[idx % palette.length]} rounded-full transition-all duration-700" style="width:${width}%"></div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function csvCell(value) {
+            return `"${(value ?? '').toString().replace(/"/g, '""')}"`;
+        }
+
+        function exportDailyReport() {
+            if (!isAdmin()) return;
+            const rows = buildDailySummaryRows();
+            const today = new Date().toISOString().slice(0, 10);
+            const lines = [
+                ['Date', 'Employee', 'Email', 'Role', 'Logged Tasks', 'Logged Time', 'Active Task', 'Active Time', 'Total Time', 'Online'].map(csvCell).join(',')
+            ];
+            rows.forEach(row => {
+                lines.push([
+                    today,
+                    row.name,
+                    row.email,
+                    row.role,
+                    row.completedTasks,
+                    formatTime(row.loggedSeconds),
+                    row.activeTask?.taskId || '',
+                    row.activeTask ? formatTime(row.activeSeconds) : '',
+                    formatTime(row.loggedSeconds + row.activeSeconds),
+                    row.online ? 'Yes' : 'No'
+                ].map(csvCell).join(','));
+            });
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `worksync-daily-report-${today}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            toast('Daily report exported', 'success');
+        }
+
+        // New functions for QC Reports filtering and export
+        function initQcReportFilters() {
+            const fromInput = document.getElementById('qc-report-date-from');
+            const toInput = document.getElementById('qc-report-date-to');
+            if (!fromInput || !toInput) return;
+
+            const datePickerEl = document.getElementById('qc-report-datepicker');
+            if (datePickerEl && window.Litepicker) {
+                new Litepicker({
+                    element: datePickerEl,
+                    singleMode: false,
+                    format: 'DD MMM, YYYY',
+                    numberOfMonths: 2,
+                    plugins: ['mobilefriendly'],
+                    setup: (picker) => {
+                        picker.on('selected', (date1, date2) => {
+                            fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
+                            toInput.value = date2.dateInstance.toISOString().slice(0, 10);
+                            handleQcReportFilterChange();
+                        });
+                    },
+                });
+            }
+            setQcReportDatePreset('this_month'); // Default to this month for QC reports
+        }
+
+        function setQcReportDatePreset(preset) {
+            const fromInput = document.getElementById('qc-report-date-from');
+            const toInput = document.getElementById('qc-report-date-to');
+            if (!fromInput || !toInput) return;
+            const today = new Date();
+            let fromDate = new Date();
+
+            if (preset === 'today') { /* fromDate is today */ } 
+            else if (preset === 'this_week') { fromDate.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); } 
+            else if (preset === 'this_month') { fromDate = new Date(today.getFullYear(), today.getMonth(), 1); }
+            
+            const toDate = new Date(); // always end today for presets
+            fromInput.value = fromDate.toISOString().slice(0, 10);
+            toInput.value = toDate.toISOString().slice(0, 10);
+
+            const picker = document.getElementById('qc-report-datepicker')?.litepicker;
+            if (picker) {
+                picker.setDateRange(fromDate, toDate);
+            }
+            
+            document.querySelectorAll('.qc-report-preset-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-slate-50', 'border-slate-200', 'text-slate-600');
+            });
+            const activeBtn = document.querySelector(`button[onclick="setQcReportDatePreset('${preset}')"]`);
+            if(activeBtn) {
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+                activeBtn.classList.remove('bg-slate-50', 'border-slate-200', 'text-slate-600');
+            }
+
+            handleQcReportFilterChange();
+        }
+
+        function handleQcReportFilterChange() {
+            const fromInput = document.getElementById('qc-report-date-from');
+            const toInput = document.getElementById('qc-report-date-to');
+            if (!fromInput || !toInput) return;
+            qcReportDateFrom = fromInput.value;
+            qcReportDateTo = toInput.value;
+            loadQcReports(); // Re-render QC reports with new filters
+        }
+
+        function renderRecentTasks() {
+            const el = document.getElementById('recent-tasks');
+            const recentTasksContainer = el.parentElement;
+            const header = recentTasksContainer.querySelector('h3');
+
+            if (isAdmin()) {
+                if (header) header.textContent = 'Recently Synced';
+                if (!tasks.length) { el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No tasks synced.</p>`; return; }
+                
+                el.innerHTML = tasks.slice(0, 5).map(t => {
+                    const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${t.id}</a>`;
+                    return `
+                    <div class="flex items-center justify-between p-3 hover:bg-slate-50 transition-all rounded-xl">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <span class="text-[10px] font-mono font-bold text-indigo-600 shrink-0">${taskKeyHtml}</span>
+                            <p class="text-xs text-slate-700 truncate font-medium">${escapeHtml(t.desc)}</p>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                    </div>`;
+                }).join('');
+            } else {
+                if (header) header.textContent = 'My Assigned Work';
+                const myTasks = tasks.filter(t => 
+                    assigneeMatches(t, 'me') && 
+                    ['Design To Do', 'Design In Progress'].includes(t.status)
+                );
+
+                if (!myTasks.length) { 
+                    el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No assigned tasks in Design To Do or In Progress.</p>`; 
+                    return; 
+                }
+                el.innerHTML = myTasks.slice(0, 10).map(t => {
+                    const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${t.id}</a>`;
+                    return `
+                    <div class="flex items-center justify-between p-3 hover:bg-slate-50 transition-all rounded-xl">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <span class="text-[10px] font-mono font-bold text-indigo-600 shrink-0">${taskKeyHtml}</span>
+                            <p class="text-xs text-slate-700 truncate font-medium">${escapeHtml(t.desc)}</p>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // CHAT
+        function eKey(email) { return email.replace(/[@.]/g, '_'); }
+        function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
+
+        function registerOnline() {
+            if (!db || !currentUser) return;
+            const userRef = ref(db, `worksync/users/${eKey(currentUser.email)}`);
+            update(userRef, { online: true, lastSeen: Date.now() });
+            onDisconnect(ref(db, `worksync/users/${eKey(currentUser.email)}/online`)).set(false); // Set to false on disconnect
+        }
+
+        function initChat() {
+            if (!db || !currentUser) return;
+            onValue(ref(db, 'worksync/conversations'), snap => {
+                const convs = snap.val() || {};
+                const myKey = eKey(currentUser.email);
+                const groups = Object.entries(convs).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                renderGroupList(groups);
+                watchConversationNotifications(Object.entries(convs).filter(([, c]) => c.members && c.members[myKey]));
+            });
+        }
+
+        function watchConversationNotifications(conversations) {
+            const activeIds = new Set(conversations.map(([id]) => id));
+            Object.entries(convListeners).forEach(([id, unsubscribe]) => {
+                if (!activeIds.has(id)) {
+                    unsubscribe();
+                    delete convListeners[id];
+                }
+            });
+            conversations.forEach(([id, conv]) => {
+                if (convListeners[id]) return;
+                const listenerStartedAt = Date.now();
+                const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
+                convListeners[id] = onChildAdded(q, snap => {
+                    const msg = snap.val();
+                    if (!msg || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
+                    notifyIncomingMessage(msg, conv, id);
+                    if (id !== activeConvId) {
+                        unreadCounts[id] = (unreadCounts[id] || 0) + 1;
+                        renderChatBadge();
+                    }
+                });
+            });
+        }
+
+        function renderChatBadge() {
+            const total = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+            const badge = document.getElementById('chat-badge');
+            if (!badge) return;
+            badge.textContent = total;
+            badge.classList.toggle('hidden', total === 0);
+        }
+
+        function notifyIncomingMessage(msg, conv, convId) {
+            if (chatNotificationsMuted) return;
+            const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
+            toast(`New message from ${title}`, 'info');
+
+            const sound = document.getElementById('chat-notification-sound');
+            if (sound) {
+                sound.play().catch(e => console.warn('Audio play failed:', e));
+            }
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(title, { 
+                    body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
+                    icon: 'img/logo.png'
+                });
+                notification.onclick = async () => {
+                    window.focus();
+                    switchView('chat');
+                    if (conv.type === 'dm') {
+                        await openDm(msg.senderEmail);
+                    } else { // group chat
+                        await openConversation(convId, conv.name, 'group', conv.profilePicture || '');
+                    }
+                };
+            }
+        }
+
+        async function renderDmList() {
+            const container = document.getElementById('dm-list');
+            if (!container || !currentUser) return;
+            if (!allUsersMap.size) allUsersMap = await getAllUsers();
+            const others = Array.from(allUsersMap.values())
+                .filter(u => u.email && u.email !== currentUser.email)
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            if (!others.length) {
+                container.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No users found.</p>`;
+                return;
+            }
+            container.innerHTML = others.map(u => {
+                const convId = dmId(currentUser.email, u.email);
+                const unread = unreadCounts[convId] || 0;
+                const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
+                return `
+                <button id="dm-btn-${convId}" onclick="openDm('${u.email}')" class="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-all text-left ${activeClass}">
+                    <div class="relative shrink-0">
+                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
+                        <div id="online-${eKey(u.email)}" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-slate-300 border-2 border-white rounded-full"></div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-slate-900 truncate">${u.name}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">${u.role}</p>
+                    </div>
+                    <span id="unread-badge-${convId}" class="${(unreadCounts[convId] || 0) > 0 ? '' : 'hidden'} bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">${unreadCounts[convId] || 0}</span>
+                </button>`;
+            }).join('');
+            others.forEach(u => {
+                onValue(ref(db, `worksync/users/${eKey(u.email)}/online`), sn => {
+                    const el = document.getElementById(`online-${eKey(u.email)}`);
+                    if (el) el.className = `absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
+                });
+            });
+        }
+
+        function renderGroupList(groups) {
+            const el = document.getElementById('group-list');
+            if (!groups.length) { el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No groups.</p>`; return; }
+            el.innerHTML = groups.map(([id, g]) => {
+                const name = g.name || 'Unnamed Group';
+                const safeNameHtml = escapeHtml(name);
+                const safeNameJs = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const unread = unreadCounts[id] || 0; // Use unreadCounts directly
+                const badgeClass = unread > 0 ? '' : 'hidden'; // Use unreadCounts directly
+                const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
+                
+                const avatarHtml = g.profilePicture
+                    ? `<img src="${g.profilePicture}" class="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200">`
+                    : `<div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black shrink-0">${escapeHtml(name.charAt(0))}</div>`;
+
+                return `
+                <button id="dm-btn-${id}" onclick="openConversation('${id}','${safeNameJs}','group', '${g.profilePicture || ''}')" class="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-all text-left ${activeClass}">
+                    ${avatarHtml}
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-slate-900 truncate">${safeNameHtml}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">Team Group</p>
+                    </div>
+                    <span id="unread-badge-${id}" class="${(unreadCounts[id] || 0) > 0 ? '' : 'hidden'} bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">${unreadCounts[id] || 0}</span>
+                </button>`;
+            }).join('');
+        }
+
+        async function openDm(otherEmail) {
+            const id = dmId(currentUser.email, otherEmail);
+            const userSnap = await get(ref(db, `worksync/users/${eKey(otherEmail)}`));
+            const other = userSnap.val() || knownUserByEmail(otherEmail) || { name: otherEmail.split('@')[0] };
+            const snap = await get(ref(db, `worksync/conversations/${id}`));
+            if (!snap.exists()) {
+                await set(ref(db, `worksync/conversations/${id}`), { type: 'dm', members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true }, lastTimestamp: Date.now() });
+            }
+            openConversation(id, other.name, 'dm', other.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.avatar || other.name}`);
+        }
+
+        async function openConversation(convId, name, type, avatar) {
+            activeConvId = convId;
+            unreadCounts[convId] = 0;
+            renderChatBadge();
+            document.getElementById('chat-welcome').classList.add('hidden');
+            document.getElementById('chat-active-header').classList.remove('hidden');
+            document.getElementById('chat-input-area').classList.remove('hidden');
+            document.getElementById('chat-conv-name').textContent = name;
+            document.getElementById('chat-conv-avatar').textContent = name.charAt(0);
+            if (avatar) document.getElementById('chat-conv-avatar').innerHTML = `<img src="${avatar}" class="w-full h-full rounded-xl object-cover">`;
+
+            activeGroupMembers = [];
+            if (type === 'group') {
+                try {
+                    const [convSnap, usersSnap] = await Promise.all([
+                        get(ref(db, `worksync/conversations/${convId}`)),
+                        Promise.resolve(allUsersMap) // Use the already loaded allUsersMap
+                    ]);
+                    const conv = convSnap.val() || {};
+                    const allUsers = Array.from(usersSnap.values()); // Get values from the map
+                    activeGroupMembers = allUsers.filter(u => conv.members && conv.members[eKey(u.email)]);
+                } catch (e) { console.error('Failed to load group members', e); }
+            }
+
+            const actions = document.getElementById('chat-conv-actions');
+            if (actions) {
+                if (type === 'group' && isAdmin()) {
+                    actions.innerHTML = `
+                        <button onclick="openEditGroupModal('${convId}')" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Group"><iconify-icon icon="solar:pen-bold" width="18"></iconify-icon></button>
+                        <button onclick="deleteGroup('${convId}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete Group"><iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon></button>
+                    `;
+                } else {
+                    actions.innerHTML = '';
+                }
+            }
+
+            if (msgListener) msgListener();
+            const area = document.getElementById('messages-area');
+            area.innerHTML = '';
+            const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(50));
+            msgListener = onValue(q, snap => {
+                renderMessages(snap.val() || {});
+                area.scrollTop = area.scrollHeight;
+            });
+        }
+
+        function renderMessages(messages) {
+            const area = document.getElementById('messages-area');
+            const rows = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            if (!rows.length) {
+                area.innerHTML = `<p class="text-center text-xs text-slate-400 italic py-6">No messages yet.</p>`;
+                return;
+            }
+            area.innerHTML = '';
+            rows.forEach(([id, msg]) => appendMessage(id, msg));
+        }
+
+        function appendMessage(id, msg) {
+            const area = document.getElementById('messages-area');
+            const isMe = msg.senderEmail === currentUser.email;
+            const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const edited = msg.editedAt && !msg.unsent ? ' · edited' : '';
+            const text = msg.unsent ? 'This message was unsent' : escapeHtml(msg.text || '');
+            const reactions = msg.reactions || {};
+            
+            let attachmentHtml = '';
+            if (msg.attachmentUrl && !msg.unsent) {
+                if (msg.attachmentType && msg.attachmentType.startsWith('image/')) {
+                    attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><a href="${msg.attachmentUrl}" target="_blank"><img src="${msg.attachmentUrl}" class="max-w-full sm:max-w-[240px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity" alt="Attached Image"></a></div>`;
+                } else {
+                    const iconColor = isMe ? 'text-indigo-100' : 'text-slate-400';
+                    const bgClass = isMe ? 'bg-indigo-500/50 hover:bg-indigo-500/70 border-indigo-400/50' : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
+                    attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><a href="${msg.attachmentUrl}" target="_blank" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download File')}</span></a></div>`;
+                }
+            }
+
+            const existingReactions = [];
+            if (!msg.unsent) {
+                ['👍', '❤️', '😂', '🎉', '👀'].forEach(emoji => {
+                    const users = reactions[emoji] || {};
+                    const count = Object.keys(users).length;
+                    const active = !!users[eKey(currentUser.email)];
+                    if (count > 0) {
+                        existingReactions.push(`<button onclick="toggleReaction('${id}','${emoji}')" class="h-6 px-1.5 rounded-full text-[10px] border transition-all ${active ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}">${emoji}${count > 1 ? ` ${count}` : ''}</button>`);
+                    }
+                });
+            }
+
+            const reactionPickerHtml = msg.unsent ? '' : `
+                <div class="relative group/react inline-block">
+                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] border bg-white border-slate-100 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                        <iconify-icon icon="solar:smile-circle-linear" width="14"></iconify-icon>
+                    </button>
+                    <div class="chat-dropdown absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} hidden flex w-max bg-white shadow-lg border border-slate-100 rounded-xl p-1 gap-1 z-20 flex-row">
+                        ${['👍', '❤️', '😂', '🎉', '👀'].map(emoji => `
+                            <button onclick="toggleReaction('${id}','${emoji}'); this.parentElement.classList.add('hidden');" class="w-8 h-8 rounded-lg hover:bg-slate-50 flex items-center justify-center text-base transition-colors">${emoji}</button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            const reactionHtml = msg.unsent ? '' : `<div class="flex items-center gap-1 flex-wrap mt-1 ${isMe ? 'justify-end' : 'justify-start'}">${existingReactions.join('')}${reactionPickerHtml}</div>`;
+
+            const ownActions = isMe && !msg.unsent ? `
+                <div class="relative inline-block opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-50 hover:text-indigo-600 flex items-center justify-center transition-all">
+                        <iconify-icon icon="solar:menu-dots-bold" width="14"></iconify-icon>
+                    </button>
+                    <div class="chat-dropdown absolute bottom-full mb-1 right-0 hidden flex flex-col bg-white shadow-lg border border-slate-100 rounded-xl p-1 z-20 w-28">
+                        <button onclick="editMessage('${id}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg w-full text-left">
+                            <iconify-icon icon="solar:pen-linear" width="14"></iconify-icon> Edit
+                        </button>
+                        <button onclick="unsendMessage('${id}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-amber-600 hover:bg-amber-50 rounded-lg w-full text-left">
+                            <iconify-icon icon="solar:undo-left-linear" width="14"></iconify-icon> Unsend
+                        </button>
+                        <button onclick="deleteMessage('${id}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 rounded-lg w-full text-left">
+                            <iconify-icon icon="solar:trash-bin-trash-linear" width="14"></iconify-icon> Delete
+                        </button>
+                    </div>
+                </div>` : '';
+
+            const div = document.createElement('div');
+            div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in`;
+            div.innerHTML = `
+                <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+                    ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
+                    <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}">
+                        <div class="px-4 py-2.5 rounded-2xl text-sm shadow-sm ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
+                            ${attachmentHtml}
+                            ${text ? `<div>${text}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            ${ownActions}
+                        </div>
+                    </div>
+                    ${reactionHtml}
+                    <p class="text-[8px] text-slate-400 mt-1 font-bold ${isMe ? 'text-right mr-1' : 'ml-1'}">${time}${edited}</p>
+                </div>`;
+            area.appendChild(div);
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+        }
+
+        async function editMessage(id) {
+            if (!activeConvId) return;
+            const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
+            const msg = snap.val();
+            if (!msg || msg.senderEmail !== currentUser.email || msg.unsent) return;
+            const next = prompt('Edit message', msg.text || '');
+            if (next === null) return;
+            const text = next.trim();
+            if (!text) return toast('Message cannot be empty', 'error');
+            await update(ref(db, `worksync/messages/${activeConvId}/${id}`), { text, editedAt: Date.now() });
+            await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: text, lastTimestamp: Date.now() });
+            toast('Message edited', 'success');
+        }
+
+        async function deleteMessage(id) {
+            if (!activeConvId || !confirm('Delete this message permanently?')) return;
+            const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
+            const msg = snap.val();
+            if (!msg || msg.senderEmail !== currentUser.email) return;
+            await remove(ref(db, `worksync/messages/${activeConvId}/${id}`));
+            toast('Message deleted', 'success');
+        }
+
+        async function unsendMessage(id) {
+            if (!activeConvId || !confirm('Unsend this message for everyone?')) return;
+            const snap = await get(ref(db, `worksync/messages/${activeConvId}/${id}`));
+            const msg = snap.val();
+            if (!msg || msg.senderEmail !== currentUser.email || msg.unsent) return;
+            await update(ref(db, `worksync/messages/${activeConvId}/${id}`), { text: '', unsent: true, unsentAt: Date.now(), editedAt: null, reactions: null });
+            await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: 'Message unsent', lastTimestamp: Date.now() });
+            toast('Message unsent', 'success');
+        }
+
+        async function toggleReaction(id, emoji) {
+            if (!activeConvId) return;
+            const key = eKey(currentUser.email);
+            const reactionRef = ref(db, `worksync/messages/${activeConvId}/${id}/reactions/${emoji}/${key}`);
+            const snap = await get(reactionRef);
+            await set(reactionRef, snap.exists() ? null : true);
+        }
+
+        let dragCounter = 0;
+        function handleChatDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        function handleChatDragEnter(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!activeConvId) return;
+            dragCounter++;
+            document.getElementById('chat-drag-overlay').classList.remove('hidden');
+        }
+        function handleChatDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter--;
+            if (dragCounter === 0) {
+                document.getElementById('chat-drag-overlay').classList.add('hidden');
+            }
+        }
+        async function handleChatDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter = 0;
+            document.getElementById('chat-drag-overlay').classList.add('hidden');
+            if (!activeConvId) return;
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                await processChatAttachment(files[0]);
+            }
+        }
+
+        async function uploadChatAttachment(event) {
+            const file = event.target.files[0];
+            document.getElementById('chat-file-upload').value = '';
+            if (file) await processChatAttachment(file);
+        }
+
+        async function processChatAttachment(file) {
+            if (file.size > 10 * 1024 * 1024) return toast('File must be less than 10MB', 'error');
+            
+            stagedAttachment = file;
+            document.getElementById('chat-staged-attachment').classList.remove('hidden');
+            document.getElementById('staged-file-name').textContent = file.name;
+            document.getElementById('staged-file-size').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+            document.getElementById('msg-input').focus();
+        }
+
+        function clearStagedAttachment() {
+            stagedAttachment = null;
+            document.getElementById('chat-staged-attachment').classList.add('hidden');
+            document.getElementById('chat-file-upload').value = '';
+        }
+
+        function handleMsgInput(e) {
+            const val = e.target.value;
+            const cursor = e.target.selectionStart;
+            const textBeforeCursor = val.slice(0, cursor);
+            const match = textBeforeCursor.match(/@([a-zA-Z0-9_ ]*)$/);
+
+            if (match && activeGroupMembers.length > 0) {
+                mentionActive = true;
+                mentionFilter = match[1].toLowerCase();
+                mentionIndex = 0;
+                renderMentionDropdown();
+            } else {
+                closeMentionDropdown();
+            }
+        }
+
+        function renderMentionDropdown() {
+            const dropdown = document.getElementById('mention-dropdown');
+            if (!dropdown) return;
+            
+            const filtered = activeGroupMembers.filter(u => 
+                (u.name || '').toLowerCase().includes(mentionFilter) || 
+                (u.email || '').toLowerCase().includes(mentionFilter)
+            );
+
+            if (filtered.length === 0) {
+                closeMentionDropdown();
+                return;
+            }
+
+            dropdown.innerHTML = filtered.map((u, i) => `
+                <div onclick="selectMention('${escapeHtml(u.name || u.email).replace(/'/g, "\\'")}')" class="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 transition-colors ${i === mentionIndex ? 'bg-indigo-50 border-l-2 border-indigo-600' : ''}">
+                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-6 h-6 rounded-md object-cover bg-slate-100">
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(u.name)}</p>
+                        <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')}</p>
+// END

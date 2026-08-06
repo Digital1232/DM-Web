@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Social Media Analytics Report - One Desk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/heroicons@2/styles.css">
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        :root {
+            --primary: #4F46E5;
+            --secondary: #7C3AED;
+            --accent-green: #10B981;
+            --accent-orange: #F59E0B;
+            --accent-blue: #3B82F6;
+            --bg-light: #F8FAFC;
+            --card-white: #FFFFFF;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+        }
+        
+        .gradient-header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #7c3aed 100%);
+        }
+        
+        .gradient-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        .gradient-success {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #059669 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .card-shadow-lg {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .fade-in-stagger {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        
+        .fade-in-stagger:nth-child(1) { animation-delay: 0.05s; }
+        .fade-in-stagger:nth-child(2) { animation-delay: 0.1s; }
+        .fade-in-stagger:nth-child(3) { animation-delay: 0.15s; }
+        .fade-in-stagger:nth-child(4) { animation-delay: 0.2s; }
+        
+        .count-up {
+            animation: countUp 0.8s ease-out;
+        }
+        
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .icon-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .badge-excellent {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        
+        .badge-good {
+            background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+        }
+        
+        .badge-average {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+        
+        .badge-low {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+            .hide-on-print {
+                display: none !important;
+            }
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid #E2E8F0;
+            transition: background-color 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background-color: #F1F5F9;
+        }
+        
+        .kpi-card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        
+        .chart-card {
+            background: white;
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        
+        .top-post-section {
+            background: white;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        
+        .header-illustration {
+            width: 200px;
+            height: 150px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(124, 58, 237, 0.2));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+        }
+        
+        .metric-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0F172A;
+            line-height: 1;
+        }
+        
+        .metric-label {
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .metric-change {
+            font-size: 12px;
+            color: #10B981;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+        
+        .post-thumbnail {
+            width: 150px;
+            height: 150px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 60px;
+        }
+        
+        .highlights-box {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+            border-left: 4px solid #10B981;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .recommendation-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: #F1F5F9;
+            border-radius: 8px;
+        }
+        
+        .performance-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .bottom-insights-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .bottom-insights-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Premium Header -->
+    <header class="gradient-header text-white py-8 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-start gap-8">
+                <!-- Left Section -->
+                <div class="flex-1">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
+                            N
+                        </div>
+                        <div>
+                            <h1 class="text-3xl font-bold">NTT - July 2026</h1>
+                            <p class="text-blue-100 text-sm">Monthly Social Media Performance Report</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-3 text-blue-100 text-sm">
+                        <span>📅</span>
+                        <span>01 Jul 2026 - 31 Jul 2026</span>
+                    </div>
+                </div>
+                
+                <!-- Center Illustration -->
+                <div class="header-illustration hide-on-print">
+                    📊
+                </div>
+                
+                <!-- Right Section -->
+                <div class="text-right text-sm">
+                    <p class="text-blue-100 mb-1">Generated on</p>
+                    <p class="font-semibold text-lg" id="generatedDate">17 Jul 2026, 11:41 AM</p>
+                    <div class="flex gap-3 justify-end mt-4">
+                        <span class="bg-white/20 rounded-full p-2 text-lg">📷</span>
+                        <span class="bg-white/20 rounded-full p-2 text-lg">📘</span>
+                        <span class="bg-white/20 rounded-full p-2 text-lg">🎬</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-12">
+        <!-- Section 1: KPI Cards -->
+        <section class="mb-12">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <!-- KPI: Total Posts -->
+                <div class="kpi-card fade-in-stagger">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="metric-label">Total Posts</div>
+                            <div class="metric-value" data-metric="totalPosts">0</div>
+                            <div class="metric-change">↑ 0% vs Jun 2026</div>
+                        </div>
+                        <div class="icon-circle gradient-primary text-white text-xl">📄</div>
+                    </div>
+                </div>
+                
+                <!-- KPI: Total Views -->
+                <div class="kpi-card fade-in-stagger">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="metric-label">Total Views</div>
+                            <div class="metric-value" data-metric="totalViews">0</div>
+                            <div class="metric-change">↑ 14.2% vs Jun 2026</div>
+                        </div>
+                        <div class="icon-circle" style="background: linear-gradient(135deg, #10B981, #059669); color: white; font-size: 20px;">👁️</div>
+                    </div>
+                </div>
+                
+                <!-- KPI: Total Engagements -->
+                <div class="kpi-card fade-in-stagger">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="metric-label">Total Engagements</div>
+                            <div class="metric-value" data-metric="totalEngagements">0</div>
+                            <div class="metric-change">↑ 12.8% vs Jun 2026</div>
+                        </div>
+                        <div class="icon-circle" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: white; font-size: 20px;">👥</div>
+                    </div>
+                </div>
+                
+                <!-- KPI: Engagement Rate -->
+                <div class="kpi-card fade-in-stagger">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <div class="metric-label">Engagement Rate</div>
+                            <div class="metric-value" data-metric="engagementRate">0%</div>
+                            <div class="metric-change">↑ 8.6% vs Jun 2026</div>
+                        </div>
+                        <div class="icon-circle" style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: white; font-size: 20px;">📈</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Charts -->
+        <section class="mb-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Chart 1: Engagement Breakdown -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-base font-semibold text-slate-900 mb-6">Engagement Breakdown</h3>
+                    <div class="relative h-64">
+                        <canvas id="engagementChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Chart 2: Posts by Type -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-base font-semibold text-slate-900 mb-6">Posts by Type</h3>
+                    <div class="relative h-64">
+                        <canvas id="contentTypeChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Chart 3: Performance Trend -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-base font-semibold text-slate-900 mb-6">Performance Trend</h3>
+                    <div class="relative h-64">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Top Performing Post -->
+        <section class="mb-12">
+            <div class="top-post-section">
+                <div class="grid md:grid-cols-2 gap-8 p-8">
+                    <!-- Left: Post Thumbnail & Badge -->
+                    <div class="flex flex-col">
+                        <div class="inline-block bg-purple-600 text-white px-4 py-2 rounded-full text-xs font-bold mb-4 w-fit">
+                            ⭐ Top Performing Post
+                        </div>
+                        <div class="post-thumbnail mb-4">
+                            🎥
+                        </div>
+                        <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
+                            <p class="text-sm text-amber-900 font-semibold">💡 This post received <span class="font-bold">76% of total views</span> and 73% of total engagements.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Post Details -->
+                    <div class="flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-2xl font-bold text-slate-900 mb-2" data-field="topPostTitle">Work Saree Collection</h3>
+                            <div class="flex gap-4 text-sm text-slate-600 mb-6">
+                                <span>🎬 Video</span>
+                                <span>📅 09 Jul 2026</span>
+                            </div>
+                            
+                            <!-- Metrics Grid -->
+                            <div class="grid grid-cols-5 gap-3 mb-6">
+                                <div class="text-center">
+                                    <p class="text-sm text-slate-600">Views</p>
+                                    <p class="text-xl font-bold text-slate-900" data-field="topPostViews">14,326</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-slate-600">❤️</p>
+                                    <p class="text-xl font-bold text-slate-900" data-field="topPostLikes">309</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-slate-600">💬</p>
+                                    <p class="text-xl font-bold text-slate-900" data-field="topPostComments">112</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-slate-600">↗️</p>
+                                    <p class="text-xl font-bold text-slate-900" data-field="topPostShares">137</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-slate-600">CTR</p>
+                                    <p class="text-xl font-bold text-slate-900" data-field="topPostCTR">0.9%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Highlights & Recommendations -->
+        <section class="mb-12">
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Highlights -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                        ✨ Highlights
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="highlights-box">
+                            <p class="text-sm font-semibold text-slate-900">✓ Best performing post generated 14,326 views.</p>
+                        </div>
+                        <div class="highlights-box">
+                            <p class="text-sm font-semibold text-slate-900">✓ Video content contributed 78% of total reach.</p>
+                        </div>
+                        <div class="highlights-box">
+                            <p class="text-sm font-semibold text-slate-900">✓ Engagement rate is above your previous month by 8.6%.</p>
+                        </div>
+                        <div class="highlights-box">
+                            <p class="text-sm font-semibold text-slate-900">✓ Great audience interaction on video content!</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recommendations -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                        💡 Recommendation
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="recommendation-item">
+                            <span class="text-lg">✅</span>
+                            <p class="text-sm font-semibold text-slate-900">Increase video content to 40% for better reach and engagement.</p>
+                        </div>
+                        <div class="recommendation-item">
+                            <span class="text-lg">✅</span>
+                            <p class="text-sm font-semibold text-slate-900">Focus on educational and entertaining content formats.</p>
+                        </div>
+                        <div class="recommendation-item">
+                            <span class="text-lg">✅</span>
+                            <p class="text-sm font-semibold text-slate-900">Post consistently 3-4 times per week for maximum engagement.</p>
+                        </div>
+                        <div class="recommendation-item">
+                            <span class="text-lg">✅</span>
+                            <p class="text-sm font-semibold text-slate-900">Leverage user-generated content and testimonials.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: All Posts Table -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">All Posts</h2>
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="text-left px-4 py-3 font-semibold text-slate-900 w-28">Post</th>
+                                <th class="text-left px-4 py-3 font-semibold text-slate-900">Title</th>
+                                <th class="text-center px-4 py-3 font-semibold text-slate-900 w-20">Type</th>
+                                <th class="text-right px-4 py-3 font-semibold text-slate-900 w-16">Views</th>
+                                <th class="text-right px-4 py-3 font-semibold text-slate-900 w-16">Likes</th>
+                                <th class="text-center px-4 py-3 font-semibold text-slate-900 w-20">Comments</th>
+                                <th class="text-right px-4 py-3 font-semibold text-slate-900 w-16">Shares</th>
+                                <th class="text-right px-4 py-3 font-semibold text-slate-900 w-20">Eng Rate</th>
+                                <th class="text-center px-4 py-3 font-semibold text-slate-900 w-24">Performance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="postsTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Bottom Insights -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">Additional Insights</h2>
+            <div class="bottom-insights-grid">
+                <!-- AI Insights -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        🤖 AI Insights
+                    </h3>
+                    <div class="space-y-3 text-sm text-slate-700">
+                        <p>✓ Your audience is highly engaged with video content.</p>
+                        <p>✓ Posts published on Wednesdays are performing better.</p>
+                        <p>✓ Try carousel or multi-image posts for higher engagement.</p>
+                    </div>
+                </div>
+                
+                <!-- Best Time to Post -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        ⏰ Best Time to Post
+                    </h3>
+                    <div class="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg mb-3">
+                        <p class="text-2xl font-bold text-purple-900">6:00 PM - 8:00 PM</p>
+                        <p class="text-sm text-purple-700 mt-1">Wednesday - Friday</p>
+                    </div>
+                    <p class="text-xs text-slate-600">Peak engagement window based on your audience activity</p>
+                </div>
+                
+                <!-- Audience Overview -->
+                <div class="chart-card fade-in-stagger">
+                    <h3 class="text-lg font-bold text-slate-900 mb-4">👥 Audience Overview</h3>
+                    <div class="relative h-32">
+                        <canvas id="audienceChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-xs text-slate-600">
+                        <p>• 72% Mobile Users</p>
+                        <p>• 28% Desktop Users</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-16 py-8 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="font-bold text-slate-900 flex items-center gap-2">
+                        <span class="text-lg">📊</span> One Desk
+                    </p>
+                    <p class="text-sm text-slate-600">Marketing Intelligence Platform</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-slate-600">Powered by</p>
+                    <p class="font-semibold text-slate-900">VilPower Solutions</p>
+                </div>
+                <button onclick="window.print()" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-semibold hide-on-print">
+                    🖨️ Print Report
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Report data structure
+        let reportData = {
+            client: 'NTT',
+            month: 'July 2026',
+            totalPosts: 1,
+            totalViews: 14326,
+            totalEngagements: 558,
+            engagementRate: 3.90,
+            likes: 309,
+            comments: 112,
+            shares: 137,
+            posts: []
+        };
+
+        // Fetch social analytics data
+        async function loadAnalyticsData() {
+            try {
+                // Check if we have stored analytics data
+                const storedData = localStorage.getItem('socialAnalyticsData');
+                if (storedData) {
+                    const analyticsData = JSON.parse(storedData);
+                    updateReportData(analyticsData);
+                }
+            } catch (error) {
+                console.log('Using default data');
+            }
+            
+            renderReport();
+        }
+
+        // Update report data with fetched data
+        function updateReportData(data) {
+            if (data.entries && data.entries.length > 0) {
+                reportData.posts = data.entries;
+                
+                // Calculate totals
+                reportData.totalPosts = data.entries.length;
+                reportData.totalViews = data.entries.reduce((sum, p) => sum + (p.views || 0), 0);
+                reportData.likes = data.entries.reduce((sum, p) => sum + (p.likes || 0), 0);
+                reportData.comments = data.entries.reduce((sum, p) => sum + (p.comments || 0), 0);
+                reportData.shares = data.entries.reduce((sum, p) => sum + (p.shares || 0), 0);
+                
+                reportData.totalEngagements = reportData.likes + reportData.comments + reportData.shares;
+                reportData.engagementRate = reportData.totalViews > 0 
+                    ? ((reportData.totalEngagements / reportData.totalViews) * 100).toFixed(2) 
+                    : 0;
+                
+                // Set top post
+                if (data.entries.length > 0) {
+                    const topPost = data.entries.reduce((prev, current) => 
+                        (current.views || 0) > (prev.views || 0) ? current : prev
+                    );
+                    reportData.topPost = topPost;
+                }
+            }
+        }
+
+        // Render all report sections
+        function renderReport() {
+            updateMetrics();
+            renderTopPost();
+            renderPostsTable();
+            initCharts();
+            setGeneratedDate();
+        }
+
+        // Update KPI metrics
+        function updateMetrics() {
+            document.querySelector('[data-metric="totalPosts"]').textContent = reportData.totalPosts;
+            document.querySelector('[data-metric="totalViews"]').textContent = reportData.totalViews.toLocaleString();
+            document.querySelector('[data-metric="totalEngagements"]').textContent = reportData.totalEngagements.toLocaleString();
+            document.querySelector('[data-metric="engagementRate"]').textContent = reportData.engagementRate + '%';
+        }
+
+        // Render top post section
+        function renderTopPost() {
+            const topPost = reportData.posts.length > 0 ? reportData.posts[0] : reportData.topPost;
+            if (topPost) {
+                document.querySelector('[data-field="topPostTitle"]').textContent = topPost.post || topPost.title || 'Post Title';
+                document.querySelector('[data-field="topPostViews"]').textContent = (topPost.views || 0).toLocaleString();
+                document.querySelector('[data-field="topPostLikes"]').textContent = (topPost.likes || 0).toLocaleString();
+                document.querySelector('[data-field="topPostComments"]').textContent = (topPost.comments || 0).toLocaleString();
+                document.querySelector('[data-field="topPostShares"]').textContent = (topPost.shares || 0).toLocaleString();
+                
+                const ctr = topPost.views > 0 ? ((topPost.profileReach / topPost.views) * 100).toFixed(2) : 0;
+                document.querySelector('[data-field="topPostCTR"]').textContent = ctr + '%';
+            }
+        }
+
+        // Render posts table
+        function renderPostsTable() {
+            const tbody = document.getElementById('postsTableBody');
+            tbody.innerHTML = '';
+            
+            if (!reportData.posts || reportData.posts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-slate-600">No posts data available</td></tr>';
+                return;
+            }
+            
+            reportData.posts.forEach(post => {
+                const engRate = post.views > 0 ? ((post.engagements || post.likes) / post.views * 100).toFixed(2) : 0;
+                let badge = 'Excellent';
+                let badgeClass = 'badge-excellent';
+                
+                if (engRate < 2) {
+                    badge = 'Low';
+                    badgeClass = 'badge-low';
+                } else if (engRate < 3) {
+                    badge = 'Average';
+                    badgeClass = 'badge-average';
+                } else if (engRate < 4.5) {
+                    badge = 'Good';
+                    badgeClass = 'badge-good';
+                }
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-slate-600 text-xs">${post.postDate || 'N/A'}</td>
+                    <td class="px-4 py-3 font-semibold text-slate-900">${post.post || post.title || 'Post'}</td>
+                    <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded text-xs font-semibold" style="background: #E0E7FF; color: #4F46E5;">${post.postType || 'Post'}</span></td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">${post.views?.toLocaleString() || 0}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">${post.likes?.toLocaleString() || 0}</td>
+                    <td class="px-4 py-3 text-center text-slate-600">${post.comments || 0}</td>
+                    <td class="px-4 py-3 text-right text-slate-600">${post.shares || 0}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">${engRate}%</td>
+                    <td class="px-4 py-3 text-center"><span class="performance-badge ${badgeClass}">${badge}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Initialize charts
+        function initCharts() {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { font: { size: 11 } }
+                    }
+                }
+            };
+            
+            // Engagement Breakdown
+            const engagementCtx = document.getElementById('engagementChart');
+            if (engagementCtx) {
+                new Chart(engagementCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Likes', 'Comments', 'Shares'],
+                        datasets: [{
+                            data: [reportData.likes, reportData.comments, reportData.shares],
+                            backgroundColor: ['#4F46E5', '#F59E0B', '#10B981'],
+                            borderColor: ['#fff', '#fff', '#fff'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: chartOptions
+                });
+            }
+            
+            // Content Type
+            const contentCtx = document.getElementById('contentTypeChart');
+            if (contentCtx) {
+                const contentTypes = {};
+                reportData.posts.forEach(p => {
+                    const type = p.postType || 'Post';
+                    contentTypes[type] = (contentTypes[type] || 0) + 1;
+                });
+                
+                new Chart(contentCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(contentTypes),
+                        datasets: [{
+                            data: Object.values(contentTypes),
+                            backgroundColor: ['#7C3AED', '#10B981', '#F59E0B', '#3B82F6'],
+                            borderColor: ['#fff', '#fff', '#fff', '#fff'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: chartOptions
+                });
+            }
+            
+            // Trend Chart
+            const trendCtx = document.getElementById('trendChart');
+            if (trendCtx) {
+                new Chart(trendCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Jul 02', 'Jul 09', 'Jul 16', 'Jul 23', 'Jul 30'],
+                        datasets: [{
+                            label: 'Views',
+                            data: [3000, 14326, 8500, 6200, 4000],
+                            borderColor: '#7C3AED',
+                            backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#7C3AED',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 5
+                        }]
+                    },
+                    options: {
+                        ...chartOptions,
+                        scales: {
+                            y: { beginAtZero: true },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+            
+            // Audience Chart
+            const audienceCtx = document.getElementById('audienceChart');
+            if (audienceCtx) {
+                new Chart(audienceCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Mobile', 'Desktop'],
+                        datasets: [{
+                            data: [72, 28],
+                            backgroundColor: ['#3B82F6', '#10B981'],
+                            borderColor: ['#fff', '#fff'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: chartOptions
+                });
+            }
+        }
+
+        // Set generated date
+        function setGeneratedDate() {
+            const now = new Date();
+            const formatted = now.toLocaleDateString('en-GB') + ', ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            document.getElementById('generatedDate').textContent = formatted;
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', loadAnalyticsData);
+    </script>
+</body>
+</html>
