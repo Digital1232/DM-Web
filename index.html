@@ -11208,16 +11208,16 @@
                     Type</label>
                 <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50 w-full"
                     id="strategy-format-toggle-container">
-                    <button type="button" id="strategy-format-poster" onclick="selectStrategyFormat('Poster', true)"
-                        class="flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer">
-                        Poster
-                    </button>
                     <button type="button" id="strategy-format-video" onclick="selectStrategyFormat('Video', true)"
-                        class="flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer">
+                        class="flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer">
                         Video
                     </button>
+                    <button type="button" id="strategy-format-poster" onclick="selectStrategyFormat('Poster', true)"
+                        class="flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer">
+                        Poster
+                    </button>
                 </div>
-                <input type="hidden" id="strategy-format" value="Poster">
+                <input type="hidden" id="strategy-format" value="Video">
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -16228,38 +16228,58 @@
                 const normalized = (statusName || '').toLowerCase().trim();
 
                 // Status Categorization (3-color system)
-                // NOT COMPLETED (Red) - Statuses: 'To Do','Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Design Hold'
-                // COMPLETED (Green) - Statuses: 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved'
+                // NOT COMPLETED (Red) - Statuses: 'To Do', 'In Progress', 'In Review', 'Shoot Needed', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail', 'Thumbnail Waiting', 'Design Hold', 'On Hold', etc.
+                // COMPLETED (Green) - Statuses: 'Quality Check', 'Design Completed', 'Thumbnail Completed', 'Client Sent', 'Client Approved'
                 // POSTED (Blue) - Statuses: 'Posted', 'Analytics', 'Done'
 
-                const notCompletedStatuses = ['to do', 'shoot needed', 'content in progress', 'client content approval', 'design to do', 'design in progress', 'rework designs', 'thumbnail waiting', 'design hold'];
-                const completedStatuses = ['quality check', 'design completed', 'client sent', 'client approved'];
-                const postedStatuses = ['posted', 'analytics', 'done'];
+                const notCompletedStatuses = [
+                    'to do', 'todo', 'planned', 'backlog', 'open',
+                    'in progress', 'inprogress', 'in-progress', 'content in progress', 'design in progress', 'shoot in progress', 'thumbnail in progress',
+                    'in review', 'review', 'code review',
+                    'shoot needed', 'shoot planned',
+                    'client content approval',
+                    'design to do', 'design', 'design hold', 'on hold', 'hold', 'blocked',
+                    'rework designs', 'rework', 'rework design',
+                    'thumbnail waiting', 'thumbnail', 'thumbnail to do', 'thumbnail pending', 'thumbnail hold'
+                ];
+
+                const completedStatuses = [
+                    'quality check', 'qc',
+                    'design completed', 'design done',
+                    'thumbnail completed', 'thumbnail done', 'thumbnail approved', 'thumbnail ready',
+                    'client sent', 'client send',
+                    'client approved', 'approved', 'completed'
+                ];
+
+                const postedStatuses = [
+                    'posted', 'published',
+                    'analytics', 'learnings', 'learning',
+                    'done', 'closed', 'resolved'
+                ];
 
                 let colorObj = {
                     solid: 'bg-slate-500 text-white',
                     pill: 'bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-800'
                 };
 
-                // Check if status matches any of the NOT COMPLETED statuses (Red)
-                if (notCompletedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                const matchesAny = (arr) => arr.some(s => normalized === s || normalized.includes(s) || s.includes(normalized));
+
+                if (matchesAny(postedStatuses)) {
                     colorObj = {
-                        solid: 'bg-red-500 text-white',
-                        pill: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50'
+                        solid: 'bg-blue-500 text-white',
+                        pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50'
                     };
                 }
-                // Check if status matches any of the COMPLETED statuses (Green)
-                else if (completedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                else if (matchesAny(completedStatuses)) {
                     colorObj = {
                         solid: 'bg-emerald-500 text-white',
                         pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50'
                     };
                 }
-                // Check if status matches any of the POSTED statuses (Blue)
-                else if (postedStatuses.some(s => normalized === s || normalized.includes(s))) {
+                else if (matchesAny(notCompletedStatuses)) {
                     colorObj = {
-                        solid: 'bg-blue-500 text-white',
-                        pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50'
+                        solid: 'bg-red-500 text-white',
+                        pill: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50'
                     };
                 }
 
@@ -16708,7 +16728,7 @@
                     const [ty, tm, td] = task.date.split('-').map(Number);
                     const dateStr = new Date(ty, tm - 1, td).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
-                    const statusHtml = finalStatus ? `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-bold border border-indigo-100">${escapeHtml(finalStatus)}</span>` : '';
+                    const statusHtml = finalStatus ? `<span class="${pillColor} px-2 py-0.5 rounded-full text-[9px] font-bold">${escapeHtml(finalStatus)}</span>` : '';
 
                     return `
                     <div onclick="event.stopPropagation(); openEditStrategyEventModal('${task.id}')" 
@@ -17090,14 +17110,14 @@ function isStrategyTask(t) {
                 const dropdown = document.getElementById('strategy-jira-dropdown');
                 if (dropdown) dropdown.classList.add('hidden');
 
-                // Reset format to Poster and enable buttons
+                // Reset format to Video and enable buttons
                 const posterBtn = document.getElementById('strategy-format-poster');
                 const videoBtn = document.getElementById('strategy-format-video');
                 if (posterBtn && videoBtn) {
                     posterBtn.removeAttribute('disabled');
                     videoBtn.removeAttribute('disabled');
                 }
-                selectStrategyFormat('Poster');
+                selectStrategyFormat('Video');
 
                 document.getElementById('strategy-delete-btn').classList.add('hidden');
                 
@@ -17237,7 +17257,7 @@ function isStrategyTask(t) {
                     }
 
                     // Restore format value
-                    selectStrategyFormat(ev.format || 'Poster');
+                    selectStrategyFormat(ev.format || 'Video');
 
                     // Toggle readonly/disabled state depending on permissions
                     const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-client', 'strategy-status', 'strategy-videos-count', 'strategy-posters-count'];

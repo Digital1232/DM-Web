@@ -3463,12 +3463,12 @@ if (initializeApp) {
         if (!posterBtn || !videoBtn || !input) return;
 
         input.value = format;
-        if (format === 'Poster') {
+        if (format === 'Video') {
+            videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
+            posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+        } else {
             posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
             videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
-        } else {
-            posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
-            videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
         }
     }
 
@@ -3616,7 +3616,7 @@ function isStrategyTask(t) {
             posterBtn.removeAttribute('disabled');
             videoBtn.removeAttribute('disabled');
         }
-        selectStrategyFormat('Poster');
+        selectStrategyFormat('Video');
 
         document.getElementById('strategy-delete-btn').classList.add('hidden');
         document.getElementById('strategyEventModal').showModal();
@@ -3673,7 +3673,7 @@ function isStrategyTask(t) {
         if (descEl) descEl.value = ev.desc || '';
 
         // Restore format value
-        selectStrategyFormat(ev.format || 'Poster');
+        selectStrategyFormat(ev.format || 'Video');
 
         // Toggle readonly/disabled state depending on permissions
         const fields = ['strategy-title', 'strategy-date', 'strategy-owner', 'strategy-desc', 'strategy-jira-search'];
