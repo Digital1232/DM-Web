@@ -4650,7 +4650,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                                             <span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span>
                                         </div>
                                     </div>
-                                    <p class="text-xs font-bold text-slate-900 mb-3">${escapeHtml(t.desc)}</p>
+                                    <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mb-3 leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
+                            <span>${escapeHtml(t.desc)}</span>
+                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
+                        </p>
                                     <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-3">
                                         <div class="flex items-center gap-1">
                                             ${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="14"></iconify-icon></button>` : ''}
@@ -4703,7 +4706,13 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 return `
                     <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${isOverdue ? 'bg-rose-50/30' : ''}">
                         <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
-                        <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">${escapeHtml(t.desc)}${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}</td>
+                        <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">
+                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors hover:underline cursor-pointer group inline-flex items-center gap-1.5" title="Click to view task resources & folder">
+                            <span>${escapeHtml(t.desc)}</span>
+                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
+                        </p>
+                        ${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}
+                    </td>
                         <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
                         <td class="px-6 py-4 hidden md:table-cell text-xs text-slate-600 font-medium">${t.client || '—'}</td>
                         <td class="px-6 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${assigneeName(t)}</td>
@@ -11462,7 +11471,10 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                             ${t.isAutoIncluded ? `<span class="bg-indigo-100 text-indigo-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase" title="Auto included by status">Auto</span>` : ''}
                             ${liveTimerHtml}
                         </div>
-                        <p class="text-xs text-slate-900 mt-1 max-w-xs truncate">${escapeHtml(t.desc)}</p>
+                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mt-1 max-w-xs whitespace-normal break-words leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
+                            <span>${escapeHtml(t.desc)}</span>
+                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
+                        </p>
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
                     <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[80px] truncate">${escapeHtml(t.duedate || '—')}</td>
