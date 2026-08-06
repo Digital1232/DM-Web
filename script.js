@@ -3479,6 +3479,7 @@ if (initializeApp) {
         document.getElementById('strategy-event-id').value = '';
         document.getElementById('strategy-title').value = '';
         document.getElementById('strategy-date').value = dateStr || '';
+        if (typeof updateStrategyFolderUI === 'function') updateStrategyFolderUI('');
         document.getElementById('strategy-owner').value = '';
         
         const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
@@ -3548,9 +3549,10 @@ if (initializeApp) {
         document.getElementById('strategy-modal-title').textContent = canWrite ? 'Edit Strategy Event' : 'View Strategy Event';
         document.getElementById('strategy-event-id').value = eventId;
         document.getElementById('strategy-title').value = ev.title || '';
-        document.getElementById('strategy-jira-id').value = ev.jiraTaskId || '';
+        const sjId = document.getElementById('strategy-jira-id'); if (sjId) sjId.value = ev.jiraTaskId || ev.jiraId || '';
         document.getElementById('strategy-date').value = ev.date || '';
         document.getElementById('strategy-owner').value = ev.owner || '';
+        if (typeof updateStrategyFolderUI === 'function') updateStrategyFolderUI(ev ? (ev.folderPath || ev.sourceFolder || '') : '');
         const descEl = document.getElementById('strategy-desc');
         if (descEl) descEl.value = ev.desc || '';
 
@@ -3991,48 +3993,50 @@ async function fetchJiraTasksForStrategy() {
 // Search Jira tasks as user types
 function searchJiraTasksForStrategy() {
     const searchField = document.getElementById('strategy-jira-search');
+    if (!searchField) return;
     const searchTerm = searchField.value.trim();
     
-    // Auto-trigger search after 2 characters
     if (searchTerm.length >= 2) {
         fetchJiraTasksForStrategy();
     } else {
-        document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+        const dropdown = document.getElementById('strategy-jira-dropdown');
+        if (dropdown) dropdown.classList.add('hidden');
     }
 }
 
 // Select a Jira task from dropdown
 function selectJiraTaskForStrategy(taskId, taskSummary) {
-    document.getElementById('strategy-jira-id').value = taskId;
-    document.getElementById('strategy-jira-search').value = `${taskId}: ${taskSummary}`;
-    document.getElementById('strategy-jira-selected').innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
-    document.getElementById('strategy-jira-clear-btn').classList.remove('hidden');
-    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    const elId = document.getElementById('strategy-jira-id'); if (elId) elId.value = taskId;
+    const elSearch = document.getElementById('strategy-jira-search'); if (elSearch) elSearch.value = `${taskId}: ${taskSummary}`;
+    const elSel = document.getElementById('strategy-jira-selected'); if (elSel) elSel.innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
+    const elClear = document.getElementById('strategy-jira-clear-btn'); if (elClear) elClear.classList.remove('hidden');
+    const elDrop = document.getElementById('strategy-jira-dropdown'); if (elDrop) elDrop.classList.add('hidden');
     
     toast(`✅ Linked to Jira task ${taskId}`, 'success');
 }
 
 // Update Jira ID display when loading event
 function loadStrategyJiraDisplay() {
-    const jiraId = document.getElementById('strategy-jira-id').value;
+    const elId = document.getElementById('strategy-jira-id');
+    const jiraId = elId ? elId.value : '';
     const jiraSearch = document.getElementById('strategy-jira-search');
     const jiraSelected = document.getElementById('strategy-jira-selected');
     const clearBtn = document.getElementById('strategy-jira-clear-btn');
     
     if (jiraId) {
-        jiraSearch.value = jiraId;
-        jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>`;
+        if (jiraSearch) jiraSearch.value = jiraId;
+        if (jiraSelected) jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>`;
         if (clearBtn) clearBtn.classList.remove('hidden');
         
-        // Fetch and display Jira status
         fetchStrategyJiraStatus(jiraId);
     } else {
-        jiraSearch.value = '';
-        jiraSelected.innerHTML = 'No task selected';
+        if (jiraSearch) jiraSearch.value = '';
+        if (jiraSelected) jiraSelected.innerHTML = 'No task selected';
         if (clearBtn) clearBtn.classList.add('hidden');
     }
     
-    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    const dropdown = document.getElementById('strategy-jira-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
 }
 
 // Fetch Jira task status and sync with strategy event
@@ -4092,11 +4096,11 @@ function getStatusColorClass(status) {
 
 // Clear Jira selection
 function clearStrategyJiraSelection() {
-    document.getElementById('strategy-jira-id').value = '';
-    document.getElementById('strategy-jira-search').value = '';
-    document.getElementById('strategy-jira-selected').innerHTML = 'No task selected';
-    document.getElementById('strategy-jira-clear-btn').classList.add('hidden');
-    document.getElementById('strategy-jira-dropdown').classList.add('hidden');
+    const elId = document.getElementById('strategy-jira-id'); if (elId) elId.value = '';
+    const elSearch = document.getElementById('strategy-jira-search'); if (elSearch) elSearch.value = '';
+    const elSel = document.getElementById('strategy-jira-selected'); if (elSel) elSel.innerHTML = 'No task selected';
+    const elClear = document.getElementById('strategy-jira-clear-btn'); if (elClear) elClear.classList.add('hidden');
+    const elDrop = document.getElementById('strategy-jira-dropdown'); if (elDrop) elDrop.classList.add('hidden');
     toast('Jira task selection cleared', 'info');
 }
 
