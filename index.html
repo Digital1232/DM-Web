@@ -16809,6 +16809,40 @@
                 }
             });
 
+function isStrategyTask(t) {
+                if (!t) return false;
+                if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || (t.category && String(t.category).toLowerCase() === 'strategy')) {
+                    return true;
+                }
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const taskId = String(t.id || '').toLowerCase().trim();
+                    const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
+                    const taskJira = String(t.jiraId || '').toLowerCase().trim();
+                    const isLinked = Object.values(strategyEvents).some(ev => {
+                        if (!ev) return false;
+                        const evId = String(ev.id || '').toLowerCase().trim();
+                        const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                        const evTitle = String(ev.title || '').toLowerCase().trim();
+                        return (evId && evId === taskId) ||
+                               (evJira && evJira === taskId) ||
+                               (taskJira && evJira && evJira === taskJira) ||
+                               (evTitle && taskDesc && evTitle === taskDesc);
+                    });
+                    if (isLinked) return true;
+                }
+                return false;
+            }
+
+            function renderTaskNameHtml(t, extraClasses = '') {
+                if (isStrategyTask(t)) {
+                    return `<p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors hover:underline cursor-pointer group inline-flex items-center gap-1.5 ${extraClasses}" title="Click to view strategy task resources & folder">
+                        <span>${escapeHtml(t.desc || t.summary || '')}</span>
+                        <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-indigo-500 group-hover:text-indigo-600 shrink-0 opacity-80 group-hover:opacity-100 transition-all"></iconify-icon>
+                    </p>`;
+                }
+                return `<p class="text-xs text-slate-900 font-medium ${extraClasses}">${escapeHtml(t.desc || t.summary || '')}</p>`;
+            }
+
             function linkFileManagerSourceForStrategy() {
                 const currentPath = document.getElementById('strategy-folder-path')?.value || '';
                 const title = document.getElementById('strategy-title')?.value?.trim() || 'Campaign';
@@ -20230,7 +20264,7 @@
                                             <span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span>
                                         </div>
                                     </div>
-                                    <button type="button" onclick="openTaskResourcesDrawer('${t.id}')" class="text-left text-xs font-bold text-slate-900 hover:text-indigo-600 hover:underline transition-colors mb-3 whitespace-normal break-words cursor-pointer w-full" title="View Task Resources & Folder">${escapeHtml(t.desc)}</button>
+                                    ${isStrategyTask(t) ? `<button type="button" onclick="openTaskResourcesDrawer('${t.id}')" class="text-left text-xs font-bold text-slate-900 hover:text-indigo-600 hover:underline transition-colors mb-3 whitespace-normal break-words cursor-pointer w-full group flex items-center gap-1.5" title="View Strategy Task Resources & Folder"><span>${escapeHtml(t.desc)}</span><iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-indigo-500 shrink-0 opacity-80 group-hover:opacity-100"></iconify-icon></button>` : `<p class="text-xs font-bold text-slate-900 mb-3 whitespace-normal break-words leading-snug">${escapeHtml(t.desc)}</p>`}
                                     <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-3">
                                         <div class="flex items-center gap-1">
                                             ${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="14"></iconify-icon></button>` : ''}
@@ -20304,9 +20338,7 @@
                         </td>
                         <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
                         <td class="px-6 py-4 max-w-sm text-xs text-slate-900 whitespace-normal break-words">
-                            <button type="button" onclick="openTaskResourcesDrawer('${t.id}')" class="text-left font-bold text-slate-900 hover:text-indigo-600 hover:underline transition-colors break-words text-xs cursor-pointer" title="View Task Resources & Folder">
-                                ${escapeHtml(t.desc)}
-                            </button>
+                            ${renderTaskNameHtml(t, 'whitespace-normal break-words')}
                             ${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}
                         </td>
                         <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span>${t.isOnHold && activeTaskId !== t.id ? `<span class="ml-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">On Hold</span>` : ''}</td>
@@ -20578,10 +20610,7 @@
                                             ${dueDateHtml}
                                         </div>
                                     </div>
-                                    <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mb-1 leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
-                                        <span>${escapeHtml(t.desc || '')}</span>
-                                        <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                                    </p>
+                                    ${renderTaskNameHtml(t, 'mb-1 leading-snug')}
                                     ${t.client ? `<p class="text-[10px] font-semibold text-slate-400 mb-3">${escapeHtml(t.client)}</p>` : '<div class="mb-3"></div>'}
                                     <div class="flex items-center justify-between border-t border-slate-100 pt-3">
                                         <select onchange="updateInternalTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer transition-all ${statusClass(t._canonicalStatus)}" style="background:transparent;" title="Change status">
@@ -20652,10 +20681,7 @@
                     </td>
                     <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600"><button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button></td>
                     <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">
-                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors max-w-xs whitespace-normal break-words hover:underline cursor-pointer group inline-flex items-center gap-1.5" title="Click to view task resources & folder">
-                            <span>${escapeHtml(t.desc || '')}</span>
-                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                        </p>
+                        ${renderTaskNameHtml(t, 'max-w-xs whitespace-normal break-words')}
                         ${isMorningLearningTask(t) ? `<span class="ml-1 text-[8px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">${escapeHtml(t.timeSlot || getMorningLearningSlot(t.userId || t.assigneeEmail))}</span>` : ''}
                         ${(t.description || t.notes) ? `<div class="text-[10px] text-slate-400 mt-1 truncate">${escapeHtml(t.description || t.notes)}</div>` : ''}
                     </td>
@@ -36451,10 +36477,7 @@
                             ${t.isAutoIncluded ? `<span class="bg-indigo-100 text-indigo-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase" title="Auto included by status">Auto</span>` : ''}
                             ${liveTimerHtml}
                         </div>
-                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mt-1 max-w-xs whitespace-normal break-words leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
-                            <span>${escapeHtml(t.desc)}</span>
-                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                        </p>
+                        ${renderTaskNameHtml(t, 'mt-1 max-w-xs whitespace-normal break-words leading-snug')}
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
                     <td class="px-6 py-4">${formatTaskDueDateHtml(t.duedate, t.status)}</td>
@@ -38984,10 +39007,7 @@
                                 ${idDisplay}
                                 ${overdueBadge}
                             </div>
-                            <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors break-words whitespace-normal leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
-                                    <span>${escapeHtml(t.desc)}</span>
-                                    <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                                </p>
+                            ${renderTaskNameHtml(t, 'break-words whitespace-normal leading-snug')}
                             <p class="text-[10px] text-slate-500 mt-0.5 break-words">${escapeHtml(t.status)}${t.client ? ' · ' + escapeHtml(t.client) : ''} · ${escapeHtml(assigneeName(t))}</p>
                         </div>
                         <div class="shrink-0 text-right min-w-[56px]">
@@ -41249,7 +41269,7 @@
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
-            window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+            window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;

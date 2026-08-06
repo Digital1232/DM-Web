@@ -3472,6 +3472,40 @@ if (initializeApp) {
         }
     }
 
+function isStrategyTask(t) {
+        if (!t) return false;
+        if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || (t.category && String(t.category).toLowerCase() === 'strategy')) {
+            return true;
+        }
+        if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+            const taskId = String(t.id || '').toLowerCase().trim();
+            const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
+            const taskJira = String(t.jiraId || '').toLowerCase().trim();
+            const isLinked = Object.values(strategyEvents).some(ev => {
+        if (!ev) return false;
+        const evId = String(ev.id || '').toLowerCase().trim();
+        const evJira = String(ev.jiraId || '').toLowerCase().trim();
+        const evTitle = String(ev.title || '').toLowerCase().trim();
+        return (evId && evId === taskId) ||
+               (evJira && evJira === taskId) ||
+               (taskJira && evJira && evJira === taskJira) ||
+               (evTitle && taskDesc && evTitle === taskDesc);
+            });
+            if (isLinked) return true;
+        }
+        return false;
+    }
+
+    function renderTaskNameHtml(t, extraClasses = '') {
+        if (isStrategyTask(t)) {
+            return `<p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors hover:underline cursor-pointer group inline-flex items-center gap-1.5 ${extraClasses}" title="Click to view strategy task resources & folder">
+        <span>${escapeHtml(t.desc || t.summary || '')}</span>
+        <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-indigo-500 group-hover:text-indigo-600 shrink-0 opacity-80 group-hover:opacity-100 transition-all"></iconify-icon>
+            </p>`;
+        }
+        return `<p class="text-xs text-slate-900 font-medium ${extraClasses}">${escapeHtml(t.desc || t.summary || '')}</p>`;
+    }
+
     function linkFileManagerSourceForStrategy() {
         const currentPath = document.getElementById('strategy-folder-path')?.value || '';
         const title = document.getElementById('strategy-title')?.value?.trim() || 'Campaign';
@@ -4650,10 +4684,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                                             <span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span>
                                         </div>
                                     </div>
-                                    <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mb-3 leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
-                            <span>${escapeHtml(t.desc)}</span>
-                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                        </p>
+                                    ${renderTaskNameHtml(t, 'mb-3 leading-snug')}
                                     <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-3">
                                         <div class="flex items-center gap-1">
                                             ${t.manual ? `<button onclick="openEditTaskModal('${t.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="14"></iconify-icon></button>` : ''}
@@ -4707,10 +4738,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                     <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${isOverdue ? 'bg-rose-50/30' : ''}">
                         <td class="px-6 py-4 text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</td>
                         <td class="px-6 py-4 max-w-xs truncate text-xs text-slate-900">
-                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors hover:underline cursor-pointer group inline-flex items-center gap-1.5" title="Click to view task resources & folder">
-                            <span>${escapeHtml(t.desc)}</span>
-                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                        </p>
+                        ${renderTaskNameHtml(t, 'max-w-xs whitespace-normal break-words')}
                         ${t.issueType ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(t.issueType)}</div>` : ''}
                     </td>
                         <td class="px-6 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full ${statusClass(t.status)}">${t.status}</span></td>
@@ -11471,10 +11499,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                             ${t.isAutoIncluded ? `<span class="bg-indigo-100 text-indigo-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase" title="Auto included by status">Auto</span>` : ''}
                             ${liveTimerHtml}
                         </div>
-                        <p onclick="openTaskResourcesDrawer('${t.id}')" class="text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors mt-1 max-w-xs whitespace-normal break-words leading-snug hover:underline cursor-pointer group flex items-center gap-1.5" title="Click to view task resources & folder">
-                            <span>${escapeHtml(t.desc)}</span>
-                            <iconify-icon icon="solar:folder-with-files-bold" width="13" class="text-slate-400 group-hover:text-indigo-600 shrink-0 opacity-0 group-hover:opacity-100 transition-all"></iconify-icon>
-                        </p>
+                        ${renderTaskNameHtml(t, 'mt-1 max-w-xs whitespace-normal break-words leading-snug')}
                     </td>
                     <td class="px-6 py-4">${statusSelectHtml}</td>
                     <td class="px-6 py-4 text-xs text-slate-600 font-medium whitespace-nowrap max-w-[80px] truncate">${escapeHtml(t.duedate || '—')}</td>
@@ -12698,7 +12723,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.moveBoardColumn = moveBoardColumn;
     window.submitDmContentIdea = submitDmContentIdea;
     window.navigateStrategyCalendar = navigateStrategyCalendar;
-    window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent;
+    window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent;
     window.openEditStrategyEventModal = openEditStrategyEventModal;
     window.closeStrategyEventModal = closeStrategyEventModal;
     window.selectStrategyFormat = selectStrategyFormat;
