@@ -6909,29 +6909,95 @@
             <!-- ════ ANNOUNCEMENTS VIEW ════ -->
             <div id="view-announcements-panel" class="hidden space-y-6 fade-in">
                 <div id="announcement-compose-card"
-                    class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 p-6">
-                    <div class="flex items-center gap-3 mb-5">
-                        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                            <iconify-icon icon="solar:bell-bing-bold" width="22"></iconify-icon>
+                    class="hidden bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700/80 p-6">
+                    <div class="flex items-center justify-between gap-3 mb-5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-100 dark:border-amber-900/50">
+                                <iconify-icon icon="solar:megaphone-bold-duotone" width="22"></iconify-icon>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-black text-slate-900 dark:text-white">Send Team Announcement</h3>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Broadcast modal & feed update to team</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-sm font-black text-slate-900">Send Team
-                                Announcement</h3>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                Visible to
-                                everyone</p>
-                        </div>
+                        <span class="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 rounded-full border border-amber-200/80">
+                            Admin Broadcast
+                        </span>
                     </div>
                     <div class="space-y-4">
-                        <input id="announcement-title" type="text" placeholder="Announcement title"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all">
-                        <textarea id="announcement-body" rows="3" placeholder="Write the announcement..."
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all resize-none"></textarea>
-                        <button onclick="sendAnnouncement()"
-                            class="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-5 py-3 text-sm font-bold shadow-lg shadow-amber-100 transition-all flex items-center gap-2">
-                            <iconify-icon icon="mdi:send" width="18"></iconify-icon>
-                            Send Announcement
-                        </button>
+                        <!-- Announcement Title -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Announcement Title *</label>
+                            <input id="announcement-title" type="text" placeholder="e.g. Important System Update / Team Event Announcement"
+                                class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:ring-4 focus:ring-amber-500/10 transition-all font-semibold">
+                        </div>
+
+                        <!-- Message Body -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Message Details *</label>
+                            <textarea id="announcement-body" rows="3" placeholder="Write full announcement details..."
+                                class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:ring-4 focus:ring-amber-500/10 transition-all resize-none font-medium"></textarea>
+                        </div>
+
+                        <!-- Image Attachment / URL Section -->
+                        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <iconify-icon icon="solar:gallery-wide-bold" width="14" class="text-amber-500"></iconify-icon>
+                                    Announcement Image (Optional)
+                                </label>
+                                <span class="text-[9px] text-slate-400 font-mono">Upload file or paste web link</span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <input id="announcement-image-url" type="url" placeholder="https://example.com/image.jpg"
+                                    oninput="onAnnouncementImageUrlInput(this.value)"
+                                    class="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500/20 font-mono">
+                                
+                                <input type="file" id="announcement-image-file" accept="image/*" class="hidden" onchange="handleAnnouncementImageFile(event)">
+                                <button type="button" onclick="document.getElementById('announcement-image-file').click()"
+                                    class="py-2 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-bold text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                                    title="Upload image from device">
+                                    <iconify-icon icon="solar:upload-bold" width="15" class="text-amber-500"></iconify-icon>
+                                    <span>Upload Image</span>
+                                </button>
+                            </div>
+
+                            <!-- Preview Thumbnail Box -->
+                            <div id="announcement-image-preview-container" class="hidden relative inline-block group pt-1">
+                                <img id="announcement-image-preview" src="" alt="Preview" class="max-h-36 rounded-xl border border-slate-300 dark:border-slate-600 shadow-sm object-cover">
+                                <button type="button" onclick="removeAnnouncementImagePreview()"
+                                    class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition-transform hover:scale-110 cursor-pointer"
+                                    title="Remove image">
+                                    <iconify-icon icon="solar:close-circle-bold" width="16"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Modal Notification Checkbox Toggle -->
+                        <div class="bg-amber-50/70 dark:bg-amber-950/40 p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/60">
+                            <label class="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-800 dark:text-slate-200 select-none">
+                                <input type="checkbox" id="announcement-is-modal" checked class="w-4 h-4 accent-amber-600 rounded cursor-pointer">
+                                <span>📢 Pop-up on screen as Modal Notification for all team members</span>
+                            </label>
+                            <p class="text-[11px] text-amber-700 dark:text-amber-400/90 font-medium ml-7 mt-0.5">
+                                Automatically opens the full-screen announcement popup dialog on every connected team member's browser in real time.
+                            </p>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center justify-between gap-3 pt-2">
+                            <button onclick="previewCurrentAnnouncementModal()" type="button"
+                                class="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer">
+                                <iconify-icon icon="solar:eye-bold" width="16" class="text-amber-500"></iconify-icon>
+                                Preview Modal
+                            </button>
+                            <button onclick="sendAnnouncement()" type="button"
+                                class="flex-1 py-3 px-5 rounded-xl bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-95">
+                                <iconify-icon icon="solar:send-bold" width="18" class="text-white"></iconify-icon>
+                                <span>Broadcast Announcement</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -9514,6 +9580,71 @@
         </div>
     </dialog>
 
+
+    <!-- Dialog: Modal Announcement Popup Notification -->
+    <dialog id="announcementPopupModal"
+        class="rounded-3xl shadow-2xl p-0 w-full max-w-lg md:max-w-xl border-none overflow-hidden bg-transparent backdrop:bg-slate-900/70 backdrop:backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+        <div class="w-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden rounded-3xl border border-slate-100 dark:border-slate-800 max-h-[90vh]">
+            <!-- Header (Solid color, no gradient) -->
+            <div class="bg-amber-600 dark:bg-amber-700 p-6 text-white shrink-0 relative">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30">
+                            <iconify-icon icon="solar:megaphone-bold-duotone" width="26" class="text-white"></iconify-icon>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-black uppercase tracking-widest bg-white/25 px-2.5 py-0.5 rounded-full text-white">Team Announcement</span>
+                            <h3 id="announcement-modal-header-title" class="text-base font-black tracking-tight leading-tight mt-1 text-white">
+                                Important Update
+                            </h3>
+                        </div>
+                    </div>
+                    <button onclick="closeAnnouncementPopupModal()" class="w-9 h-9 rounded-full bg-black/15 hover:bg-black/30 flex items-center justify-center text-white transition-all cursor-pointer">
+                        <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Area (Scrollable) -->
+            <div class="p-6 space-y-5 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50">
+                <!-- Optional Image Banner -->
+                <div id="announcement-modal-image-wrapper" class="hidden rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-md bg-slate-950">
+                    <img id="announcement-modal-image" src="" alt="Announcement banner" class="w-full h-auto max-h-72 object-contain mx-auto cursor-pointer" onclick="openImagePreview(this.src, 'Announcement Image')" title="Click to enlarge">
+                </div>
+
+                <!-- Title & Meta -->
+                <div class="space-y-1.5">
+                    <h2 id="announcement-modal-title" class="text-xl font-black text-slate-900 dark:text-white leading-tight break-words">
+                        Announcement Title
+                    </h2>
+                    <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <span id="announcement-modal-author" class="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
+                            <iconify-icon icon="solar:user-circle-bold" width="15"></iconify-icon>
+                            <span>Admin</span>
+                        </span>
+                        <span>•</span>
+                        <span id="announcement-modal-time" class="flex items-center gap-1">
+                            <iconify-icon icon="solar:clock-circle-bold" width="14"></iconify-icon>
+                            <span>Just now</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Message Body -->
+                <div id="announcement-modal-body" class="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm">
+                    Announcement text...
+                </div>
+            </div>
+
+            <!-- Footer Action -->
+            <div class="p-5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                <button onclick="closeAnnouncementPopupModal()" class="w-full py-3.5 px-5 rounded-xl bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]">
+                    <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon>
+                    Got It, Thanks!
+                </button>
+            </div>
+        </div>
+    </dialog>
 
     <!-- Dialog: Monthly Organisers Announcement Popup -->
     <dialog id="organisersAnnouncementModal"
@@ -26268,7 +26399,9 @@ function isStrategyTask(t) {
                 }
             }
 
-            // ANNOUNCEMENTS
+            // ANNOUNCEMENTS & MODAL ANNOUNCEMENTS
+            let currentAnnouncementsMap = {};
+
             function getLastSeenAnnouncementAt() {
                 if (!currentUser) return 0;
                 return parseInt(localStorage.getItem(`worksync_last_seen_announcement_${eKey(currentUser.email)}`) || '0', 10);
@@ -26310,6 +26443,7 @@ function isStrategyTask(t) {
                 const q = query(ref(db, 'worksync/announcements'), limitToLast(50));
                 announcementsUnsub = onValue(q, snap => {
                     const data = snap.val() || {};
+                    currentAnnouncementsMap = data;
                     renderAnnouncements(data);
                     if (activeView === 'announcements') markAnnouncementsSeen(data);
                     else refreshUnreadAnnouncements(data);
@@ -26333,39 +26467,160 @@ function isStrategyTask(t) {
                         <iconify-icon icon="solar:trash-bin-trash-linear" width="16"></iconify-icon>
                     </button>` : '';
                     return `
-                    <div class="p-6 hover:bg-slate-50/70 transition-all">
+                    <div class="p-6 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-all border-b border-slate-100 dark:border-slate-800/60 last:border-0">
                         <div class="flex items-start gap-4">
-                            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                                <iconify-icon icon="solar:bell-bing-bold" width="20"></iconify-icon>
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/50">
+                                <iconify-icon icon="solar:megaphone-bold-duotone" width="20"></iconify-icon>
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
-                                        <h4 class="text-sm font-black text-slate-900">${escapeHtml(item.title || 'Announcement')}</h4>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <h4 class="text-sm font-black text-slate-900 dark:text-white">${escapeHtml(item.title || 'Announcement')}</h4>
+                                            ${item.isModal !== false ? `<span class="text-[9px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/50">Modal Announcement</span>` : ''}
+                                        </div>
                                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">${escapeHtml(item.authorName || 'Admin')} · ${date}</p>
                                     </div>
                                     ${canDelete}
                                 </div>
-                                <p class="text-sm text-slate-600 leading-relaxed mt-3 whitespace-pre-wrap">${escapeHtml(item.body || '')}</p>
+                                <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mt-3 whitespace-pre-wrap">${escapeHtml(item.body || '')}</p>
                                 ${item.image ? `
                                 <div class="mt-3">
                                     <img src="${item.image}" alt="Announcement attachment"
-                                        onclick="openImagePreview(this.src, '${escapeHtml(item.title || 'Announcement')}')"
-                                        class="max-h-40 rounded-xl border border-slate-200 cursor-pointer hover:opacity-95 transition-all">
-                                    <p class="text-[10px] text-indigo-600 font-bold mt-1">Tap image to enlarge</p>
+                                        onclick="openImagePreview(this.src, '${escapeHtml(item.title || 'Announcement').replace(/'/g, "\\'")}')"
+                                        class="max-h-48 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-95 transition-all shadow-sm">
+                                    <p class="text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-1">Tap image to enlarge</p>
                                 </div>` : ''}
+
+                                <div class="mt-4 flex items-center gap-2">
+                                    <button onclick="showAnnouncementPopupModalById('${id}')"
+                                        class="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/80 border border-amber-200/80 dark:border-amber-800/80 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <iconify-icon icon="solar:megaphone-bold" width="15"></iconify-icon>
+                                        <span>View Modal Announcement</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>`;
                 }).join('');
             }
 
+            function showAnnouncementPopupModal(item) {
+                if (!item) return;
+                const modal = document.getElementById('announcementPopupModal');
+                if (!modal) return;
+
+                const headerTitle = document.getElementById('announcement-modal-header-title');
+                const titleEl = document.getElementById('announcement-modal-title');
+                const bodyEl = document.getElementById('announcement-modal-body');
+                const authorEl = document.getElementById('announcement-modal-author');
+                const timeEl = document.getElementById('announcement-modal-time');
+                const imageWrapper = document.getElementById('announcement-modal-image-wrapper');
+                const imageEl = document.getElementById('announcement-modal-image');
+
+                if (headerTitle) headerTitle.textContent = item.title || 'Team Announcement';
+                if (titleEl) titleEl.textContent = item.title || 'Team Announcement';
+                if (bodyEl) bodyEl.textContent = item.body || '';
+                if (authorEl) {
+                    authorEl.innerHTML = `<iconify-icon icon="solar:user-circle-bold" width="15"></iconify-icon> <span>${escapeHtml(item.authorName || 'Team Admin')}</span>`;
+                }
+                if (timeEl) {
+                    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Just now';
+                    timeEl.innerHTML = `<iconify-icon icon="solar:clock-circle-bold" width="14"></iconify-icon> <span>${dateStr}</span>`;
+                }
+
+                if (item.image && imageWrapper && imageEl) {
+                    imageEl.src = item.image;
+                    imageWrapper.classList.remove('hidden');
+                } else if (imageWrapper) {
+                    imageWrapper.classList.add('hidden');
+                }
+
+                try {
+                    modal.showModal();
+                } catch(e) {
+                    console.warn('Could not show announcementPopupModal:', e);
+                }
+            }
+
+            function closeAnnouncementPopupModal() {
+                const modal = document.getElementById('announcementPopupModal');
+                if (modal) modal.close();
+            }
+
+            function showAnnouncementPopupModalById(id) {
+                const item = currentAnnouncementsMap[id];
+                if (item) {
+                    showAnnouncementPopupModal(item);
+                } else if (db) {
+                    get(ref(db, `worksync/announcements/${id}`)).then(snap => {
+                        if (snap.exists()) showAnnouncementPopupModal(snap.val());
+                    }).catch(e => console.warn('Fetch announcement error:', e));
+                }
+            }
+
+            function onAnnouncementImageUrlInput(val) {
+                const container = document.getElementById('announcement-image-preview-container');
+                const img = document.getElementById('announcement-image-preview');
+                if (val && val.trim().startsWith('http')) {
+                    if (img) img.src = val.trim();
+                    if (container) container.classList.remove('hidden');
+                } else if (!val || !val.trim()) {
+                    if (container) container.classList.add('hidden');
+                }
+            }
+
+            function handleAnnouncementImageFile(e) {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                if (file.size > 8 * 1024 * 1024) {
+                    return toast('Image size should be under 8MB', 'error');
+                }
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const dataUrl = evt.target.result;
+                    const urlInput = document.getElementById('announcement-image-url');
+                    const img = document.getElementById('announcement-image-preview');
+                    const container = document.getElementById('announcement-image-preview-container');
+                    if (urlInput) urlInput.value = dataUrl;
+                    if (img) img.src = dataUrl;
+                    if (container) container.classList.remove('hidden');
+                    toast('Image attached successfully', 'success');
+                };
+                reader.readAsDataURL(file);
+            }
+
+            function removeAnnouncementImagePreview() {
+                const urlInput = document.getElementById('announcement-image-url');
+                const fileInput = document.getElementById('announcement-image-file');
+                const container = document.getElementById('announcement-image-preview-container');
+                if (urlInput) urlInput.value = '';
+                if (fileInput) fileInput.value = '';
+                if (container) container.classList.add('hidden');
+            }
+
+            function previewCurrentAnnouncementModal() {
+                const titleInput = document.getElementById('announcement-title');
+                const bodyInput = document.getElementById('announcement-body');
+                const imageInput = document.getElementById('announcement-image-url');
+
+                const title = titleInput?.value.trim() || 'Sample Announcement Title';
+                const body = bodyInput?.value.trim() || 'This is a preview of how your modal announcement notification will look to all team members.';
+                const image = imageInput?.value.trim() || null;
+
+                showAnnouncementPopupModal({
+                    title,
+                    body,
+                    image,
+                    authorName: currentUser ? currentUser.name : 'Admin',
+                    createdAt: Date.now()
+                });
+            }
+
             function handleAnnouncementNotificationClick(item) {
                 window.focus();
-                if (item?.image) {
-                    openImagePreview(item.image, item.title || 'Announcement');
-                } else {
-                    switchView('announcements');
+                if (item) {
+                    showAnnouncementPopupModal(item);
                 }
             }
 
@@ -26388,14 +26643,20 @@ function isStrategyTask(t) {
                         markAnnouncementsSeen();
                         handleAnnouncementNotificationClick(item);
                     };
-                    const imageHint = item.image ? ' — tap to view image' : '';
-                    toast(`Announcement: ${item.title || 'New update'}${imageHint}`, 'info', announceClick);
+
+                    // AUTO POP-UP MODAL NOTIFICATION FOR TEAM MEMBERS!
+                    if (item.isModal !== false) {
+                        showAnnouncementPopupModal(item);
+                    }
+
+                    const imageHint = item.image ? ' — tap to view' : '';
+                    toast(`📢 Announcement: ${item.title || 'New update'}${imageHint}`, 'info', announceClick);
                     if (activeView !== 'announcements') {
                         unreadAnnouncements += 1;
                         renderAnnouncementBadge();
                     }
                     if ('Notification' in window && Notification.permission === 'granted') {
-                        const n = new Notification(item.title || 'Team announcement', { body: item.image ? (item.body || 'Tap to view the attached image') : (item.body || 'Open One Desk to view the announcement') });
+                        const n = new Notification(item.title || 'Team announcement', { body: item.body || 'Open One Desk to view the announcement' });
                         n.onclick = announceClick;
                     }
                 });
@@ -26602,20 +26863,36 @@ function isStrategyTask(t) {
                 if (!isAdmin()) return toast('Only admins can send announcements', 'error');
                 const titleInput = document.getElementById('announcement-title');
                 const bodyInput = document.getElementById('announcement-body');
-                const title = titleInput.value.trim();
-                const body = bodyInput.value.trim();
-                if (!title) return toast('Enter announcement title', 'error');
-                if (!body) return toast('Enter announcement details', 'error');
-                await push(ref(db, 'worksync/announcements'), {
-                    title,
-                    body,
-                    authorEmail: currentUser.email,
-                    authorName: currentUser.name,
-                    createdAt: Date.now()
-                });
-                titleInput.value = '';
-                bodyInput.value = '';
-                toast('Announcement sent', 'success');
+                const imageInput = document.getElementById('announcement-image-url');
+                const modalCheck = document.getElementById('announcement-is-modal');
+
+                const title = titleInput ? titleInput.value.trim() : '';
+                const body = bodyInput ? bodyInput.value.trim() : '';
+                const image = imageInput ? imageInput.value.trim() : '';
+                const isModal = modalCheck ? modalCheck.checked : true;
+
+                if (!title) return toast('Please enter an announcement title', 'error');
+                if (!body) return toast('Please enter announcement details', 'error');
+
+                try {
+                    await push(ref(db, 'worksync/announcements'), {
+                        title,
+                        body,
+                        image: image || null,
+                        isModal: Boolean(isModal),
+                        authorEmail: currentUser.email,
+                        authorName: currentUser.name || 'Admin',
+                        createdAt: Date.now()
+                    });
+
+                    if (titleInput) titleInput.value = '';
+                    if (bodyInput) bodyInput.value = '';
+                    removeAnnouncementImagePreview();
+                    toast('📢 Announcement broadcasted successfully!', 'success');
+                } catch (err) {
+                    console.error('Failed to send announcement:', err);
+                    toast('Failed to send announcement: ' + err.message, 'error');
+                }
             }
 
             async function deleteAnnouncement(id) {
@@ -41035,6 +41312,10 @@ function isStrategyTask(t) {
             window.openNewGroupModal = openNewGroupModal; window.createGroup = createGroup;
             window.openEditGroupModal = openEditGroupModal; window.updateGroup = updateGroup; window.deleteGroup = deleteGroup; window.processGroupPhoto = processGroupPhoto; window.togglePinChat = togglePinChat;
             window.sendAnnouncement = sendAnnouncement; window.deleteAnnouncement = deleteAnnouncement;
+            window.showAnnouncementPopupModal = showAnnouncementPopupModal; window.closeAnnouncementPopupModal = closeAnnouncementPopupModal;
+            window.showAnnouncementPopupModalById = showAnnouncementPopupModalById; window.onAnnouncementImageUrlInput = onAnnouncementImageUrlInput;
+            window.handleAnnouncementImageFile = handleAnnouncementImageFile; window.removeAnnouncementImagePreview = removeAnnouncementImagePreview;
+            window.previewCurrentAnnouncementModal = previewCurrentAnnouncementModal;
             window.switchDprTab = switchDprTab; window.submitDpr = submitDpr; window.submitDprKarthika = submitDprKarthika; window.cancelDprEditKarthika = cancelDprEditKarthika; window.renderDpr = renderDpr; window.exportDprCsv = exportDprCsv; window.editDprEntry = editDprEntry; window.cancelDprEdit = cancelDprEdit; window.handleReportFilterChange = handleReportFilterChange; window.populateReportUserFilter = populateReportUserFilter;
             window.switchReportTab = switchReportTab; window.switchReportMainTab = switchReportMainTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.exportReportsCsv = exportReportsCsv; window.renderClientReport = renderClientReport; window.exportClientReport = exportClientReport; window.renderClientWideReport = renderClientWideReport; window.renderClientWiseTimingReport = renderClientWiseTimingReport;
             window.diagnoseJira = diagnoseJira; window.renderPerformanceReport = renderPerformanceReport;
