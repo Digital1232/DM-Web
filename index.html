@@ -2961,27 +2961,25 @@
                         <!-- Clock & Pulse dot -->
                         <div class="flex items-center gap-2 pr-2 border-r border-slate-200">
                             <span id="header-timer-dot" class="flex h-2 w-2 relative">
-                                <span
-                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
                             </span>
                             <span id="header-timer-display"
                                 class="text-xs font-black text-slate-700 font-mono tracking-tight">00:00:00</span>
                             <span id="header-timer-status"
-                                class="text-[9px] font-black text-slate-400 uppercase tracking-widest">WORKING</span>
+                                class="text-[9px] font-black text-slate-400 uppercase tracking-widest">OFFLINE</span>
                         </div>
 
                         <!-- Actions -->
                         <div class="flex items-center gap-1.5">
                             <!-- Check In -->
                             <button id="header-btn-checkin" onclick="doCheckIn()"
-                                class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center hidden"
+                                class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center"
                                 title="Check In">
                                 <iconify-icon icon="solar:play-circle-bold" width="18"></iconify-icon>
                             </button>
                             <!-- Break -->
                             <button id="header-btn-break" onclick="doBreak()"
-                                class="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center"
+                                class="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center hidden"
                                 title="Take a Break">
                                 <iconify-icon icon="solar:pause-circle-bold" width="18"></iconify-icon>
                             </button>
@@ -2993,7 +2991,7 @@
                             </button>
                             <!-- Check Out -->
                             <button id="header-btn-checkout" onclick="confirmCheckOut()"
-                                class="p-1.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center"
+                                class="p-1.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center hidden"
                                 title="Check Out">
                                 <iconify-icon icon="solar:stop-circle-bold" width="18"></iconify-icon>
                             </button>
@@ -13371,8 +13369,10 @@
                     initJiraDatePicker();
                     initInternalDatePicker();
 
-                    // NOW switch to the last view after tasks are loaded
-                    switchView(validViews.includes(lastView) ? lastView : 'dashboard');
+                    // NOW switch to view (prioritizing URL hash for quick link opening)
+                    const urlHashView = (window.location.hash || '').replace('#', '').trim();
+                    const targetView = validViews.includes(urlHashView) ? urlHashView : (validViews.includes(lastView) ? lastView : 'dashboard');
+                    switchView(targetView);
 
                     // PERFORMANCE: Load cache AFTER switching views (deferred)
                     // This makes UI appear much faster on first load and page reload
@@ -14806,7 +14806,10 @@
             function restoreTimerState() {
                 const state = localStorage.getItem('worksync_timerState');
                 const ciTime = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
-                if (!state || !ciTime) return;
+                if (!state || !ciTime) {
+                    setTimerState('idle');
+                    return;
+                }
                 
                 const now = new Date();
                 const ciDate = new Date(ciTime);
@@ -14820,6 +14823,7 @@
                     localStorage.removeItem('worksync_breakStartTime');
                     isCheckedIn = false;
                     checkInTime = null;
+                    setTimerState('idle');
                     return;
                 }
                 
@@ -14881,16 +14885,25 @@
                         .filter(e => e.date === today)
                         .sort((a, b) => a.timestamp - b.timestamp);
 
-                    if (!todayEvents.length) return;
+                    if (!todayEvents.length) {
+                        setTimerState('idle');
+                        return;
+                    }
 
                     const lastEvent = todayEvents[todayEvents.length - 1];
 
                     // Already checked out today — stay idle
-                    if (lastEvent.type === 'check_out') return;
+                    if (lastEvent.type === 'check_out') {
+                        setTimerState('idle');
+                        return;
+                    }
 
                     // Has a check_in — restore state
                     const checkInEvent = todayEvents.find(e => e.type === 'check_in');
-                    if (!checkInEvent) return;
+                    if (!checkInEvent) {
+                        setTimerState('idle');
+                        return;
+                    }
 
                     isCheckedIn = true;
                     checkInTime = checkInEvent.timestamp;
@@ -15131,6 +15144,11 @@
 
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
+
+                // Update URL hash for direct quick link sharing and navigation
+                if (window.location.hash !== '#' + view) {
+                    try { history.replaceState(null, '', '#' + view); } catch (e) { }
+                }
 
                 // ════ CLEANUP: If leaving chat, stop all listeners and clean up UI ════
                 if (activeView === 'chat' && view !== 'chat') {
@@ -36401,16 +36419,37 @@
                 let body = '';
                 let type = '';
 
+                // Helper to resolve task assignee's email address
+                const resolveAssigneeEmail = (t) => {
+                    if (t.assigneeEmail) return t.assigneeEmail.toLowerCase();
+                    if (t.userId && String(t.userId).includes('@')) return String(t.userId).toLowerCase();
+                    if (t.owner && String(t.owner).includes('@')) return String(t.owner).toLowerCase();
+                    if (t.assignee && typeof allUsersMap !== 'undefined' && allUsersMap.size > 0) {
+                        const norm = normalizeAssigneeValue(t.assignee);
+                        if (norm) {
+                            const found = Array.from(allUsersMap.values()).find(u => {
+                                const uNorm = normalizeAssigneeValue(u.name);
+                                return uNorm && (uNorm === norm || uNorm.includes(norm) || norm.includes(uNorm));
+                            });
+                            if (found && found.email) return found.email.toLowerCase();
+                        }
+                    }
+                    return null;
+                };
+
+                const taskAssigneeEmail = resolveAssigneeEmail(task);
+
                 if (isRework) {
                     type = 'rework';
-                    const assignee = task.assigneeEmail || task.userId || task.owner;
-                    if (assignee) targetEmails.push(assignee.toLowerCase());
+                    if (taskAssigneeEmail) targetEmails.push(taskAssigneeEmail);
                     title = '🔄 Task Received for Rework';
                     body = `Task "${task.desc || task.summary || task.id}" (${task.client || 'Client'}) has been sent for rework/corrections.`;
                 } else if (isQc) {
                     type = 'qc';
                     targetEmails.push('snehavilpower@gmail.com');
-                    if (task.assigneeEmail) targetEmails.push(task.assigneeEmail.toLowerCase());
+                    if (taskAssigneeEmail && taskAssigneeEmail !== 'snehavilpower@gmail.com') {
+                        targetEmails.push(taskAssigneeEmail);
+                    }
                     title = '🔎 New Task Ready for QC';
                     body = `Task "${task.desc || task.summary || task.id}" (${task.client || 'Client'}) is waiting for Quality Check.`;
                 }
@@ -36431,7 +36470,7 @@
 
                 try {
                     await push(ref(db, 'worksync/task_notifications'), notifData);
-                    console.log(`[Rework/QC Notif] Sent ${type} notification for ${task.id}`);
+                    console.log(`[Rework/QC Notif] Sent ${type} notification for ${task.id} to:`, targetEmails);
                 } catch (e) {
                     console.error('Failed to send rework/QC notification:', e);
                 }
@@ -36470,10 +36509,19 @@
             function openReworkQcModal(data) {
                 const modal = document.getElementById('reworkQcModal');
                 const container = document.getElementById('rework-qc-modal-content');
-                if (!modal || !container) return;
+                if (!modal || !container || !currentUser) return;
 
                 const isRework = isReworkStatus(data.newStatus || data.status);
                 const isQc = isQcStatus(data.newStatus || data.status);
+                const myEmail = currentUser.email.toLowerCase();
+
+                // Target restriction: Only show QC modal to Sneha or targeted recipients, and Rework modal to the assigned recipient
+                if (data.notifyEmails && Array.isArray(data.notifyEmails) && data.notifyEmails.length > 0) {
+                    const targets = data.notifyEmails.map(e => String(e).toLowerCase());
+                    if (!targets.includes(myEmail)) return;
+                } else if (isQc) {
+                    if (typeof isSnehaUser === 'function' && !isSnehaUser()) return;
+                }
 
                 const theme = isRework ? {
                     headerBg: 'bg-gradient-to-r from-rose-600 via-amber-600 to-rose-700',
@@ -36553,21 +36601,51 @@
                 } catch(e) {
                     console.warn('Could not show reworkQcModal:', e);
                 }
+
+                // Also send a browser push notification for Rework/QC alerts
+                try {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        const notifTitle = isRework ? '🔄 Rework Task Received' : '🔎 Quality Check Task Received';
+                        const notifBody = (taskTitle ? taskTitle + ' ' : '') + (client ? '(' + client + ')' : '') + (movedBy ? ' — ' + movedBy : '');
+                        const n = new Notification(notifTitle, {
+                            body: notifBody,
+                            icon: 'img/logo.png',
+                            tag: 'rework-qc-' + taskId,
+                            requireInteraction: true
+                        });
+                        n.onclick = () => {
+                            window.focus();
+                            n.close();
+                        };
+                    } else if ('Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission();
+                    }
+                } catch (notifErr) {
+                    console.warn('Browser notification failed:', notifErr);
+                }
             }
 
             function handleOpenAlertTask(taskId) {
                 if (!taskId) return;
+                // For QC user (Sneha): switch to QC view, then load QC task details
                 if (typeof isSnehaUser === 'function' && isSnehaUser() && typeof loadQcTaskDetails === 'function') {
-                    const qcSelect = document.getElementById('qc-task-select');
-                    if (qcSelect) {
-                        qcSelect.value = taskId;
-                        loadQcTaskDetails(taskId);
-                        return;
+                    if (typeof switchView === 'function') switchView('qc');
+                    setTimeout(() => {
+                        const qcSelect = document.getElementById('qc-task-select');
+                        if (qcSelect) {
+                            qcSelect.value = taskId;
+                            loadQcTaskDetails(taskId);
+                        }
+                    }, 300);
+                    return;
+                }
+                // For other users: switch to tasks view, then open edit modal
+                if (typeof switchView === 'function') switchView('tasks');
+                setTimeout(() => {
+                    if (typeof openEditTaskModal === 'function') {
+                        openEditTaskModal(taskId);
                     }
-                }
-                if (typeof openEditTaskModal === 'function') {
-                    openEditTaskModal(taskId);
-                }
+                }, 300);
             }
 
             let poppedAlertTaskIds = new Set(JSON.parse(sessionStorage.getItem('worksync_popped_alert_task_ids') || '[]'));
@@ -36628,9 +36706,16 @@
                     Object.entries(data).forEach(([id, notif]) => {
                         if (shownTaskNotifIds.has(id)) return;
 
-                        // Only show if this notification targets the current user
                         const targets = (notif.notifyEmails || []).map(e => e.toLowerCase());
-                        if (targets.length > 0 && !targets.includes(myEmail)) return;
+                        const isReworkOrQcNotif = notif.type === 'rework' || notif.type === 'qc' || isReworkStatus(notif.newStatus) || isQcStatus(notif.newStatus);
+
+                        // Strict target filtering:
+                        // For Rework and QC notifications, ONLY process if current user's email is explicitly in notifyEmails list
+                        if (isReworkOrQcNotif) {
+                            if (targets.length === 0 || !targets.includes(myEmail)) return;
+                        } else if (targets.length > 0 && !targets.includes(myEmail)) {
+                            return;
+                        }
 
                         // Don't show if already read
                         if (notif.readBy && notif.readBy[eKey(myEmail)]) return;
@@ -36642,7 +36727,7 @@
                         localStorage.setItem('worksync_toasted_notifs', JSON.stringify(Array.from(shownTaskNotifIds)));
 
                         // Trigger Popup Modal for Rework and QC notifications!
-                        if (notif.type === 'rework' || notif.type === 'qc' || isReworkStatus(notif.newStatus) || isQcStatus(notif.newStatus)) {
+                        if (isReworkOrQcNotif) {
                             openReworkQcModal(notif);
                         }
 
@@ -36657,7 +36742,7 @@
                             toast(`🔔 ${notif.title || 'Notification'}: ${notif.body}${imageHint}`, 'info', notif.image ? openNotif : null);
                         } else {
                             const client = notif.client ? ` (${notif.client})` : '';
-                            toast(`📋 Thumbnail task received: ${notif.taskId}${client} — ${notif.taskDesc}. Moved by ${notif.changedBy}`, 'info');
+                            toast(`📋 Task status updated: ${notif.taskId}${client} — ${notif.taskDesc}. Moved by ${notif.changedBy}`, 'info');
                         }
                     });
                 });
@@ -40330,6 +40415,14 @@
                 }
             }
             window.handleLogin = handleLogin; window.logout = logout; window.switchView = switchView; window.toggleSidebar = toggleSidebar;
+
+        // Support URL Hash Navigation for direct quick link opening and browser back/forward buttons
+        window.addEventListener('hashchange', function () {
+            const hashView = (window.location.hash || '').replace('#', '').trim();
+            if (hashView && typeof switchView === 'function' && typeof activeView !== 'undefined' && hashView !== activeView) {
+                switchView(hashView);
+            }
+        });
             window.doCheckIn = doCheckIn; window.doBreak = doBreak; window.doResume = doResume; window.confirmCheckOut = confirmCheckOut;
             window.openBreakPopup = openBreakPopup; window.closeBreakPopupOnly = closeBreakPopupOnly; window.doResumeFromBreakPopup = doResumeFromBreakPopup;
             window.syncTasks = syncTasks; window.toggleActiveTask = toggleActiveTask;
@@ -40818,7 +40911,8 @@
             window.filterQcReportsList = filterQcReportsList; window.renderQcReportsList = renderQcReportsList; window.loadMoreQcReports = loadMoreQcReports;
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
-            window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+            window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
+            window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;

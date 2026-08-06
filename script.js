@@ -1921,7 +1921,10 @@ if (initializeApp) {
     function restoreTimerState() {
         const state = localStorage.getItem('worksync_timerState');
         const ciTime = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
-        if (!state || !ciTime) return;
+        if (!state || !ciTime) {
+            setTimerState('idle');
+            return;
+        }
         isCheckedIn = true;
         checkInTime = ciTime;
         totalBreakDuration = parseInt(localStorage.getItem('worksync_totalBreakDuration'), 10) || 0;
