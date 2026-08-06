@@ -10823,12 +10823,12 @@
         </div>
     </dialog>
 
-    <!-- Task Resources Side Drawer -->
+    <!-- Task Resources Modal -->
     <dialog id="taskResourcesDrawer"
-        class="fixed inset-y-0 right-0 m-0 ml-auto h-full w-full max-w-lg md:max-w-xl bg-transparent border-none p-0 overflow-hidden backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm animate-in slide-in-from-right duration-250">
-        <div class="h-full w-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden border-l border-slate-100 dark:border-slate-800">
+        class="rounded-3xl shadow-2xl p-0 w-full max-w-lg md:max-w-xl border-none overflow-hidden bg-transparent backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+        <div class="w-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden rounded-3xl border border-slate-100 dark:border-slate-800 max-h-[90vh]">
             <!-- Header -->
-            <div class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 p-6 text-white shrink-0 relative">
+            <div class="bg-indigo-600 p-6 text-white shrink-0 relative">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
@@ -10838,7 +10838,7 @@
                             <h3 class="text-lg font-black tracking-tight leading-tight flex items-center gap-2">
                                 Task Resources
                             </h3>
-                            <p class="text-xs text-white/80 font-medium mt-0.5">Production file location & storage overview</p>
+                            <p class="text-xs text-white/80 font-medium mt-0.5">Production file location overview</p>
                         </div>
                     </div>
                     <button onclick="closeTaskResourcesDrawer()" class="w-9 h-9 rounded-full bg-black/10 hover:bg-black/25 flex items-center justify-center text-white transition-all cursor-pointer">
@@ -10848,7 +10848,7 @@
             </div>
 
             <!-- Content Area (Scrollable) -->
-            <div id="task-resources-drawer-content" class="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50 dark:bg-slate-900/50">
+            <div id="task-resources-drawer-content" class="p-5 space-y-4 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50">
                 <!-- Dynamically populated via openTaskResourcesDrawer JS -->
             </div>
         </div>
@@ -36763,46 +36763,117 @@ function isStrategyTask(t) {
                 const container = document.getElementById('task-resources-drawer-content');
                 if (!drawer || !container) return;
 
-                const task = (typeof tasks !== 'undefined' && Array.isArray(tasks))
-                    ? (tasks.find(t => String(t.id).toLowerCase() === String(taskId).toLowerCase()) || { id: taskId, desc: taskId })
-                    : { id: taskId, desc: taskId };
+                // 1. Retrieve Task from global tasks array
+                let task = (typeof tasks !== 'undefined' && Array.isArray(tasks))
+                    ? (tasks.find(t => String(t.id).toLowerCase() === String(taskId).toLowerCase() || String(t.jiraId || '').toLowerCase() === String(taskId).toLowerCase() || String(t.key || '').toLowerCase() === String(taskId).toLowerCase()) || null)
+                    : null;
 
-                const taskName = task.desc || task.summary || task.title || 'Task Details';
-                const client = task.client || 'Others';
-                const assignee = typeof assigneeName === 'function' ? assigneeName(task) : (task.assignee || 'Unassigned');
-                const status = task.status || 'To Do';
+                // 2. Retrieve Strategy Event from global strategyEvents object
+                let strategyEv = null;
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    if (strategyEvents[taskId]) {
+                        strategyEv = strategyEvents[taskId];
+                    } else {
+                        strategyEv = Object.values(strategyEvents).find(ev => 
+                            String(ev.id || '').toLowerCase() === String(taskId).toLowerCase() ||
+                            String(ev.jiraId || '').toLowerCase() === String(taskId).toLowerCase() ||
+                            String(ev.title || '').toLowerCase() === String(taskId).toLowerCase()
+                        );
+                    }
+                }
+
+                // If task object wasn't found in tasks array, assemble fallback from strategyEv
+                if (!task) {
+                    if (strategyEv) {
+                        task = {
+                            id: taskId,
+                            desc: strategyEv.title || taskId,
+                            client: strategyEv.client || 'Others',
+                            assignee: strategyEv.owner || 'Unassigned',
+                            status: strategyEv.status || 'To Do',
+                            duedate: strategyEv.duedate || strategyEv.date || '',
+                            folderPath: strategyEv.folderPath || strategyEv.sourceFolder || '',
+                            ...strategyEv
+                        };
+                    } else {
+                        task = { id: taskId, desc: taskId };
+                    }
+                }
+
+                const taskName = task.desc || task.summary || task.title || strategyEv?.title || 'Task Details';
+                const client = task.client || strategyEv?.client || 'Others';
+                const assignee = typeof assigneeName === 'function' && task ? assigneeName(task) : (task.assignee || task.owner || strategyEv?.owner || 'Unassigned');
+                const status = task.status || strategyEv?.status || 'To Do';
 
                 let dueDateFormatted = '—';
-                if (task.duedate) {
+                const dateVal = task.duedate || task.date || strategyEv?.duedate || strategyEv?.date;
+                if (dateVal) {
                     try {
-                        const [y, m, d] = task.duedate.split('-').map(Number);
+                        const [y, m, d] = dateVal.split('-').map(Number);
                         if (y && m && d) {
                             dueDateFormatted = new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
                         } else {
-                            dueDateFormatted = task.duedate;
+                            dueDateFormatted = dateVal;
                         }
                     } catch(e) {
-                        dueDateFormatted = task.duedate;
+                        dueDateFormatted = dateVal;
                     }
                 }
 
                 let year = '2026';
                 let monthName = 'August';
-                if (task.duedate) {
+                if (dateVal) {
                     try {
-                        const [y, m] = task.duedate.split('-').map(Number);
+                        const [y, m] = dateVal.split('-').map(Number);
                         if (y) year = String(y);
                         if (m) monthName = new Date(2026, m - 1, 1).toLocaleString('en-US', { month: 'long' });
                     } catch(e) {}
                 }
 
                 const numId = (taskId || '').replace(/[^0-9]/g, '');
-                const folderId = task.folderId || `FLD-${(numId.padStart(6, '0')) || '000284'}`;
-                const fileCount = task.fileCount || (parseInt(numId || '18', 10) % 25) + 8;
-                const storageMb = task.storageMb || ((parseInt(numId || '12', 10) * 37) % 800) + 120;
-                const lastUpdated = task.lastUpdated || 'Today 09:15 AM';
+                const folderId = task.folderId || strategyEv?.folderId || `FLD-${(numId.padStart(6, '0')) || '000284'}`;
+                const fileCount = task.fileCount || strategyEv?.fileCount || (parseInt(numId || '18', 10) % 25) + 8;
+                const storageMb = task.storageMb || strategyEv?.storageMb || ((parseInt(numId || '12', 10) * 37) % 800) + 120;
+                const lastUpdated = task.lastUpdated || strategyEv?.lastUpdated || 'Today 09:15 AM';
 
-                const pathParts = ['Clients', client, year, monthName, `${taskId} - ${taskName}`];
+                // Check actual stored folderPath / fileSourceUrl (e.g. \\192.168.11.154\g\Shoot July\Einstein\...)
+                const actualPath = task.folderPath || task.fileSourceUrl || task.file_source_url || task.source_url || task.sourceUrl || task.fileSource || task.sourceFolder || strategyEv?.folderPath || strategyEv?.sourceFolder || strategyEv?.fileSourceUrl || strategyEv?.source_url || '';
+                
+                const fallbackPath = `Clients / ${client} / ${year} / ${monthName} / ${taskId} - ${taskName}`;
+                const folderLocation = actualPath || fallbackPath;
+                const isCustomLinkedPath = Boolean(actualPath);
+
+                // Detect Path Type (UNC Network Drive, Web URL, or Folder Path)
+                const isUncPath = folderLocation.startsWith('\\\\') || folderLocation.startsWith('//') || folderLocation.includes('192.168.');
+                const isWebUrl = folderLocation.startsWith('http://') || folderLocation.startsWith('https://');
+
+                let pathTypeBadgeHtml = '';
+                if (isUncPath) {
+                    pathTypeBadgeHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80">
+                        <iconify-icon icon="solar:server-bold" width="13"></iconify-icon> Network Storage (UNC)
+                    </span>`;
+                } else if (isWebUrl) {
+                    pathTypeBadgeHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80">
+                        <iconify-icon icon="solar:link-circle-bold" width="13"></iconify-icon> Web / Cloud URL
+                    </span>`;
+                } else if (isCustomLinkedPath) {
+                    pathTypeBadgeHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Custom Location Linked
+                    </span>`;
+                } else {
+                    pathTypeBadgeHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/60">
+                        Default Hierarchy
+                    </span>`;
+                }
+
+                // Split path into visual breadcrumb segments
+                let pathSegments = [];
+                if (folderLocation.includes('\\') || folderLocation.includes('/')) {
+                    pathSegments = folderLocation.split(/[\\/]+/).filter(Boolean);
+                } else {
+                    pathSegments = [folderLocation];
+                }
+
                 const stStyle = typeof getStatusStyle === 'function' ? getStatusStyle(status) : { bg: 'bg-slate-100', text: 'text-slate-700' };
 
                 container.innerHTML = `
@@ -36838,85 +36909,68 @@ function isStrategyTask(t) {
                         </div>
                     </div>
 
-                    <!-- Source Folder Large Card -->
+                    <!-- Production File Location & Storage Overview Redesigned Model -->
                     <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-5">
-                        <div class="flex items-center justify-between">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
                             <div class="flex items-center gap-2">
-                                <iconify-icon icon="solar:folder-with-files-bold-duotone" class="text-indigo-600 dark:text-indigo-400" width="22"></iconify-icon>
-                                <h5 class="text-sm font-black text-slate-900 dark:text-white">Source Folder</h5>
+                                <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100 dark:border-indigo-900/50">
+                                    <iconify-icon icon="solar:folder-with-files-bold-duotone" width="20"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h5 class="text-sm font-black text-slate-900 dark:text-white">Production File Location</h5>
+                                    <p class="text-[10px] text-slate-400 font-medium">Storage overview & exact source path</p>
+                                </div>
                             </div>
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/80">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Linked
-                            </span>
+                            ${pathTypeBadgeHtml}
                         </div>
 
-                        <!-- Breadcrumb Navigation -->
-                        <div class="bg-slate-50 dark:bg-slate-900/80 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Folder Location</p>
-                            <div class="flex items-center flex-wrap gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-bold">
-                                ${pathParts.map((part, index) => {
-                                    const partialPath = pathParts.slice(0, index + 1).join(' > ');
-                                    const isLast = index === pathParts.length - 1;
+                        <!-- Exact Folder Path Display Box -->
+                        <div class="bg-slate-900 dark:bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 relative">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/80 pb-2">
+                                <span class="flex items-center gap-1.5 text-indigo-400">
+                                    <iconify-icon icon="solar:hard-drive-bold" width="13"></iconify-icon> Exact Folder / File Source Location
+                                </span>
+                            </div>
+
+                            <div class="font-mono text-xs font-bold text-emerald-400 dark:text-emerald-300 break-all select-all leading-relaxed py-1">
+                                ${escapeHtml(folderLocation)}
+                            </div>
+                        </div>
+
+                        <!-- Visual Breadcrumbs Navigation -->
+                        ${pathSegments.length > 0 ? `
+                        <div class="bg-slate-50 dark:bg-slate-900/80 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Folder Hierarchy Breakdown</p>
+                            <div class="flex items-center flex-wrap gap-1 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                ${pathSegments.map((segment, idx) => {
+                                    const isLast = idx === pathSegments.length - 1;
+                                    const subPath = (folderLocation.startsWith('\\\\') ? '\\\\' : '') + pathSegments.slice(0, idx + 1).join('\\');
                                     return `
-                                        <button onclick="openFolderBreadcrumb('${escapeHtml(part)}', '${escapeHtml(partialPath)}')"
-                                            class="px-2 py-1 rounded-lg transition-all text-left truncate max-w-[180px] ${isLast ? 'bg-indigo-100/70 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 font-extrabold' : 'hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600'} cursor-pointer"
-                                            title="${escapeHtml(part)}">
-                                            ${escapeHtml(part)}
+                                        <button onclick="openFolderBreadcrumb('${escapeHtml(segment).replace(/'/g, "\\'")}', '${escapeHtml(subPath).replace(/'/g, "\\'")}')"
+                                            class="px-2 py-0.5 rounded-md transition-all text-left truncate max-w-[200px] ${isLast ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'} cursor-pointer"
+                                            title="Copy sub-path: ${escapeHtml(subPath)}">
+                                            ${escapeHtml(segment)}
                                         </button>
-                                        ${!isLast ? `<span class="text-slate-300 dark:text-slate-600 font-normal">&gt;</span>` : ''}
+                                        ${!isLast ? `<span class="text-slate-300 dark:text-slate-600 font-bold select-none">&gt;</span>` : ''}
                                     `;
                                 }).join('')}
                             </div>
                         </div>
+                        ` : ''}
 
-                        <!-- Folder Information Metrics Grid -->
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Folder ID</p>
-                                <p class="text-xs font-mono font-black text-slate-800 dark:text-slate-200 mt-1">${escapeHtml(folderId)}</p>
-                            </div>
-                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Files</p>
-                                <p class="text-sm font-black text-slate-900 dark:text-white mt-1">${fileCount}</p>
-                            </div>
-                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Storage</p>
-                                <p class="text-sm font-black text-slate-900 dark:text-white mt-1">${storageMb} MB</p>
-                            </div>
-                            <div class="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Last Updated</p>
-                                <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 mt-1 truncate" title="${escapeHtml(lastUpdated)}">${escapeHtml(lastUpdated)}</p>
-                            </div>
-                        </div>
-
-                        <!-- Primary Action CTA -->
-                        <div class="pt-2">
-                            <button onclick="openInFileManager('${escapeHtml(client)}', '${escapeHtml(taskId)}')"
-                                class="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200/50 dark:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]">
-                                <iconify-icon icon="solar:folder-open-bold" width="20"></iconify-icon>
-                                Open in File Manager
+                        <!-- Primary Actions Row -->
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <button id="primary-copy-btn-${escapeHtml(taskId)}" onclick="copyTaskFolderPath('${escapeHtml(folderLocation).replace(/'/g, "\\'")}', 'primary-copy-btn-${escapeHtml(taskId)}')"
+                                class="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg shadow-indigo-200/50 dark:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]">
+                                <iconify-icon icon="solar:copy-bold" width="18"></iconify-icon>
+                                <span>Copy File Location</span>
+                            </button>
+                            <button onclick="changeTaskFolder('${escapeHtml(taskId).replace(/'/g, "\\'")}', '${escapeHtml(folderLocation).replace(/'/g, "\\'")}')"
+                                class="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                                <iconify-icon icon="solar:pen-new-square-bold" width="18" class="text-indigo-500"></iconify-icon>
+                                Edit Location
                             </button>
                         </div>
-                    </div>
-
-                    <!-- Secondary Actions Grid -->
-                    <div class="grid grid-cols-3 gap-3">
-                        <button onclick="changeTaskFolder('${escapeHtml(taskId)}')"
-                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
-                            <iconify-icon icon="solar:pen-new-square-linear" width="16"></iconify-icon>
-                            Change Folder
-                        </button>
-                        <button onclick="copyTaskFolderPath('${escapeHtml(pathParts.join(' / '))}')"
-                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
-                            <iconify-icon icon="solar:copy-linear" width="16"></iconify-icon>
-                            Copy Folder Path
-                        </button>
-                        <button onclick="openParentFolderInFm('${escapeHtml(client)}')"
-                            class="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
-                            <iconify-icon icon="solar:corner-left-up-linear" width="16"></iconify-icon>
-                            Open Parent Folder
-                        </button>
                     </div>
                 `;
 
@@ -36945,15 +36999,47 @@ function isStrategyTask(t) {
                 }, 300);
             }
 
-            function copyTaskFolderPath(folderPath) {
+            function copyTaskFolderPath(folderPath, buttonId = null) {
+                if (!folderPath) return;
+                const textToCopy = String(folderPath).trim();
+
+                const performSuccessUi = () => {
+                    if (buttonId) {
+                        const btn = document.getElementById(buttonId);
+                        if (btn) {
+                            const origHtml = btn.innerHTML;
+                            btn.innerHTML = `<iconify-icon icon="solar:check-circle-bold" width="15" class="text-emerald-300"></iconify-icon> <span>Copied!</span>`;
+                            btn.classList.remove('bg-indigo-600');
+                            btn.classList.add('bg-emerald-600');
+                            setTimeout(() => {
+                                btn.innerHTML = origHtml;
+                                btn.classList.remove('bg-emerald-600');
+                                btn.classList.add('bg-indigo-600');
+                            }, 2000);
+                        }
+                    }
+                    if (typeof toast === 'function') toast(`📋 Folder location copied to clipboard!`, 'success');
+                };
+
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(folderPath).then(() => {
-                        if (typeof toast === 'function') toast('📋 Folder path copied to clipboard!', 'success');
-                    }).catch(() => {
-                        if (typeof toast === 'function') toast(`Path: ${folderPath}`, 'info');
+                    navigator.clipboard.writeText(textToCopy).then(performSuccessUi).catch(() => {
+                        // Fallback using temporary textarea element
+                        const el = document.createElement('textarea');
+                        el.value = textToCopy;
+                        document.body.appendChild(el);
+                        el.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(el);
+                        performSuccessUi();
                     });
                 } else {
-                    if (typeof toast === 'function') toast(`Path: ${folderPath}`, 'info');
+                    const el = document.createElement('textarea');
+                    el.value = textToCopy;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    performSuccessUi();
                 }
             }
 
@@ -36970,16 +37056,40 @@ function isStrategyTask(t) {
                 }, 300);
             }
 
-            function changeTaskFolder(taskId) {
-                const newPath = prompt(`Enter new Source Folder path for task ${taskId}:`, `Clients / Quade / 2026 / August / ${taskId}`);
-                if (newPath) {
-                    if (typeof toast === 'function') toast(`✓ Source folder updated for ${taskId}`, 'success');
+            function changeTaskFolder(taskId, currentPath = '') {
+                const newPath = prompt(`Enter or paste Source Folder location / UNC path for task ${taskId}:`, currentPath || '');
+                if (newPath !== null) {
+                    const cleanPath = newPath.trim();
+                    // Update Firebase if available
+                    if (typeof db !== 'undefined' && typeof ref !== 'undefined' && typeof update !== 'undefined') {
+                        try {
+                            const updates = {};
+                            updates[`worksync/strategy_events/${taskId}/folderPath`] = cleanPath;
+                            update(ref(db), updates).catch(e => console.warn('Firebase folderPath update error:', e));
+                        } catch(e) {
+                            console.warn('Firebase update catch:', e);
+                        }
+                    }
+                    // Update local memory strategyEvents
+                    if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                        if (strategyEvents[taskId]) strategyEvents[taskId].folderPath = cleanPath;
+                        else {
+                            const evKey = Object.keys(strategyEvents).find(k => strategyEvents[k].jiraId === taskId || strategyEvents[k].id === taskId);
+                            if (evKey && strategyEvents[evKey]) strategyEvents[evKey].folderPath = cleanPath;
+                        }
+                    }
+                    // Update local memory tasks
+                    if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                        const t = tasks.find(x => String(x.id).toLowerCase() === String(taskId).toLowerCase() || String(x.jiraId || '').toLowerCase() === String(taskId).toLowerCase());
+                        if (t) t.folderPath = cleanPath;
+                    }
+                    if (typeof toast === 'function') toast(cleanPath ? '✓ Production file location updated!' : 'Location cleared', 'success');
                     openTaskResourcesDrawer(taskId);
                 }
             }
 
             function openFolderBreadcrumb(segmentName, fullPath) {
-                if (typeof toast === 'function') toast(`📁 Location: ${fullPath}`, 'info');
+                copyTaskFolderPath(fullPath);
             }
 
             function handleOpenAlertTask(taskId) {
