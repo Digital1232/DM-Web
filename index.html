@@ -1280,18 +1280,26 @@
             z-index: -9998 !important;
         }
 
-        .toast {
-            position: fixed;
-            margin: 0;
-            top: auto;
-            left: auto;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
+        .toast, #toast, #toast:popover-open {
+            position: fixed !important;
+            margin: 0 !important;
+            top: auto !important;
+            left: auto !important;
+            bottom: 20px !important;
+            right: 20px !important;
+            z-index: 2147483647 !important;
             transform: translateY(150%);
             opacity: 0;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
             pointer-events: none;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.25) !important;
+        }
+
+        .toast.show, #toast.show, #toast:popover-open.show {
+            transform: translateY(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }
 
         .hidden-sidebar {
@@ -2547,7 +2555,7 @@
 
 
     <!-- Toast Notification -->
-    <div id="toast"
+    <div id="toast" popover="manual"
         class="toast flex items-center gap-3 px-4 py-3 rounded-xl bg-white shadow-2xl border border-slate-100 min-w-[300px]">
         <div id="toast-icon" class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"></div>
         <div class="flex-1">
@@ -34722,8 +34730,25 @@
                 clearTimeout(toastTimeout);
                 clearTimeout(toastHideTimeout);
 
+                // If any modal dialog is open, append toast into top open dialog as fallback so it stays above modal backdrop across all browsers
                 try {
-                    if (t.showPopover) t.showPopover();
+                    const openDialogs = Array.from(document.querySelectorAll('dialog[open]'));
+                    if (openDialogs.length > 0) {
+                        const topDialog = openDialogs[openDialogs.length - 1];
+                        if (t.parentElement !== topDialog) {
+                            topDialog.appendChild(t);
+                        }
+                    } else if (t.parentElement !== document.body) {
+                        document.body.appendChild(t);
+                    }
+                } catch (dialogErr) {
+                    console.warn('Toast reparent error:', dialogErr);
+                }
+
+                try {
+                    if (t.showPopover && t.hasAttribute('popover')) {
+                        t.showPopover();
+                    }
                 } catch (e) {
                     // Ignore if already open or not supported
                 }
@@ -34735,7 +34760,9 @@
                     toastHideTimeout = setTimeout(() => {
                         if (!t.classList.contains('show')) {
                             try {
-                                if (t.hidePopover) t.hidePopover();
+                                if (t.hidePopover && t.hasAttribute('popover')) {
+                                    t.hidePopover();
+                                }
                             } catch (e) {
                                 // Ignore already hidden popover error
                             }
