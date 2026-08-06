@@ -2558,10 +2558,13 @@
     <div id="toast" popover="manual"
         class="toast flex items-center gap-3 px-4 py-3 rounded-xl bg-white shadow-2xl border border-slate-100 min-w-[300px]">
         <div id="toast-icon" class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"></div>
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
             <p id="toast-title" class="text-xs font-bold text-slate-900"></p>
-            <p id="toast-msg" class="text-[10px] text-slate-500"></p>
+            <p id="toast-msg" class="text-[10px] text-slate-500 truncate"></p>
         </div>
+        <button type="button" onclick="dismissToast(); event.stopPropagation();" class="text-slate-400 hover:text-slate-600 p-1 rounded-md transition-colors shrink-0" title="Dismiss notification">
+            <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
+        </button>
     </div>
 
     <!-- ══════════════════════════════════════════
@@ -16942,13 +16945,14 @@
 
 function isStrategyTask(t) {
                 if (!t) return false;
-                if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || (t.category && String(t.category).toLowerCase() === 'strategy')) {
+                if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || t.isStrategyTask || t.fileManagerPath || t.driveLink || t.sourceLink || t.sourceFolder || t.folderPath || t.fileSourceUrl || t.file_source_url || t.source_url || (t.category && String(t.category).toLowerCase() === 'strategy')) {
                     return true;
                 }
+                const taskId = String(t.id || '').toLowerCase().trim();
+                const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
+                const taskJira = String(t.jiraId || '').toLowerCase().trim();
+
                 if (typeof strategyEvents !== 'undefined' && strategyEvents) {
-                    const taskId = String(t.id || '').toLowerCase().trim();
-                    const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
-                    const taskJira = String(t.jiraId || '').toLowerCase().trim();
                     const isLinked = Object.values(strategyEvents).some(ev => {
                         if (!ev) return false;
                         const evId = String(ev.id || '').toLowerCase().trim();
@@ -16961,6 +16965,49 @@ function isStrategyTask(t) {
                     });
                     if (isLinked) return true;
                 }
+
+                // Subtask check: inherit strategy/source link status from parent task if t is a subtask
+                const parentId = t.parentId || t.parentKey || t.parentTaskId || (typeof t.parent === 'string' ? t.parent : (t.parent?.key || t.parent?.id || ''));
+                if (parentId) {
+                    const pIdStr = String(parentId).toLowerCase().trim();
+                    let allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
+                    let parentTask = allTasks.find(p => p && p !== t && (
+                        String(p.id || '').toLowerCase() === pIdStr ||
+                        String(p.jiraId || '').toLowerCase() === pIdStr ||
+                        String(p.key || '').toLowerCase() === pIdStr
+                    ));
+
+                    if (parentTask) {
+                        if (parentTask.isStrategyEvent || parentTask.isStrategy || parentTask.eventId || parentTask.strategyEventId || parentTask.isStrategyTask || parentTask.fileManagerPath || parentTask.driveLink || parentTask.sourceLink || parentTask.sourceFolder || parentTask.folderPath || parentTask.fileSourceUrl || parentTask.file_source_url || parentTask.source_url || (parentTask.category && String(parentTask.category).toLowerCase() === 'strategy')) {
+                            return true;
+                        }
+                        if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                            const pId = String(parentTask.id || '').toLowerCase().trim();
+                            const pDesc = String(parentTask.desc || parentTask.summary || '').toLowerCase().trim();
+                            const pJira = String(parentTask.jiraId || '').toLowerCase().trim();
+                            const isParentLinked = Object.values(strategyEvents).some(ev => {
+                                if (!ev) return false;
+                                const evId = String(ev.id || '').toLowerCase().trim();
+                                const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                                const evTitle = String(ev.title || '').toLowerCase().trim();
+                                return (evId && evId === pId) ||
+                                       (evJira && evJira === pId) ||
+                                       (pJira && evJira && evJira === pJira) ||
+                                       (evTitle && pDesc && evTitle === pDesc);
+                            });
+                            if (isParentLinked) return true;
+                        }
+                    } else if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                        const isParentLinked = Object.values(strategyEvents).some(ev => {
+                            if (!ev) return false;
+                            const evId = String(ev.id || '').toLowerCase().trim();
+                            const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                            return (evId && evId === pIdStr) || (evJira && evJira === pIdStr);
+                        });
+                        if (isParentLinked) return true;
+                    }
+                }
+
                 return false;
             }
 
@@ -19927,14 +19974,24 @@ function isStrategyTask(t) {
                         if (p.referenceLinks) sub.referenceLinks = p.referenceLinks;
                         if (p.campaign) sub.campaign = p.campaign;
                         if (p.department) sub.department = p.department;
+
+                        if (p.fileManagerPath) sub.fileManagerPath = p.fileManagerPath;
+                        if (p.sourceFolder) sub.sourceFolder = p.sourceFolder;
+                        if (p.sourceLink) sub.sourceLink = p.sourceLink;
+                        if (p.driveLink) sub.driveLink = p.driveLink;
+                        if (p.folderPath) sub.folderPath = p.folderPath;
+                        if (p.fileSourceUrl) sub.fileSourceUrl = p.fileSourceUrl;
+                        if (p.isStrategyTask) sub.isStrategyTask = p.isStrategyTask;
+                        if (p.isStrategyEvent) sub.isStrategyEvent = p.isStrategyEvent;
+                        if (p.eventId) sub.eventId = p.eventId;
+                        if (p.strategyEventId) sub.strategyEventId = p.strategyEventId;
                     };
 
                     let jiraTasks = mapJiraIssues(issues);
 
-                    // Post-process to inherit parent fields for thumbnail subtasks
+                    // Post-process to inherit parent fields for subtasks
                     jiraTasks.forEach(t => {
-                        const isThumbnail = t.desc && t.desc.toLowerCase().includes('thumbnail');
-                        if (isThumbnail && t.parentId) {
+                        if (t.parentId) {
                             const parent = jiraTasks.find(p => p.id === t.parentId) || tasks.find(p => p.id === t.parentId);
                             if (parent) {
                                 copyParentFieldsToSubtask(t, parent);
@@ -24697,6 +24754,7 @@ function isStrategyTask(t) {
                     });
                     notification.onclick = async () => {
                         window.focus();
+                        try { notification.close(); } catch(e){}
                         switchView('chat');
                         if (conv.type === 'dm') {
                             await openDm(msg.senderEmail);
@@ -24704,6 +24762,9 @@ function isStrategyTask(t) {
                             await openConversation(convId, conv.name, 'group', conv.profilePicture || '');
                         }
                     };
+                    setTimeout(() => {
+                        try { notification.close(); } catch(e){}
+                    }, 4000);
                 }
             }
 
@@ -26657,7 +26718,13 @@ function isStrategyTask(t) {
                     }
                     if ('Notification' in window && Notification.permission === 'granted') {
                         const n = new Notification(item.title || 'Team announcement', { body: item.body || 'Open One Desk to view the announcement' });
-                        n.onclick = announceClick;
+                        n.onclick = () => {
+                            announceClick();
+                            try { n.close(); } catch(e){}
+                        };
+                        setTimeout(() => {
+                            try { n.close(); } catch(e){}
+                        }, 5000);
                     }
                 });
             }
@@ -35061,9 +35128,37 @@ function isStrategyTask(t) {
 
             // UTILS
             let toastTimeout, toastHideTimeout;
-            function toast(msg, type = 'info', onClick = null) {
+            function dismissToast() {
+                const t = document.getElementById('toast');
+                if (!t) return;
+                clearTimeout(toastTimeout);
+                clearTimeout(toastHideTimeout);
+                t.classList.remove('show');
+                toastHideTimeout = setTimeout(() => {
+                    try {
+                        if (t.hidePopover && t.hasAttribute('popover')) {
+                            t.hidePopover();
+                        }
+                    } catch (e) {
+                        // Ignore already hidden popover error
+                    }
+                }, 300);
+            }
+
+            function toast(msg, type = 'info', onClickOrDuration = null, customDuration = 3500) {
                 const t = document.getElementById('toast'), ti = document.getElementById('toast-icon'), tt = document.getElementById('toast-title'), tm = document.getElementById('toast-msg');
                 if (!t) return;
+
+                let onClick = null;
+                let duration = 3500;
+
+                if (typeof onClickOrDuration === 'function') {
+                    onClick = onClickOrDuration;
+                    if (typeof customDuration === 'number') duration = customDuration;
+                } else if (typeof onClickOrDuration === 'number') {
+                    duration = onClickOrDuration;
+                }
+
                 if (tt) tt.textContent = type.toUpperCase();
                 if (tm) tm.textContent = msg;
                 if (ti) {
@@ -35071,7 +35166,7 @@ function isStrategyTask(t) {
                     ti.innerHTML = `<iconify-icon icon="${type === 'success' ? 'solar:check-circle-bold' : (type === 'error' ? 'solar:danger-circle-bold' : 'solar:info-circle-bold')}" width="20"></iconify-icon>`;
                 }
 
-                t.onclick = onClick;
+                t.onclick = onClick ? (e) => { onClick(e); dismissToast(); } : null;
                 t.style.cursor = onClick ? 'pointer' : 'default';
 
                 clearTimeout(toastTimeout);
@@ -35103,19 +35198,8 @@ function isStrategyTask(t) {
                 requestAnimationFrame(() => t.classList.add('show'));
 
                 toastTimeout = setTimeout(() => {
-                    t.classList.remove('show');
-                    toastHideTimeout = setTimeout(() => {
-                        if (!t.classList.contains('show')) {
-                            try {
-                                if (t.hidePopover && t.hasAttribute('popover')) {
-                                    t.hidePopover();
-                                }
-                            } catch (e) {
-                                // Ignore already hidden popover error
-                            }
-                        }
-                    }, 300);
-                }, 3000);
+                    dismissToast();
+                }, duration);
             }
 
             function updateSystemStatus(ok, message, isAutoSync = false) {
@@ -37020,13 +37104,15 @@ function isStrategyTask(t) {
                         const n = new Notification(notifTitle, {
                             body: notifBody,
                             icon: 'img/logo.png',
-                            tag: 'rework-qc-' + taskId,
-                            requireInteraction: true
+                            tag: 'rework-qc-' + taskId
                         });
                         n.onclick = () => {
                             window.focus();
-                            n.close();
+                            try { n.close(); } catch(e){}
                         };
+                        setTimeout(() => {
+                            try { n.close(); } catch(e){}
+                        }, 5000);
                     } else if ('Notification' in window && Notification.permission === 'default') {
                         Notification.requestPermission();
                     }
@@ -37045,17 +37131,38 @@ function isStrategyTask(t) {
                     ? (tasks.find(t => String(t.id).toLowerCase() === String(taskId).toLowerCase() || String(t.jiraId || '').toLowerCase() === String(taskId).toLowerCase() || String(t.key || '').toLowerCase() === String(taskId).toLowerCase()) || null)
                     : null;
 
-                // 2. Retrieve Strategy Event from global strategyEvents object
+                // Resolve Parent Task if this is a subtask
+                const parentId = task ? (task.parentId || task.parentKey || task.parentTaskId || (typeof task.parent === 'string' ? task.parent : (task.parent?.key || task.parent?.id || ''))) : null;
+                let parentTask = null;
+                if (parentId && typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                    parentTask = tasks.find(p => p && p !== task && (
+                        String(p.id || '').toLowerCase() === String(parentId).toLowerCase() ||
+                        String(p.jiraId || '').toLowerCase() === String(parentId).toLowerCase() ||
+                        String(p.key || '').toLowerCase() === String(parentId).toLowerCase()
+                    )) || null;
+                }
+
+                // 2. Retrieve Strategy Event from global strategyEvents object (checking task ID first, then parent ID)
                 let strategyEv = null;
                 if (typeof strategyEvents !== 'undefined' && strategyEvents) {
-                    if (strategyEvents[taskId]) {
-                        strategyEv = strategyEvents[taskId];
-                    } else {
+                    const candidateIds = [taskId];
+                    if (parentId) candidateIds.push(parentId);
+                    if (parentTask?.id) candidateIds.push(parentTask.id);
+                    if (parentTask?.jiraId) candidateIds.push(parentTask.jiraId);
+
+                    for (const cId of candidateIds) {
+                        const cleanId = String(cId).toLowerCase();
+                        if (strategyEvents[cId]) {
+                            strategyEv = strategyEvents[cId];
+                            break;
+                        }
                         strategyEv = Object.values(strategyEvents).find(ev => 
-                            String(ev.id || '').toLowerCase() === String(taskId).toLowerCase() ||
-                            String(ev.jiraId || '').toLowerCase() === String(taskId).toLowerCase() ||
-                            String(ev.title || '').toLowerCase() === String(taskId).toLowerCase()
+                            String(ev.id || '').toLowerCase() === cleanId ||
+                            String(ev.jiraId || '').toLowerCase() === cleanId ||
+                            (parentTask && ev.title && String(parentTask.desc || parentTask.summary || '').toLowerCase().trim() === String(ev.title).toLowerCase().trim()) ||
+                            (task && ev.title && String(task.desc || task.summary || '').toLowerCase().trim() === String(ev.title).toLowerCase().trim())
                         );
+                        if (strategyEv) break;
                     }
                 }
 
@@ -37078,12 +37185,12 @@ function isStrategyTask(t) {
                 }
 
                 const taskName = task.desc || task.summary || task.title || strategyEv?.title || 'Task Details';
-                const client = task.client || strategyEv?.client || 'Others';
+                const client = task.client || parentTask?.client || strategyEv?.client || 'Others';
                 const assignee = typeof assigneeName === 'function' && task ? assigneeName(task) : (task.assignee || task.owner || strategyEv?.owner || 'Unassigned');
                 const status = task.status || strategyEv?.status || 'To Do';
 
                 let dueDateFormatted = '—';
-                const dateVal = task.duedate || task.date || strategyEv?.duedate || strategyEv?.date;
+                const dateVal = task.duedate || task.date || parentTask?.duedate || parentTask?.date || strategyEv?.duedate || strategyEv?.date;
                 if (dateVal) {
                     try {
                         const [y, m, d] = dateVal.split('-').map(Number);
@@ -37108,15 +37215,17 @@ function isStrategyTask(t) {
                 }
 
                 const numId = (taskId || '').replace(/[^0-9]/g, '');
-                const folderId = task.folderId || strategyEv?.folderId || `FLD-${(numId.padStart(6, '0')) || '000284'}`;
-                const fileCount = task.fileCount || strategyEv?.fileCount || (parseInt(numId || '18', 10) % 25) + 8;
-                const storageMb = task.storageMb || strategyEv?.storageMb || ((parseInt(numId || '12', 10) * 37) % 800) + 120;
-                const lastUpdated = task.lastUpdated || strategyEv?.lastUpdated || 'Today 09:15 AM';
+                const folderId = task.folderId || parentTask?.folderId || strategyEv?.folderId || `FLD-${(numId.padStart(6, '0')) || '000284'}`;
+                const fileCount = task.fileCount || parentTask?.fileCount || strategyEv?.fileCount || (parseInt(numId || '18', 10) % 25) + 8;
+                const storageMb = task.storageMb || parentTask?.storageMb || strategyEv?.storageMb || ((parseInt(numId || '12', 10) * 37) % 800) + 120;
+                const lastUpdated = task.lastUpdated || parentTask?.lastUpdated || strategyEv?.lastUpdated || 'Today 09:15 AM';
 
-                // Check actual stored folderPath / fileSourceUrl (e.g. \\192.168.11.154\g\Shoot July\Einstein\...)
-                const actualPath = task.folderPath || task.fileSourceUrl || task.file_source_url || task.source_url || task.sourceUrl || task.fileSource || task.sourceFolder || strategyEv?.folderPath || strategyEv?.sourceFolder || strategyEv?.fileSourceUrl || strategyEv?.source_url || '';
+                // Check actual stored folderPath / fileSourceUrl (from subtask, parentTask, or strategyEv)
+                const actualPath = task.folderPath || task.fileSourceUrl || task.file_source_url || task.source_url || task.sourceUrl || task.fileSource || task.sourceFolder || task.fileManagerPath || task.sourceLink || task.driveLink ||
+                                   parentTask?.folderPath || parentTask?.fileSourceUrl || parentTask?.file_source_url || parentTask?.source_url || parentTask?.sourceUrl || parentTask?.fileSource || parentTask?.sourceFolder || parentTask?.fileManagerPath || parentTask?.sourceLink || parentTask?.driveLink ||
+                                   strategyEv?.folderPath || strategyEv?.sourceFolder || strategyEv?.fileSourceUrl || strategyEv?.source_url || '';
                 
-                const fallbackPath = `Clients / ${client} / ${year} / ${monthName} / ${taskId} - ${taskName}`;
+                const fallbackPath = `Clients / ${client} / ${year} / ${monthName} / ${parentTask ? `${parentTask.id} - ${parentTask.desc || parentTask.summary}` : `${taskId} - ${taskName}`}`;
                 const folderLocation = actualPath || fallbackPath;
                 const isCustomLinkedPath = Boolean(actualPath);
 
@@ -39141,6 +39250,16 @@ function isStrategyTask(t) {
                     if (task.referenceLinks) subTask.referenceLinks = task.referenceLinks;
                     if (task.campaign) subTask.campaign = task.campaign;
                     if (task.department) subTask.department = task.department;
+                    if (task.fileManagerPath) subTask.fileManagerPath = task.fileManagerPath;
+                    if (task.sourceFolder) subTask.sourceFolder = task.sourceFolder;
+                    if (task.sourceLink) subTask.sourceLink = task.sourceLink;
+                    if (task.driveLink) subTask.driveLink = task.driveLink;
+                    if (task.folderPath) subTask.folderPath = task.folderPath;
+                    if (task.fileSourceUrl) subTask.fileSourceUrl = task.fileSourceUrl;
+                    if (task.isStrategyTask) subTask.isStrategyTask = task.isStrategyTask;
+                    if (task.isStrategyEvent) subTask.isStrategyEvent = task.isStrategyEvent;
+                    if (task.eventId) subTask.eventId = task.eventId;
+                    if (task.strategyEventId) subTask.strategyEventId = task.strategyEventId;
 
                     try {
                         await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail)}/${subTaskId}`), subTask);
@@ -41660,6 +41779,7 @@ function isStrategyTask(t) {
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
+            window.dismissToast = dismissToast;
             window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;

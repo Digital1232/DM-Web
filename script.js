@@ -3474,25 +3474,69 @@ if (initializeApp) {
 
 function isStrategyTask(t) {
         if (!t) return false;
-        if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || (t.category && String(t.category).toLowerCase() === 'strategy')) {
+        if (t.isStrategyEvent || t.isStrategy || t.eventId || t.strategyEventId || t.isStrategyTask || t.fileManagerPath || t.driveLink || t.sourceLink || t.sourceFolder || t.folderPath || t.fileSourceUrl || t.file_source_url || t.source_url || (t.category && String(t.category).toLowerCase() === 'strategy')) {
             return true;
         }
+        const taskId = String(t.id || '').toLowerCase().trim();
+        const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
+        const taskJira = String(t.jiraId || '').toLowerCase().trim();
+
         if (typeof strategyEvents !== 'undefined' && strategyEvents) {
-            const taskId = String(t.id || '').toLowerCase().trim();
-            const taskDesc = String(t.desc || t.summary || '').toLowerCase().trim();
-            const taskJira = String(t.jiraId || '').toLowerCase().trim();
             const isLinked = Object.values(strategyEvents).some(ev => {
-        if (!ev) return false;
-        const evId = String(ev.id || '').toLowerCase().trim();
-        const evJira = String(ev.jiraId || '').toLowerCase().trim();
-        const evTitle = String(ev.title || '').toLowerCase().trim();
-        return (evId && evId === taskId) ||
-               (evJira && evJira === taskId) ||
-               (taskJira && evJira && evJira === taskJira) ||
-               (evTitle && taskDesc && evTitle === taskDesc);
+                if (!ev) return false;
+                const evId = String(ev.id || '').toLowerCase().trim();
+                const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                const evTitle = String(ev.title || '').toLowerCase().trim();
+                return (evId && evId === taskId) ||
+                       (evJira && evJira === taskId) ||
+                       (taskJira && evJira && evJira === taskJira) ||
+                       (evTitle && taskDesc && evTitle === taskDesc);
             });
             if (isLinked) return true;
         }
+
+        // Subtask check: inherit strategy/source link status from parent task if t is a subtask
+        const parentId = t.parentId || t.parentKey || t.parentTaskId || (typeof t.parent === 'string' ? t.parent : (t.parent?.key || t.parent?.id || ''));
+        if (parentId) {
+            const pIdStr = String(parentId).toLowerCase().trim();
+            let allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
+            let parentTask = allTasks.find(p => p && p !== t && (
+                String(p.id || '').toLowerCase() === pIdStr ||
+                String(p.jiraId || '').toLowerCase() === pIdStr ||
+                String(p.key || '').toLowerCase() === pIdStr
+            ));
+
+            if (parentTask) {
+                if (parentTask.isStrategyEvent || parentTask.isStrategy || parentTask.eventId || parentTask.strategyEventId || parentTask.isStrategyTask || parentTask.fileManagerPath || parentTask.driveLink || parentTask.sourceLink || parentTask.sourceFolder || parentTask.folderPath || parentTask.fileSourceUrl || parentTask.file_source_url || parentTask.source_url || (parentTask.category && String(parentTask.category).toLowerCase() === 'strategy')) {
+                    return true;
+                }
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const pId = String(parentTask.id || '').toLowerCase().trim();
+                    const pDesc = String(parentTask.desc || parentTask.summary || '').toLowerCase().trim();
+                    const pJira = String(parentTask.jiraId || '').toLowerCase().trim();
+                    const isParentLinked = Object.values(strategyEvents).some(ev => {
+                        if (!ev) return false;
+                        const evId = String(ev.id || '').toLowerCase().trim();
+                        const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                        const evTitle = String(ev.title || '').toLowerCase().trim();
+                        return (evId && evId === pId) ||
+                               (evJira && evJira === pId) ||
+                               (pJira && evJira && evJira === pJira) ||
+                               (evTitle && pDesc && evTitle === pDesc);
+                    });
+                    if (isParentLinked) return true;
+                }
+            } else if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                const isParentLinked = Object.values(strategyEvents).some(ev => {
+                    if (!ev) return false;
+                    const evId = String(ev.id || '').toLowerCase().trim();
+                    const evJira = String(ev.jiraId || '').toLowerCase().trim();
+                    return (evId && evId === pIdStr) || (evJira && evJira === pIdStr);
+                });
+                if (isParentLinked) return true;
+            }
+        }
+
         return false;
     }
 
@@ -4422,6 +4466,44 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent');
             console.log(`📡 Fetched ${issues.length} Jira issues across pages.`);
             let jiraTasks = mapJiraIssues(issues);
+
+            const copyParentFieldsToSubtask = (sub, p) => {
+                if (!sub || !p) return;
+                sub.client = p.client || sub.client || '';
+                sub.project = p.project || sub.project || '';
+                sub.parentId = p.id || sub.parentId || '';
+                sub.duedate = p.duedate || sub.duedate || null;
+                sub.priority = p.priority || sub.priority || 'Medium';
+                sub.clientLabels = p.clientLabels || sub.clientLabels || [];
+                sub.category = p.category || sub.category || '';
+                sub.taskType = p.taskType || sub.taskType || '';
+
+                if (p.postDate) sub.postDate = p.postDate;
+                if (p.referenceLinks) sub.referenceLinks = p.referenceLinks;
+                if (p.campaign) sub.campaign = p.campaign;
+                if (p.department) sub.department = p.department;
+
+                if (p.fileManagerPath) sub.fileManagerPath = p.fileManagerPath;
+                if (p.sourceFolder) sub.sourceFolder = p.sourceFolder;
+                if (p.sourceLink) sub.sourceLink = p.sourceLink;
+                if (p.driveLink) sub.driveLink = p.driveLink;
+                if (p.folderPath) sub.folderPath = p.folderPath;
+                if (p.fileSourceUrl) sub.fileSourceUrl = p.fileSourceUrl;
+                if (p.isStrategyTask) sub.isStrategyTask = p.isStrategyTask;
+                if (p.isStrategyEvent) sub.isStrategyEvent = p.isStrategyEvent;
+                if (p.eventId) sub.eventId = p.eventId;
+                if (p.strategyEventId) sub.strategyEventId = p.strategyEventId;
+            };
+
+            jiraTasks.forEach(t => {
+                if (t.parentId) {
+                    const parent = jiraTasks.find(p => p.id === t.parentId) || tasks.find(p => p.id === t.parentId);
+                    if (parent) {
+                        copyParentFieldsToSubtask(t, parent);
+                    }
+                }
+            });
+
             const subtaskCount = jiraTasks.filter(t => t.parentId).length;
             console.log(`📌 Imported ${subtaskCount} Jira subtasks among ${jiraTasks.length} total tasks.`);
             console.log(`📊 Mapped ${jiraTasks.length} tasks from Jira for ${isAuto ? 'auto-sync' : 'full-sync'}`);
@@ -4438,6 +4520,14 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                     existingTask.assignee = jiraTask.assignee;
                     existingTask.assigneeEmail = jiraTask.assigneeEmail;
                     existingTask.duedate = jiraTask.duedate;
+                    if (jiraTask.parentId) existingTask.parentId = jiraTask.parentId;
+                    if (jiraTask.fileManagerPath) existingTask.fileManagerPath = jiraTask.fileManagerPath;
+                    if (jiraTask.sourceFolder) existingTask.sourceFolder = jiraTask.sourceFolder;
+                    if (jiraTask.sourceLink) existingTask.sourceLink = jiraTask.sourceLink;
+                    if (jiraTask.driveLink) existingTask.driveLink = jiraTask.driveLink;
+                    if (jiraTask.folderPath) existingTask.folderPath = jiraTask.folderPath;
+                    if (jiraTask.fileSourceUrl) existingTask.fileSourceUrl = jiraTask.fileSourceUrl;
+                    if (jiraTask.isStrategyTask) existingTask.isStrategyTask = jiraTask.isStrategyTask;
                 } else {
                     // New task from Jira
                     taskMap.set(jiraTask.id, jiraTask);
