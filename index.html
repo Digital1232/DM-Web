@@ -15046,17 +15046,27 @@
 
                 try {
                     const today = new Date().toISOString().slice(0, 10);
-                    const q = query(
-                        ref(db, 'worksync/attendance_events'),
-                        orderByChild('userId'),
-                        equalTo(currentUser.email)
-                    );
-                    const snap = await get(q);
-                    if (!snap.exists()) return;
+                    let snap;
+                    try {
+                        const q = query(
+                            ref(db, 'worksync/attendance_events'),
+                            orderByChild('userId'),
+                            equalTo(currentUser.email)
+                        );
+                        snap = await get(q);
+                    } catch (qErr) {
+                        console.warn('[restoreCheckinFromFirebase] Unindexed query fallback:', qErr?.message || qErr);
+                        snap = await get(ref(db, 'worksync/attendance_events'));
+                    }
+                    if (!snap || !snap.exists()) return;
 
                     // Collect today's events sorted by timestamp
+                    const userEmailLower = (currentUser.email || '').toLowerCase();
                     const todayEvents = Object.values(snap.val())
-                        .filter(e => e.date === today)
+                        .filter(e => {
+                            const u = (e.userId || e.userEmail || e.email || '').toLowerCase();
+                            return u === userEmailLower && e.date === today;
+                        })
                         .sort((a, b) => a.timestamp - b.timestamp);
 
                     if (!todayEvents.length) {
