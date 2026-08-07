@@ -24585,7 +24585,7 @@ function isStrategyTask(t) {
 
                 const datePickerEl = document.getElementById('qc-report-datepicker');
                 if (datePickerEl && window.Litepicker) {
-                    new Litepicker({
+                    const picker = new Litepicker({
                         element: datePickerEl,
                         singleMode: false,
                         format: 'DD MMM, YYYY',
@@ -24593,12 +24593,13 @@ function isStrategyTask(t) {
                         plugins: ['mobilefriendly'],
                         setup: (picker) => {
                             picker.on('selected', (date1, date2) => {
-                                fromInput.value = date1.dateInstance.toISOString().slice(0, 10);
-                                toInput.value = date2.dateInstance.toISOString().slice(0, 10);
+                                fromInput.value = formatLocalDate(date1);
+                                toInput.value = formatLocalDate(date2);
                                 handleQcReportFilterChange();
                             });
                         },
                     });
+                    datePickerEl.litepicker = picker;
                 }
                 setQcReportDatePreset('this_month'); // Default to this month for QC reports
             }
@@ -24615,8 +24616,8 @@ function isStrategyTask(t) {
                 else if (preset === 'this_month') { fromDate = new Date(today.getFullYear(), today.getMonth(), 1); }
 
                 const toDate = new Date(); // always end today for presets
-                fromInput.value = fromDate.toISOString().slice(0, 10);
-                toInput.value = toDate.toISOString().slice(0, 10);
+                fromInput.value = formatLocalDate(fromDate);
+                toInput.value = formatLocalDate(toDate);
 
                 const picker = document.getElementById('qc-report-datepicker')?.litepicker;
                 if (picker) {
@@ -25497,17 +25498,40 @@ function isStrategyTask(t) {
             // Helper function to parse date strings in local timezone (not UTC)
             // Fixes timezone issues where new Date('2026-07-02') interprets as UTC
             function parseLocalDate(dateStr) {
-                const [year, month, day] = dateStr.split('-').map(Number);
-                return new Date(year, month - 1, day);
+                if (!dateStr) return new Date();
+                if (typeof dateStr !== 'string') return new Date(dateStr);
+                const parts = dateStr.split('-').map(Number);
+                if (parts.length === 3 && !parts.some(isNaN)) {
+                    return new Date(parts[0], parts[1] - 1, parts[2]);
+                }
+                return new Date(dateStr);
+            }
+
+            function getNativeDate(ld) {
+                if (!ld) return null;
+                if (typeof ld.toJSDate === 'function') return ld.toJSDate();
+                if (ld.dateInstance) return ld.dateInstance;
+                if (typeof ld.toDate === 'function') return ld.toDate();
+                if (ld instanceof Date) return ld;
+                return new Date(ld);
             }
 
             // Helper function to format date to string in local timezone
             function formatLocalDate(d) {
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
+                if (!d) return '';
+                const dateObj = getNativeDate(d);
+                if (!dateObj || isNaN(dateObj.getTime())) return '';
+                const year = dateObj.getFullYear();
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             }
+
+            function getTaskTs(t) {
+                if (!t) return 0;
+                return t.completedAt || t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0) || 0;
+            }
+            window.getTaskTs = getTaskTs;
 
 
 
@@ -26858,7 +26882,7 @@ function isStrategyTask(t) {
 
                 const datePickerEl = document.getElementById('report-datepicker');
                 if (datePickerEl && window.Litepicker) {
-                    new Litepicker({
+                    const picker = new Litepicker({
                         element: datePickerEl,
                         singleMode: false,
                         format: 'DD MMM, YYYY',
@@ -26866,12 +26890,13 @@ function isStrategyTask(t) {
                         plugins: ['mobilefriendly'],
                         setup: (picker) => {
                             picker.on('selected', (date1, date2) => {
-                                fromInput.value = formatLocalDate(date1.dateInstance);
-                                toInput.value = formatLocalDate(date2.dateInstance);
+                                fromInput.value = formatLocalDate(date1);
+                                toInput.value = formatLocalDate(date2);
                                 handleReportFilterChange();
                             });
                         },
                     });
+                    datePickerEl.litepicker = picker;
                 }
 
                 setReportDatePreset('this_week');
@@ -31124,9 +31149,11 @@ function isStrategyTask(t) {
                     get(ref(db, 'worksync/attendance_events')),
                     get(ref(db, 'worksync/qc_reports')),
                     get(ref(db, 'worksync/sneha_work_selections')),
-                    get(ref(db, 'worksync/internal_task_preparations'))
-                ]).then(([attSnap, qcSnap, snehaSnap, internalPrepSnap]) => {
+                    get(ref(db, 'worksync/internal_task_preparations')),
+                    get(ref(db, 'worksync/task_notifications'))
+                ]).then(([attSnap, qcSnap, snehaSnap, internalPrepSnap, notifSnap]) => {
                     const attEvents = Object.values(attSnap.val() || {});
+                    const taskNotifications = Object.values(notifSnap.val() || {});
                     // Merge JIRA selections (Sneha) and internal task preparations into one unified list
                     const snehaSelections = [
                         ...Object.values(snehaSnap.val() || {}),
@@ -31808,9 +31835,11 @@ function isStrategyTask(t) {
                     get(ref(db, 'worksync/attendance_events')),
                     get(ref(db, 'worksync/qc_reports')),
                     get(ref(db, 'worksync/sneha_work_selections')),
-                    get(ref(db, 'worksync/internal_task_preparations'))
-                ]).then(([attSnap, qcSnap, snehaSnap, internalPrepSnap]) => {
+                    get(ref(db, 'worksync/internal_task_preparations')),
+                    get(ref(db, 'worksync/task_notifications'))
+                ]).then(([attSnap, qcSnap, snehaSnap, internalPrepSnap, notifSnap]) => {
                     const attEvents = Object.values(attSnap.val() || {});
+                    const taskNotifications = Object.values(notifSnap.val() || {});
                     const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => {
                         const entry = { id, ...r };
                         if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
@@ -32939,6 +32968,236 @@ function isStrategyTask(t) {
                     </div>
                     `;
 
+                    // ── Delivery & Timing Report For Murugesh ──
+                    let murugeshDeliverySectionHtml = '';
+                    if (email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                        const deliveryTaskSet = new Set();
+                        const murugeshDeliveryTasks = [];
+
+                        const relevantMurugeshTasks = tasks.filter(t => {
+                            if (!t) return false;
+                            const st = (t.status || '').toLowerCase().trim();
+                            const isTargetStatus = ['design completed', 'client sent', 'client approved', 'posted', 'done', 'quality check'].includes(st);
+                            const isAssigned = assigneeMatches(t, email) || t.murugeshTask || (t.userId || '').toLowerCase() === email;
+                            const ts = getTaskTs(t);
+                            const inPeriod = ts >= fromTs && ts <= toTs;
+                            return (isTargetStatus || isAssigned) && (inPeriod || workedTasks.some(wt => wt.id === t.id));
+                        });
+
+                        relevantMurugeshTasks.forEach(t => {
+                            if (t && t.id && !deliveryTaskSet.has(t.id)) {
+                                deliveryTaskSet.add(t.id);
+                                murugeshDeliveryTasks.push(t);
+                            }
+                        });
+
+                        const notifList = typeof taskNotifications !== 'undefined' ? (taskNotifications || []) : [];
+
+                        // Include tasks from notifications (e.g. JULY-*, AUG-*) that moved to Design Completed or Client Sent
+                        notifList.forEach(n => {
+                            if (n.taskId && (n.type === 'design_completed' || n.type === 'client_sent' || (n.newStatus || '').toLowerCase() === 'design completed' || (n.newStatus || '').toLowerCase() === 'client sent')) {
+                                if (!deliveryTaskSet.has(n.taskId)) {
+                                    const existingTask = tasks.find(t => t.id === n.taskId);
+                                    if (existingTask) {
+                                        deliveryTaskSet.add(existingTask.id);
+                                        murugeshDeliveryTasks.push(existingTask);
+                                    } else {
+                                        deliveryTaskSet.add(n.taskId);
+                                        murugeshDeliveryTasks.push({
+                                            id: n.taskId,
+                                            desc: n.taskDesc || n.taskId,
+                                            client: n.client || '—',
+                                            status: n.newStatus || 'Client Sent',
+                                            manual: !n.taskId.includes('-')
+                                        });
+                                    }
+                                }
+                            }
+                        });
+
+                        let totalRatingSum = 0;
+                        let ratedCount = 0;
+
+                        const deliveryTaskItemsHtml = murugeshDeliveryTasks.map(t => {
+                            const dcNotif = notifList.find(n => n.taskId === t.id && (n.type === 'design_completed' || (n.newStatus || '').toLowerCase() === 'design completed'));
+                            const dcReport = freshQcReports.find(r => r.taskId === t.id && (r.newStatus === 'Design Completed' || r.actionStatus === 'Approved' || (r.qcScore || 0) >= 85));
+                            
+                            let dcTime = dcNotif ? dcNotif.timestamp : (dcReport ? dcReport.timestamp : null);
+                            if (!dcTime) {
+                                if ((t.status || '').toLowerCase().includes('design completed') || (t.status || '').toLowerCase().includes('client')) {
+                                    dcTime = t.designCompletedAt || t.updatedAt || t.createdAt || null;
+                                }
+                            }
+
+                            const csNotif = notifList.find(n => n.taskId === t.id && (n.type === 'client_sent' || (n.newStatus || '').toLowerCase() === 'client sent'));
+                            let csTime = csNotif ? csNotif.timestamp : null;
+                            if (!csTime && ['client sent', 'client approved', 'posted', 'done'].includes((t.status || '').toLowerCase().trim())) {
+                                csTime = t.clientSentAt || t.completedAt || t.updatedAt || null;
+                            }
+
+                            const formatDateTime = (ts) => {
+                                if (!ts) return '—';
+                                const d = new Date(ts);
+                                if (isNaN(d.getTime())) return '—';
+                                return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
+                                       d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            };
+
+                            const dcFormattedDate = formatDateTime(dcTime);
+                            const csFormattedDate = formatDateTime(csTime);
+
+                            let durationFormattedStr = '—';
+                            let ratingScoreVal = 0;
+                            let ratingStars = '';
+                            let ratingBadge = '';
+                            let ratingStyle = '';
+                            let ratingScoreText = '';
+
+                            if (dcTime && csTime && csTime >= dcTime) {
+                                const diffMs = csTime - dcTime;
+                                const hours = Math.floor(diffMs / 3600000);
+                                const mins = Math.floor((diffMs % 3600000) / 60000);
+                                durationFormattedStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                                if (diffMs <= 2 * 3600 * 1000) {
+                                    ratingScoreVal = 5.0;
+                                    ratingStars = '⭐⭐⭐⭐⭐';
+                                    ratingBadge = '⚡ Lightning Delivery (<2h)';
+                                    ratingStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                                } else if (diffMs <= 6 * 3600 * 1000) {
+                                    ratingScoreVal = 4.5;
+                                    ratingStars = '⭐⭐⭐⭐½';
+                                    ratingBadge = '🚀 Fast Turnaround (2-6h)';
+                                    ratingStyle = 'bg-blue-50 text-blue-700 border border-blue-200';
+                                } else if (diffMs <= 24 * 3600 * 1000) {
+                                    ratingScoreVal = 3.5;
+                                    ratingStars = '⭐⭐⭐½';
+                                    ratingBadge = '👍 Same Day / Standard (6-24h)';
+                                    ratingStyle = 'bg-amber-50 text-amber-700 border border-amber-200';
+                                } else {
+                                    ratingScoreVal = 2.0;
+                                    ratingStars = '⭐⭐';
+                                    ratingBadge = '⚠️ Delayed Delivery (>24h)';
+                                    ratingStyle = 'bg-rose-50 text-rose-700 border border-rose-200';
+                                }
+                                ratingScoreText = `${ratingScoreVal.toFixed(1)} / 5.0`;
+                                totalRatingSum += ratingScoreVal;
+                                ratedCount++;
+                            } else if (dcTime && !csTime) {
+                                const diffMs = Math.max(0, Date.now() - dcTime);
+                                const hours = Math.floor(diffMs / 3600000);
+                                const mins = Math.floor((diffMs % 3600000) / 60000);
+                                durationFormattedStr = `Elapsed: ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
+                                ratingStars = '⏳';
+                                ratingBadge = 'Pending Client Send';
+                                ratingStyle = 'bg-slate-100 text-slate-700 border border-slate-200';
+                                ratingScoreText = 'Pending Send';
+                            } else {
+                                durationFormattedStr = 'Status Transition Logged';
+                                ratingStars = '⭐ 4.0';
+                                ratingBadge = 'Completed';
+                                ratingStyle = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+                                ratingScoreText = '4.0 / 5.0';
+                                totalRatingSum += 4.0;
+                                ratedCount++;
+                            }
+
+                            const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
+                            const projectKey = (t.id && t.id.includes('-')) ? t.id.split('-')[0].toUpperCase() : null;
+                            const projectKeyTagHtml = projectKey ? `<span class="px-2 py-0.5 text-[9px] font-black rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase">Key: ${escapeHtml(projectKey)}</span>` : '';
+                            const badgeClass = getStatusBadgeClass(t.status);
+
+                            return `
+                                <div class="bg-slate-50/70 border border-slate-100 hover:border-slate-200 rounded-2xl p-4 transition-all space-y-3">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100/80 pb-2.5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-mono font-black text-indigo-600">${taskKeyHtml}</span>
+                                            ${projectKeyTagHtml}
+                                            <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-white text-slate-600 border border-slate-200">Client: ${escapeHtml(t.client || '—')}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-0.5 text-[9px] font-bold border rounded-full ${badgeClass}">${t.status || 'No Status'}</span>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black ${ratingStyle}">
+                                                ${ratingStars} ${ratingBadge}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="text-xs font-bold text-slate-900 leading-snug">${escapeHtml(t.desc || t.summary || '')}</p>
+
+                                    <!-- Timing & Delivery Rating Details -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-white border border-slate-100 rounded-xl p-3 text-[10px]">
+                                        <div>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Received in Design Completed</p>
+                                            <p class="font-bold text-slate-700 flex items-center gap-1">
+                                                <iconify-icon icon="solar:calendar-check-bold" class="text-indigo-500 shrink-0" width="12"></iconify-icon>
+                                                <span>${dcFormattedDate}</span>
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Moved to Client Sent</p>
+                                            <p class="font-bold text-slate-700 flex items-center gap-1">
+                                                <iconify-icon icon="solar:sendFile-bold" class="text-emerald-500 shrink-0" width="12"></iconify-icon>
+                                                <span>${csFormattedDate}</span>
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Delivery Speed & Turnaround</p>
+                                            <p class="font-black text-indigo-700 flex items-center gap-1">
+                                                <iconify-icon icon="solar:clock-circle-bold" class="text-indigo-600 shrink-0" width="12"></iconify-icon>
+                                                <span>${durationFormattedStr}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between text-[9px] text-slate-400 font-semibold pt-1 border-t border-slate-100/60">
+                                        <span>Task Handling: <strong class="text-slate-700">Design Completed → Client Sent</strong></span>
+                                        <span>Delivery Rating: <strong class="text-slate-800 font-black">${ratingScoreText}</strong></span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        const avgRatingVal = ratedCount > 0 ? (totalRatingSum / ratedCount).toFixed(1) : '5.0';
+
+                        murugeshDeliverySectionHtml = `
+                        <!-- Delivery & Timing Report Panel (Murugesh) -->
+                        <div class="mt-6 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-4">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                            <iconify-icon icon="solar:stopwatch-bold" class="text-indigo-600" width="16"></iconify-icon>
+                                        </div>
+                                        <h4 class="text-sm font-black text-slate-900 tracking-tight">Delivery & Timing Report</h4>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 font-semibold mt-1">Detailed log of tasks received in Design Completed status, time moved to Client Sent, turnaround duration, and delivery ratings.</p>
+                                </div>
+                                <div class="flex items-center gap-2 self-start sm:self-auto">
+                                    <span class="px-3 py-1 text-[10px] font-black rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                        ${murugeshDeliveryTasks.length} ${murugeshDeliveryTasks.length === 1 ? 'Task' : 'Tasks'} Tracked
+                                    </span>
+                                    <span class="px-3 py-1 text-[10px] font-black rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                        Average Rating: ⭐ ${avgRatingVal} / 5.0
+                                    </span>
+                                </div>
+                            </div>
+
+                            ${murugeshDeliveryTasks.length > 0 ? `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
+                                    ${deliveryTaskItemsHtml}
+                                </div>
+                            ` : `
+                                <div class="bg-emerald-50/50 border border-emerald-100/80 rounded-2xl p-6 text-center space-y-2">
+                                    <iconify-icon icon="solar:shield-check-bold-duotone" class="text-emerald-500" width="36"></iconify-icon>
+                                    <p class="text-xs font-black text-slate-800">No Delivery Tasks Logged</p>
+                                    <p class="text-[10px] text-slate-500 font-semibold">No tasks received in Design Completed or moved to Client Sent during the selected period.</p>
+                                </div>
+                            `}
+                        </div>
+                        `;
+                    }
+
                     let html = `
                 ${comparisonHeader}
                 
@@ -33280,7 +33539,7 @@ function isStrategyTask(t) {
                 </div>
                 `;
 
-                    container.innerHTML = html + qcMistakesSectionHtml;
+                    container.innerHTML = html + (email.toLowerCase() === 'murugeshvilpower@gmail.com' ? murugeshDeliverySectionHtml : qcMistakesSectionHtml);
                 }).catch(err => {
                     container.innerHTML = `<p class="text-center text-rose-400 text-sm py-8">Failed to calculate diagnostics: ${err.message}</p>`;
                 });
@@ -35750,19 +36009,13 @@ function isStrategyTask(t) {
                         plugins: ['mobilefriendly'],
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
-                                const getNativeDate = (ld) => {
-                                    if (!ld) return null;
-                                    if (ld.dateInstance) return ld.dateInstance;
-                                    if (typeof ld.toDate === 'function') return ld.toDate();
-                                    return new Date(ld);
-                                };
                                 const d1 = getNativeDate(date1);
                                 const d2 = getNativeDate(date2) || d1;
                                 if (d1) {
                                     const fromInput = document.getElementById('jira-date-from');
                                     const toInput = document.getElementById('jira-date-to');
-                                    if (fromInput) fromInput.value = d1.getFullYear() + '-' + String(d1.getMonth() + 1).padStart(2, '0') + '-' + String(d1.getDate()).padStart(2, '0');
-                                    if (toInput) toInput.value = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0') + '-' + String(d2.getDate()).padStart(2, '0');
+                                    if (fromInput) fromInput.value = formatLocalDate(d1);
+                                    if (toInput) toInput.value = formatLocalDate(d2);
 
                                     setTimeout(() => {
                                         const presetSelect = document.getElementById('jira-due-date-filter');
@@ -35924,19 +36177,13 @@ function isStrategyTask(t) {
                         plugins: ['mobilefriendly'],
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
-                                const getNativeDate = (ld) => {
-                                    if (!ld) return null;
-                                    if (ld.dateInstance) return ld.dateInstance;
-                                    if (typeof ld.toDate === 'function') return ld.toDate();
-                                    return new Date(ld);
-                                };
                                 const d1 = getNativeDate(date1);
                                 const d2 = getNativeDate(date2) || d1;
                                 if (d1) {
                                     const fromInput = document.getElementById('internal-date-from');
                                     const toInput = document.getElementById('internal-date-to');
-                                    if (fromInput) fromInput.value = d1.getFullYear() + '-' + String(d1.getMonth() + 1).padStart(2, '0') + '-' + String(d1.getDate()).padStart(2, '0');
-                                    if (toInput) toInput.value = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0') + '-' + String(d2.getDate()).padStart(2, '0');
+                                    if (fromInput) fromInput.value = formatLocalDate(d1);
+                                    if (toInput) toInput.value = formatLocalDate(d2);
 
                                     setTimeout(() => {
                                         const presetSelect = document.getElementById('internal-due-date-filter');
@@ -37207,6 +37454,37 @@ function isStrategyTask(t) {
                     console.log(`[Design Completed Notif] Sent notification for ${task.id} to Murugesh, Palani & Nanjil (${targetEmails.join(', ')})`);
                 } catch (e) {
                     console.error('Failed to send Design Completed notification:', e);
+                }
+            }
+
+            async function sendClientSentNotification(task, changedBy, oldStatus) {
+                if (!db || !task) return;
+                const targetEmails = ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
+                const title = '📤 Task Moved to Client Sent';
+                const taskTitle = task.desc || task.summary || task.id || 'Task';
+                const clientStr = task.client ? ` (${task.client})` : '';
+                const body = `Task "${taskTitle}"${clientStr} was sent to the client.`;
+
+                const notifData = {
+                    type: 'client_sent',
+                    taskId: task.id,
+                    taskDesc: taskTitle,
+                    client: task.client || '',
+                    newStatus: 'Client Sent',
+                    oldStatus: oldStatus || 'Design Completed',
+                    changedBy: changedBy || currentUser?.name || currentUser?.email || 'System',
+                    notifyEmails: targetEmails,
+                    title,
+                    body,
+                    timestamp: Date.now(),
+                    readBy: {}
+                };
+
+                try {
+                    await push(ref(db, 'worksync/task_notifications'), notifData);
+                    console.log(`[Client Sent Notif] Sent notification for ${task.id}`);
+                } catch (e) {
+                    console.error('Failed to send Client Sent notification:', e);
                 }
             }
 
@@ -39277,6 +39555,11 @@ function isStrategyTask(t) {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
+                        // Client Sent notification for Murugesh & admins
+                        if (newStatus.toLowerCase().trim() === 'client sent' && (oldStatus || '').toLowerCase().trim() !== 'client sent') {
+                            sendClientSentNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
+                        }
+
                         // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
@@ -39315,6 +39598,11 @@ function isStrategyTask(t) {
                         // Design Completed notification for Murugesh, Palani & Nanjil
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
+                        }
+
+                        // Client Sent notification for Murugesh & admins
+                        if (newStatus.toLowerCase().trim() === 'client sent' && (oldStatus || '').toLowerCase().trim() !== 'client sent') {
+                            sendClientSentNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
                         // Sync to matching strategy event
