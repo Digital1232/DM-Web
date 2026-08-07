@@ -11939,13 +11939,18 @@
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
                 projectKey: 'AUG',
-                projectKeys: ['AUG'],
+                projectKeys: ['AUG', 'JULY'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
             };
 
             function getJiraProjectKeyForDate(dateStr) {
+                if (!dateStr) return JIRA.projectKey || 'AUG';
+                const month = String(dateStr).split('-')[1];
+                if (month === '07') return 'JULY';
+                if (month === '06') return 'JUN';
+                if (month === '05') return 'MAY';
                 return JIRA.projectKey || 'AUG';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
@@ -19945,7 +19950,7 @@ function isStrategyTask(t) {
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
                 }
                 try {
-                    const projectKeys = JIRA.projectKeys || ['AUG'];
+                    const projectKeys = JIRA.projectKeys || ['AUG', 'JULY'];
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
@@ -24368,10 +24373,18 @@ function isStrategyTask(t) {
                     container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No tasks in this category.</p>`;
                 } else {
                     container.innerHTML = matchedTasks.map(t => {
+                        const reworkBadge = (t.reworkCount > 0 || (t.status || '').toLowerCase().includes('rework')) ? `
+                            <span class="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <iconify-icon icon="solar:refresh-circle-bold" width="10"></iconify-icon>
+                                Rework: ${t.reworkCount || 1}x
+                            </span>` : '';
                         return `<div class="bg-slate-50 border border-slate-200 p-3 rounded-xl hover:border-indigo-300 transition-colors cursor-pointer" onclick="openEditTaskModal('${t.id}')">
-                            <div class="flex items-center justify-between mb-1">
+                            <div class="flex items-center justify-between mb-1 gap-2">
                                 <span class="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest">${t.id || 'N/A'}</span>
-                                <span class="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">${t.status || 'No Status'}</span>
+                                <div class="flex items-center gap-1">
+                                    ${reworkBadge}
+                                    <span class="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">${t.status || 'No Status'}</span>
+                                </div>
                             </div>
                             <p class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(t.desc || t.summary || t.name || '')}</p>
                             ${t.client ? `<p class="text-[10px] font-medium text-slate-500 mt-2"><iconify-icon icon="solar:buildings-bold" class="inline align-text-bottom text-slate-400 mr-1"></iconify-icon>${escapeHtml(t.client)}</p>` : ''}
@@ -33087,15 +33100,168 @@ function isStrategyTask(t) {
                                         `;
                         }).join('')}
                                 </div>
-                            ` : `
-                                <p class="text-xs italic text-slate-400 text-center py-12">No tasks worked on in this date range.</p>
-                            `}
-                        </div>
-                    </div>
-                </div>
-                `;
+                    // ── QC Mistakes & Rework History Panel ──
+                    const taskReworkCountMap = {};
+                    freshQcReports.forEach(r => {
+                        if (!r.taskId) return;
+                        const isRework = r.actionStatus === 'Rework' || 
+                                         (r.mistakeItems && r.mistakeItems.length > 0) ||
+                                         isReworkStatus(r.newStatus || r.status || '');
+                        if (isRework) {
+                            taskReworkCountMap[r.taskId] = (taskReworkCountMap[r.taskId] || 0) + 1;
+                        }
+                    });
 
-                    container.innerHTML = html;
+                    const userQcReportMap = {};
+                    periodQc.forEach(r => {
+                        if (!r.taskId) return;
+                        if (!userQcReportMap[r.taskId]) userQcReportMap[r.taskId] = [];
+                        userQcReportMap[r.taskId].push(r);
+                    });
+
+                    const userMistakeTasks = workedTasks.filter(t => {
+                        const reps = userQcReportMap[t.id] || [];
+                        const hasMistakes = reps.some(r => r.mistakeItems && r.mistakeItems.length > 0);
+                        const hasReworkRep = reps.some(r => r.actionStatus === 'Rework' || isReworkStatus(r.newStatus || ''));
+                        const reworkCount = Math.max(t.reworkCount || 0, taskReworkCountMap[t.id] || 0);
+                        const isCurrentlyRework = (t.status || '').toLowerCase().includes('rework');
+                        return hasMistakes || hasReworkRep || reworkCount > 0 || isCurrentlyRework;
+                    });
+
+                    periodQc.forEach(r => {
+                        if (r.taskId && ((r.mistakeItems && r.mistakeItems.length > 0) || r.actionStatus === 'Rework')) {
+                            if (!userMistakeTasks.some(t => t.id === r.taskId)) {
+                                const existingTask = tasks.find(t => t.id === r.taskId);
+                                if (existingTask) userMistakeTasks.push(existingTask);
+                                else userMistakeTasks.push({ id: r.taskId, desc: r.taskDesc || r.summary || r.taskId, client: r.client || '—', status: 'Rework' });
+                            }
+                        }
+                    });
+
+                    let totalMistakesCount = 0;
+                    let totalReworkEventsCount = 0;
+
+                    const mistakeTaskItemsHtml = userMistakeTasks.map(t => {
+                        const reps = userQcReportMap[t.id] || freshQcReports.filter(r => r.taskId === t.id && (r.timestamp || 0) >= fromTs && (r.timestamp || 0) <= toTs);
+                        const totalReworksForTask = Math.max(t.reworkCount || 0, taskReworkCountMap[t.id] || 0, reps.filter(r => r.actionStatus === 'Rework').length);
+                        totalReworkEventsCount += totalReworksForTask;
+
+                        const allMistakes = [];
+                        const allNotes = [];
+                        let latestScore = null;
+                        let reviewerName = '';
+                        let reviewDate = '';
+
+                        reps.forEach(r => {
+                            if (r.mistakeItems && Array.isArray(r.mistakeItems)) {
+                                r.mistakeItems.forEach(item => {
+                                    if (!allMistakes.includes(item)) allMistakes.push(item);
+                                });
+                            }
+                            if (r.notes && r.notes.trim() && !allNotes.includes(r.notes.trim())) {
+                                allNotes.push(r.notes.trim());
+                            }
+                            if (r.qcScore !== undefined) latestScore = r.qcScore;
+                            if (r.qcUser) reviewerName = r.qcUser;
+                            if (r.timestamp) reviewDate = new Date(r.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        });
+
+                        totalMistakesCount += allMistakes.length;
+
+                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
+
+                        const mistakesFormattedHtml = allMistakes.length > 0 ? `
+                            <div class="flex flex-wrap gap-1.5 my-2">
+                                ${allMistakes.map(m => {
+                                    const parts = m.split('|');
+                                    const cat = parts.length > 1 ? parts[0] : '';
+                                    const name = parts.length > 1 ? parts.slice(1).join('|') : m;
+                                    return `<span class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold rounded-lg bg-rose-50 text-rose-700 border border-rose-100">
+                                        <iconify-icon icon="solar:close-circle-bold" class="text-rose-500" width="12"></iconify-icon>
+                                        ${cat ? `<strong class="text-rose-800">${escapeHtml(cat)}:</strong> ` : ''}${escapeHtml(name)}
+                                    </span>`;
+                                }).join('')}
+                            </div>
+                        ` : `<p class="text-[11px] italic text-slate-400 my-1">No checkbox items checked, moved to rework by reviewer notes/status.</p>`;
+
+                        const notesFormattedHtml = allNotes.length > 0 ? `
+                            <div class="bg-amber-50/60 border border-amber-100/80 rounded-xl p-2.5 mt-2">
+                                <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-0.5">QC Reviewer Feedback</p>
+                                <p class="text-xs text-slate-700 font-medium italic">"${escapeHtml(allNotes.join(' | '))}"</p>
+                            </div>
+                        ` : '';
+
+                        return `
+                            <div class="bg-slate-50/70 border border-slate-100 hover:border-slate-200 rounded-2xl p-4 transition-all">
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100/80 pb-2.5 mb-2.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-mono font-black text-indigo-600">${taskKeyHtml}</span>
+                                        <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-white text-slate-600 border border-slate-200">Client: ${escapeHtml(t.client || '—')}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                                            <iconify-icon icon="solar:refresh-circle-bold" width="12"></iconify-icon>
+                                            Rework Count: ${totalReworksForTask} ${totalReworksForTask === 1 ? 'time' : 'times'}
+                                        </span>
+                                        ${latestScore !== null ? `<span class="px-2 py-0.5 text-[10px] font-black rounded-full ${latestScore >= 85 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">QC Score: ${latestScore}%</span>` : ''}
+                                    </div>
+                                </div>
+                                
+                                <p class="text-xs font-bold text-slate-900 leading-snug mb-2">${escapeHtml(t.desc || t.summary || '')}</p>
+                                
+                                <div class="mt-2">
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Identified QC Mistakes (${allMistakes.length})</p>
+                                    ${mistakesFormattedHtml}
+                                </div>
+
+                                ${notesFormattedHtml}
+
+                                <div class="flex items-center justify-between text-[9px] text-slate-400 font-semibold mt-3 pt-2 border-t border-slate-100/60">
+                                    <span>Status: <strong class="text-slate-700">${t.status || 'No Status'}</strong></span>
+                                    <span>${reviewerName ? `Reviewed by <strong class="text-slate-600">${escapeHtml(reviewerName)}</strong>` : ''} ${reviewDate ? `on ${reviewDate}` : ''}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    const qcMistakesSectionHtml = `
+                    <!-- QC Mistakes & Rework History Panel -->
+                    <div class="mt-6 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center">
+                                        <iconify-icon icon="solar:danger-bold" class="text-rose-600" width="16"></iconify-icon>
+                                    </div>
+                                    <h4 class="text-sm font-black text-slate-900 tracking-tight">QC Mistakes & Rework History</h4>
+                                </div>
+                                <p class="text-[10px] text-slate-400 font-semibold mt-1">Detailed list of QC issues flagged, mistake categories, and total times tasks moved to rework in this period.</p>
+                            </div>
+                            <div class="flex items-center gap-2 self-start sm:self-auto">
+                                <span class="px-3 py-1 text-[10px] font-black rounded-full bg-rose-50 text-rose-700 border border-rose-100">
+                                    ${userMistakeTasks.length} ${userMistakeTasks.length === 1 ? 'Task' : 'Tasks'} with Mistakes
+                                </span>
+                                <span class="px-3 py-1 text-[10px] font-black rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                                    ${totalMistakesCount} Total Issues Flagged
+                                </span>
+                            </div>
+                        </div>
+
+                        ${userMistakeTasks.length > 0 ? `
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
+                                ${mistakeTaskItemsHtml}
+                            </div>
+                        ` : `
+                            <div class="bg-emerald-50/50 border border-emerald-100/80 rounded-2xl p-6 text-center space-y-2">
+                                <iconify-icon icon="solar:shield-check-bold-duotone" class="text-emerald-500" width="36"></iconify-icon>
+                                <p class="text-xs font-black text-slate-800">Zero QC Mistakes Recorded</p>
+                                <p class="text-[10px] text-slate-500 font-semibold">No QC issues or rework events recorded for this employee during the selected period.</p>
+                            </div>
+                        `}
+                    </div>
+                    `;
+
+                    container.innerHTML = html + qcMistakesSectionHtml;
                 }).catch(err => {
                     container.innerHTML = `<p class="text-center text-rose-400 text-sm py-8">Failed to calculate diagnostics: ${err.message}</p>`;
                 });
