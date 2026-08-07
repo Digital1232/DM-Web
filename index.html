@@ -23973,7 +23973,7 @@ function isStrategyTask(t) {
                             updatedAt: Date.now()
                         });
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
-                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
                         toast('Status updated', 'success');
                         return true;
@@ -23988,7 +23988,7 @@ function isStrategyTask(t) {
                             return false;
                         }
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
-                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
                         return true;
                     }
@@ -36989,13 +36989,18 @@ function isStrategyTask(t) {
                 }
             }
 
-            async function sendDesignCompletedNotification(task, changedBy) {
+            async function sendDesignCompletedNotification(task, changedBy, oldStatus) {
                 if (!db || !task) return;
-                const targetEmails = ['murugeshvilpower@gmail.com'];
+                // Only send if moving FROM Quality Check (or if oldStatus not passed/specified)
+                if (oldStatus && !isQcStatus(oldStatus) && (oldStatus || '').toLowerCase().trim() !== 'quality check') {
+                    console.log(`[Design Completed Notif] Skipped: task moved from "${oldStatus}" (not QC)`);
+                    return;
+                }
+                const targetEmails = ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com', 'nanjil@vilpower.com'];
                 const title = '🎨 Task Moved to Design Completed';
                 const taskTitle = task.desc || task.summary || task.id || 'Task';
                 const clientStr = task.client ? ` (${task.client})` : '';
-                const body = `Task "${taskTitle}"${clientStr} is marked as Design Completed. Please send this task to the client to get approved!`;
+                const body = `Task "${taskTitle}"${clientStr} was approved in Quality Check and moved to Design Completed. Please send this task to the client to get approved!`;
 
                 const notifData = {
                     type: 'design_completed',
@@ -37003,6 +37008,7 @@ function isStrategyTask(t) {
                     taskDesc: taskTitle,
                     client: task.client || '',
                     newStatus: 'Design Completed',
+                    oldStatus: oldStatus || 'Quality Check',
                     changedBy: changedBy || currentUser?.name || currentUser?.email || 'System',
                     notifyEmails: targetEmails,
                     title,
@@ -37013,7 +37019,7 @@ function isStrategyTask(t) {
 
                 try {
                     await push(ref(db, 'worksync/task_notifications'), notifData);
-                    console.log(`[Design Completed Notif] Sent notification for ${task.id} to Murugesh (${targetEmails.join(', ')})`);
+                    console.log(`[Design Completed Notif] Sent notification for ${task.id} to Murugesh, Palani & Nanjil (${targetEmails.join(', ')})`);
                 } catch (e) {
                     console.error('Failed to send Design Completed notification:', e);
                 }
@@ -37026,6 +37032,7 @@ function isStrategyTask(t) {
 
                 const isRework = isReworkStatus(data.newStatus || data.status);
                 const isQc = isQcStatus(data.newStatus || data.status);
+                const isDesignCompleted = (data.newStatus || data.status || '').toLowerCase().trim() === 'design completed' || data.type === 'design_completed';
                 const myEmail = currentUser.email.toLowerCase();
 
                 // Target restriction: Only show QC modal to Sneha or targeted recipients, and Rework modal to the assigned recipient
@@ -37040,26 +37047,36 @@ function isStrategyTask(t) {
                     if (reworkTaskObj && typeof assigneeMatches === 'function' && !assigneeMatches(reworkTaskObj, myEmail)) return;
                 }
 
-                const theme = isRework ? {
+                const theme = isDesignCompleted ? {
+                    headerBg: 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700',
+                    badgeBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200',
+                    icon: 'solar:palette-bold-duotone',
+                    title: '🎨 Task Moved to Design Completed',
+                    subtitle: 'Quality Check Passed! Task is completed and ready for client delivery.',
+                    btnBg: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200',
+                    dotBg: 'bg-emerald-500'
+                } : isRework ? {
                     headerBg: 'bg-gradient-to-r from-rose-600 via-amber-600 to-rose-700',
                     badgeBg: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200',
                     icon: 'solar:refresh-circle-bold-duotone',
                     title: '🔄 Task Received for Rework',
                     subtitle: 'Attention Required: This task needs edits / corrections!',
-                    btnBg: 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                    btnBg: 'bg-rose-600 hover:bg-rose-700 shadow-rose-200',
+                    dotBg: 'bg-rose-500'
                 } : {
                     headerBg: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700',
                     badgeBg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200',
                     icon: 'solar:shield-check-bold-duotone',
                     title: '🔎 New Task for Quality Check (QC)',
                     subtitle: 'Action Needed: A new task is ready for QC review!',
-                    btnBg: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                    btnBg: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200',
+                    dotBg: 'bg-indigo-500'
                 };
 
                 const taskId = data.taskId || data.id || '';
                 const taskTitle = data.taskDesc || data.desc || data.summary || 'Task Details';
                 const client = data.client || 'Others';
-                const status = data.newStatus || data.status || (isRework ? 'Rework' : 'Quality Check');
+                const status = data.newStatus || data.status || (isDesignCompleted ? 'Design Completed' : isRework ? 'Rework' : 'Quality Check');
                 const movedBy = data.changedBy ? `Moved by ${data.changedBy}` : '';
 
                 container.innerHTML = `
@@ -37094,7 +37111,7 @@ function isStrategyTask(t) {
 
                             <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-350">
                                 <span class="inline-flex items-center gap-1.5 font-bold">
-                                    <span class="w-2 h-2 rounded-full ${isRework ? 'bg-rose-500' : 'bg-indigo-500'}"></span>
+                                    <span class="w-2 h-2 rounded-full ${theme.dotBg}"></span>
                                     Status: <strong class="text-slate-900 dark:text-white">${status}</strong>
                                 </span>
                                 ${movedBy ? `<span class="text-[11px] text-slate-400">${movedBy}</span>` : ''}
@@ -37119,15 +37136,15 @@ function isStrategyTask(t) {
                     console.warn('Could not show reworkQcModal:', e);
                 }
 
-                // Also send a browser push notification for Rework/QC alerts
+                // Also send a browser push notification for Rework/QC/Design Completed alerts
                 try {
                     if ('Notification' in window && Notification.permission === 'granted') {
-                        const notifTitle = isRework ? '🔄 Rework Task Received' : '🔎 Quality Check Task Received';
+                        const notifTitle = isDesignCompleted ? '🎨 Task Moved to Design Completed' : (isRework ? '🔄 Rework Task Received' : '🔎 Quality Check Task Received');
                         const notifBody = (taskTitle ? taskTitle + ' ' : '') + (client ? '(' + client + ')' : '') + (movedBy ? ' — ' + movedBy : '');
                         const n = new Notification(notifTitle, {
                             body: notifBody,
                             icon: 'img/logo.png',
-                            tag: 'rework-qc-' + taskId
+                            tag: 'task-alert-' + taskId
                         });
                         n.onclick = () => {
                             window.focus();
@@ -37584,10 +37601,12 @@ function isStrategyTask(t) {
 
                         const targets = (notif.notifyEmails || []).map(e => e.toLowerCase());
                         const isReworkOrQcNotif = notif.type === 'rework' || notif.type === 'qc' || isReworkStatus(notif.newStatus) || isQcStatus(notif.newStatus);
+                        const isDesignCompletedNotif = notif.type === 'design_completed' || (notif.newStatus || '').toLowerCase().trim() === 'design completed';
+                        const isAlertNotif = isReworkOrQcNotif || isDesignCompletedNotif;
 
                         // Strict target filtering:
-                        // For Rework and QC notifications, ONLY process if current user's email is explicitly in notifyEmails list
-                        if (isReworkOrQcNotif) {
+                        // For Rework, QC, and Design Completed notifications, ONLY process if current user's email is explicitly in notifyEmails list
+                        if (isAlertNotif) {
                             if (targets.length === 0 || !targets.includes(myEmail)) return;
                         } else if (targets.length > 0 && !targets.includes(myEmail)) {
                             return;
@@ -37602,8 +37621,8 @@ function isStrategyTask(t) {
                         shownTaskNotifIds.add(id);
                         localStorage.setItem('worksync_toasted_notifs', JSON.stringify(Array.from(shownTaskNotifIds)));
 
-                        // Trigger Popup Modal for Rework and QC notifications!
-                        if (isReworkOrQcNotif) {
+                        // Trigger Popup Modal for Rework, QC, and Design Completed notifications!
+                        if (isAlertNotif) {
                             openReworkQcModal(notif);
                         }
 
@@ -39068,9 +39087,9 @@ function isStrategyTask(t) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
-                        // Design Completed notification for Murugesh
+                        // Design Completed notification for Murugesh, Palani & Nanjil
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
-                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
                         // Sync to matching strategy event
@@ -39108,9 +39127,9 @@ function isStrategyTask(t) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
 
-                        // Design Completed notification for Murugesh
+                        // Design Completed notification for Murugesh, Palani & Nanjil
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
-                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
                         // Sync to matching strategy event
