@@ -14127,22 +14127,59 @@
             }
 
             async function uploadToCloudinary(file) {
-                // Non-media files (PDFs, docs, etc.) — store as base64 in Firebase directly
-                // Cloudinary only supports images and videos
+                // Non-media files (PDFs, docs, etc.) — upload via Hostinger API first to avoid base64 storage bloat
                 if (!isCloudinarySupported(file)) {
-                    const MAX_DOC_SIZE = 3 * 1024 * 1024; // 3 MB limit for documents
-                    if (file.size > MAX_DOC_SIZE) {
-                        throw new Error(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Documents must be under 3 MB.`);
+                    try {
+                        const hostingerRes = await uploadTaskFile(file);
+                        return {
+                            url: hostingerRes.url,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            hostinger: true
+                        };
+                    } catch (hErr) {
+                        console.warn('Hostinger document upload failed, attempting Cloudinary auto upload:', hErr);
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('upload_preset', CLOUDINARY_PRESET);
+                            formData.append('folder', 'worksync_chat');
+
+                            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`, {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (res.ok) {
+                                const data = await res.json();
+                                return {
+                                    url: data.secure_url,
+                                    type: file.type || 'application/octet-stream',
+                                    name: file.name,
+                                    size: data.bytes,
+                                    cloudinary: true
+                                };
+                            }
+                        } catch (cErr) {
+                            console.warn('Cloudinary auto upload failed:', cErr);
+                        }
+
+                        // Fallback to base64 for small files (< 3MB) if server upload fails
+                        const MAX_DOC_SIZE = 3 * 1024 * 1024;
+                        if (file.size > MAX_DOC_SIZE) {
+                            throw new Error(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Upload failed. Documents over 3MB require upload server.`);
+                        }
+                        const base64 = await fileToBase64(file);
+                        return {
+                            url: base64,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            cloudinary: false,
+                            isDoc: true
+                        };
                     }
-                    const base64 = await fileToBase64(file);
-                    return {
-                        url: base64,
-                        type: file.type || 'application/octet-stream',
-                        name: file.name,
-                        size: file.size,
-                        cloudinary: false,
-                        isDoc: true
-                    };
                 }
 
                 const formData = new FormData();
@@ -14156,8 +14193,19 @@
                 });
 
                 if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.error?.message || `Cloudinary upload failed (${res.status})`);
+                    try {
+                        const hostingerRes = await uploadTaskFile(file);
+                        return {
+                            url: hostingerRes.url,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            hostinger: true
+                        };
+                    } catch (hErr) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error?.message || `Cloudinary upload failed (${res.status})`);
+                    }
                 }
 
                 const data = await res.json();
@@ -25951,13 +25999,8 @@ function isStrategyTask(t) {
             }
 
             async function processChatAttachment(file, deferPreview = false) {
-                if (file.size > 10 * 1024 * 1024) {
-                    toast(`${file.name} skipped — must be less than 10MB`, 'error');
-                    return;
-                }
-                // Documents go via base64 — cap at 3MB to keep Firebase storage manageable
-                if (!isCloudinarySupported(file) && file.size > 3 * 1024 * 1024) {
-                    toast(`${file.name} skipped — documents must be under 3MB`, 'error');
+                if (file.size > 100 * 1024 * 1024) {
+                    toast(`${file.name} skipped — must be less than 100MB`, 'error');
                     return;
                 }
                 stagedAttachments.push(file);
@@ -25999,8 +26042,8 @@ function isStrategyTask(t) {
                         ? `${(item.size / 1024 / 1024).toFixed(1)} MB`
                         : `${(item.size / 1024).toFixed(0)} KB`);
 
-                    const docWarning = !isLink && !isCloudinarySupported(item) && item.size > 3 * 1024 * 1024
-                        ? `<p class="text-[8px] text-rose-500 font-bold">Too large (max 3MB)</p>`
+                    const docWarning = item.size > 100 * 1024 * 1024
+                        ? `<p class="text-[8px] text-rose-500 font-bold">Too large (max 100MB)</p>`
                         : '';
 
                     return `
