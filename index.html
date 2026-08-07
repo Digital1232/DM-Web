@@ -22449,7 +22449,16 @@ function isStrategyTask(t) {
                     tasks.unshift(taskToMove);
                 }
 
-                // Clear the hold state on the task being started
+                // Clear the hold state on the task being started and dismiss any active rework alert modal
+                poppedAlertTaskIds.add(id);
+                try {
+                    sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                } catch (e) {}
+                const reworkModal = document.getElementById('reworkQcModal');
+                if (reworkModal && reworkModal.open) {
+                    try { reworkModal.close(); } catch(e){}
+                }
+
                 const task = tasks.find(t => t.id === id);
                 if (task) {
                     task.isOnHold = false;
@@ -37540,10 +37549,20 @@ function isStrategyTask(t) {
                 const container = document.getElementById('rework-qc-modal-content');
                 if (!modal || !container || !currentUser) return;
 
+                const taskId = data.taskId || data.id || '';
+                const liveTaskObj = tasks.find(t => t.id === taskId);
+                const liveStatus = liveTaskObj ? liveTaskObj.status : null;
+
                 const isRework = isReworkStatus(data.newStatus || data.status);
                 const isQc = isQcStatus(data.newStatus || data.status);
                 const isDesignCompleted = (data.newStatus || data.status || '').toLowerCase().trim() === 'design completed' || data.type === 'design_completed';
                 const myEmail = currentUser.email.toLowerCase();
+
+                // If notification payload is for Rework, but live task status has already moved past Rework (e.g. Design In Progress), suppress stale rework modal!
+                if (isRework && liveStatus && !isReworkStatus(liveStatus)) {
+                    console.log(`[Rework/QC Modal] Suppressing stale rework popup for task ${taskId} as its live status is '${liveStatus}'`);
+                    return;
+                }
 
                 // Target restriction: Only show QC modal to Sneha or targeted recipients, and Rework modal to the assigned recipient
                 if (data.notifyEmails && Array.isArray(data.notifyEmails) && data.notifyEmails.length > 0) {
@@ -37553,7 +37572,7 @@ function isStrategyTask(t) {
                     if (typeof isSnehaUser === 'function' && !isSnehaUser()) return;
                 } else if (isRework) {
                     // When no notifyEmails, only show rework modal to the task's actual assignee
-                    const reworkTaskObj = tasks.find(t => t.id === (data.taskId || data.id));
+                    const reworkTaskObj = liveTaskObj || tasks.find(t => t.id === taskId);
                     if (reworkTaskObj && typeof assigneeMatches === 'function' && !assigneeMatches(reworkTaskObj, myEmail)) return;
                 }
 
@@ -37583,10 +37602,9 @@ function isStrategyTask(t) {
                     dotBg: 'bg-indigo-500'
                 };
 
-                const taskId = data.taskId || data.id || '';
-                const taskTitle = data.taskDesc || data.desc || data.summary || 'Task Details';
-                const client = data.client || 'Others';
-                const status = data.newStatus || data.status || (isDesignCompleted ? 'Design Completed' : isRework ? 'Rework' : 'Quality Check');
+                const taskTitle = data.taskDesc || data.desc || data.summary || (liveTaskObj ? (liveTaskObj.desc || liveTaskObj.summary) : 'Task Details');
+                const client = data.client || (liveTaskObj ? liveTaskObj.client : 'Others');
+                const status = liveStatus || data.newStatus || data.status || (isDesignCompleted ? 'Design Completed' : isRework ? 'Rework' : 'Quality Check');
                 const movedBy = data.changedBy ? `Moved by ${data.changedBy}` : '';
 
                 container.innerHTML = `
@@ -38133,7 +38151,14 @@ function isStrategyTask(t) {
 
                         // Trigger Popup Modal for Rework, QC, and Design Completed notifications!
                         if (isAlertNotif) {
-                            openReworkQcModal(notif);
+                            const notifTaskId = notif.taskId || notif.id;
+                            const liveTask = tasks.find(t => t.id === notifTaskId);
+                            const isReworkNotif = notif.type === 'rework' || isReworkStatus(notif.newStatus);
+                            if (isReworkNotif && liveTask && !isReworkStatus(liveTask.status)) {
+                                console.log(`[Task Notifications] Skipping stale rework alert for task ${notifTaskId} because live status is '${liveTask.status}'`);
+                            } else {
+                                openReworkQcModal(notif);
+                            }
                         }
 
                         const openNotif = () => {
@@ -38279,6 +38304,14 @@ function isStrategyTask(t) {
                     if (area) area.value = '';
                     document.getElementById('missedLearningReasonModal')?.showModal();
                     return;
+                }
+
+                if (notif && (notif.taskId || notif.id)) {
+                    const targetTaskId = notif.taskId || notif.id;
+                    const liveTask = tasks.find(t => t.id === targetTaskId);
+                    if (liveTask && typeof handleOpenAlertTask === 'function') {
+                        handleOpenAlertTask(targetTaskId);
+                    }
                 }
 
                 if (image) {
