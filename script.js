@@ -11464,16 +11464,35 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         let plannedTasks = [];
 
         targetUsers.forEach(userEmail => {
-            const userPlans = dailyPlans[eKey(userEmail)] || {};
+            const normalizedEmail = (userEmail || '').toLowerCase();
+            const userPlans = dailyPlans[eKey(normalizedEmail)] || dailyPlans[eKey(userEmail)] || {};
             Object.entries(userPlans).forEach(([taskId, planData]) => {
                 const planDateStr = planData.date;
                 const planDate = new Date(planDateStr);
                 planDate.setHours(0, 0, 0, 0);
 
-                const task = tasks.find(t => t.id === taskId);
+                let task = tasks.find(t => t && t.id && t.id.trim().toLowerCase() === taskId.trim().toLowerCase());
+                if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && (e.jiraId === taskId || e.id === taskId));
+                    if (ev) {
+                        task = {
+                            id: ev.jiraId || taskId,
+                            desc: ev.title,
+                            summary: ev.title,
+                            status: ev.status || 'To Do',
+                            client: ev.client || '',
+                            assignee: ev.owner || '',
+                            owner: ev.owner || '',
+                            duedate: ev.duedate,
+                            postDate: ev.date,
+                            isStrategyEvent: true,
+                            eventId: taskId
+                        };
+                    }
+                }
                 if (!task) return;
 
-                const isExactDate = planDate.getTime() === selectedDate.getTime();
+                const isExactDate = (planDate.getTime() === selectedDate.getTime()) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
                 const isCarryOver = planDate.getTime() < selectedDate.getTime() && DAILY_PLAN_CARRY_STATUSES.includes(task.status);
 
                 if (isExactDate || isCarryOver) {
