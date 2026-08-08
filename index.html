@@ -13361,6 +13361,7 @@
 
             function taskEligibleForDailyPlanAllocation(task) {
                 if (!task) return false;
+                if (typeof isLearningTask === 'function' && isLearningTask(task)) return false;
                 const s = (task.status || '').trim().toLowerCase();
                 if (s === 'done' || s === 'completed' || s === 'closed' || s === 'resolved' || s === 'cancelled') return false;
                 return true;
@@ -13440,7 +13441,7 @@
                         }
                     });
 
-                return plannedTasks;
+                return plannedTasks.filter(pt => typeof isLearningTask === 'function' ? !isLearningTask(pt) : true);
             }
 
             function collectDailyPlanTasksForUser(userEmail, dateStr) {
@@ -13578,7 +13579,7 @@
                         uniquePlans.push(pt);
                     }
                 });
-                return uniquePlans;
+                return uniquePlans.filter(pt => typeof isLearningTask === 'function' ? !isLearningTask(pt) : true);
             }
             // AUTH
             async function handleLogin() {
@@ -21136,7 +21137,18 @@ function isStrategyTask(t) {
             }
 
             function isMorningLearningTask(task) {
-                return task?.learningSession === true || String(task?.id || '').startsWith('LEARN-');
+                if (!task) return false;
+                if (task.learningSession === true || String(task.id || '').toLowerCase().startsWith('learn-')) return true;
+                const status = String(task.status || '').toLowerCase().trim();
+                const client = String(task.client || '').toLowerCase().trim();
+                const desc = String(task.desc || task.summary || task.title || '').toLowerCase().trim();
+                return status === 'learnings' || status === 'learning' ||
+                    client === 'learnings' || client === 'learning' ||
+                    desc.includes('morning learning') || desc.startsWith('learning');
+            }
+
+            function isLearningTask(task) {
+                return isMorningLearningTask(task);
             }
 
             function isExcludedFromMorningLearning(email) {
@@ -37514,7 +37526,7 @@ function isStrategyTask(t) {
                     if (seen.has(k)) return false;
                     seen.add(k);
                     return true;
-                });
+                }).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
 
                 if (dpFilter === 'completed') {
                     // Filter for completed tasks for that day (post-QC statuses)
@@ -37720,6 +37732,7 @@ function isStrategyTask(t) {
             }
 
             function renderDailyPlanStats(uniquePlans) {
+                uniquePlans = (uniquePlans || []).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
                 const statsGrid = document.getElementById('dp-stats-dashboard');
                 
                 // Count each category - exclude completed tasks from categorization
