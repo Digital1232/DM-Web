@@ -14871,7 +14871,7 @@
                     }
 
                     let endTime = Date.now();
-                    if (endTime > limitDate.getTime()) {
+                    if (checkInTime < limitDate.getTime() && endTime > limitDate.getTime()) {
                         endTime = limitDate.getTime();
                     }
 
@@ -15023,8 +15023,10 @@
                 }
                 
                 const limit = getCheckoutLimit();
-                const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
-                if (isPastTime) {
+                const limitDate = new Date(ciDate);
+                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+
+                if (checkInTime < limitDate.getTime() && now.getTime() >= limitDate.getTime()) {
                     autoCheckOut();
                 }
             }
@@ -15095,8 +15097,10 @@
                 totalBreakDuration = parseInt(localStorage.getItem('worksync_totalBreakDuration'), 10) || 0;
 
                 const limit = getCheckoutLimit();
-                const isPastTime = now.getHours() > limit.hours || (now.getHours() === limit.hours && now.getMinutes() >= limit.mins);
-                if (isPastTime) {
+                const limitDate = new Date(ciDate);
+                limitDate.setHours(limit.hours, limit.mins, 0, 0);
+
+                if (ciTime < limitDate.getTime() && now.getTime() >= limitDate.getTime()) {
                     if (state === 'paused') {
                         breakStartTime = parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
                     }
@@ -37979,6 +37983,14 @@ function isStrategyTask(t) {
                 if (!modal || !container || !currentUser) return;
 
                 const taskId = data.taskId || data.id || '';
+                if (taskId) {
+                    poppedAlertTaskIds.add(String(taskId));
+                    try {
+                        localStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                        sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                    } catch(e){}
+                }
+
                 const liveTaskObj = tasks.find(t => t.id === taskId);
                 const liveStatus = liveTaskObj ? liveTaskObj.status : null;
 
@@ -38048,7 +38060,7 @@ function isStrategyTask(t) {
                                     <p class="text-xs text-white/80 font-medium mt-0.5">${theme.subtitle}</p>
                                 </div>
                             </div>
-                            <button onclick="document.getElementById('reworkQcModal').close()" class="w-8 h-8 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-white transition-colors">
+                            <button onclick="dismissReworkQcModal('${taskId}')" class="w-8 h-8 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-white transition-colors">
                                 <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
                             </button>
                         </div>
@@ -38076,10 +38088,10 @@ function isStrategyTask(t) {
                         </div>
 
                         <div class="flex gap-3">
-                            <button onclick="document.getElementById('reworkQcModal').close()" class="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            <button onclick="dismissReworkQcModal('${taskId}')" class="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                 Dismiss
                             </button>
-                            <button onclick="document.getElementById('reworkQcModal').close(); handleOpenAlertTask('${taskId}')" class="flex-1 py-3 px-4 rounded-xl ${theme.btnBg} text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+                            <button onclick="dismissReworkQcModal('${taskId}'); handleOpenAlertTask('${taskId}')" class="flex-1 py-3 px-4 rounded-xl ${theme.btnBg} text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
                                 <iconify-icon icon="solar:eye-bold" width="16"></iconify-icon>
                                 View Task Details
                             </button>
@@ -38498,7 +38510,21 @@ function isStrategyTask(t) {
                 }, 300);
             }
 
-            let poppedAlertTaskIds = new Set(JSON.parse(sessionStorage.getItem('worksync_popped_alert_task_ids') || '[]'));
+            let poppedAlertTaskIds = new Set(JSON.parse(localStorage.getItem('worksync_popped_alert_task_ids') || sessionStorage.getItem('worksync_popped_alert_task_ids') || '[]'));
+
+            function dismissReworkQcModal(taskId) {
+                if (taskId) {
+                    poppedAlertTaskIds.add(String(taskId));
+                    try {
+                        localStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                        sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                    } catch(e){}
+                }
+                const modal = document.getElementById('reworkQcModal');
+                if (modal && modal.open) {
+                    try { modal.close(); } catch(e){}
+                }
+            }
 
             function checkReworkAndQcTaskPopups() {
                 if (!currentUser || !tasks || tasks.length === 0) return;
@@ -38508,8 +38534,7 @@ function isStrategyTask(t) {
                 if (typeof isSnehaUser === 'function' && isSnehaUser()) {
                     const qcTask = tasks.find(t => isQcStatus(t.status) && !poppedAlertTaskIds.has(t.id));
                     if (qcTask) {
-                        poppedAlertTaskIds.add(qcTask.id);
-                        sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                        dismissReworkQcModal(qcTask.id);
                         openReworkQcModal({
                             taskId: qcTask.id,
                             taskDesc: qcTask.desc || qcTask.summary,
@@ -38529,8 +38554,7 @@ function isStrategyTask(t) {
                 );
 
                 if (reworkTask) {
-                    poppedAlertTaskIds.add(reworkTask.id);
-                    sessionStorage.setItem('worksync_popped_alert_task_ids', JSON.stringify(Array.from(poppedAlertTaskIds)));
+                    dismissReworkQcModal(reworkTask.id);
                     openReworkQcModal({
                         taskId: reworkTask.id,
                         taskDesc: reworkTask.desc || reworkTask.summary,
@@ -42833,7 +42857,7 @@ function isStrategyTask(t) {
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
             window.dismissToast = dismissToast;
-            window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+            window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.dismissReworkQcModal = dismissReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
