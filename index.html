@@ -42621,21 +42621,27 @@ function isStrategyTask(t) {
                     let evVideos = 0;
                     let evPosters = 0;
 
-                    if (event.videosCount !== undefined && event.videosCount !== null) {
+                    if (event.videosCount !== undefined && event.videosCount !== null && String(event.videosCount).trim() !== '') {
                         evVideos = Number(event.videosCount) || 0;
-                    } else if ((event.format || '').toLowerCase() === 'video') {
-                        evVideos = 1;
+                    }
+                    if (event.postersCount !== undefined && event.postersCount !== null && String(event.postersCount).trim() !== '') {
+                        evPosters = Number(event.postersCount) || 0;
                     }
 
-                    if (event.postersCount !== undefined && event.postersCount !== null) {
-                        evPosters = Number(event.postersCount) || 0;
-                    } else if ((event.format || '').toLowerCase() === 'poster') {
-                        evPosters = 1;
+                    if (evVideos === 0 && evPosters === 0) {
+                        const fmt = (event.format || event.type || event.category || event.title || '').toLowerCase();
+                        if (fmt.includes('video') || fmt.includes('reel') || fmt.includes('motion') || fmt.includes('animation') || fmt.includes('youtube')) {
+                            evVideos = 1;
+                        } else if (fmt.includes('poster') || fmt.includes('design') || fmt.includes('static') || fmt.includes('creative') || fmt.includes('banner') || fmt.includes('carousel') || fmt.includes('carousal')) {
+                            evPosters = 1;
+                        } else {
+                            evPosters = 1;
+                        }
                     }
 
                     clientMetrics[client].videosCount += evVideos;
                     clientMetrics[client].postersCount += evPosters;
-                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Videos: ${evVideos}, Posters: ${evPosters}, Raw: v=${event.videosCount}, p=${event.postersCount}`);
+                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Videos: ${evVideos}, Posters: ${evPosters}`);
                 });
 
                 // Second pass: count task statuses by client
@@ -42673,25 +42679,30 @@ function isStrategyTask(t) {
                     // Skip cancelled/terminal tasks
                     if (['shoot cancelled', 'cancelled', 'discarded'].includes(statusClean)) return;
 
-                    // Mappings defined by user (expanded to cover all Jira/internal resolved & posted states)
-                    const isCompleted = [
+                    // Status Mappings defined by user request:
+                    // 1. Posted: Posted and after that (Analytics, Analytics Done, Done)
+                    const isPosted = [
+                        'posted', 
+                        'analytics', 
+                        'analytics done',
+                        'done'
+                    ].includes(statusClean);
+                    
+                    // 2. Completed: Statuses starting from Design Completed onwards up to before Posted
+                    const isCompleted = !isPosted && [
                         'design completed', 
-                        'quality check', 
                         'client sent', 
                         'client approved', 
+                        'client content approval', 
                         'thumbnail waiting', 
+                        'thumbnail',
                         'completed', 
                         'resolved', 
                         'closed', 
                         'shoot completed'
                     ].includes(statusClean);
                     
-                    const isPosted = [
-                        'posted', 
-                        'analytics', 
-                        'done'
-                    ].includes(statusClean);
-                    
+                    // 3. Pending: Not yet started and in progress (before Design Completed)
                     const isPending = !isCompleted && !isPosted;
 
                     if (isCompleted) {
