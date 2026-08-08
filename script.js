@@ -385,9 +385,36 @@ if (initializeApp) {
     let qcReportDateTo = null;   // New state variable for QC reports filter
     const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done'];
     const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
-    const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-    const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs'];
-    const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+    // Daily Plan Pre-QC vs Completed status helpers
+    const DAILY_PLAN_BEFORE_QC_STATUS_SET = new Set([
+        'to do',
+        'to-do',
+        'in progress',
+        'content in progress',
+        'client content approval',
+        'design to do',
+        'design in progress',
+        'design hold',
+        'hold',
+        'on hold',
+        'rework designs',
+        'rework'
+    ]);
+
+    function isDailyPlanBeforeQcStatus(status) {
+        if (!status) return false;
+        const s = String(status).trim().toLowerCase();
+        return DAILY_PLAN_BEFORE_QC_STATUS_SET.has(s);
+    }
+
+    function isDailyPlanCompletedTask(status) {
+        if (!status) return true;
+        return !isDailyPlanBeforeQcStatus(status);
+    }
+
+    const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
+    const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework'];
+    const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
     const DAILY_REPORT_TIMES = [
         { hour: 12, minute: 55, label: 'Afternoon (1 PM)' },
         { hour: 15, minute: 55, label: 'Evening (4 PM)' },
@@ -11520,9 +11547,10 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (!task) return;
 
                 const isExactDate = (planDate.getTime() === selectedDate.getTime()) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
-                const isCarryOver = planDate.getTime() < selectedDate.getTime() && DAILY_PLAN_CARRY_STATUSES.includes(task.status);
+                const isCarryOver = planDate.getTime() < selectedDate.getTime() && isDailyPlanBeforeQcStatus(task.status);
+                const isCompleted = isDailyPlanCompletedTask(task.status);
 
-                if (isExactDate || isCarryOver) {
+                if (isExactDate || (isCarryOver && !isCompleted)) {
                     plannedTasks.push({
                         ...task,
                         planData,

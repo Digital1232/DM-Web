@@ -12381,12 +12381,39 @@
             const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done', 'Rework'];
             const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed', 'Quality Check', 'Rework'];
 
-            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design In Progress', 'Design To Do', 'Rework Designs', 'Design Hold', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Rework'];
-            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Thumbnail Waiting', 'Thumbnail', 'Rework Designs', 'Rework'];
-            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Content In Progress', 'Client Content Approval', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Rework'];
-            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Quality Check', 'Rework'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Quality Check', 'Rework'];
-            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Discussion', 'Learnings', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Quality Check', 'Rework'];
+            // Daily Plan Pre-QC vs Completed status helpers
+            const DAILY_PLAN_BEFORE_QC_STATUS_SET = new Set([
+                'to do',
+                'to-do',
+                'in progress',
+                'content in progress',
+                'client content approval',
+                'design to do',
+                'design in progress',
+                'design hold',
+                'hold',
+                'on hold',
+                'rework designs',
+                'rework'
+            ]);
+
+            function isDailyPlanBeforeQcStatus(status) {
+                if (!status) return false;
+                const s = String(status).trim().toLowerCase();
+                return DAILY_PLAN_BEFORE_QC_STATUS_SET.has(s);
+            }
+
+            function isDailyPlanCompletedTask(status) {
+                if (!status) return true;
+                return !isDailyPlanBeforeQcStatus(status);
+            }
+
+            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
+            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework'];
+            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
+            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework'];
+            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
 
@@ -13454,9 +13481,9 @@
                     const effectiveTask = { ...task };
 
                     const isExactDate = (planDate.getTime() === selectedDate.getTime()) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
-                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && dailyPlanCarryStatuses(effectiveTask).includes(effectiveTask.status);
+                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && isDailyPlanBeforeQcStatus(effectiveTask.status);
 
-                    const isCompleted = isDone(effectiveTask.status) || isInternalDone(effectiveTask.status) || isTaskCompletedStatus(effectiveTask.status);
+                    const isCompleted = isDailyPlanCompletedTask(effectiveTask.status);
 
                     if (isExactDate || (isCarryOver && !isCompleted)) {
                         plannedTasks.push({
@@ -13472,7 +13499,7 @@
                 tasks
                     .filter(task => {
                         if (!assigneeMatches(task, userEmail)) return false;
-                        const isCompleted = isDone(task.status) || isInternalDone(task.status) || isTaskCompletedStatus(task.status);
+                        const isCompleted = isDailyPlanCompletedTask(task.status);
                         if (!isCompleted) return false;
                         const completedOnDate = task.lastCompletedDate === dateStr ||
                             (task.completedAt && new Date(task.completedAt).toISOString().split('T')[0] === dateStr);
@@ -37490,21 +37517,16 @@ function isStrategyTask(t) {
                 });
 
                 if (dpFilter === 'completed') {
-                    // Filter for completed tasks only
-                    uniquePlans = uniquePlans.filter(t => {
-                        const taskStatus = (t.status || '').toLowerCase().trim();
-                        return isDone(taskStatus) || isInternalDone(taskStatus) || isTaskCompletedStatus(taskStatus);
-                    });
+                    // Filter for completed tasks for that day (post-QC statuses)
+                    uniquePlans = uniquePlans.filter(t => isDailyPlanCompletedTask(t.status));
                 } else if (dpFilter === 'active') {
-                    // Filter for active/pending tasks only
+                    // Filter for active/pending Pre-QC tasks only
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
-                        const taskStatus = (t.status || '').toLowerCase().trim();
-                        const isCompleted = isDone(taskStatus) || isInternalDone(taskStatus) || isTaskCompletedStatus(taskStatus);
-                        return !isCompleted;
+                        return isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else if (dpFilter === 'carryover') {
-                    uniquePlans = uniquePlans.filter(t => t.isCarryOver);
+                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && isDailyPlanBeforeQcStatus(t.status));
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
@@ -37520,8 +37542,13 @@ function isStrategyTask(t) {
                                 !desc.includes('thumbnail') && !desc.includes('video') &&
                                 !desc.includes('reel') && desc.includes('design'));
                     });
+                } else {
+                    // Default / 'all' view: Only show tasks before Quality Check (Pre-QC)
+                    uniquePlans = uniquePlans.filter(t => {
+                        if (activeTaskId && t.id === activeTaskId) return true;
+                        return isDailyPlanBeforeQcStatus(t.status);
+                    });
                 }
-                // When dpFilter === 'all', show ALL planned tasks for the date (both active and completed)
                 return uniquePlans;
             }
 
@@ -37706,12 +37733,7 @@ function isStrategyTask(t) {
                     thumbnail: uniquePlans.filter(t => ['thumbnail waiting', 'thumbnail'].includes(statusToLower(t))).length,
                     hold: uniquePlans.filter(t => ['hold', 'design hold', 'on hold'].includes(statusToLower(t))).length,
                     qualityCheck: uniquePlans.filter(t => ['quality check', 'qc started'].includes(statusToLower(t))).length,
-                    completed: uniquePlans.filter(t => {
-                        const s = statusToLower(t);
-                        // Exclude thumbnail statuses from completed count - they are tracked separately
-                        if (['thumbnail waiting', 'thumbnail'].includes(s)) return false;
-                        return isDone(t.status) || isInternalDone(t.status) || isTaskCompletedStatus(t.status);
-                    }).length
+                    completed: uniquePlans.filter(t => isDailyPlanCompletedTask(t.status)).length
                 };
                 if (!statsGrid) return;
                 const cards = [
