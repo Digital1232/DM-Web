@@ -42595,16 +42595,38 @@ function isStrategyTask(t) {
                     return resolved || trimmed;
                 };
 
-                // Group plans by client and aggregate counts from JIRA tasks
+                // Helper for robust date normalization to YYYY-MM-DD
+                const parseYmd = (dateVal) => {
+                    if (!dateVal) return null;
+                    if (typeof dateVal === 'string') {
+                        const trimmed = dateVal.trim();
+                        if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+                            return trimmed.substring(0, 10);
+                        }
+                    }
+                    try {
+                        const d = new Date(dateVal);
+                        if (!isNaN(d.getTime())) {
+                            const yyyy = d.getFullYear();
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            return `${yyyy}-${mm}-${dd}`;
+                        }
+                    } catch(e) {}
+                    return null;
+                };
+
+                // Group plans by client and aggregate counts from JIRA tasks & strategy calendar
                 const clientMetrics = {};
                 const clientNames = new Set();
 
                 // First pass: Initialize clients from strategy events (if any) and accumulate planned counts
                 Object.entries(strategyEvents || {}).forEach(([eventId, event]) => {
-                    if (!event || !event.date || !event.client) return;
+                    if (!event || !event.client) return;
 
-                    // Timezone-safe string date range comparison (dates are YYYY-MM-DD)
-                    if (event.date < reportDateFrom || event.date > reportDateTo) return;
+                    const rawDate = event.date || event.postDate || event.duedate || event.due;
+                    const evDateStr = parseYmd(rawDate);
+                    if (!evDateStr || evDateStr < reportDateFrom || evDateStr > reportDateTo) return;
 
                     const client = getNormalizedClientName(event.client);
                     
@@ -42614,7 +42636,7 @@ function isStrategyTask(t) {
                     clientNames.add(client);
 
                     if (!clientMetrics[client]) {
-                        clientMetrics[client] = { videosCount: 0, postersCount: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
+                        clientMetrics[client] = { strategyV: 0, strategyP: 0, taskV: 0, taskP: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
                     }
 
                     // Accumulate planned counts from strategy events
@@ -42629,19 +42651,19 @@ function isStrategyTask(t) {
                     }
 
                     if (evVideos === 0 && evPosters === 0) {
-                        const fmt = (event.format || event.type || event.category || event.title || '').toLowerCase();
-                        if (fmt.includes('video') || fmt.includes('reel') || fmt.includes('motion') || fmt.includes('animation') || fmt.includes('youtube')) {
+                        const fmt = (event.format || event.type || event.category || event.title || event.desc || '').toLowerCase();
+                        if (fmt.includes('video') || fmt.includes('reel') || fmt.includes('motion') || fmt.includes('animation') || fmt.includes('youtube') || fmt.includes('yt') || fmt.includes('shorts') || fmt.includes('teaser') || fmt.includes('film')) {
                             evVideos = 1;
-                        } else if (fmt.includes('poster') || fmt.includes('design') || fmt.includes('static') || fmt.includes('creative') || fmt.includes('banner') || fmt.includes('carousel') || fmt.includes('carousal')) {
+                        } else if (fmt.includes('poster') || fmt.includes('design') || fmt.includes('static') || fmt.includes('creative') || fmt.includes('banner') || fmt.includes('carousel') || fmt.includes('carousal') || fmt.includes('graphic') || fmt.includes('thumbnail')) {
                             evPosters = 1;
                         } else {
                             evPosters = 1;
                         }
                     }
 
-                    clientMetrics[client].videosCount += evVideos;
-                    clientMetrics[client].postersCount += evPosters;
-                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Videos: ${evVideos}, Posters: ${evPosters}`);
+                    clientMetrics[client].strategyV += evVideos;
+                    clientMetrics[client].strategyP += evPosters;
+                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Date: ${evDateStr}, Videos: ${evVideos}, Posters: ${evPosters}`);
                 });
 
                 // Second pass: count task statuses by client
@@ -42654,7 +42676,7 @@ function isStrategyTask(t) {
                     // Filter out clients that are not selected in multi-select filter
                     if (cdSelectedClients !== null && !cdSelectedClients.includes(client)) return;
                     const type = (task.issueType || task.type || '').toLowerCase();
-                    const desc = (task.desc || '').toLowerCase();
+                    const desc = (task.desc || task.summary || '').toLowerCase();
 
                     const isVideo = type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') ||
                         desc.includes('video') || desc.includes('reel') ||
@@ -42666,13 +42688,17 @@ function isStrategyTask(t) {
 
                     if (!isVideo && !isPoster) return;
 
-                    // Apply date filter (require duedate and check range)
-                    if (!task.duedate || task.duedate < reportDateFrom || task.duedate > reportDateTo) return;
+                    // Apply date filter using parseYmd (checking duedate or created date)
+                    const taskDateStr = parseYmd(task.duedate || task.due || task.created);
+                    if (!taskDateStr || taskDateStr < reportDateFrom || taskDateStr > reportDateTo) return;
 
                     clientNames.add(client);
                     if (!clientMetrics[client]) {
-                        clientMetrics[client] = { videosCount: 0, postersCount: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
+                        clientMetrics[client] = { strategyV: 0, strategyP: 0, taskV: 0, taskP: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
                     }
+
+                    if (isVideo) clientMetrics[client].taskV++;
+                    else clientMetrics[client].taskP++;
 
                     const statusClean = (task.status || '').trim().toLowerCase();
 
@@ -42718,6 +42744,13 @@ function isStrategyTask(t) {
                         if (isVideo) clientMetrics[client].pendingV++;
                         else clientMetrics[client].pendingP++;
                     }
+                });
+
+                // Compute final planned counts per client: max of strategy calendar events or tasks
+                Object.keys(clientMetrics).forEach(client => {
+                    const m = clientMetrics[client];
+                    m.videosCount = Math.max(m.strategyV || 0, m.taskV || 0);
+                    m.postersCount = Math.max(m.strategyP || 0, m.taskP || 0);
                 });
 
                 // Planned counts are aggregated from strategy events in the first pass
