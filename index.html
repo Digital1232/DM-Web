@@ -42746,11 +42746,16 @@ function isStrategyTask(t) {
                     }
                 });
 
-                // Compute final planned counts per client: max of strategy calendar events or tasks
+                // Compute final planned & pending counts per client ensuring: Completed + Posted + Pending === Planned
                 Object.keys(clientMetrics).forEach(client => {
                     const m = clientMetrics[client];
-                    m.videosCount = Math.max(m.strategyV || 0, m.taskV || 0);
-                    m.postersCount = Math.max(m.strategyP || 0, m.taskP || 0);
+                    m.videosCount = Math.max(m.strategyV || 0, (m.completedV || 0) + (m.postedV || 0) + (m.pendingV || 0));
+                    m.postersCount = Math.max(m.strategyP || 0, (m.completedP || 0) + (m.postedP || 0) + (m.pendingP || 0));
+
+                    // Ensure Pending = Planned - (Completed + Posted) so Completed + Posted + Pending ALWAYS equals Planned!
+                    m.pendingV = Math.max(0, m.videosCount - (m.completedV || 0) - (m.postedV || 0));
+                    m.pendingP = Math.max(0, m.postersCount - (m.completedP || 0) - (m.postedP || 0));
+                    m.pending = m.pendingV + m.pendingP;
                 });
 
                 // Planned counts are aggregated from strategy events in the first pass
