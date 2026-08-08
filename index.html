@@ -42616,6 +42616,61 @@ function isStrategyTask(t) {
                     return null;
                 };
 
+                // Helper to extract videos and posters count from numerical properties or title/desc text
+                const extractDeliverableCounts = (item) => {
+                    let evVideos = 0;
+                    let evPosters = 0;
+
+                    const rawV = item?.videosCount ?? item?.videoCount ?? item?.videos ?? item?.videos_count;
+                    const rawP = item?.postersCount ?? item?.posterCount ?? item?.posters ?? item?.posters_count;
+
+                    if (rawV !== undefined && rawV !== null && String(rawV).trim() !== '') {
+                        evVideos = Number(rawV) || 0;
+                    }
+                    if (rawP !== undefined && rawP !== null && String(rawP).trim() !== '') {
+                        evPosters = Number(rawP) || 0;
+                    }
+
+                    if (evVideos === 0 && evPosters === 0) {
+                        const title = item?.title || item?.summary || '';
+                        const desc = item?.desc || item?.description || '';
+                        const format = item?.format || item?.issueType || item?.type || '';
+                        const category = item?.category || '';
+                        const text = [title, desc, format, category].filter(Boolean).join(' ');
+
+                        const posterDirect = text.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:posters|poster|creatives|creative|banner|banners|carousel|carousels|carousal|carousals|design|designs|static)/i);
+                        const posterNumMatch = text.match(/(?:poster|posters|creative|creatives|banner|banners|carousel|carousels|design|designs|static)\s*[\(\:\-\=]?\s*(\d+)/i);
+
+                        const videoDirect = text.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:videos|video|reels|reel|shorts|motion|animation|films|film|teasers|teaser)/i);
+                        const videoNumMatch = text.match(/(?:video|videos|reel|reels|shorts|motion|animation|film|films)\s*[\(\:\-\=]?\s*(\d+)/i);
+
+                        if (posterDirect) {
+                            evPosters = parseInt(posterDirect[1], 10);
+                        } else if (posterNumMatch) {
+                            evPosters = parseInt(posterNumMatch[1], 10);
+                        }
+
+                        if (videoDirect) {
+                            evVideos = parseInt(videoDirect[1], 10);
+                        } else if (videoNumMatch) {
+                            evVideos = parseInt(videoNumMatch[1], 10);
+                        }
+
+                        if (evVideos === 0 && evPosters === 0) {
+                            const lower = text.toLowerCase();
+                            if (lower.includes('video') || lower.includes('reel') || lower.includes('motion') || lower.includes('animation') || lower.includes('youtube') || lower.includes('yt') || lower.includes('shorts') || lower.includes('teaser') || lower.includes('film')) {
+                                evVideos = 1;
+                            } else if (lower.includes('poster') || lower.includes('design') || lower.includes('static') || lower.includes('creative') || lower.includes('banner') || lower.includes('carousel') || lower.includes('carousal') || lower.includes('graphic') || lower.includes('thumbnail')) {
+                                evPosters = 1;
+                            } else {
+                                evPosters = 1;
+                            }
+                        }
+                    }
+
+                    return { videos: evVideos, posters: evPosters };
+                };
+
                 // Group plans by client and aggregate counts from JIRA tasks & strategy calendar
                 const clientMetrics = {};
                 const clientNames = new Set();
@@ -42639,31 +42694,11 @@ function isStrategyTask(t) {
                         clientMetrics[client] = { strategyV: 0, strategyP: 0, taskV: 0, taskP: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
                     }
 
-                    // Accumulate planned counts from strategy events
-                    let evVideos = 0;
-                    let evPosters = 0;
-
-                    if (event.videosCount !== undefined && event.videosCount !== null && String(event.videosCount).trim() !== '') {
-                        evVideos = Number(event.videosCount) || 0;
-                    }
-                    if (event.postersCount !== undefined && event.postersCount !== null && String(event.postersCount).trim() !== '') {
-                        evPosters = Number(event.postersCount) || 0;
-                    }
-
-                    if (evVideos === 0 && evPosters === 0) {
-                        const fmt = (event.format || event.type || event.category || event.title || event.desc || '').toLowerCase();
-                        if (fmt.includes('video') || fmt.includes('reel') || fmt.includes('motion') || fmt.includes('animation') || fmt.includes('youtube') || fmt.includes('yt') || fmt.includes('shorts') || fmt.includes('teaser') || fmt.includes('film')) {
-                            evVideos = 1;
-                        } else if (fmt.includes('poster') || fmt.includes('design') || fmt.includes('static') || fmt.includes('creative') || fmt.includes('banner') || fmt.includes('carousel') || fmt.includes('carousal') || fmt.includes('graphic') || fmt.includes('thumbnail')) {
-                            evPosters = 1;
-                        } else {
-                            evPosters = 1;
-                        }
-                    }
-
-                    clientMetrics[client].strategyV += evVideos;
-                    clientMetrics[client].strategyP += evPosters;
-                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Date: ${evDateStr}, Videos: ${evVideos}, Posters: ${evPosters}`);
+                    // Accumulate planned counts from strategy events using extractDeliverableCounts
+                    const counts = extractDeliverableCounts(event);
+                    clientMetrics[client].strategyV += counts.videos;
+                    clientMetrics[client].strategyP += counts.posters;
+                    console.log(`[Client Delivery] Event: "${event.title}" (${client}) - Date: ${evDateStr}, Videos: ${counts.videos}, Posters: ${counts.posters}`);
                 });
 
                 // Second pass: count task statuses by client
@@ -42675,30 +42710,21 @@ function isStrategyTask(t) {
 
                     // Filter out clients that are not selected in multi-select filter
                     if (cdSelectedClients !== null && !cdSelectedClients.includes(client)) return;
-                    const type = (task.issueType || task.type || '').toLowerCase();
-                    const desc = (task.desc || task.summary || '').toLowerCase();
-
-                    const isVideo = type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') ||
-                        desc.includes('video') || desc.includes('reel') ||
-                        (task.labels && (task.labels.includes('video') || task.labels.includes('Video')));
-
-                    const isPoster = type.includes('poster') || type.includes('design') || type.includes('static') || type.includes('creative') ||
-                        desc.includes('poster') || desc.includes('design') ||
-                        (task.labels && (task.labels.includes('poster') || task.labels.includes('Poster')));
-
-                    if (!isVideo && !isPoster) return;
 
                     // Apply date filter using parseYmd (checking duedate or created date)
                     const taskDateStr = parseYmd(task.duedate || task.due || task.created);
                     if (!taskDateStr || taskDateStr < reportDateFrom || taskDateStr > reportDateTo) return;
+
+                    const taskCounts = extractDeliverableCounts(task);
+                    if (taskCounts.videos === 0 && taskCounts.posters === 0) return;
 
                     clientNames.add(client);
                     if (!clientMetrics[client]) {
                         clientMetrics[client] = { strategyV: 0, strategyP: 0, taskV: 0, taskP: 0, completed: 0, completedV: 0, completedP: 0, posted: 0, postedV: 0, postedP: 0, pending: 0, pendingV: 0, pendingP: 0, hours: 0 };
                     }
 
-                    if (isVideo) clientMetrics[client].taskV++;
-                    else clientMetrics[client].taskP++;
+                    if (taskCounts.videos > 0) clientMetrics[client].taskV += taskCounts.videos;
+                    if (taskCounts.posters > 0) clientMetrics[client].taskP += taskCounts.posters;
 
                     const statusClean = (task.status || '').trim().toLowerCase();
 
@@ -42732,17 +42758,17 @@ function isStrategyTask(t) {
                     const isPending = !isCompleted && !isPosted;
 
                     if (isCompleted) {
-                        clientMetrics[client].completed++;
-                        if (isVideo) clientMetrics[client].completedV++;
-                        else clientMetrics[client].completedP++;
+                        clientMetrics[client].completed += (taskCounts.videos + taskCounts.posters);
+                        clientMetrics[client].completedV += taskCounts.videos;
+                        clientMetrics[client].completedP += taskCounts.posters;
                     } else if (isPosted) {
-                        clientMetrics[client].posted++;
-                        if (isVideo) clientMetrics[client].postedV++;
-                        else clientMetrics[client].postedP++;
+                        clientMetrics[client].posted += (taskCounts.videos + taskCounts.posters);
+                        clientMetrics[client].postedV += taskCounts.videos;
+                        clientMetrics[client].postedP += taskCounts.posters;
                     } else if (isPending) {
-                        clientMetrics[client].pending++;
-                        if (isVideo) clientMetrics[client].pendingV++;
-                        else clientMetrics[client].pendingP++;
+                        clientMetrics[client].pending += (taskCounts.videos + taskCounts.posters);
+                        clientMetrics[client].pendingV += taskCounts.videos;
+                        clientMetrics[client].pendingP += taskCounts.posters;
                     }
                 });
 
