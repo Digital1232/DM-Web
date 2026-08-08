@@ -42671,24 +42671,45 @@ function isStrategyTask(t) {
                 if (!item) return { videos: 0, posters: 0 };
 
                 const title = item.title || item.summary || item.desc || item.description || '';
-                const format = item.format || item.issueType || item.type || '';
-                const category = item.category || '';
-                const text = [title, format, category].filter(Boolean).join(' ');
-                const lower = text.toLowerCase();
+                const rawFormat = String(item.format || item.contentType || item.deliverableType || item.taskType || item.issueType || item.type || '').trim().toLowerCase();
+                const category = String(item.category || '').trim().toLowerCase();
+                const fullText = [title, rawFormat, category].filter(Boolean).join(' ').toLowerCase();
 
-                // EXCLUDE THUMBNAILS AND SUBTASKS!
-                // Thumbnails are components of videos/tasks, NOT standalone poster or video deliverables!
-                // Subtasks are also child items and should not double-count parent deliverables.
+                // EXCLUDE THUMBNAILS & SUBTASKS (child items that should not double-count parent deliverables)
                 if (
                     item.parentId || 
                     item.parent || 
                     item.parentKey || 
                     item.isSubtask || 
-                    format.toLowerCase().includes('sub-task') || 
-                    format.toLowerCase().includes('subtask') || 
-                    (lower.includes('thumbnail') && !lower.includes('video') && !lower.includes('poster')) || 
-                    (lower.includes('thumb') && !lower.includes('video') && !lower.includes('poster'))
+                    rawFormat.includes('sub-task') || 
+                    rawFormat.includes('subtask') || 
+                    (fullText.includes('thumbnail') && !fullText.includes('video') && !fullText.includes('poster')) || 
+                    (fullText.includes('thumb') && !fullText.includes('video') && !fullText.includes('poster'))
                 ) {
+                    return { videos: 0, posters: 0 };
+                }
+
+                // EXCLUDE NON-POSTER/VIDEO TASK TYPES AND KEYWORDS
+                const nonPosterVideoKeywords = [
+                    'printing material', 'printing', 'print', 'brochure', 'standee', 'pamphlet', 'visiting card', 'hoarding', 'flex', 'menu card', 'id card', 'lanyard',
+                    'shoot', 'shooting', 'video shoot', 'photo shoot', 'studio shoot', 'outdoor shoot',
+                    'branding', 'logo design', 'logo', 'brand identity', 'packaging',
+                    'seo', 'keyword research', 'backlink', 'on-page seo', 'off-page seo',
+                    'web dev', 'web development', 'website', 'landing page', 'ui/ux',
+                    'copywriting', 'content writing', 'caption writing', 'script', 'scriptwriting', 'blog', 'article',
+                    'meta ad', 'meta ads', 'google ad', 'google ads', 'ad campaign', 'ppc', 'ads setup',
+                    'analytics', 'dpr', 'report', 'audit', 'meeting', 'call', 'sync', 'strategy', 'onboarding', 'invoice', 'proposal', 'admin', 'setup', 'maintenance'
+                ];
+
+                const videoKeywords = ['video', 'videos', 'reel', 'reels', 'animation', 'animations', 'motion', 'motion graphic', 'shorts', 'yt short', 'youtube short', 'film', 'teaser'];
+                const posterKeywords = ['poster', 'posters', 'carousel', 'carousels', 'carousal', 'single post', 'static post', 'graphic', 'graphics', 'static', 'banner', 'banners', 'flyer', 'flyers', 'image', 'photo', 'creative', 'creatives'];
+
+                const formatIsVideo = videoKeywords.some(kw => rawFormat.includes(kw));
+                const formatIsPoster = posterKeywords.some(kw => rawFormat.includes(kw));
+                const formatIsExcluded = nonPosterVideoKeywords.some(kw => rawFormat.includes(kw));
+
+                // If format explicitly matches non-deliverable task type (and is not poster/video), return 0
+                if (formatIsExcluded && !formatIsVideo && !formatIsPoster) {
                     return { videos: 0, posters: 0 };
                 }
 
@@ -42703,11 +42724,11 @@ function isStrategyTask(t) {
                 }
 
                 if (evVideos === 0 && evPosters === 0) {
-                    const posterDirect = text.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:posters|poster|creatives|creative|banner|banners|carousel|carousels|carousal|carousals|design|designs|static)/i);
-                    const posterNumMatch = text.match(/(?:poster|posters|creative|creatives|banner|banners|carousel|carousels|design|designs|static)\s*[\(\:\-\=]?\s*(\d+)/i);
+                    const posterDirect = fullText.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:posters|poster|creatives|creative|banner|banners|carousel|carousels|carousal|carousals|static)/i);
+                    const posterNumMatch = fullText.match(/(?:poster|posters|creative|creatives|banner|banners|carousel|carousels|static)\s*[\(\:\-\=]?\s*(\d+)/i);
 
-                    const videoDirect = text.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:videos|video|reels|reel|shorts|motion|animation|films|film|teasers|teaser)/i);
-                    const videoNumMatch = text.match(/(?:video|videos|reel|reels|shorts|motion|animation|film|films)\s*[\(\:\-\=]?\s*(\d+)/i);
+                    const videoDirect = fullText.match(/(\d+)\s*(?:nos|nos\.|x|\*|pcs)?\s*(?:videos|video|reels|reel|shorts|motion|animation|films|film|teasers|teaser)/i);
+                    const videoNumMatch = fullText.match(/(?:video|videos|reel|reels|shorts|motion|animation|film|films)\s*[\(\:\-\=]?\s*(\d+)/i);
 
                     if (posterDirect) {
                         evPosters = parseInt(posterDirect[1], 10);
@@ -42722,12 +42743,17 @@ function isStrategyTask(t) {
                     }
 
                     if (evVideos === 0 && evPosters === 0) {
-                        if (lower.includes('video') || lower.includes('reel') || lower.includes('motion') || lower.includes('animation') || lower.includes('youtube') || lower.includes('yt') || lower.includes('shorts') || lower.includes('teaser') || lower.includes('film')) {
+                        const hasVideoKw = videoKeywords.some(kw => fullText.includes(kw));
+                        const hasPosterKw = posterKeywords.some(kw => fullText.includes(kw));
+                        const hasExcludedKw = nonPosterVideoKeywords.some(kw => fullText.includes(kw));
+
+                        if (hasVideoKw) {
                             evVideos = 1;
-                        } else if (lower.includes('poster') || lower.includes('design') || lower.includes('static') || lower.includes('creative') || lower.includes('banner') || lower.includes('carousel') || lower.includes('carousal') || lower.includes('graphic')) {
+                        } else if (hasPosterKw && !hasExcludedKw) {
                             evPosters = 1;
                         } else {
-                            evPosters = 1;
+                            // Strictly return 0 count for tasks that are neither Poster nor Video
+                            return { videos: 0, posters: 0 };
                         }
                     }
                 }
@@ -42854,6 +42880,12 @@ function isStrategyTask(t) {
                 // First pass: Initialize clients from strategy events (if any) and accumulate planned counts
                 Object.entries(strategyEvents || {}).forEach(([eventId, event]) => {
                     if (!event) return;
+
+                    // FILTER: Only include task types Poster and Video from Strategy Calendar
+                    const eventFmt = String(event.format || event.contentType || event.type || '').trim().toLowerCase();
+                    if (eventFmt && !['poster', 'video', 'carousel', 'reel'].includes(eventFmt)) {
+                        return; // Exclude non-Poster/Video strategy formats (e.g. Printing Material)
+                    }
 
                     const rawDate = event.date || event.postDate || event.postingDate || event.reportDate || event.eventDate || event.scheduledDate || event.start || event.duedate || event.due || event.created;
                     const evDateStr = parseYmd(rawDate);
@@ -43210,6 +43242,12 @@ function isStrategyTask(t) {
                     // 2. Process Strategy Calendar events only if NOT already represented by a Jira task
                     Object.entries(stratEventsObj || {}).forEach(([evId, ev]) => {
                         if (!ev) return;
+
+                        // FILTER: Only include task types Poster and Video from Strategy Calendar
+                        const evFmt = String(ev.format || ev.contentType || ev.type || '').trim().toLowerCase();
+                        if (evFmt && !['poster', 'video', 'carousel', 'reel'].includes(evFmt)) {
+                            return; // Exclude non-Poster/Video strategy formats (e.g. Printing Material)
+                        }
                         const evClient = getNormalizedClientName(ev.client || 'Other');
                         if (client !== 'ALL' && evClient !== client) return;
 
