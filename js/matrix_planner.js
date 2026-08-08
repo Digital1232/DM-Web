@@ -491,8 +491,9 @@ function renderMatrixPlanner() {
         titleEl.textContent = matrixCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
     }
 
-    // Render Client Filter Tabs
+    // Render Client Filter Tabs & Format Stats Summary
     renderMatrixClientTabs();
+    renderStrategyFormatSummary();
 
     // Render Active View
     switch (activeMatrixView) {
@@ -560,6 +561,110 @@ function setMatrixClientFilter(client) {
 }
 
 /**
+ * Render Video & Poster Format Stats & Filter Chips
+ */
+function renderStrategyFormatSummary() {
+    const container = document.getElementById('strategy-format-pills-container');
+    if (!container) return;
+
+    const year = matrixCurrentDate.getFullYear();
+    const monthStr = String(matrixCurrentDate.getMonth() + 1).padStart(2, '0');
+    const monthPrefix = `${year}-${monthStr}`;
+
+    const allTasks = Array.from(matrixTasksMap.values());
+
+    // Get tasks for month & client (without applying format filter)
+    const monthTasks = allTasks.filter(item => {
+        const rawDate = item.date || item.dueDate || item.postDate || '';
+        const taskDate = normalizeDateStringToISO(rawDate);
+        if (!taskDate.startsWith(monthPrefix)) return false;
+
+        const client = item.client || 'Unassigned';
+        const assignee = item.assignee || item.assigneeName || 'Unassigned';
+        const status = item.status || 'Working';
+
+        // Search Query Filter
+        if (matrixSearchQuery) {
+            const q = matrixSearchQuery.toLowerCase();
+            const title = (item.title || item.desc || '').toLowerCase();
+            const matches = title.includes(q) || client.toLowerCase().includes(q) || assignee.toLowerCase().includes(q);
+            if (!matches) return false;
+        }
+
+        if (matrixFilterClient !== 'All' && client !== matrixFilterClient) return false;
+        if (matrixFilterAssignee !== 'All' && assignee !== matrixFilterAssignee) return false;
+        if (matrixFilterStatus !== 'All' && status !== matrixFilterStatus) return false;
+
+        return true;
+    });
+
+    const isCompletedStatus = (s) => ['completed', 'done', 'closed', 'resolved', 'posted', 'analytics', 'client approved', 'design completed', 'quality check', 'qc completed'].includes((s || '').toLowerCase().trim());
+
+    let videoCount = 0, videoCompleted = 0;
+    let posterCount = 0, posterCompleted = 0;
+    let carouselCount = 0, carouselCompleted = 0;
+    let reelCount = 0, reelCompleted = 0;
+    let printingMaterialCount = 0, printingMaterialCompleted = 0;
+    let totalCount = monthTasks.length;
+
+    monthTasks.forEach(t => {
+        const fmt = t.contentType || t.format || 'Poster';
+        const done = isCompletedStatus(t.status);
+
+        if (fmt === 'Video') {
+            videoCount++;
+            if (done) videoCompleted++;
+        } else if (fmt === 'Poster') {
+            posterCount++;
+            if (done) posterCompleted++;
+        } else if (fmt === 'Carousel') {
+            carouselCount++;
+            if (done) carouselCompleted++;
+        } else if (fmt === 'Reel') {
+            reelCount++;
+            if (done) reelCompleted++;
+        } else if (fmt === 'Printing Material') {
+            printingMaterialCount++;
+            if (done) printingMaterialCompleted++;
+        } else {
+            posterCount++;
+            if (done) posterCompleted++;
+        }
+    });
+
+    const formats = [
+        { key: 'All', label: `📝 All (${totalCount})`, activeStyle: 'bg-indigo-600 text-white shadow-md shadow-indigo-100', inactiveStyle: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
+        { key: 'Video', label: `🎥 Video (${videoCount} | 🟢 ${videoCompleted})`, activeStyle: 'bg-red-600 text-white shadow-md shadow-red-100', inactiveStyle: 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-100' },
+        { key: 'Poster', label: `📷 Poster (${posterCount} | 🟢 ${posterCompleted})`, activeStyle: 'bg-purple-600 text-white shadow-md shadow-purple-100', inactiveStyle: 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100' },
+        { key: 'Printing Material', label: `🖨️ Printing Material (${printingMaterialCount} | 🟢 ${printingMaterialCompleted})`, activeStyle: 'bg-amber-600 text-white shadow-md shadow-amber-100', inactiveStyle: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100' },
+    ];
+
+    if (carouselCount > 0) {
+        formats.push({ key: 'Carousel', label: `🎠 Carousel (${carouselCount} | 🟢 ${carouselCompleted})`, activeStyle: 'bg-blue-600 text-white shadow-md shadow-blue-100', inactiveStyle: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100' });
+    }
+    if (reelCount > 0) {
+        formats.push({ key: 'Reel', label: `⚡ Reel (${reelCount} | 🟢 ${reelCompleted})`, activeStyle: 'bg-pink-600 text-white shadow-md shadow-pink-100', inactiveStyle: 'bg-pink-50 text-pink-700 hover:bg-pink-100 border border-pink-100' });
+    }
+
+    container.innerHTML = formats.map(f => {
+        const isActive = matrixFilterFormat === f.key;
+        return `<button onclick="setMatrixFormatFilter('${f.key}')" class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1 cursor-pointer ${isActive ? f.activeStyle : f.inactiveStyle}">
+            ${f.label}
+        </button>`;
+    }).join('');
+}
+
+function setMatrixFormatFilter(format) {
+    matrixFilterFormat = format;
+    const select = document.getElementById('matrix-filter-format');
+    if (select) select.value = format;
+    renderMatrixPlanner();
+}
+
+window.renderStrategyFormatSummary = renderStrategyFormatSummary;
+window.setMatrixFormatFilter = setMatrixFormatFilter;
+
+/**
  * Month Navigation Buttons (Left, Right, Today)
  */
 function navigateMatrixMonth(offset) {
@@ -616,7 +721,8 @@ const FORMAT_ICONS = {
     'Poster': '📷',
     'Video': '🎥',
     'Carousel': '🎠',
-    'Reel': '⚡'
+    'Reel': '⚡',
+    'Printing Material': '🖨️'
 };
 
 // Status Style Map

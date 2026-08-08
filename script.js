@@ -3487,19 +3487,26 @@ if (initializeApp) {
         }).join('');
     }
 
-    function selectStrategyFormat(format) {
-        const posterBtn = document.getElementById('strategy-format-poster');
-        const videoBtn = document.getElementById('strategy-format-video');
-        const input = document.getElementById('strategy-format');
-        if (!posterBtn || !videoBtn || !input) return;
+    function selectStrategyFormat(format, autoUpdateCounts = false) {
+        const formatSelect = document.getElementById('strategy-format');
+        if (formatSelect) {
+            formatSelect.value = format || 'Video';
+        }
 
-        input.value = format;
-        if (format === 'Video') {
-            videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
-            posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
-        } else {
-            posterBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm cursor-pointer";
-            videoBtn.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 cursor-pointer";
+        const selectedFormat = formatSelect ? formatSelect.value : (format || 'Video');
+
+        // Poster and Printing Material auto assign to Karthika
+        if (selectedFormat === 'Poster' || selectedFormat === 'Printing Material') {
+            const ownerSelect = document.getElementById('strategy-owner');
+            if (ownerSelect) {
+                const karthikaOpt = Array.from(ownerSelect.options).find(o => 
+                    (o.value && o.value.toLowerCase().includes('karthika')) || 
+                    (o.text && o.text.toLowerCase().includes('karthika'))
+                );
+                if (karthikaOpt) {
+                    ownerSelect.value = karthikaOpt.value;
+                }
+            }
         }
     }
 
@@ -3640,13 +3647,7 @@ function isStrategyTask(t) {
         const descEl = document.getElementById('strategy-desc');
         if (descEl) descEl.value = '';
 
-        // Reset format to Poster and enable buttons
-        const posterBtn = document.getElementById('strategy-format-poster');
-        const videoBtn = document.getElementById('strategy-format-video');
-        if (posterBtn && videoBtn) {
-            posterBtn.removeAttribute('disabled');
-            videoBtn.removeAttribute('disabled');
-        }
+        // Reset format to Video
         selectStrategyFormat('Video');
 
         document.getElementById('strategy-delete-btn').classList.add('hidden');
@@ -3776,8 +3777,8 @@ function isStrategyTask(t) {
             saveBtn.innerHTML = '<iconify-icon icon="svg-spinners:ring-resize" width="16" class="inline mr-1"></iconify-icon> Saving...';
         }
 
-        // If format is Poster, auto assign to Karthika
-        if (format === 'Poster') {
+        // If format is Poster or Printing Material, auto assign to Karthika
+        if (format === 'Poster' || format === 'Printing Material') {
             owner = 'karthikavilpower@gmail.com';
             const ownerEl = document.getElementById('strategy-owner');
             if (ownerEl) ownerEl.value = owner;
