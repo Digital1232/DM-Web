@@ -13998,7 +13998,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
     }
 
 
-    window.addEditQcCustomItem = addEditQcCustomItem; window.setEditQcRating = setEditQcRating; window.renderEditQcChecklist = renderEditQcChecklist; window.openEditQcReportModal = openEditQcReportModal; window.saveEditedQcReport = saveEditedQcReport; window.renderQcInspectorPerformance = renderQcInspectorPerformance;
+    window.getSafePdfUrl = getSafePdfUrl; window.openPdfUrl = openPdfUrl; window.addEditQcCustomItem = addEditQcCustomItem; window.setEditQcRating = setEditQcRating; window.renderEditQcChecklist = renderEditQcChecklist; window.openEditQcReportModal = openEditQcReportModal; window.saveEditedQcReport = saveEditedQcReport; window.renderQcInspectorPerformance = renderQcInspectorPerformance;
     window.renderClientQcMistakes = renderClientQcMistakes;
 
 
@@ -15229,6 +15229,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             // Icon and label for document file types
+            
+            // ── PDF URL Safe Helper (bypasses Cloudinary 401 PDF delivery restriction) ──
+            function getSafePdfUrl(url) {
+                if (!url) return '';
+                const lowerUrl = String(url).toLowerCase();
+                if (lowerUrl.includes('.pdf') || lowerUrl.includes('application/pdf')) {
+                    if (lowerUrl.includes('cloudinary.com') && lowerUrl.includes('/image/upload/')) {
+                        return 'https://docs.google.com/viewerng/viewer?url=' + encodeURIComponent(url);
+                    }
+                }
+                return url;
+            }
+
+            function openPdfUrl(url) {
+                if (!url) return;
+                const safeUrl = getSafePdfUrl(url);
+                window.open(safeUrl, '_blank', 'noopener,noreferrer');
+            }
+
             function docFileIcon(type, name) {
                 const t = (type || '').toLowerCase();
                 const n = (name || '').toLowerCase();
@@ -15493,7 +15512,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 <p class="text-[9px] text-slate-400">${formatTaskFileSize(att.size)}</p>
                             </div>
                             
-                            <a href="${att.url}" target="_blank" 
+                            <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" 
                                 class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
                                 title="Open file">
                                 <iconify-icon icon="solar:link-circle-bold" width="18"></iconify-icon>
@@ -15527,7 +15546,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             ${attachments.map(att => {
                     const icon = getTaskFileIcon(att.name);
                     return `
-                                    <a href="${att.url}" target="_blank" 
+                                    <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" 
                                         class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-[9px] font-bold text-indigo-700">
                                         <iconify-icon icon="${icon.icon}" width="14"></iconify-icon>
                                         ${escapeHtml(att.name)}
@@ -50822,7 +50841,7 @@ function isStrategyTask(t) {
                             <p class="text-[9px] text-slate-400">${formatFileSize(att.size)}</p>
                         </div>
                         
-                        <a href="${att.url}" target="_blank" rel="noopener noreferrer"
+                        <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" rel="noopener noreferrer"
                             class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
                             title="Open file">
                             <iconify-icon icon="solar:link-circle-bold" width="18"></iconify-icon>
@@ -50865,7 +50884,7 @@ function isStrategyTask(t) {
                         ${attachments.map(att => {
                 const icon = getFileIcon(att.name);
                 return `
-                                <a href="${att.url}" target="_blank" rel="noopener noreferrer"
+                                <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" rel="noopener noreferrer"
                                     class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-[9px] font-bold text-indigo-700 truncate max-w-xs"
                                     title="${att.name}">
                                     <iconify-icon icon="${icon.icon}" width="14"></iconify-icon>

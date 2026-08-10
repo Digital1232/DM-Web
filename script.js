@@ -13652,7 +13652,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     }
 
 
-    window.addEditQcCustomItem = addEditQcCustomItem; window.setEditQcRating = setEditQcRating; window.renderEditQcChecklist = renderEditQcChecklist; window.openEditQcReportModal = openEditQcReportModal; window.saveEditedQcReport = saveEditedQcReport; window.renderQcInspectorPerformance = renderQcInspectorPerformance; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+    window.getSafePdfUrl = getSafePdfUrl; window.openPdfUrl = openPdfUrl; window.addEditQcCustomItem = addEditQcCustomItem; window.setEditQcRating = setEditQcRating; window.renderEditQcChecklist = renderEditQcChecklist; window.openEditQcReportModal = openEditQcReportModal; window.saveEditedQcReport = saveEditedQcReport; window.renderQcInspectorPerformance = renderQcInspectorPerformance; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
     window.updateInternalTaskStatus = updateInternalTaskStatus;
     window.handleLeaveTypeChange = handleLeaveTypeChange;
     window.setQcPerformanceFilter = setQcPerformanceFilter;
