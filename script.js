@@ -3636,24 +3636,21 @@ function setQcPerformanceFilter(period) {
             return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
 
-        // Allowed statuses requested by user
-        const ALLOWED_STATUSES = new Set([
-            'to do',
-            'todo',
-            'content inprogress',
-            'content in progress',
-            'client content approval',
-            'design to do',
-            'design in progress',
-            'design in-progress',
-            'design hold',
-            'thumbnail waiting'
+        // Statuses allowed for strategy task assignment (excludes Done/Completed/Published/QC)
+        const EXCLUDED_STATUSES = new Set([
+            'done',
+            'completed',
+            'published',
+            'closed',
+            'archived',
+            'client sent',
+            'quality check'
         ]);
 
         const isAllowedStatus = function(statusStr) {
-            if (!statusStr) return true; // Default untagged strategy tasks as To Do
+            if (!statusStr) return true; // Default untagged strategy tasks as active
             const norm = String(statusStr).trim().toLowerCase();
-            return ALLOWED_STATUSES.has(norm);
+            return !EXCLUDED_STATUSES.has(norm);
         };
 
         const clientTasks = [];
@@ -3662,12 +3659,12 @@ function setQcPerformanceFilter(period) {
 
         const targetClientNorm = String(clientName || '').trim().toLowerCase();
 
-        // 1. Gather strategyEvents
+        // 1. Gather strategyEvents from window.strategyEvents or strategyEvents
         const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
         Object.entries(sEvents).forEach(([id, ev]) => {
             if (!ev || !ev.title) return;
             const status = ev.status || 'To Do';
-            if (!isAllowedStatus(status)) return; // Filter out finished/completed/QC statuses
+            if (!isAllowedStatus(status)) return;
 
             const titleTrim = String(ev.title).trim();
             if (seenTitles.has(titleTrim.toLowerCase())) return;
@@ -3690,12 +3687,12 @@ function setQcPerformanceFilter(period) {
             }
         });
 
-        // 2. Gather Jira / Internal tasks
+        // 2. Gather Jira / Internal tasks from window.tasks or tasks
         const allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : (window.tasks || []);
         allTasks.forEach(t => {
             if (!t) return;
             const status = t.status || 'To Do';
-            if (!isAllowedStatus(status)) return; // Filter out non-matching statuses
+            if (!isAllowedStatus(status)) return;
 
             const titleTrim = String(t.desc || t.summary || t.id || '').trim();
             if (!titleTrim || seenTitles.has(titleTrim.toLowerCase())) return;
@@ -3721,16 +3718,18 @@ function setQcPerformanceFilter(period) {
         let optionsHtml = '<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>';
 
         if (clientTasks.length > 0) {
+            optionsHtml += `<optgroup label="Tasks for ${safeEsc(clientName || 'Selected Client')}">`;
             clientTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
                 const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
                 const statusTxt = t.status ? (' [' + t.status + ']') : '';
                 optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${statusTxt}${ownerTxt}</option>`;
             });
+            optionsHtml += '</optgroup>';
         }
 
         if (otherTasks.length > 0) {
-            optionsHtml += `<option value="" disabled>──────── Other Available Strategy Tasks ────────</option>`;
+            optionsHtml += `<optgroup label="Other Available Strategy & Project Tasks">`;
             otherTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
                 const clientTxt = t.client ? (' [' + t.client + ']') : '';
@@ -3738,6 +3737,7 @@ function setQcPerformanceFilter(period) {
                 const statusTxt = t.status ? (' - ' + t.status) : '';
                 optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${statusTxt}${ownerTxt}</option>`;
             });
+            optionsHtml += '</optgroup>';
         }
 
         optionsHtml += '<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>';
