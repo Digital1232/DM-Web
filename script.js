@@ -1115,24 +1115,24 @@ if (initializeApp) {
                 accuracyPct = Math.max(0, 100 - (escapes * 20));
             }
 
-            let badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+            let badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
             let badgeText = 'High Precision QC';
             if (accuracyPct < 80) {
-                badgeColor = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+                badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
                 badgeText = 'Needs Improvement';
             } else if (accuracyPct < 90) {
-                badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+                badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
                 badgeText = 'Good Accuracy';
             }
 
             return `
-                <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 backdrop-blur-md flex flex-col justify-between space-y-4 shadow-lg">
+                <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-center gap-3">
-                            <img src="${ins.avatar}" class="w-10 h-10 rounded-xl object-cover border border-slate-600 bg-slate-900 shadow-sm">
+                            <img src="${ins.avatar}" class="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-slate-50 shadow-2xs shrink-0">
                             <div>
-                                <h4 class="text-sm font-black text-white">${escapeHtml(ins.name)}</h4>
-                                <p class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">QC Inspector</p>
+                                <h4 class="text-sm font-black text-slate-900 truncate">${escapeHtml(ins.name)}</h4>
+                                <p class="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">QC Inspector</p>
                             </div>
                         </div>
                         <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border ${badgeColor}">
@@ -1140,7 +1140,7 @@ if (initializeApp) {
                         </span>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-2 py-3 border-y border-slate-700/60 text-center">
+                    <div class="grid grid-cols-3 gap-2 py-3 border-y border-slate-100 text-center">
                         <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/40">
                             <p class="text-[9px] text-slate-400 font-bold uppercase">QC Audits</p>
                             <p class="text-base font-black text-indigo-400">${totalAudits}</p>
@@ -1466,6 +1466,12 @@ function setQcPerformanceFilter(period) {
             <div class="space-y-4">
                 ${mistakesHtml}
                 ${report.notes ? `<div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Feedback Notes</p><p class="text-sm text-slate-600 italic">"${escapeHtml(report.notes)}"</p></div>` : ''}
+                <div class="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                    <button onclick="document.getElementById('qcReportDetailModal').close(); openEditQcReportModal('${report.id}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer">
+                        <iconify-icon icon="solar:pen-bold" width="14"></iconify-icon>
+                        Edit QC Report
+                    </button>
+                </div>
             </div>`;
         modal.showModal();
     }
@@ -13418,7 +13424,235 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.toggleCustomCategoryInput = toggleCustomCategoryInput;
     window.openClientMistakeDetails = openClientMistakeDetails;
     window.addJiraComment = addJiraComment;
-    window.openClientQcMistakeModal = openClientQcMistakeModal; window.onClientQcTaskChange = onClientQcTaskChange; window.submitClientQcMistake = submitClientQcMistake; window.deleteClientQcMistake = deleteClientQcMistake; window.loadClientQcMistakes = loadClientQcMistakes; window.renderQcInspectorPerformance = renderQcInspectorPerformance; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
+    window.openClientQcMistakeModal = openClientQcMistakeModal; window.onClientQcTaskChange = onClientQcTaskChange; window.submitClientQcMistake = submitClientQcMistake; window.deleteClientQcMistake = deleteClientQcMistake; window.loadClientQcMistakes = loadClientQcMistakes; 
+    let editQcCurrentRating = 5;
+    let editQcCurrentReport = null;
+    let editQcCustomItems = {};
+
+    function setEditQcRating(rating) {
+        editQcCurrentRating = rating;
+        const container = document.getElementById('edit-qc-rating-stars');
+        const label = document.getElementById('edit-qc-rating-label');
+        if (!container) return;
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            const active = i <= rating;
+            html += `<button type="button" onclick="setEditQcRating(${i})" class="text-xl ${active ? 'text-amber-400' : 'text-slate-300'} hover:text-amber-400 transition-colors cursor-pointer">★</button>`;
+        }
+        container.innerHTML = html;
+        if (label) label.textContent = `${rating} Star${rating !== 1 ? 's' : ''}`;
+    }
+
+    function addEditQcCustomItem(category) {
+        const newItem = prompt(`Add a custom check to ${category}:`);
+        if (!newItem || !newItem.trim()) return;
+        const trimmed = newItem.trim();
+        if (!editQcCustomItems[category]) editQcCustomItems[category] = [];
+        if (!editQcCustomItems[category].includes(trimmed)) {
+            editQcCustomItems[category].push(trimmed);
+        }
+        if (editQcCurrentReport) {
+            if (!editQcCurrentReport.mistakeItems) editQcCurrentReport.mistakeItems = [];
+            const key = `${category}|${trimmed}`;
+            if (!editQcCurrentReport.mistakeItems.includes(key)) {
+                editQcCurrentReport.mistakeItems.push(key);
+            }
+        }
+        renderEditQcChecklist();
+    }
+
+    function renderEditQcChecklist() {
+        const type = document.getElementById('edit-qc-type').value;
+        const grid = document.getElementById('edit-qc-checklist-grid');
+        if (!grid) return;
+
+        const baseData = type === 'poster' ? QC_POSTER_CHECKLIST : QC_VIDEO_CHECKLIST;
+        const currentMistakes = editQcCurrentReport ? (editQcCurrentReport.mistakeItems || []) : [];
+
+        const catMap = new Map();
+
+        // 1. Fill base categories & items
+        baseData.forEach(cat => {
+            catMap.set(cat.category, new Set(cat.items));
+        });
+
+        // 2. Add extra items from saved report's mistakeItems
+        currentMistakes.forEach(mi => {
+            const parts = mi.split('|');
+            const catName = parts[0];
+            const itemName = parts.slice(1).join('|');
+            if (catName && itemName) {
+                if (!catMap.has(catName)) {
+                    catMap.set(catName, new Set());
+                }
+                catMap.get(catName).add(itemName);
+            }
+        });
+
+        // 3. Add custom items added via editQcCustomItems
+        Object.entries(editQcCustomItems).forEach(([catName, customList]) => {
+            if (!catMap.has(catName)) {
+                catMap.set(catName, new Set());
+            }
+            customList.forEach(item => catMap.get(catName).add(item));
+        });
+
+        grid.innerHTML = Array.from(catMap.entries()).map(([category, itemsSet]) => {
+            const items = Array.from(itemsSet);
+            return `
+                <div class="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col space-y-2 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <h5 class="text-[10px] font-black text-slate-800 uppercase tracking-wider">${escapeHtml(category)}</h5>
+                        <button type="button" onclick="addEditQcCustomItem('${escapeHtml(category.replace(/'/g, "\\\'"))}')" class="w-5 h-5 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors cursor-pointer" title="Add custom check item">
+                            <iconify-icon icon="solar:add-circle-bold" width="13"></iconify-icon>
+                        </button>
+                    </div>
+                    <div class="space-y-1.5">
+                        ${items.map(item => {
+                            const valueKey = `${category}|${item}`;
+                            const isChecked = currentMistakes.includes(valueKey);
+                            return `
+                                <label class="flex items-start gap-2 text-xs font-bold text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors">
+                                    <input type="checkbox" name="edit_qc_item" value="${escapeHtml(valueKey)}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 mt-0.5">
+                                    <span class="text-[11px] font-semibold text-slate-700">${escapeHtml(item)}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function openEditQcReportModal(reportId) {
+        const report = (allQcReports || []).find(r => r.id === reportId);
+        if (!report) return toast('QC Report not found', 'error');
+
+        editQcCurrentReport = JSON.parse(JSON.stringify(report));
+        editQcCustomItems = {};
+        document.getElementById('edit-qc-report-id').value = report.id;
+
+        // Populate task summary info
+        const infoEl = document.getElementById('edit-qc-task-info');
+        if (infoEl) {
+            infoEl.innerHTML = `
+                <div>
+                    <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Task Details</p>
+                    <p class="text-xs font-black text-slate-900"><span class="font-mono text-indigo-600 mr-1.5">${escapeHtml(report.taskId || '')}</span> ${escapeHtml(report.taskDesc || '')}</p>
+                </div>
+                <div class="text-left sm:text-right shrink-0">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Reviewer & Date</p>
+                    <p class="text-xs font-bold text-slate-700">${escapeHtml(report.qcUser || 'QC')} · ${new Date(report.timestamp).toLocaleDateString()}</p>
+                </div>
+            `;
+        }
+
+        // Set status
+        const statusSelect = document.getElementById('edit-qc-status');
+        if (statusSelect) {
+            statusSelect.value = (report.status === 'Approved' || report.actionStatus === 'Approved') ? 'Approved' : 'Rework';
+        }
+
+        // Set type
+        const typeSelect = document.getElementById('edit-qc-type');
+        if (typeSelect) {
+            typeSelect.value = report.type || 'poster';
+        }
+
+        // Set rating
+        setEditQcRating(report.rating || 5);
+
+        // Set notes
+        const notesInput = document.getElementById('edit-qc-notes');
+        if (notesInput) {
+            notesInput.value = report.notes || '';
+        }
+
+        // Render checklist
+        renderEditQcChecklist();
+
+        const modal = document.getElementById('editQcReportModal');
+        if (modal) modal.showModal();
+    }
+
+    async function saveEditedQcReport() {
+        const reportId = document.getElementById('edit-qc-report-id').value;
+        if (!reportId) return toast('Invalid Report ID', 'error');
+
+        const existingReport = (allQcReports || []).find(r => r.id === reportId);
+        if (!existingReport) return toast('Report not found', 'error');
+
+        const status = document.getElementById('edit-qc-status').value;
+        const type = document.getElementById('edit-qc-type').value;
+        const rating = editQcCurrentRating;
+        const notes = (document.getElementById('edit-qc-notes').value || '').trim();
+
+        const mistakeItems = [...document.querySelectorAll('input[name="edit_qc_item"]:checked')].map(i => i.value);
+        const totalItems = [...document.querySelectorAll('input[name="edit_qc_item"]')].length;
+        const checkedCount = Math.max(0, totalItems - mistakeItems.length);
+        const qcScore = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 100;
+
+        const updatedData = {
+            ...existingReport,
+            status: status,
+            actionStatus: status,
+            type: type,
+            rating: rating,
+            notes: notes,
+            mistakeItems: mistakeItems,
+            totalCount: totalItems,
+            checkedCount: checkedCount,
+            qcScore: qcScore,
+            updatedAt: Date.now()
+        };
+
+        try {
+            if (db) {
+                await update(ref(db, `worksync/qc_reports/${reportId}`), updatedData);
+
+                // Update task status if status was changed
+                if (existingReport.taskId) {
+                    const targetStatus = status === 'Approved' ? 'Design Completed' : 'Rework';
+                    const targetTask = (tasks || []).find(t => t.id === existingReport.taskId);
+                    if (targetTask) {
+                        if (typeof isInternalTask === 'function' && isInternalTask(targetTask)) {
+                            await updateInternalTaskStatus(targetTask.id, targetStatus);
+                        } else if (typeof updateTaskStatus === 'function') {
+                            await updateTaskStatus(targetTask.id, targetStatus);
+                        }
+                    }
+                }
+            }
+
+            // Update local memory cache
+            const index = allQcReports.findIndex(r => r.id === reportId);
+            if (index !== -1) {
+                allQcReports[index] = { ...allQcReports[index], ...updatedData };
+            }
+
+            document.getElementById('editQcReportModal').close();
+            toast('QC Report updated successfully!', 'success');
+
+            // Refresh UI components
+            if (typeof renderQcReportsList === 'function' && window._allQcReportsFiltered) {
+                const fIdx = window._allQcReportsFiltered.findIndex(r => r.id === reportId);
+                if (fIdx !== -1) window._allQcReportsFiltered[fIdx] = { ...window._allQcReportsFiltered[fIdx], ...updatedData };
+                renderQcReportsList(window._allQcReportsFiltered);
+            }
+            if (typeof renderQcInspectorPerformance === 'function') {
+                renderQcInspectorPerformance();
+            }
+            if (typeof loadQcReports === 'function') {
+                loadQcReports();
+            }
+        } catch (err) {
+            console.error('Failed to save edited QC report:', err);
+            toast('Failed to update QC report: ' + (err.message || err), 'error');
+        }
+    }
+
+
+    window.addEditQcCustomItem = addEditQcCustomItem; window.setEditQcRating = setEditQcRating; window.renderEditQcChecklist = renderEditQcChecklist; window.openEditQcReportModal = openEditQcReportModal; window.saveEditedQcReport = saveEditedQcReport; window.renderQcInspectorPerformance = renderQcInspectorPerformance; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
     window.updateInternalTaskStatus = updateInternalTaskStatus;
     window.handleLeaveTypeChange = handleLeaveTypeChange;
     window.setQcPerformanceFilter = setQcPerformanceFilter;
