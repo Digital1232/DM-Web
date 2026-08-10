@@ -2214,7 +2214,7 @@ function setQcPerformanceFilter(period) {
         if (confirm('Are you sure you want to Check Out for today?')) {
             clearInterval(timerRef);
             isCheckedIn = false;
-            holdActiveTaskForCheckout();
+            if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) { try { holdTask(); } catch(e){} } if (typeof clearCurrentTask === 'function') { clearCurrentTask().catch(() => {}); }
             if (checkInTime) {
                 const totalDuration = Date.now() - checkInTime;
                 logAttendanceEvent('check_out', totalDuration);
@@ -2287,7 +2287,7 @@ function setQcPerformanceFilter(period) {
             logAttendanceEvent('check_out', totalDuration);
             checkInTime = null;
         }
-        holdActiveTaskForCheckout();
+        if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) { try { holdTask(); } catch(e){} } if (typeof clearCurrentTask === 'function') { clearCurrentTask().catch(() => {}); }
         setTimerState('idle');
         localStorage.removeItem('worksync_timerState');
         localStorage.removeItem('worksync_checkInTime');
@@ -3463,7 +3463,23 @@ function setQcPerformanceFilter(period) {
         }
     };
 
-        window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
+        
+    window.adminClearUserCurrentTask = async function(userEmail) {
+        if (!userEmail) return;
+        if (!confirm(`Clear current active task for ${userEmail}?`)) return;
+        try {
+            const userKey = (userEmail || '').toLowerCase().replace(/[@.]/g, '_');
+            await set(ref(db, `worksync/users/${userKey}/currentTask`), null);
+            toast(`Cleared active task timer for ${userEmail}`, 'success');
+            if (typeof loadEmployeeCurrentTasks === 'function') loadEmployeeCurrentTasks();
+        } catch (err) {
+            console.error('Failed to clear user task:', err);
+            toast('Failed to clear user task: ' + err.message, 'error');
+        }
+    };
+
+
+    window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
         const cell = document.getElementById(`matrix-cell-${cellSanitizedId}-${dateStr}`);
         if (!cell) return;
 
@@ -6671,7 +6687,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${u.role || 'Employee'}</p>
                                 </div>
                             </div>
+                            <div class="flex items-center gap-1.5">
                             <span class="text-[10px] font-bold px-2.5 py-1 rounded-full border ${stateClass}">${stateLabel}</span>
+                            ${(isAdmin() || isManager()) && task ? `<button onclick="adminClearUserCurrentTask('${u.email}')" class="text-[9px] font-bold text-rose-600 hover:bg-rose-100 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 transition-all shadow-sm" title="Clear Stale Task">Clear</button>` : ''}
+                        </div>
                         </div>
                         ${task ? `
                             <div class="bg-white rounded-2xl border border-slate-100 p-4">
