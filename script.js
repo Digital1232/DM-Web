@@ -3463,17 +3463,52 @@ function setQcPerformanceFilter(period) {
         }
     };
 
-    window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
+        window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
         const cell = document.getElementById(`matrix-cell-${cellSanitizedId}-${dateStr}`);
         if (!cell) return;
 
         const formId = `inline-form-${Date.now()}`;
+
+        // Gather pre-created strategy tasks for this client (or unassigned/all)
+        const availableTasks = Object.entries(strategyEvents || {})
+            .filter(([id, ev]) => {
+                if (!ev || !ev.title) return false;
+                if (clientName && ev.client && ev.client.toLowerCase() !== clientName.toLowerCase()) return false;
+                return true;
+            })
+            .map(([id, ev]) => ({
+                id,
+                title: ev.title,
+                format: ev.format || 'Poster',
+                owner: ev.owner || ev.assignee || '',
+                date: ev.date || ''
+            }));
+
+        const taskOptionsHtml = availableTasks.map(t => {
+            const icon = t.format === 'Video' ? '🎥' : '📷';
+            const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
+            return `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${ownerTxt}</option>`;
+        }).join('');
+
         const inlineHtml = `
-            <div id="${formId}" class="bg-indigo-50/90 dark:bg-indigo-950 p-2.5 rounded-xl border border-indigo-200 space-y-2 shadow-md">
-                <input id="${formId}-title" type="text" placeholder="Task Title..." class="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <div id="${formId}" data-selected-id="" class="bg-indigo-50/95 dark:bg-indigo-950 p-2.5 rounded-xl border border-indigo-200 space-y-2 shadow-md">
+                <div class="text-[10px] font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Assign Strategy Task</span>
+                    <span class="text-[9px] font-bold text-slate-400">${dateStr}</span>
+                </div>
+
+                ${availableTasks.length > 0 ? `
+                <select id="${formId}-select" onchange="handleMatrixTaskDropdownChange('${formId}')" class="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+                    <option value="">📋 Select Pre-Created Strategy Task...</option>
+                    ${taskOptionsHtml}
+                    <option value="__NEW_CUSTOM__">✍️ + Type Custom Task Title...</option>
+                </select>
+                ` : ''}
+
+                <input id="${formId}-title" type="text" placeholder="Task Title..." class="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 ${availableTasks.length > 0 ? 'hidden' : ''}">
                 
                 <div class="grid grid-cols-2 gap-1.5">
-                    <select id="${formId}-assignee" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200">
+                    <select id="${formId}-assignee" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
                         <option value="">Assignee</option>
                         <option value="Barath">Barath</option>
                         <option value="Immanuel">Immanuel</option>
@@ -3482,7 +3517,7 @@ function setQcPerformanceFilter(period) {
                         <option value="Siddharth">Siddharth</option>
                     </select>
 
-                    <select id="${formId}-format" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200">
+                    <select id="${formId}-format" class="text-[10px] font-bold p-1 rounded-lg border border-slate-200 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
                         <option value="Poster">📷 Poster</option>
                         <option value="Video">🎥 Video</option>
                     </select>
@@ -3496,21 +3531,77 @@ function setQcPerformanceFilter(period) {
         `;
 
         cell.insertAdjacentHTML('beforeend', inlineHtml);
+    };
+
+    window.handleMatrixTaskDropdownChange = function(formId) {
+        const select = document.getElementById(`${formId}-select`);
         const titleInput = document.getElementById(`${formId}-title`);
-        if (titleInput) titleInput.focus();
+        const assigneeSelect = document.getElementById(`${formId}-assignee`);
+        const formatSelect = document.getElementById(`${formId}-format`);
+        const formContainer = document.getElementById(formId);
+
+        if (!select || !titleInput || !formContainer) return;
+
+        const val = select.value;
+        if (val === '__NEW_CUSTOM__' || !val) {
+            formContainer.setAttribute('data-selected-id', '');
+            titleInput.classList.remove('hidden');
+            if (val === '__NEW_CUSTOM__') {
+                titleInput.value = '';
+                titleInput.focus();
+            }
+            return;
+        }
+
+        const selectedOption = select.options[select.selectedIndex];
+        if (!selectedOption) return;
+
+        const taskTitle = selectedOption.getAttribute('data-title') || '';
+        const taskFormat = selectedOption.getAttribute('data-format') || 'Poster';
+        const taskOwner = selectedOption.getAttribute('data-owner') || '';
+
+        formContainer.setAttribute('data-selected-id', val);
+        titleInput.value = taskTitle;
+        titleInput.classList.add('hidden');
+
+        if (formatSelect && taskFormat) formatSelect.value = taskFormat;
+        if (assigneeSelect && taskOwner) assigneeSelect.value = taskOwner;
     };
 
     window.saveInlineMatrixTask = function(formId, clientName, dateStr) {
+        const formContainer = document.getElementById(formId);
         const titleEl = document.getElementById(`${formId}-title`);
+        const selectEl = document.getElementById(`${formId}-select`);
         const assigneeEl = document.getElementById(`${formId}-assignee`);
         const formatEl = document.getElementById(`${formId}-format`);
-        
-        if (!titleEl || !titleEl.value.trim()) return toast('Please enter a task title', 'error');
 
-        const title = titleEl.value.trim();
+        const selectedTaskId = formContainer ? formContainer.getAttribute('data-selected-id') : '';
+        const title = titleEl ? titleEl.value.trim() : '';
         const owner = assigneeEl ? assigneeEl.value : '';
         const format = formatEl ? formatEl.value : 'Poster';
 
+        if (!title && !selectedTaskId) return toast('Please select or enter a task title', 'error');
+
+        // If assigning an existing pre-created strategy task from dropdown
+        if (selectedTaskId && strategyEvents && strategyEvents[selectedTaskId]) {
+            const updates = {};
+            updates[`worksync/strategy_events/${selectedTaskId}/client`] = clientName;
+            updates[`worksync/strategy_events/${selectedTaskId}/date`] = dateStr;
+            updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
+            updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
+
+            update(ref(db), updates)
+                .then(() => {
+                    toast(`Strategy task "${title}" assigned to ${owner || 'team'} for ${dateStr}`, 'success');
+                    renderStrategyCalendar();
+                })
+                .catch(err => {
+                    toast('Failed to assign task: ' + err.message, 'error');
+                });
+            return;
+        }
+
+        // If creating a new custom task
         const newId = `strat_${Date.now()}`;
         const newEvent = {
             title,
@@ -3525,7 +3616,7 @@ function setQcPerformanceFilter(period) {
 
         set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
             .then(() => {
-                toast('Task created successfully', 'success');
+                toast('Task created & assigned successfully', 'success');
                 renderStrategyCalendar();
             })
             .catch(err => {
