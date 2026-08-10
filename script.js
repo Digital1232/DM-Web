@@ -3452,7 +3452,7 @@ function setQcPerformanceFilter(period) {
             });
 
             grid.innerHTML += `
-                <div onclick="openAddStrategyEventModal('${dateStr}')" 
+                <div onclick="openWeeklyTaskAssigneeModal('${dateStr}')" 
                      class="p-2 border-r border-b border-slate-100 min-h-[110px] flex flex-col ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 cursor-pointer">
                     <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">${d}</span>
                     <div class="mt-1.5 space-y-1 flex-1 overflow-y-auto max-h-[80px]">
@@ -4430,7 +4430,7 @@ function isStrategyTask(t) {
         }
     }
 
-    function openAddStrategyEventModal(dateStr, clientStr) {
+    function openWeeklyTaskAssigneeModal(dateStr, clientStr) {
         if (typeof openWeeklyTaskAssigneeModal === 'function') {
             openWeeklyTaskAssigneeModal(dateStr, clientStr);
             return;
@@ -4459,10 +4459,15 @@ function isStrategyTask(t) {
         selectStrategyFormat('Video');
 
         document.getElementById('strategy-delete-btn').classList.add('hidden');
-        document.getElementById('strategyEventModal').showModal();
+        (document.getElementById('weeklyTaskAssigneeModal') || document.getElementById('strategyEventModal')).showModal();
     }
 
     function openEditStrategyEventModal(eventId) {
+        if (typeof openWeeklyTaskAssigneeModal === 'function') {
+            const ev = typeof strategyEvents !== 'undefined' ? strategyEvents[eventId] : null;
+            openWeeklyTaskAssigneeModal(ev?.date || '', ev?.client || '');
+            return;
+        }
         let ev = typeof strategyEvents !== 'undefined' ? strategyEvents[eventId] : null;
         let realEventId = eventId;
 
@@ -4554,7 +4559,7 @@ function isStrategyTask(t) {
         // Load Jira display when modal opens
         loadStrategyJiraDisplay();
 
-        document.getElementById('strategyEventModal').showModal();
+        (document.getElementById('weeklyTaskAssigneeModal') || document.getElementById('strategyEventModal')).showModal();
     }
 
     function closeStrategyEventModal() {
