@@ -3480,6 +3480,10 @@ function setQcPerformanceFilter(period) {
 
 
     
+    
+
+
+
     window.openWeeklyTaskAssigneeModal = function(dateStr, clientName) {
         const modal = document.getElementById('weeklyTaskAssigneeModal');
         if (!modal) return;
@@ -4430,7 +4434,7 @@ function isStrategyTask(t) {
         }
     }
 
-    function openWeeklyTaskAssigneeModal(dateStr, clientStr) {
+    function openAddStrategyEventModal(dateStr, clientStr) {
         if (typeof openWeeklyTaskAssigneeModal === 'function') {
             openWeeklyTaskAssigneeModal(dateStr, clientStr);
             return;
