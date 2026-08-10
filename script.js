@@ -3324,7 +3324,7 @@ function setQcPerformanceFilter(period) {
                                         <span class="text-[10px] font-bold text-slate-400">${totalCount} Monthly Tasks</span>
                                     </div>
                                 </div>
-                                <button onclick="openAddStrategyEventModal('', '${escapeHtml(client)}')" class="p-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all" title="Quick Add Task">
+                                <button onclick="openWeeklyTaskAssigneeModal('', '${escapeHtml(client)}')" class="p-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all" title="Quick Add Task">
                                     <iconify-icon icon="solar:add-square-bold" width="16"></iconify-icon>
                                 </button>
                             </div>
@@ -3476,6 +3476,149 @@ function setQcPerformanceFilter(period) {
             console.error('Failed to clear user task:', err);
             toast('Failed to clear user task: ' + err.message, 'error');
         }
+    };
+
+
+    
+    window.openWeeklyTaskAssigneeModal = function(dateStr, clientName) {
+        const modal = document.getElementById('weeklyTaskAssigneeModal');
+        if (!modal) return;
+
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+
+        selectedIdEl.value = '';
+        titleEl.value = '';
+        if (clientEl) clientEl.value = clientName || 'Einstein';
+        if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
+        if (ownerEl) ownerEl.value = '';
+        if (formatEl) formatEl.value = 'Poster';
+
+        // Gather pre-created strategy tasks for this client (or unassigned/all)
+        const availableTasks = Object.entries(strategyEvents || {})
+            .filter(([id, ev]) => {
+                if (!ev || !ev.title) return false;
+                if (clientName && ev.client && ev.client.toLowerCase() !== clientName.toLowerCase()) return false;
+                return true;
+            })
+            .map(([id, ev]) => ({
+                id,
+                title: ev.title,
+                format: ev.format || 'Poster',
+                owner: ev.owner || ev.assignee || '',
+                client: ev.client || ''
+            }));
+
+        if (selectEl) {
+            selectEl.innerHTML = `<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>` +
+                availableTasks.map(t => {
+                    const icon = t.format === 'Video' ? '🎥' : '📷';
+                    const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
+                    return `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${ownerTxt}</option>`;
+                }).join('') +
+                `<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>`;
+        }
+
+        modal.showModal();
+    };
+
+    window.handleWeeklyTaskModalSelectChange = function() {
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+
+        if (!selectEl || !titleEl || !selectedIdEl) return;
+
+        const val = selectEl.value;
+        if (val === '__NEW_CUSTOM__' || !val) {
+            selectedIdEl.value = '';
+            if (val === '__NEW_CUSTOM__') {
+                titleEl.value = '';
+                titleEl.focus();
+            }
+            return;
+        }
+
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        if (!selectedOption) return;
+
+        const taskTitle = selectedOption.getAttribute('data-title') || '';
+        const taskFormat = selectedOption.getAttribute('data-format') || 'Poster';
+        const taskOwner = selectedOption.getAttribute('data-owner') || '';
+
+        selectedIdEl.value = val;
+        titleEl.value = taskTitle;
+
+        if (formatEl && taskFormat) formatEl.value = taskFormat;
+        if (ownerEl && taskOwner) ownerEl.value = taskOwner;
+    };
+
+    window.saveWeeklyTaskAssignment = function() {
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+
+        const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
+        const title = titleEl ? titleEl.value.trim() : '';
+        const client = clientEl ? clientEl.value : 'Einstein';
+        const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+        const owner = ownerEl ? ownerEl.value : '';
+        const format = formatEl ? formatEl.value : 'Poster';
+
+        if (!title && !selectedTaskId) return toast('Please select or enter a task title', 'error');
+
+        // If assigning an existing pre-created strategy task
+        if (selectedTaskId && strategyEvents && strategyEvents[selectedTaskId]) {
+            const updates = {};
+            updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
+            updates[`worksync/strategy_events/${selectedTaskId}/date`] = dateStr;
+            updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
+            updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
+
+            update(ref(db), updates)
+                .then(() => {
+                    toast(`Assigned "${title}" to ${owner || 'team'} for ${dateStr}`, 'success');
+                    document.getElementById('weeklyTaskAssigneeModal')?.close();
+                    renderStrategyCalendar();
+                })
+                .catch(err => {
+                    toast('Failed to assign task: ' + err.message, 'error');
+                });
+            return;
+        }
+
+        // If creating a new custom task
+        const newId = `strat_${Date.now()}`;
+        const newEvent = {
+            title,
+            client,
+            date: dateStr,
+            owner,
+            format,
+            platform: 'General Brand',
+            status: 'To Do',
+            createdAt: new Date().toISOString()
+        };
+
+        set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
+            .then(() => {
+                toast(`Task created & assigned to ${owner || 'team'}`, 'success');
+                document.getElementById('weeklyTaskAssigneeModal')?.close();
+                renderStrategyCalendar();
+            })
+            .catch(err => {
+                toast('Failed to create task: ' + err.message, 'error');
+            });
     };
 
 
