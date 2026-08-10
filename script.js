@@ -3636,6 +3636,26 @@ function setQcPerformanceFilter(period) {
             return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
 
+        // Allowed statuses requested by user
+        const ALLOWED_STATUSES = new Set([
+            'to do',
+            'todo',
+            'content inprogress',
+            'content in progress',
+            'client content approval',
+            'design to do',
+            'design in progress',
+            'design in-progress',
+            'design hold',
+            'thumbnail waiting'
+        ]);
+
+        const isAllowedStatus = function(statusStr) {
+            if (!statusStr) return true; // Default untagged strategy tasks as To Do
+            const norm = String(statusStr).trim().toLowerCase();
+            return ALLOWED_STATUSES.has(norm);
+        };
+
         const clientTasks = [];
         const otherTasks = [];
         const seenTitles = new Set();
@@ -3646,6 +3666,9 @@ function setQcPerformanceFilter(period) {
         const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
         Object.entries(sEvents).forEach(([id, ev]) => {
             if (!ev || !ev.title) return;
+            const status = ev.status || 'To Do';
+            if (!isAllowedStatus(status)) return; // Filter out finished/completed/QC statuses
+
             const titleTrim = String(ev.title).trim();
             if (seenTitles.has(titleTrim.toLowerCase())) return;
             seenTitles.add(titleTrim.toLowerCase());
@@ -3656,7 +3679,8 @@ function setQcPerformanceFilter(period) {
                 title: titleTrim,
                 format: ev.format || 'Poster',
                 owner: ev.owner || ev.assignee || '',
-                client: ev.client || ''
+                client: ev.client || '',
+                status: status
             };
 
             if (targetClientNorm && evClientNorm && (evClientNorm.includes(targetClientNorm) || targetClientNorm.includes(evClientNorm))) {
@@ -3670,6 +3694,9 @@ function setQcPerformanceFilter(period) {
         const allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : (window.tasks || []);
         allTasks.forEach(t => {
             if (!t) return;
+            const status = t.status || 'To Do';
+            if (!isAllowedStatus(status)) return; // Filter out non-matching statuses
+
             const titleTrim = String(t.desc || t.summary || t.id || '').trim();
             if (!titleTrim || seenTitles.has(titleTrim.toLowerCase())) return;
             seenTitles.add(titleTrim.toLowerCase());
@@ -3680,7 +3707,8 @@ function setQcPerformanceFilter(period) {
                 title: titleTrim,
                 format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
                 owner: t.assignee || '',
-                client: t.client || ''
+                client: t.client || '',
+                status: status
             };
 
             if (targetClientNorm && tClientNorm && (tClientNorm.includes(targetClientNorm) || targetClientNorm.includes(tClientNorm))) {
@@ -3696,17 +3724,19 @@ function setQcPerformanceFilter(period) {
             clientTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
                 const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
-                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${ownerTxt}</option>`;
+                const statusTxt = t.status ? (' [' + t.status + ']') : '';
+                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${statusTxt}${ownerTxt}</option>`;
             });
         }
 
         if (otherTasks.length > 0) {
-            optionsHtml += `<option value="" disabled>──────── All Strategy & Project Tasks ────────</option>`;
+            optionsHtml += `<option value="" disabled>──────── Other Available Strategy Tasks ────────</option>`;
             otherTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
                 const clientTxt = t.client ? (' [' + t.client + ']') : '';
                 const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
-                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${ownerTxt}</option>`;
+                const statusTxt = t.status ? (' - ' + t.status) : '';
+                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${statusTxt}${ownerTxt}</option>`;
             });
         }
 
