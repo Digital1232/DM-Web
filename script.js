@@ -3626,6 +3626,130 @@ function setQcPerformanceFilter(period) {
     };
 
 
+    
+    window.populateWeeklyTaskDropdownForClient = function(clientName) {
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        if (!selectEl) return;
+
+        const clientTasks = [];
+        const otherTasks = [];
+        const seenTitles = new Set();
+
+        // 1. Gather strategyEvents
+        if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+            Object.entries(strategyEvents).forEach(([id, ev]) => {
+                if (!ev || !ev.title || seenTitles.has(ev.title.toLowerCase().trim())) return;
+                seenTitles.add(ev.title.toLowerCase().trim());
+
+                const taskObj = {
+                    id,
+                    title: ev.title,
+                    format: ev.format || 'Poster',
+                    owner: ev.owner || ev.assignee || '',
+                    client: ev.client || ''
+                };
+                if (clientName && ev.client && ev.client.toLowerCase().trim() === clientName.toLowerCase().trim()) {
+                    clientTasks.push(taskObj);
+                } else {
+                    otherTasks.push(taskObj);
+                }
+            });
+        }
+
+        // 2. Gather Jira / Internal tasks
+        if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+            tasks.forEach(t => {
+                if (!t) return;
+                const title = (t.desc || t.summary || t.id || '').trim();
+                if (!title || seenTitles.has(title.toLowerCase())) return;
+                seenTitles.add(title.toLowerCase());
+
+                const taskObj = {
+                    id: t.id,
+                    title: title,
+                    format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
+                    owner: t.assignee || '',
+                    client: t.client || ''
+                };
+                if (clientName && t.client && t.client.toLowerCase().trim() === clientName.toLowerCase().trim()) {
+                    clientTasks.push(taskObj);
+                } else {
+                    otherTasks.push(taskObj);
+                }
+            });
+        }
+
+        let optionsHtml = '<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>';
+
+        if (clientTasks.length > 0) {
+            optionsHtml += `<optgroup label="Tasks for ${escapeHtml(clientName || 'Selected Client')}">`;
+            clientTasks.forEach(t => {
+                const icon = t.format === 'Video' ? '🎥' : '📷';
+                const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
+                optionsHtml += `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${ownerTxt}</option>`;
+            });
+            optionsHtml += '</optgroup>';
+        }
+
+        if (otherTasks.length > 0) {
+            optionsHtml += `<optgroup label="Other Available Tasks">`;
+            otherTasks.forEach(t => {
+                const icon = t.format === 'Video' ? '🎥' : '📷';
+                const clientTxt = t.client ? ` [${t.client}]` : '';
+                const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
+                optionsHtml += `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${clientTxt}${ownerTxt}</option>`;
+            });
+            optionsHtml += '</optgroup>';
+        }
+
+        optionsHtml += '<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>';
+        selectEl.innerHTML = optionsHtml;
+    };
+
+    window.handleWeeklyTaskModalClientChange = function() {
+        const clientEl = document.getElementById('weekly-assign-client');
+        if (!clientEl) return;
+        const selectedClient = clientEl.value;
+        populateWeeklyTaskDropdownForClient(selectedClient);
+    };
+
+    window.openWeeklyTaskAssigneeModal = function(dateStr, clientName) {
+        const modal = document.getElementById('weeklyTaskAssigneeModal');
+        if (!modal) return;
+
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+
+        selectedIdEl.value = '';
+        titleEl.value = '';
+        
+        const targetClient = clientName || 'Einstein';
+
+        if (clientEl) {
+            // Ensure targetClient exists in client dropdown
+            let exists = Array.from(clientEl.options).some(opt => opt.value.toLowerCase() === targetClient.toLowerCase());
+            if (!exists && targetClient) {
+                const newOpt = document.createElement('option');
+                newOpt.value = targetClient;
+                newOpt.textContent = targetClient;
+                clientEl.appendChild(newOpt);
+            }
+            clientEl.value = targetClient;
+        }
+
+        if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
+        if (ownerEl) ownerEl.value = '';
+        if (formatEl) formatEl.value = 'Poster';
+
+        populateWeeklyTaskDropdownForClient(targetClient);
+        modal.showModal();
+    };
+
+
     window.openInlineMatrixTaskCreator = function(cellSanitizedId, dateStr, clientName) {
         const cell = document.getElementById(`matrix-cell-${cellSanitizedId}-${dateStr}`);
         if (!cell) return;

@@ -1977,10 +1977,12 @@ function matrixGoToCurrentWeek() {
 }
 
 function weeklyMatrixQuickCreate(client, dateStr) {
-    if (typeof window.openAddStrategyEventModal === 'function') {
+    if (typeof window.openWeeklyTaskAssigneeModal === 'function') {
+        window.openWeeklyTaskAssigneeModal(dateStr, client);
+    } else if (typeof window.openAddStrategyEventModal === 'function') {
         window.openAddStrategyEventModal(dateStr, client);
     } else {
-        console.error('openAddStrategyEventModal is not globally defined');
+        console.error('openWeeklyTaskAssigneeModal is not globally defined');
     }
 }
 
