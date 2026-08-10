@@ -15233,13 +15233,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // ── PDF URL Safe Helper (bypasses Cloudinary 401 PDF delivery restriction) ──
             function getSafePdfUrl(url) {
                 if (!url) return '';
-                const lowerUrl = String(url).toLowerCase();
+                const strUrl = String(url);
+                const lowerUrl = strUrl.toLowerCase();
                 if (lowerUrl.includes('cloudinary.com') && lowerUrl.includes('/image/upload/')) {
-                    if (lowerUrl.endsWith('.pdf')) {
-                        return url.replace(/\.pdf$/i, '.jpg');
+                    if (lowerUrl.includes('.pdf')) {
+                        return strUrl.replace(/\.pdf(\?.*)?$/i, '.jpg$1');
                     }
                 }
-                return url;
+                return strUrl;
             }
 
             function openPdfUrl(url) {
@@ -26645,12 +26646,12 @@ function isStrategyTask(t) {
                                     <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''}</p>
                                 </div>
                                 <div class="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                                    <a href="${a.url}" target="_blank" rel="noopener noreferrer"
+                                    <a href="${getSafePdfUrl(a.url)}" target="_blank" rel="noopener noreferrer"
                                        class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity"
                                        title="Open file">
                                         <iconify-icon icon="solar:square-arrow-right-up-bold" width="14" class="${isMe ? 'text-slate-400 hover:text-slate-600' : 'text-slate-300 hover:text-slate-600'}"></iconify-icon>
                                     </a>
-                                    <a href="${a.url}" download="${escapeHtml(a.name || 'file')}"
+                                    <a href="${getSafePdfUrl(a.url)}" download="${escapeHtml(a.name || 'file')}"
                                        class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity opacity-0 group-hover/attachment:opacity-100"
                                        title="Download file"
                                        onclick="event.stopPropagation()">
@@ -26812,7 +26813,7 @@ function isStrategyTask(t) {
                 const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                 let linkified = text.replace(urlRegex, (url) => {
                     const colorClass = 'text-indigo-600 dark:text-indigo-400 underline font-bold hover:text-indigo-800 dark:hover:text-indigo-300';
-                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${url}</a>`;
+                    return `<a href="${getSafePdfUrl(url)}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${url}</a>`;
                 });
                 const wwwRegex = /(^|[^\/])(www\.[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-]+[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                 linkified = linkified.replace(wwwRegex, (match, prefix, wwwUrl) => {
@@ -48812,7 +48813,7 @@ function isStrategyTask(t) {
                     var pillBorder = isMe ? 'rgba(255,255,255,0.2)' : attBorder;
                     var pillText = isMe ? '#fff' : (isDark ? '#e2e8f0' : '#1e293b');
                     var pillSub = isMe ? 'rgba(255,255,255,0.5)' : '#94a3b8';
-                    return '<a href="' + a.url + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:7px 10px;margin-top:5px;background:' + pillBg + ';border:1px solid ' + pillBorder + ';border-radius:10px;text-decoration:none;max-width:200px;">'
+                    return '<a href="' + (typeof getSafePdfUrl==='function'?getSafePdfUrl(a.url):a.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:7px 10px;margin-top:5px;background:' + pillBg + ';border:1px solid ' + pillBorder + ';border-radius:10px;text-decoration:none;max-width:200px;">'
                         + '<span style="font-size:16px;flex-shrink:0;color:' + dColor + ';">📄</span>'
                         + '<span style="min-width:0;">'
                         + '<span style="display:block;font-size:10px;font-weight:700;color:' + pillText + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;">' + _fcpEH(a.name || 'File') + '</span>'

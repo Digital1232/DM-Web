@@ -7618,7 +7618,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
         let linkified = text.replace(urlRegex, (url) => {
             const colorClass = isMe ? 'text-white underline font-bold hover:text-indigo-200' : 'text-indigo-600 underline font-bold hover:text-indigo-800';
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${url}</a>`;
+            return `<a href="${getSafePdfUrl(url)}" target="_blank" rel="noopener noreferrer" class="${colorClass}">${url}</a>`;
         });
         const wwwRegex = /(^|[^\/])(www\.[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-]+[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
         linkified = linkified.replace(wwwRegex, (match, prefix, wwwUrl) => {
