@@ -6959,13 +6959,28 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         });
     }
 
+    function formatChatTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[d.getMonth()];
+        const day = d.getDate();
+        let hours = d.getHours();
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
+    }
+
     function appendMessage(id, msg) {
         // Ensure readBy exists
         if (!msg.readBy) msg.readBy = {};
 
         const area = document.getElementById('messages-area');
         const isMe = msg.senderEmail === currentUser.email;
-        const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const time = formatChatTime(msg.timestamp);
         const edited = msg.editedAt && !msg.unsent ? ' · edited' : '';
         const text = msg.unsent ? 'This message was unsent' : linkify(escapeHtml(msg.text || ''), isMe);
         const reactions = msg.reactions || {};
