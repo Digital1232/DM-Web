@@ -3627,79 +3627,87 @@ function setQcPerformanceFilter(period) {
 
 
     
+    
     window.populateWeeklyTaskDropdownForClient = function(clientName) {
         const selectEl = document.getElementById('weekly-assign-task-select');
         if (!selectEl) return;
+
+        const safeEsc = function(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
 
         const clientTasks = [];
         const otherTasks = [];
         const seenTitles = new Set();
 
-        // 1. Gather strategyEvents
-        if (typeof strategyEvents !== 'undefined' && strategyEvents) {
-            Object.entries(strategyEvents).forEach(([id, ev]) => {
-                if (!ev || !ev.title || seenTitles.has(ev.title.toLowerCase().trim())) return;
-                seenTitles.add(ev.title.toLowerCase().trim());
+        const targetClientNorm = String(clientName || '').trim().toLowerCase();
 
-                const taskObj = {
-                    id,
-                    title: ev.title,
-                    format: ev.format || 'Poster',
-                    owner: ev.owner || ev.assignee || '',
-                    client: ev.client || ''
-                };
-                if (clientName && ev.client && ev.client.toLowerCase().trim() === clientName.toLowerCase().trim()) {
-                    clientTasks.push(taskObj);
-                } else {
-                    otherTasks.push(taskObj);
-                }
-            });
-        }
+        // 1. Gather strategyEvents
+        const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
+        Object.entries(sEvents).forEach(([id, ev]) => {
+            if (!ev || !ev.title) return;
+            const titleTrim = String(ev.title).trim();
+            if (seenTitles.has(titleTrim.toLowerCase())) return;
+            seenTitles.add(titleTrim.toLowerCase());
+
+            const evClientNorm = String(ev.client || '').trim().toLowerCase();
+            const taskObj = {
+                id,
+                title: titleTrim,
+                format: ev.format || 'Poster',
+                owner: ev.owner || ev.assignee || '',
+                client: ev.client || ''
+            };
+
+            if (targetClientNorm && evClientNorm && (evClientNorm.includes(targetClientNorm) || targetClientNorm.includes(evClientNorm))) {
+                clientTasks.push(taskObj);
+            } else {
+                otherTasks.push(taskObj);
+            }
+        });
 
         // 2. Gather Jira / Internal tasks
-        if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
-            tasks.forEach(t => {
-                if (!t) return;
-                const title = (t.desc || t.summary || t.id || '').trim();
-                if (!title || seenTitles.has(title.toLowerCase())) return;
-                seenTitles.add(title.toLowerCase());
+        const allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : (window.tasks || []);
+        allTasks.forEach(t => {
+            if (!t) return;
+            const titleTrim = String(t.desc || t.summary || t.id || '').trim();
+            if (!titleTrim || seenTitles.has(titleTrim.toLowerCase())) return;
+            seenTitles.add(titleTrim.toLowerCase());
 
-                const taskObj = {
-                    id: t.id,
-                    title: title,
-                    format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
-                    owner: t.assignee || '',
-                    client: t.client || ''
-                };
-                if (clientName && t.client && t.client.toLowerCase().trim() === clientName.toLowerCase().trim()) {
-                    clientTasks.push(taskObj);
-                } else {
-                    otherTasks.push(taskObj);
-                }
-            });
-        }
+            const tClientNorm = String(t.client || '').trim().toLowerCase();
+            const taskObj = {
+                id: t.id,
+                title: titleTrim,
+                format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
+                owner: t.assignee || '',
+                client: t.client || ''
+            };
+
+            if (targetClientNorm && tClientNorm && (tClientNorm.includes(targetClientNorm) || targetClientNorm.includes(tClientNorm))) {
+                clientTasks.push(taskObj);
+            } else {
+                otherTasks.push(taskObj);
+            }
+        });
 
         let optionsHtml = '<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>';
 
         if (clientTasks.length > 0) {
-            optionsHtml += `<optgroup label="Tasks for ${escapeHtml(clientName || 'Selected Client')}">`;
             clientTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
-                const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
-                optionsHtml += `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${ownerTxt}</option>`;
+                const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
+                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${ownerTxt}</option>`;
             });
-            optionsHtml += '</optgroup>';
         }
 
         if (otherTasks.length > 0) {
-            optionsHtml += `<optgroup label="Other Available Tasks">`;
+            optionsHtml += `<option value="" disabled>──────── All Strategy & Project Tasks ────────</option>`;
             otherTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
-                const clientTxt = t.client ? ` [${t.client}]` : '';
-                const ownerTxt = t.owner ? ` (${t.owner})` : ' (Unassigned)';
-                optionsHtml += `<option value="${t.id}" data-title="${escapeHtml(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${escapeHtml(t.title)}${clientTxt}${ownerTxt}</option>`;
+                const clientTxt = t.client ? (' [' + t.client + ']') : '';
+                const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
+                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${ownerTxt}</option>`;
             });
-            optionsHtml += '</optgroup>';
         }
 
         optionsHtml += '<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>';
@@ -3713,9 +3721,28 @@ function setQcPerformanceFilter(period) {
         populateWeeklyTaskDropdownForClient(selectedClient);
     };
 
-    window.openWeeklyTaskAssigneeModal = function(dateStr, clientName) {
+    window.openWeeklyTaskAssigneeModal = function(arg1, arg2) {
         const modal = document.getElementById('weeklyTaskAssigneeModal');
         if (!modal) return;
+
+        // Smart parameter detector: check if arg1 or arg2 is date / client
+        let dateStr = '';
+        let clientName = '';
+
+        const isDatePattern = function(str) {
+            return typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
+        };
+
+        if (isDatePattern(arg1)) {
+            dateStr = arg1;
+            clientName = arg2 || '';
+        } else if (isDatePattern(arg2)) {
+            dateStr = arg2;
+            clientName = arg1 || '';
+        } else {
+            clientName = arg1 || arg2 || '';
+            dateStr = new Date().toISOString().split('T')[0];
+        }
 
         const titleEl = document.getElementById('weekly-assign-title');
         const clientEl = document.getElementById('weekly-assign-client');
@@ -3724,13 +3751,12 @@ function setQcPerformanceFilter(period) {
         const formatEl = document.getElementById('weekly-assign-format');
         const selectedIdEl = document.getElementById('weekly-assign-selected-id');
 
-        selectedIdEl.value = '';
-        titleEl.value = '';
-        
-        const targetClient = clientName || 'Einstein';
+        if (selectedIdEl) selectedIdEl.value = '';
+        if (titleEl) titleEl.value = '';
+
+        const targetClient = (clientName || 'Einstein').trim();
 
         if (clientEl) {
-            // Ensure targetClient exists in client dropdown
             let exists = Array.from(clientEl.options).some(opt => opt.value.toLowerCase() === targetClient.toLowerCase());
             if (!exists && targetClient) {
                 const newOpt = document.createElement('option');

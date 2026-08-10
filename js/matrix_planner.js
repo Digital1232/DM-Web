@@ -1977,6 +1977,10 @@ function matrixGoToCurrentWeek() {
 }
 
 function weeklyMatrixQuickCreate(client, dateStr) {
+    if (typeof window.openWeeklyTaskAssigneeModal === "function") {
+        window.openWeeklyTaskAssigneeModal(client, dateStr);
+        return;
+    }
     if (typeof window.openWeeklyTaskAssigneeModal === 'function') {
         window.openWeeklyTaskAssigneeModal(dateStr, client);
     } else if (typeof window.openAddStrategyEventModal === 'function') {
