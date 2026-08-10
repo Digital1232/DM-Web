@@ -4431,6 +4431,10 @@ function isStrategyTask(t) {
     }
 
     function openAddStrategyEventModal(dateStr, clientStr) {
+        if (typeof openWeeklyTaskAssigneeModal === 'function') {
+            openWeeklyTaskAssigneeModal(dateStr, clientStr);
+            return;
+        }
         if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
 
         document.getElementById('strategy-modal-title').textContent = 'Add Strategy Event';
