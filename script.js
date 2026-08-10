@@ -153,7 +153,7 @@ if (initializeApp) {
     const JIRA = {
         domain: 'vilpowerdigitalmarketing.atlassian.net',
         projectKey: 'AUG',
-        projectKeys: ['AUG', 'JULY'],
+        projectKeys: ['AUG'],
         apiUrl: '/api/jira',
         gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
         useLocalApi: false
@@ -162,7 +162,7 @@ if (initializeApp) {
     function getJiraProjectKeyForDate(dateStr) {
         if (!dateStr) return JIRA.projectKey || 'AUG';
         const month = String(dateStr).split('-')[1];
-        if (month === '07') return 'JULY';
+        // July key removed
         if (month === '06') return 'JUN';
         if (month === '05') return 'MAY';
         return JIRA.projectKey || 'AUG';
@@ -5013,7 +5013,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
         }
         try {
-            const projectKeys = JIRA.projectKeys || ['AUG', 'JULY'];
+            const projectKeys = JIRA.projectKeys || ['AUG'];
             const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
             const manualTasks = tasks.filter(t => t.manual);
 
