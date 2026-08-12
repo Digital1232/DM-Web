@@ -13148,7 +13148,14 @@
                 const previousReviews = allQcReports.filter(r => r.taskId === id).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 const reviewNumber = previousReviews.length + 1;
 
-                document.getElementById('qc-task-id').textContent = `${task.id} (Review #${reviewNumber})`;
+                const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
+                const isManualTask = task.manual || String(task.id).startsWith('M-');
+                if (isManualTask) {
+                    document.getElementById('qc-task-id').textContent = `${task.id} (Review #${reviewNumber})`;
+                } else {
+                    const jiraUrl = `https://${jiraDomain}/browse/${encodeURIComponent(task.id)}`;
+                    document.getElementById('qc-task-id').innerHTML = `<a href="${jiraUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1 cursor-pointer" title="Open Jira Task Details">${escapeHtml(task.id)} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a> <span class="text-slate-400 font-normal ml-1">(Review #${reviewNumber})</span>`;
+                }
                 document.getElementById('qc-task-desc').textContent = task.desc;
                 document.getElementById('qc-task-assignee').textContent = 'Assignee: ' + assigneeName(task);
 
@@ -13475,10 +13482,15 @@
 
                 list.innerHTML = visible.map(r => {
                     const scoreColor = r.qcScore >= 85 ? 'text-emerald-600' : r.qcScore >= 60 ? 'text-amber-500' : 'text-rose-500';
+                    const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
+                    const isManualReport = r.manual || String(r.taskId || '').startsWith('M-');
+                    const taskIdHtml = isManualReport 
+                        ? `<span class="text-indigo-600 font-mono mr-2">${escapeHtml(r.taskId || '')}</span>` 
+                        : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(r.taskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="text-indigo-600 hover:text-indigo-800 hover:underline font-mono inline-flex items-center gap-0.5 mr-2 cursor-pointer" title="Open Jira Task Details">${escapeHtml(r.taskId || '')} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
                     return `
             <div onclick="openQcReportDetails('${r.id}')" class="p-4 hover:bg-slate-50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer">
                 <div class="min-w-0">
-                    <p class="text-xs font-black text-slate-900"><span class="text-indigo-600 font-mono mr-2">${escapeHtml(r.taskId || '')}</span> ${escapeHtml(r.taskDesc || '')}</p>
+                    <p class="text-xs font-black text-slate-900">${taskIdHtml}${escapeHtml(r.taskDesc || '')}</p>
                     <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">QC: ${escapeHtml(r.qcUser || '')} · Assignee: ${escapeHtml(r.assignee || '')} · ${new Date(r.timestamp).toLocaleDateString()}</p>
                 </div>
                 <div class="flex items-center gap-4 shrink-0">
@@ -14337,9 +14349,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     mistakesHtml = `<p class="text-xs text-emerald-600 font-bold bg-emerald-50 p-3 rounded-lg border border-emerald-100 mt-4">✓ No issues found. Perfect score!</p>`;
                 }
 
+                const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
+                const isManualReportTask = report.manual || String(report.taskId || '').startsWith('M-');
+                const reportTaskIdHtml = isManualReportTask
+                    ? escapeHtml(report.taskId)
+                    : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(report.taskId)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 cursor-pointer" title="Open in Jira">${escapeHtml(report.taskId)} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+
                 content.innerHTML = `
             <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Task</p><p class="text-xs font-black text-slate-900">${report.taskId}</p></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Task</p><p class="text-xs font-black text-slate-900">${reportTaskIdHtml}</p></div>
                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">Review Date</p><p class="text-xs font-bold text-slate-700">${date}</p></div>
                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">Assignee</p><p class="text-xs font-bold text-slate-700">${report.assignee}</p></div>
                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">QC Reviewer</p><p class="text-xs font-bold text-slate-700">${report.qcUser}</p></div>
