@@ -2847,9 +2847,14 @@
     <!-- ══════════════════════════════════════════
          LOADING SCREEN
     ══════════════════════════════════════════ -->
-    <div id="loading-view" class="fixed inset-0 z-[70] bg-slate-50 flex-col items-center justify-center hidden">
-        <img src="img/onedesk-logo.png" alt="One Desk Logo" class="w-48 mb-4 animate-pulse">
-        <p class="text-slate-400 text-sm mt-1">Loading your workspace...</p>
+    <div id="loading-view" class="fixed inset-0 z-[70] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="relative flex items-center justify-center mb-5">
+            <img src="img/loading_logo.gif" alt="Loading..." class="w-32 h-32 object-contain">
+        </div>
+        <div class="flex items-center gap-2.5 px-4 py-2">
+            <iconify-icon icon="svg-spinners:ring-resize" width="18" class="text-indigo-600 dark:text-indigo-400"></iconify-icon>
+            <p class="text-slate-600 dark:text-slate-300 font-bold text-xs tracking-wider uppercase">Loading your workspace...</p>
+        </div>
     </div>
 
 
@@ -4138,9 +4143,9 @@
                                 class="p-6 border-b border-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div class="flex flex-wrap items-center gap-3">
                                     <h3 class="text-lg font-black text-slate-900 tracking-tight">Planned Tasks</h3>
-                                    <button type="button" onclick="renderDailyPlan()" title="Refresh task list"
-                                        class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-indigo-600">
-                                        <iconify-icon icon="solar:refresh-circle-bold" width="20"></iconify-icon>
+                                    <button type="button" onclick="refreshDailyPlanWithJiraSync()" title="Refresh task list" id="dp-refresh-btn"
+                                        class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-indigo-600 disabled:opacity-50 transition-all">
+                                        <iconify-icon icon="solar:refresh-circle-bold" id="dp-refresh-icon" width="20"></iconify-icon>
                                     </button>
                                     <div class="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
                                         <button type="button" onclick="setDailyPlanView('table')" id="dp-view-table"
@@ -11801,7 +11806,40 @@
                     </button>
                 </div>
             </div>
-            <input id="strategy-jira-id" type="hidden">
+            <!-- Link Existing Jira Task Field -->
+            <div class="relative">
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Link Existing Jira Task <span class="text-slate-300 font-normal lowercase">(optional)</span>
+                    </label>
+                    <button type="button" id="strategy-jira-clear-btn" onclick="clearStrategyJiraSelection()" 
+                        class="hidden text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                        <iconify-icon icon="solar:trash-bin-trash-bold" width="12"></iconify-icon> Clear Link
+                    </button>
+                </div>
+                <input id="strategy-jira-id" type="hidden">
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input id="strategy-jira-search" type="text" placeholder="Search Jira task key (e.g. EIS-101) or title..."
+                            onkeydown="if(event.key === 'Enter'){ event.preventDefault(); fetchJiraTasksForStrategy(); }"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 font-semibold text-slate-800">
+                        <iconify-icon icon="solar:magnifer-linear" width="16" class="absolute right-2.5 top-3 text-slate-400 pointer-events-none"></iconify-icon>
+                    </div>
+                    <button type="button" onclick="fetchJiraTasksForStrategy()"
+                        class="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer border border-indigo-100">
+                        <iconify-icon icon="solar:magnifer-bold" width="14"></iconify-icon>
+                        Search
+                    </button>
+                </div>
+                
+                <!-- Selected Task Display Badge -->
+                <div id="strategy-jira-selected" class="mt-1.5 text-[11px] font-medium text-slate-500 px-1">
+                    No task selected
+                </div>
+
+                <!-- Dropdown Search Results Container -->
+                <div id="strategy-jira-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100"></div>
+            </div>
 
             <div>
                 <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
@@ -14950,6 +14988,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            function hideLoadingScreen() {
+                const loader = document.getElementById('loading-view');
+                if (!loader || loader.classList.contains('hidden')) return;
+                loader.style.transition = 'opacity 0.5s ease-out';
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.classList.add('hidden');
+                    loader.style.opacity = '1';
+                    loader.style.transition = '';
+                }, 500);
+            }
+
             async function finishLogin() {
                 if (appInitialized) return;
                 appInitialized = true;
@@ -14966,9 +15016,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     document.getElementById('login-view')?.classList.add('hidden');
                     document.getElementById('dashboard-view')?.classList.remove('hidden');
 
-                    // Hide the loader as soon as UI state is ready (don't wait for data)
-                    // document.documentElement.classList.remove('has-user'); // This should be done after allUsersMap is populated
-                    document.getElementById('loading-view')?.classList.add('hidden');
+                    // Fade out loader smoothly after a brief moment so user can see logo on page reload
+                    setTimeout(hideLoadingScreen, 600);
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
                     const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements'];
@@ -15092,7 +15141,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } finally {
                     document.documentElement.classList.remove('has-user');
                     document.documentElement.classList.remove('auth-pending');
-                    document.getElementById('loading-view')?.classList.add('hidden');
+                    setTimeout(hideLoadingScreen, 600);
                 }
             }
 
@@ -19383,58 +19432,19 @@ function isStrategyTask(t) {
                                 const taskDueDate = calculatedDueDate;
                                 const projectKey = getJiraProjectKeyForDate(date);
                                 const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
-                                const jiraPayload = {
-                                    fields: {
-                                        project: { key: projectKey },
-                                        summary: title,
-                                        issuetype: { name: 'Task' },
-                                        labels: client ? [client.replace(/\s+/g, '_')] : [],
-                                        duedate: taskDueDate
-                                    }
-                                };
 
-                                if (desc) {
-                                    jiraPayload.fields.description = {
-                                        type: 'doc',
-                                        version: 1,
-                                        content: [
-                                            {
-                                                type: 'paragraph',
-                                                content: [
-                                                    {
-                                                        type: 'text',
-                                                        text: desc
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    };
-                                }
+                                if (jiraId) {
+                                    // Relink/update an existing Jira task! Do NOT create a duplicate Jira task!
+                                    toast(`Strategy event linked to Jira task ${jiraId}!`, 'success');
 
-                                if (owner) {
-                                    const assigneeUser = allUsersMap.get(owner.toLowerCase()) || { email: owner, name: owner };
-                                    const accountId = await findJiraAccountId(assigneeUser);
-                                    if (accountId) {
-                                        jiraPayload.fields.assignee = { id: accountId };
-                                    }
-                                }
-
-                                const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
-                                if (res.success && (res.data?.key || res.key)) {
-                                    const parentKey = res.data?.key || res.key;
-                                    toast(`Jira task ${parentKey} created!`, 'success');
-
-                                    if (newEventId && parentKey) {
+                                    if (newEventId && jiraId) {
                                         try {
-                                            await update(ref(db, `worksync/strategy_events/${newEventId}`), { jiraId: parentKey });
-                                            // Eagerly update local cache so syncTasks can correctly identify
-                                            // this Jira task as strategy-linked and skip internal task creation
+                                            await update(ref(db, `worksync/strategy_events/${newEventId}`), { jiraId: jiraId });
                                             if (typeof strategyEvents !== 'undefined' && strategyEvents) {
                                                 if (!strategyEvents[newEventId]) {
-                                                    // New event not yet in local cache – populate it fully
-                                                    strategyEvents[newEventId] = { ...evPayload, jiraId: parentKey };
+                                                    strategyEvents[newEventId] = { ...evPayload, jiraId: jiraId };
                                                 } else {
-                                                    strategyEvents[newEventId].jiraId = parentKey;
+                                                    strategyEvents[newEventId].jiraId = jiraId;
                                                 }
                                             }
                                         } catch (e) {
@@ -19442,37 +19452,55 @@ function isStrategyTask(t) {
                                         }
                                     }
 
-                                    // Auto create a subtask thumbnail for video tasks and assign to Karthika
+                                    // Update existing Jira task fields (summary/title & due date) if needed
+                                    const fieldsToUpdate = {};
+                                    const matchedTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(title, desc, jiraId) : null;
+                                    if (matchedTask && (matchedTask.summary || matchedTask.desc) !== title) {
+                                        fieldsToUpdate.summary = title;
+                                    }
+                                    if (!matchedTask || matchedTask.duedate !== taskDueDate) {
+                                        fieldsToUpdate.duedate = taskDueDate;
+                                    }
+                                    if (Object.keys(fieldsToUpdate).length > 0) {
+                                        const updateJiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(jiraId)}`;
+                                        jiraRequest(updateJiraUrl, 'put', { fields: fieldsToUpdate }).catch(e => console.error('Failed to update linked Jira task:', e));
+                                    }
+
+                                    if (matchedTask && matchedTask.status !== status) {
+                                        await updateTaskStatus(matchedTask.id, status);
+                                    }
+
+                                    // Auto create a subtask thumbnail for video tasks if format is Video and no thumbnail subtask exists under jiraId
                                     if (format === 'Video') {
                                         const subtaskTitle = `Thumbnail – ${title}`;
-                                        const subtaskPayload = {
-                                            fields: {
-                                                project: { key: projectKey },
-                                                parent: { key: parentKey },
-                                                summary: subtaskTitle,
-                                                issuetype: { name: 'Sub-task' },
-                                                duedate: taskDueDate || null,
-                                                labels: jiraPayload.fields.labels || []
+                                        const hasSubtask = typeof tasks !== 'undefined' && Array.isArray(tasks) && tasks.some(t => 
+                                            t && (t.parentId === jiraId || t.parentKey === jiraId || t.parent === jiraId) && 
+                                            (t.summary || t.desc || '').toLowerCase().includes('thumbnail')
+                                        );
+                                        if (!hasSubtask) {
+                                            const subtaskPayload = {
+                                                fields: {
+                                                    project: { key: projectKey },
+                                                    parent: { key: jiraId },
+                                                    summary: subtaskTitle,
+                                                    issuetype: { name: 'Sub-task' },
+                                                    duedate: taskDueDate || null,
+                                                    labels: client ? [client.replace(/\s+/g, '_')] : []
+                                                }
+                                            };
+                                            const karthikaUser = allUsersMap.get('karthikavilpower@gmail.com') || { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
+                                            const karthikaAccountId = await findJiraAccountId(karthikaUser);
+                                            if (karthikaAccountId) {
+                                                subtaskPayload.fields.assignee = { id: karthikaAccountId };
                                             }
-                                        };
-
-                                        const karthikaUser = allUsersMap.get('karthikavilpower@gmail.com') || { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
-                                        const karthikaAccountId = await findJiraAccountId(karthikaUser);
-                                        if (karthikaAccountId) {
-                                            subtaskPayload.fields.assignee = { id: karthikaAccountId };
-                                        }
-
-                                        try {
-                                            const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
-                                            if (subRes.success && (subRes.data?.key || subRes.key)) {
-                                                toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
-                                            } else {
-                                                console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
-                                                toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
+                                            try {
+                                                const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                                                if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                                    toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
+                                                }
+                                            } catch (subErr) {
+                                                console.error('Error auto-creating subtask:', subErr);
                                             }
-                                        } catch (subErr) {
-                                            console.error('Error auto-creating subtask:', subErr);
-                                            toast(`Failed to create subtask: ${subErr.message}`, 'warning');
                                         }
                                     }
 
@@ -19480,17 +19508,113 @@ function isStrategyTask(t) {
                                         await syncTasks(true);
                                     }
                                 } else {
-                                    console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
-                                    toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
-                                }
+                                    // No existing Jira task selected/linked: Auto-create a brand new Jira task!
+                                    const jiraPayload = {
+                                        fields: {
+                                            project: { key: projectKey },
+                                            summary: title,
+                                            issuetype: { name: 'Task' },
+                                            labels: client ? [client.replace(/\s+/g, '_')] : [],
+                                            duedate: taskDueDate
+                                        }
+                                    };
 
-                                const matchedTask = findMatchedStrategyTask(title, desc, jiraId);
-                                if (matchedTask && matchedTask.status !== status) {
-                                    await updateTaskStatus(matchedTask.id, status);
+                                    if (desc) {
+                                        jiraPayload.fields.description = {
+                                            type: 'doc',
+                                            version: 1,
+                                            content: [
+                                                {
+                                                    type: 'paragraph',
+                                                    content: [
+                                                        {
+                                                            type: 'text',
+                                                            text: desc
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        };
+                                    }
+
+                                    if (owner) {
+                                        const assigneeUser = allUsersMap.get(owner.toLowerCase()) || { email: owner, name: owner };
+                                        const accountId = await findJiraAccountId(assigneeUser);
+                                        if (accountId) {
+                                            jiraPayload.fields.assignee = { id: accountId };
+                                        }
+                                    }
+
+                                    const res = await jiraRequest(jiraUrl, 'post', jiraPayload);
+                                    if (res.success && (res.data?.key || res.key)) {
+                                        const parentKey = res.data?.key || res.key;
+                                        toast(`Jira task ${parentKey} created!`, 'success');
+
+                                        if (newEventId && parentKey) {
+                                            try {
+                                                await update(ref(db, `worksync/strategy_events/${newEventId}`), { jiraId: parentKey });
+                                                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                                    if (!strategyEvents[newEventId]) {
+                                                        strategyEvents[newEventId] = { ...evPayload, jiraId: parentKey };
+                                                    } else {
+                                                        strategyEvents[newEventId].jiraId = parentKey;
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                console.error('Failed to update strategy event jiraId:', e);
+                                            }
+                                        }
+
+                                        // Auto create a subtask thumbnail for video tasks and assign to Karthika
+                                        if (format === 'Video') {
+                                            const subtaskTitle = `Thumbnail – ${title}`;
+                                            const subtaskPayload = {
+                                                fields: {
+                                                    project: { key: projectKey },
+                                                    parent: { key: parentKey },
+                                                    summary: subtaskTitle,
+                                                    issuetype: { name: 'Sub-task' },
+                                                    duedate: taskDueDate || null,
+                                                    labels: jiraPayload.fields.labels || []
+                                                }
+                                            };
+
+                                            const karthikaUser = allUsersMap.get('karthikavilpower@gmail.com') || { email: 'karthikavilpower@gmail.com', name: 'Karthika K' };
+                                            const karthikaAccountId = await findJiraAccountId(karthikaUser);
+                                            if (karthikaAccountId) {
+                                                subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                                            }
+
+                                            try {
+                                                const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                                                if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                                    toast(`Jira thumbnail subtask ${subRes.data?.key || subRes.key} created and assigned to Karthika!`, 'success');
+                                                } else {
+                                                    console.error('Failed to auto-create subtask:', jiraErrorMessage(subRes));
+                                                    toast(`Failed to create subtask: ${jiraErrorMessage(subRes)}`, 'warning');
+                                                }
+                                            } catch (subErr) {
+                                                console.error('Error auto-creating subtask:', subErr);
+                                                toast(`Failed to create subtask: ${subErr.message}`, 'warning');
+                                            }
+                                        }
+
+                                        if (typeof syncTasks === 'function') {
+                                            await syncTasks(true);
+                                        }
+                                    } else {
+                                        console.error('Failed to auto-create Jira task:', jiraErrorMessage(res));
+                                        toast(`Strategy event scheduled, but failed to create Jira task: ${jiraErrorMessage(res)}`, 'warning');
+                                    }
+
+                                    const matchedTask = findMatchedStrategyTask(title, desc, jiraId);
+                                    if (matchedTask && matchedTask.status !== status) {
+                                        await updateTaskStatus(matchedTask.id, status);
+                                    }
                                 }
                             } catch (jiraErr) {
-                                console.error('Error auto-creating Jira task:', jiraErr);
-                                toast(`Strategy event scheduled, but Jira task creation failed: ${jiraErr.message}`, 'warning');
+                                console.error('Error handling Jira task:', jiraErr);
+                                toast(`Strategy event scheduled, but Jira task sync failed: ${jiraErr.message}`, 'warning');
                             }
                         })();
                     }
@@ -39619,6 +39743,43 @@ function isStrategyTask(t) {
                 }).join('');
             }
 
+            async function refreshDailyPlanWithJiraSync() {
+                const btn = document.getElementById('dp-refresh-btn');
+                const icon = document.getElementById('dp-refresh-icon');
+                if (btn) btn.disabled = true;
+                if (icon) icon.classList.add('animate-spin');
+
+                try {
+                    // Re-fetch daily_plans from Firebase RTDB if available
+                    if (typeof db !== 'undefined' && typeof get === 'function' && typeof ref === 'function') {
+                        try {
+                            const snap = await get(ref(db, 'worksync/daily_plans'));
+                            if (snap && snap.exists()) {
+                                dailyPlans = snap.val() || {};
+                            }
+                        } catch (fbErr) {
+                            console.warn('Firebase daily_plans refresh notice:', fbErr);
+                        }
+                    }
+
+                    // Automatically sync Jira tasks and update Jira task status
+                    if (typeof syncTasks === 'function') {
+                        await syncTasks(false);
+                    } else {
+                        renderDailyPlan();
+                    }
+
+                    toast('✓ Daily plan task list & Jira task statuses synced', 'success');
+                } catch (err) {
+                    console.error('Error refreshing Daily Plan with Jira sync:', err);
+                    toast('Failed to refresh task list: ' + (err.message || err), 'error');
+                    renderDailyPlan();
+                } finally {
+                    if (btn) btn.disabled = false;
+                    if (icon) icon.classList.remove('animate-spin');
+                }
+            }
+
             async function sendThumbnailNotification(task, changedBy) {
                 const THUMBNAIL_NOTIFY_EMAILS = ['karthikavilpower@gmail.com', 'digitalmarketing@vilpower.com'];
                 const notifData = {
@@ -44919,6 +45080,7 @@ function isStrategyTask(t) {
                         matchedItems.push({
                             isStrategyEvent: false,
                             id: t.id,
+                            displayKey: t.key || t.id,
                             title: t.desc || t.summary || t.id,
                             client: taskClient,
                             status: t.status || 'To Do',
@@ -44966,6 +45128,7 @@ function isStrategyTask(t) {
                         matchedItems.push({
                             isStrategyEvent: true,
                             id: evId,
+                            displayKey: ev.jiraId || ev.jiraTaskId || ev.key || (String(evId).startsWith('-') ? 'STRATEGY' : evId),
                             title: ev.title || 'Strategy Event',
                             client: evClient,
                             status: 'Strategy Plan',
@@ -45004,6 +45167,7 @@ function isStrategyTask(t) {
                             matchedItems.push({
                                 isStrategyEvent: false,
                                 id: t.id,
+                                displayKey: t.key || t.id,
                                 title: t.desc || t.summary || t.id,
                                 client: taskClient,
                                 status: t.status || 'To Do',
@@ -45036,12 +45200,13 @@ function isStrategyTask(t) {
                         const countText = item.count > 1 ? ` (${item.count})` : '';
 
                         const clickAttr = item.isStrategyEvent ? `onclick="if(typeof openEditStrategyEventModal === 'function') openEditStrategyEventModal('${item.id}')"` : `onclick="if(typeof openJiraTaskDetail === 'function') openJiraTaskDetail('${item.id}')"`;
+                        const displayId = item.displayKey || (item.id && String(item.id).startsWith('-') ? 'STRATEGY' : item.id);
 
                         return `
                             <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                                 <td class="px-4 py-3 font-semibold text-slate-800 text-xs">
                                     <button ${clickAttr} class="text-indigo-600 hover:text-indigo-800 hover:underline font-bold text-left cursor-pointer">
-                                        ${escapeHtml(item.id)}
+                                        ${escapeHtml(displayId)}
                                     </button>
                                 </td>
                                 <td class="px-4 py-3 text-slate-900 text-xs font-medium">
@@ -45075,7 +45240,7 @@ function isStrategyTask(t) {
             window.populateIndivPerfUserFilter = populateIndivPerfUserFilter; window.renderIndivPerfReport = renderIndivPerfReport;
             window.populateClientPerfFilter = populateClientPerfFilter; window.renderClientPerfReport = renderClientPerfReport;
             window.renderClientDeliveryDashboard = renderClientDeliveryDashboard;
-            window.renderDailyPlan = renderDailyPlan; window.openAssignPlanModal = openAssignPlanModal;
+            window.renderDailyPlan = renderDailyPlan; window.refreshDailyPlanWithJiraSync = refreshDailyPlanWithJiraSync; window.openAssignPlanModal = openAssignPlanModal;
             window.setDailyPlanView = setDailyPlanView; window.openDailyPlanTextReport = openDailyPlanTextReport;
             window.copyDailyPlanReport = copyDailyPlanReport;
             window.showReportTasks = showReportTasks; window.showReportQcDetails = showReportQcDetails;
