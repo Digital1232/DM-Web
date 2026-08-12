@@ -4506,7 +4506,7 @@
 
                         <!-- Add Button (only visible to permitted users) -->
                         <div id="strategy-action-buttons" class="hidden">
-                            <button onclick="openWeeklyTaskAssigneeModal()"
+                            <button onclick="openAddStrategyEventModal()"
                                 class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-5 py-2.5 text-xs font-bold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2">
                                 <iconify-icon icon="solar:calendar-add-bold" width="16"></iconify-icon> Add
                                 Campaign/Event
@@ -18107,7 +18107,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     });
 
                     grid.innerHTML += `
-                    <div onclick="openWeeklyTaskAssigneeModal('${dateStr}')" 
+                    <div onclick="openAddStrategyEventModal('${dateStr}')" 
                          class="relative p-3 border-r border-b border-slate-100 min-h-[90px] flex flex-col group ${isToday ? 'bg-indigo-50/40' : ''} hover:bg-slate-50/50 transition-colors cursor-pointer">
                         <span class="font-black text-xs ${isToday ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg' : 'text-slate-600'} w-fit">
                             ${d}
@@ -18885,53 +18885,79 @@ function isStrategyTask(t) {
 
 
     function openAddStrategyEventModal(dateStr, clientStr) {
-
-                if (!canViewStrategyCalendar()) return toast('You do not have permission to schedule strategy events.', 'error');
-
-                document.getElementById('strategy-modal-title').textContent = 'Add Strategy Event';
-                document.getElementById('strategy-event-id').value = '';
-                document.getElementById('strategy-title').value = '';
-                document.getElementById('strategy-date').value = dateStr || '';
-                updateStrategyFolderUI('');
-                document.getElementById('strategy-owner').value = '';
-                
-                const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
-                populateStrategyClientDropdown(defaultClient);
-
-                document.getElementById('strategy-status').value = 'To Do';
-                const descEl = document.getElementById('strategy-desc');
-                if (descEl) descEl.value = '';
-                const vcEl = document.getElementById('strategy-videos-count');
-                if (vcEl) vcEl.value = '';
-                const pcEl = document.getElementById('strategy-posters-count');
-                if (pcEl) pcEl.value = '';
-
-                // Clear Jira selection safely if elements exist
-                const sjId3 = document.getElementById('strategy-jira-id'); if (sjId3) sjId3.value = '';
-                const sjSearch3 = document.getElementById('strategy-jira-search'); if (sjSearch3) sjSearch3.value = '';
-                const sjSel3 = document.getElementById('strategy-jira-selected'); if (sjSel3) sjSel3.innerHTML = 'No task selected';
-                
-                const clearBtn = document.getElementById('strategy-jira-clear-btn');
-                if (clearBtn) clearBtn.classList.add('hidden');
-                const dropdown = document.getElementById('strategy-jira-dropdown');
-                if (dropdown) dropdown.classList.add('hidden');
-
-                // Reset format to Video
-                selectStrategyFormat('Video');
-
-                document.getElementById('strategy-delete-btn').classList.add('hidden');
-                
-                const saveBtn = document.getElementById('strategy-save-btn');
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.style.opacity = '1';
-                    saveBtn.innerHTML = 'Save Event';
-                }
-
-                document.getElementById('strategyEventModal').showModal();
+        try {
+            if (typeof canViewStrategyCalendar === 'function' && !canViewStrategyCalendar()) {
+                return typeof toast === 'function' ? toast('You do not have permission to schedule strategy events.', 'error') : alert('Permission denied');
             }
 
-            function openEditStrategyEventModal(eventId) {
+            const titleEl = document.getElementById('strategy-modal-title');
+            if (titleEl) titleEl.textContent = 'Add Strategy Event';
+
+            const idEl = document.getElementById('strategy-event-id');
+            if (idEl) idEl.value = '';
+
+            const taskTitleEl = document.getElementById('strategy-title');
+            if (taskTitleEl) taskTitleEl.value = '';
+
+            const dateEl = document.getElementById('strategy-date');
+            if (dateEl) dateEl.value = dateStr || '';
+
+            if (typeof updateStrategyFolderUI === 'function') updateStrategyFolderUI('');
+
+            const ownerEl = document.getElementById('strategy-owner');
+            if (ownerEl) ownerEl.value = '';
+
+            const defaultClient = clientStr || ((typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') ? activeStrategyClientFilter : '');
+            if (typeof populateStrategyClientDropdown === 'function') populateStrategyClientDropdown(defaultClient);
+
+            const statusEl = document.getElementById('strategy-status');
+            if (statusEl) statusEl.value = 'To Do';
+
+            const descEl = document.getElementById('strategy-desc');
+            if (descEl) descEl.value = '';
+
+            const vcEl = document.getElementById('strategy-videos-count');
+            if (vcEl) vcEl.value = '';
+
+            const pcEl = document.getElementById('strategy-posters-count');
+            if (pcEl) pcEl.value = '';
+
+            const sjId3 = document.getElementById('strategy-jira-id'); if (sjId3) sjId3.value = '';
+            const sjSearch3 = document.getElementById('strategy-jira-search'); if (sjSearch3) sjSearch3.value = '';
+            const sjSel3 = document.getElementById('strategy-jira-selected'); if (sjSel3) sjSel3.innerHTML = 'No task selected';
+
+            const clearBtn = document.getElementById('strategy-jira-clear-btn');
+            if (clearBtn) clearBtn.classList.add('hidden');
+
+            const dropdown = document.getElementById('strategy-jira-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
+            if (typeof selectStrategyFormat === 'function') selectStrategyFormat('Video');
+
+            const deleteBtn = document.getElementById('strategy-delete-btn');
+            if (deleteBtn) deleteBtn.classList.add('hidden');
+
+            const saveBtn = document.getElementById('strategy-save-btn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.opacity = '1';
+                saveBtn.innerHTML = 'Save Event';
+            }
+
+            const modal = document.getElementById('strategyEventModal');
+            if (modal) {
+                modal.showModal();
+                console.log('[openAddStrategyEventModal] Modal opened successfully');
+            } else {
+                console.error('[openAddStrategyEventModal] strategyEventModal element not found');
+            }
+        } catch (err) {
+            console.error('[openAddStrategyEventModal] Error:', err, err.stack);
+            if (typeof toast === 'function') toast('Error opening add strategy event modal: ' + err.message, 'error');
+        }
+    }
+
+    function openEditStrategyEventModal(eventId) {
 
                 console.log('[openEditStrategyEventModal] Opening event:', eventId, 'Available events:', Object.keys(strategyEvents || {}).length);
                 let ev = strategyEvents ? strategyEvents[eventId] : null;
