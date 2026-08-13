@@ -15586,10 +15586,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 try {
                     const arr = dataurl.split(',');
                     const mimeMatch = arr[0].match(/:(.*?);/);
-                    let mime = fallbackType || (mimeMatch ? mimeMatch[1] : 'application/octet-stream');
-                    if (fallbackType && (mime.includes('postscript') || mime.includes('illustrator'))) {
+                    let mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+                    
+                    // CRITICAL FIX: Use fallbackType if provided, it has the actual file type
+                    // Don't let browser misinterpret application/postscript as .ai
+                    if (fallbackType) {
                         mime = fallbackType;
                     }
+                    
+                    // Override wrong MIME types that convert to .ai
+                    if (mime.includes('postscript') || mime.includes('illustrator') || mime === 'application/pdf') {
+                        mime = 'application/pdf';
+                    }
+                    
                     const bstr = atob(arr[1]);
                     let n = bstr.length;
                     const u8arr = new Uint8Array(n);
@@ -15615,27 +15624,75 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // ── Universal Download Helper (prevents cross-origin file renaming to .ai) ──
             async function downloadFile(url, fileName) {
                 if (!url) return;
-                const isPdf = (fileName || url || '').toLowerCase().includes('.pdf');
-                const name = fileName || (isPdf ? 'document.pdf' : 'download');
+                
+                // Ensure fileName is properly extracted and safe
+                let cleanName = fileName || 'download';
+                // Remove any escaped quotes from the filename
+                cleanName = cleanName.replace(/\\'/g, "'").replace(/\\"/g, '"');
+                
+                // Detect file type from extension
+                const lowerName = cleanName.toLowerCase();
+                const nameParts = lowerName.split('.');
+                const ext = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+                
+                // Determine if it's a PDF based on extension
+                const isPdf = ext === 'pdf' || (url || '').toLowerCase().includes('.pdf');
+                
+                // CRITICAL FIX: Ensure proper extension for PDFs
+                let finalName = cleanName;
+                if (isPdf && !lowerName.endsWith('.pdf')) {
+                    finalName = cleanName + '.pdf';
+                } else if (!isPdf && lowerName.endsWith('.pdf')) {
+                    // File has .pdf extension, treat as PDF
+                    finalName = cleanName;
+                }
                 
                 try {
+                    // Handle data URLs (base64 encoded attachments)
                     if (url.startsWith('data:')) {
-                        const blobType = isPdf ? 'application/pdf' : undefined;
-                        const blob = dataURLtoBlob(url, blobType);
-                        if (blob) {
-                            const blobUrl = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = blobUrl;
-                            a.download = name;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-                            return;
+                        try {
+                            // CRITICAL FIX: Extract MIME type from data URL and force PDF if needed
+                            let blobType = 'application/octet-stream';
+                            
+                            // Check if data URL has MIME type
+                            const mimeMatch = url.match(/^data:([^;]+)/);
+                            if (mimeMatch) {
+                                blobType = mimeMatch[1];
+                            }
+                            
+                            // Force PDF MIME type for PDF files
+                            if (isPdf || lowerName.endsWith('.pdf')) {
+                                blobType = 'application/pdf';
+                            } else if (blobType.includes('postscript') || 
+                                     blobType.includes('illustrator') || 
+                                     blobType.includes('vnd.adobe')) {
+                                // Correct misidentified file types
+                                blobType = 'application/pdf';
+                                if (!lowerName.endsWith('.pdf')) {
+                                    finalName = cleanName + '.pdf';
+                                }
+                            }
+                            
+                            const blob = dataURLtoBlob(url, blobType);
+                            if (blob && blob.size > 0) {
+                                const blobUrl = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = blobUrl;
+                                a.download = finalName;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                                if (typeof toast === 'function') toast('File downloaded successfully', 'success');
+                                return;
+                            }
+                        } catch (blobErr) {
+                            console.warn('Blob creation failed:', blobErr);
                         }
+                        // Fallback for direct data URL
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = name;
+                        a.download = finalName;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
@@ -15643,37 +15700,92 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     if (typeof toast === 'function') toast('Downloading file...', 'info');
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    let fetchUrl = url;
+                    
+                    // FIX: Detect and correct malformed Cloudinary URLs with invalid fl_attachment syntax
+                    if (fetchUrl.includes('cloudinary.com')) {
+                        // Remove malformed fl_attachment parameters that cause 400 errors
+                        fetchUrl = fetchUrl.replace(/\/fl_attachment:[^/]*\//, '/');
+                        
+                        // Add correct PDF transformation if needed
+                        if (isPdf && fetchUrl.includes('/image/upload/') && !fetchUrl.includes('/f_pdf')) {
+                            fetchUrl = fetchUrl.replace('/image/upload/', '/image/upload/f_pdf/');
+                        }
+                    }
+                    
+                    // Validate URL format before fetching
+                    try {
+                        new URL(fetchUrl);
+                    } catch (urlErr) {
+                        console.error('Invalid URL format:', fetchUrl);
+                        throw new Error('Invalid file URL format');
+                    }
+
+                    const response = await fetch(fetchUrl, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/pdf, application/octet-stream' }
+                    });
+                    
+                    if (!response.ok) {
+                        console.error(`HTTP ${response.status} when fetching: ${fetchUrl}`);
+                        throw new Error(`HTTP ${response.status}: Failed to fetch file - ${response.statusText}`);
+                    }
+                    
                     const blob = await response.blob();
                     
-                    // Force PDF mime type if extension is .pdf or if blob mime type is postscript/illustrator
+                    // CRITICAL FIX: Force correct MIME type to prevent browser converting to .ai
                     let finalBlob = blob;
-                    if (isPdf || (blob.type && (blob.type.includes('postscript') || blob.type.includes('illustrator')))) {
+                    if (isPdf || finalName.toLowerCase().endsWith('.pdf')) {
                         finalBlob = new Blob([blob], { type: 'application/pdf' });
+                    } else if (blob.type && (blob.type.includes('postscript') || 
+                                           blob.type.includes('illustrator') || 
+                                           blob.type.includes('vnd.adobe'))) {
+                        // Browser gave us wrong MIME type, convert to PDF
+                        finalBlob = new Blob([blob], { type: 'application/pdf' });
+                        // If filename doesn't indicate PDF, add extension
+                        if (!finalName.toLowerCase().endsWith('.pdf')) {
+                            finalName = finalName + '.pdf';
+                        }
                     }
                     
                     const blobUrl = URL.createObjectURL(finalBlob);
                     const a = document.createElement('a');
                     a.href = blobUrl;
-                    a.download = name;
+                    a.download = finalName;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                    if (typeof toast === 'function') toast('File downloaded successfully', 'success');
                 } catch (err) {
-                    console.warn('Blob download failed, attempting formatted direct link:', err);
-                    let finalUrl = url;
-                    if (isPdf && url.includes('cloudinary.com') && !url.includes('fl_attachment')) {
-                        finalUrl = url.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(name)}/`);
+                    console.error('Download failed:', err);
+                    if (typeof toast === 'function') toast('Download failed: ' + err.message, 'error');
+                    
+                    // Last resort: try direct link without fetch, but still fix the URL
+                    try {
+                        console.warn('Attempting direct download link:', url);
+                        let finalUrl = url;
+                        
+                        // Even for direct link, fix the malformed Cloudinary URL
+                        if (finalUrl.includes('cloudinary.com')) {
+                            finalUrl = finalUrl.replace(/\/fl_attachment:[^/]*\//, '/');
+                            if (isPdf && finalUrl.includes('/image/upload/') && !finalUrl.includes('/f_pdf')) {
+                                finalUrl = finalUrl.replace('/image/upload/', '/image/upload/f_pdf/');
+                            }
+                        }
+                        
+                        const a = document.createElement('a');
+                        a.href = finalUrl;
+                        a.download = finalName;
+                        a.target = '_blank';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } catch (fallbackErr) {
+                        console.error('All download methods failed:', fallbackErr);
+                        if (typeof toast === 'function') toast('Unable to download file. Please try again or contact support.', 'error');
                     }
-                    const a = document.createElement('a');
-                    a.href = finalUrl;
-                    a.download = name;
-                    a.target = '_blank';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
                 }
             }
             window.downloadFile = downloadFile;
@@ -15681,10 +15793,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // ── View/Open PDF Helper (prevents PDF opening as .ai download) ──
             async function viewOrOpenPdf(url, fileName) {
                 if (!url) return;
-                const isPdf = (fileName || url || '').toLowerCase().includes('.pdf');
+                
+                // Ensure fileName is properly extracted and safe
+                let cleanName = fileName || 'document.pdf';
+                cleanName = cleanName.replace(/\\'/g, "'").replace(/\\"/g, '"');
+                
+                const lowerName = cleanName.toLowerCase();
+                const isPdf = lowerName.endsWith('.pdf') || (url || '').toLowerCase().includes('.pdf');
+                let finalName = isPdf && !lowerName.endsWith('.pdf') ? (cleanName + '.pdf') : cleanName;
                 
                 if (url.startsWith('data:')) {
-                    const blobType = isPdf ? 'application/pdf' : undefined;
+                    // CRITICAL FIX: Always pass application/pdf for PDF files to prevent .ai conversion
+                    const blobType = isPdf ? 'application/pdf' : 'application/octet-stream';
                     const blob = dataURLtoBlob(url, blobType);
                     if (blob) {
                         const blobUrl = URL.createObjectURL(blob);
@@ -15698,19 +15818,54 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (isPdf) {
                     try {
-                        const response = await fetch(url);
+                        // Validate URL format
+                        new URL(url);
+                        
+                        let fetchUrl = url;
+                        
+                        // FIX: Detect and correct malformed Cloudinary URLs
+                        // Remove malformed fl_attachment parameters that cause 400 errors
+                        if (fetchUrl.includes('cloudinary.com')) {
+                            fetchUrl = fetchUrl.replace(/\/fl_attachment:[^/]*\//, '/');
+                            
+                            // Add correct PDF transformation if needed
+                            if (fetchUrl.includes('/image/upload/') && !fetchUrl.includes('/f_pdf')) {
+                                fetchUrl = fetchUrl.replace('/image/upload/', '/image/upload/f_pdf/');
+                            }
+                        }
+                        
+                        const response = await fetch(fetchUrl, {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/pdf, application/octet-stream' }
+                        });
+                        
                         if (response.ok) {
                             const blob = await response.blob();
+                            // CRITICAL FIX: Ensure blob is always PDF MIME type
                             const pdfBlob = new Blob([blob], { type: 'application/pdf' });
                             const blobUrl = URL.createObjectURL(pdfBlob);
                             window.open(blobUrl, '_blank');
                             setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
                             return;
+                        } else {
+                            console.error(`HTTP ${response.status} when fetching PDF`);
                         }
-                    } catch(e) {}
+                    } catch(e) {
+                        console.warn('PDF fetch failed, attempting direct open:', e);
+                    }
                 }
                 
-                window.open(url, '_blank');
+                // Fallback: direct open without transformation, but still fix the URL
+                let targetUrl = url;
+                if (targetUrl.includes('cloudinary.com')) {
+                    // Fix malformed URLs even for direct open
+                    targetUrl = targetUrl.replace(/\/fl_attachment:[^/]*\//, '/');
+                    
+                    if (isPdf && targetUrl.includes('/image/upload/') && !targetUrl.includes('/f_pdf')) {
+                        targetUrl = targetUrl.replace('/image/upload/', '/image/upload/f_pdf/');
+                    }
+                }
+                window.open(targetUrl, '_blank');
             }
             window.viewOrOpenPdf = viewOrOpenPdf;
 
@@ -15757,9 +15912,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // Icon and label for document file types
             
             // ── PDF URL Safe Helper ──
-            function getSafePdfUrl(url) {
+            function getSafePdfUrl(url, name) {
                 if (!url) return '';
-                return String(url);
+                let strUrl = String(url);
+                const isPdf = (name || strUrl).toLowerCase().includes('.pdf');
+                // For Cloudinary image-uploaded PDFs, add fl_attachment to force download instead of inline render
+                if (isPdf && strUrl.includes('cloudinary.com') && strUrl.includes('/image/upload/')) {
+                    const cleanName = encodeURIComponent(name || 'document.pdf');
+                    if (!strUrl.includes('fl_attachment')) {
+                        return strUrl.replace('/image/upload/', `/image/upload/fl_attachment:${cleanName}/`);
+                    }
+                }
+                // For raw uploads that snuck through (legacy URLs), convert to image path for accessibility
+                if (isPdf && strUrl.includes('cloudinary.com') && strUrl.includes('/raw/upload/')) {
+                    strUrl = strUrl.replace('/raw/upload/', '/image/upload/');
+                    const cleanName = encodeURIComponent(name || 'document.pdf');
+                    return strUrl.replace('/image/upload/', `/image/upload/fl_attachment:${cleanName}/`);
+                }
+                return strUrl;
             }
 
             function openPdfUrl(url) {
@@ -15797,9 +15967,32 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const formData = new FormData();
                             formData.append('file', file);
                             formData.append('upload_preset', CLOUDINARY_PRESET);
-                            formData.append('folder', 'worksync_chat');
-
-                            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`, {
+                            
+                            // CRITICAL FIX: Preserve filename and prevent .ai conversion
+                            // Upload PDFs as image type with format=pdf forced (raw/upload gives 401 on this account)
+                            const fileName = file.name || 'file';
+                            const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+                            const fileExt = (fileName.substring(fileName.lastIndexOf('.') + 1) || 'pdf').toLowerCase();
+                            
+                            // Detect if this is a PDF file
+                            const isPdfFile = fileExt === 'pdf' ||
+                                fileName.toLowerCase().endsWith('.pdf') || 
+                                file.type === 'application/pdf' ||
+                                file.type === 'application/postscript' ||
+                                (file.type || '').includes('illustrator');
+                            
+                            if (isPdfFile) {
+                                // Force format=pdf so Cloudinary doesn't auto-detect as .ai
+                                formData.append('format', 'pdf');
+                                // public_id includes folder prefix — don't also append 'folder' or it double-nests
+                                formData.append('public_id', `worksync_chat/${fileNameWithoutExt}`);
+                            } else {
+                                formData.append('folder', 'worksync_chat');
+                            }
+                            
+                            // Use /image/upload for PDFs (raw/upload gives 401 on this account)
+                            const uploadType = isPdfFile ? 'image' : 'auto';
+                            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${uploadType}/upload`, {
                                 method: 'POST',
                                 body: formData
                             });
@@ -15838,9 +16031,32 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('upload_preset', CLOUDINARY_PRESET);
-                formData.append('folder', 'worksync_chat');
-
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`, {
+                
+                // CRITICAL FIX: Preserve filename for PDFs and prevent .ai conversion
+                // Upload PDFs as image type with format=pdf forced (raw/upload gives 401 on this account)
+                const fileName = file.name || 'file';
+                const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+                const fileExt = (fileName.substring(fileName.lastIndexOf('.') + 1) || '').toLowerCase();
+                
+                // Detect if this is a PDF file
+                const isPdfFile = fileExt === 'pdf' ||
+                    fileName.toLowerCase().endsWith('.pdf') || 
+                    file.type === 'application/pdf' ||
+                    file.type === 'application/postscript' ||
+                    (file.type || '').includes('illustrator');
+                
+                if (isPdfFile) {
+                    // Force format=pdf so Cloudinary doesn't auto-detect as .ai
+                    formData.append('format', 'pdf');
+                    // public_id includes folder prefix — don't also append 'folder' or it double-nests
+                    formData.append('public_id', `worksync_chat/${fileNameWithoutExt}`);
+                } else {
+                    formData.append('folder', 'worksync_chat');
+                }
+                
+                // Use /image/upload for PDFs (raw/upload gives 401 on this account)
+                const uploadType = isPdfFile ? 'image' : 'auto';
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${uploadType}/upload`, {
                     method: 'POST',
                     body: formData
                 });

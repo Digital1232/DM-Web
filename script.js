@@ -8010,7 +8010,14 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 const bgClass = isMe ? 'bg-indigo-500/50 hover:bg-indigo-500/70 border-indigo-400/50' : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
                 const safeUrl = (msg.attachmentUrl || '').replace(/'/g, "\\'");
                 const safeName = (msg.attachmentName || 'file.pdf').replace(/'/g, "\\'");
-                attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><button type="button" onclick="downloadFile('${safeUrl}', '${safeName}')" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download File')}</span></button></div>`;
+                const isPdf = msg.attachmentName && msg.attachmentName.toLowerCase().endsWith('.pdf');
+                
+                // For PDFs, show both View and Download buttons
+                if (isPdf) {
+                    attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><div class="flex items-center gap-2"><button type="button" onclick="viewOrOpenPdf('${safeUrl}', '${safeName}')" title="View PDF" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:eye-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold">View</span></button><button type="button" onclick="downloadFile('${safeUrl}', '${safeName}')" title="Download PDF" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download')}</span></button></div></div>`;
+                } else {
+                    attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><button type="button" onclick="downloadFile('${safeUrl}', '${safeName}')" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download File')}</span></button></div>`;
+                }
             }
         }
 
@@ -8414,6 +8421,23 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 attachmentUrl = await fileToBase64(stagedAttachment);
                 attachmentType = stagedAttachment.type || 'application/octet-stream';
                 attachmentName = stagedAttachment.name;
+                
+                // CRITICAL FIX: Force correct MIME type for PDFs to prevent .ai conversion
+                // Check both file extension and MIME type
+                const lowerName = (attachmentName || '').toLowerCase();
+                if (lowerName.endsWith('.pdf') || 
+                    attachmentType === 'application/pdf' ||
+                    attachmentType === 'application/postscript' ||
+                    attachmentType.includes('illustrator') ||
+                    attachmentType.includes('postscript')) {
+                    // Force PDF MIME type to prevent browser misidentifying it as .ai
+                    attachmentType = 'application/pdf';
+                    
+                    // If filename doesn't have .pdf extension, add it
+                    if (!lowerName.endsWith('.pdf')) {
+                        attachmentName = (attachmentName || 'document') + '.pdf';
+                    }
+                }
             }
 
             const payload = { senderEmail: currentUser.email, senderName: currentUser.name, text, timestamp: Date.now(), readBy: {} };
