@@ -895,8 +895,9 @@ if (initializeApp) {
                         <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black text-indigo-600">${r.qcScore}%</p></div>
                     </div>
                 </div>
-            `).join('');
-        });
+            `;
+        }).join('');
+    });
         if (activeView === 'qc') initQcReportFilters();
     }
 
@@ -7766,7 +7767,8 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         });
         conversations.forEach(([id, conv]) => {
             if (convListeners[id]) return;
-            const listenerStartedAt = Date.now();
+            // 10 second buffer to account for device clock drift
+            const listenerStartedAt = Date.now() - 10000;
             const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
             convListeners[id] = onChildAdded(q, snap => {
                 const msg = snap.val();
@@ -7775,6 +7777,12 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 if (id !== activeConvId) {
                     unreadCounts[id] = (unreadCounts[id] || 0) + 1;
                     renderChatBadge();
+                    // Immediately update sidebar DM/Group list badge element in DOM
+                    const unreadBadge = document.getElementById(`unread-badge-${id}`);
+                    if (unreadBadge) {
+                        unreadBadge.textContent = unreadCounts[id];
+                        unreadBadge.classList.remove('hidden');
+                    }
                 }
             });
         });
@@ -7793,25 +7801,33 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
         toast(`New message from ${title}`, 'info');
 
-        const sound = document.getElementById('chat-notification-sound');
-        if (sound) {
-            sound.play().catch(e => console.warn('Audio play failed:', e));
+        // Play notification sound via Web Audio API
+        if (typeof playNotificationSound === 'function') {
+            playNotificationSound();
         }
 
-        if ('Notification' in window && Notification.permission === 'granted') {
-            const notification = new Notification(title, {
-                body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
-                icon: 'img/logo.png'
-            });
-            notification.onclick = async () => {
-                window.focus();
-                switchView('chat');
-                if (conv.type === 'dm') {
-                    await openDm(msg.senderEmail);
-                } else { // group chat
-                    await openConversation(convId, conv.name, 'group', conv.profilePicture || '');
-                }
-            };
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                const notification = new Notification(title, {
+                    body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
+                    icon: 'img/onedesk-logo.png'
+                });
+                notification.onclick = async () => {
+                    window.focus();
+                    try { notification.close(); } catch(e){}
+                    switchView('chat');
+                    if (conv?.type === 'dm') {
+                        await openDm(msg.senderEmail);
+                    } else { // group chat
+                        await openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                    }
+                };
+                setTimeout(() => {
+                    try { notification.close(); } catch(e){}
+                }, 4000);
+            } else if (Notification.permission === 'default') {
+                try { Notification.requestPermission(); } catch(e){}
+            }
         }
     }
 
@@ -7992,7 +8008,9 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             } else {
                 const iconColor = isMe ? 'text-indigo-100' : 'text-slate-400';
                 const bgClass = isMe ? 'bg-indigo-500/50 hover:bg-indigo-500/70 border-indigo-400/50' : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
-                attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><a href="${msg.attachmentUrl}" target="_blank" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download File')}</span></a></div>`;
+                const safeUrl = (msg.attachmentUrl || '').replace(/'/g, "\\'");
+                const safeName = (msg.attachmentName || 'file.pdf').replace(/'/g, "\\'");
+                attachmentHtml = `<div class="${text ? 'mb-2' : ''}"><button type="button" onclick="downloadFile('${safeUrl}', '${safeName}')" class="inline-flex items-center gap-2 p-2.5 ${bgClass} rounded-xl transition-colors border"><iconify-icon icon="solar:file-download-bold" width="20" class="${iconColor}"></iconify-icon><span class="text-xs font-bold underline truncate max-w-[150px]">${escapeHtml(msg.attachmentName || 'Download File')}</span></button></div>`;
             }
         }
 

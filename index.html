@@ -15570,9 +15570,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.readAsDataURL(file);
-                    reader.onload = () => resolve(reader.result);
+                    reader.onload = () => {
+                        let res = reader.result;
+                        if (file && file.name && file.name.toLowerCase().endsWith('.pdf') && typeof res === 'string') {
+                            res = res.replace(/^data:[^;]+;/, 'data:application/pdf;');
+                        }
+                        resolve(res);
+                    };
                     reader.onerror = error => reject(error);
                 });
+            }
+
+            // Helper to convert base64 Data URL to Blob safely
+            function dataURLtoBlob(dataurl, fallbackType) {
+                try {
+                    const arr = dataurl.split(',');
+                    const mimeMatch = arr[0].match(/:(.*?);/);
+                    let mime = fallbackType || (mimeMatch ? mimeMatch[1] : 'application/octet-stream');
+                    if (fallbackType && (mime.includes('postscript') || mime.includes('illustrator'))) {
+                        mime = fallbackType;
+                    }
+                    const bstr = atob(arr[1]);
+                    let n = bstr.length;
+                    const u8arr = new Uint8Array(n);
+                    while (n--) {
+                        u8arr[n] = bstr.charCodeAt(n);
+                    }
+                    return new Blob([u8arr], { type: mime });
+                } catch(e) {
+                    return null;
+                }
             }
 
             // ── Cloudinary upload for chat attachments ────────────────────────────
@@ -15585,19 +15612,154 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return t.startsWith('image/') || t.startsWith('video/');
             }
 
+            // ── Universal Download Helper (prevents cross-origin file renaming to .ai) ──
+            async function downloadFile(url, fileName) {
+                if (!url) return;
+                const isPdf = (fileName || url || '').toLowerCase().includes('.pdf');
+                const name = fileName || (isPdf ? 'document.pdf' : 'download');
+                
+                try {
+                    if (url.startsWith('data:')) {
+                        const blobType = isPdf ? 'application/pdf' : undefined;
+                        const blob = dataURLtoBlob(url, blobType);
+                        if (blob) {
+                            const blobUrl = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = blobUrl;
+                            a.download = name;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                            return;
+                        }
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = name;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        return;
+                    }
+
+                    if (typeof toast === 'function') toast('Downloading file...', 'info');
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const blob = await response.blob();
+                    
+                    // Force PDF mime type if extension is .pdf or if blob mime type is postscript/illustrator
+                    let finalBlob = blob;
+                    if (isPdf || (blob.type && (blob.type.includes('postscript') || blob.type.includes('illustrator')))) {
+                        finalBlob = new Blob([blob], { type: 'application/pdf' });
+                    }
+                    
+                    const blobUrl = URL.createObjectURL(finalBlob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                } catch (err) {
+                    console.warn('Blob download failed, attempting formatted direct link:', err);
+                    let finalUrl = url;
+                    if (isPdf && url.includes('cloudinary.com') && !url.includes('fl_attachment')) {
+                        finalUrl = url.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(name)}/`);
+                    }
+                    const a = document.createElement('a');
+                    a.href = finalUrl;
+                    a.download = name;
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
+            }
+            window.downloadFile = downloadFile;
+
+            // ── View/Open PDF Helper (prevents PDF opening as .ai download) ──
+            async function viewOrOpenPdf(url, fileName) {
+                if (!url) return;
+                const isPdf = (fileName || url || '').toLowerCase().includes('.pdf');
+                
+                if (url.startsWith('data:')) {
+                    const blobType = isPdf ? 'application/pdf' : undefined;
+                    const blob = dataURLtoBlob(url, blobType);
+                    if (blob) {
+                        const blobUrl = URL.createObjectURL(blob);
+                        window.open(blobUrl, '_blank');
+                        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                        return;
+                    }
+                    window.open(url, '_blank');
+                    return;
+                }
+
+                if (isPdf) {
+                    try {
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+                            const blobUrl = URL.createObjectURL(pdfBlob);
+                            window.open(blobUrl, '_blank');
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                            return;
+                        }
+                    } catch(e) {}
+                }
+                
+                window.open(url, '_blank');
+            }
+            window.viewOrOpenPdf = viewOrOpenPdf;
+
+            // ── Web Audio API Notification Sound Synthesizer ──
+            function playNotificationSound() {
+                try {
+                    const soundEl = document.getElementById('chat-notification-sound');
+                    if (soundEl && soundEl.src && !soundEl.src.includes('notificationsounds.com')) {
+                        const p = soundEl.play();
+                        if (p && p.catch) p.catch(() => {});
+                    }
+                } catch(e){}
+
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContext) return;
+                    const ctx = new AudioContext();
+
+                    const osc1 = ctx.createOscillator();
+                    const gain1 = ctx.createGain();
+                    osc1.type = 'sine';
+                    osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+                    gain1.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                    osc1.connect(gain1);
+                    gain1.connect(ctx.destination);
+                    osc1.start(ctx.currentTime);
+                    osc1.stop(ctx.currentTime + 0.15);
+
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.type = 'sine';
+                    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+                    gain2.gain.setValueAtTime(0.2, ctx.currentTime + 0.1);
+                    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                    osc2.connect(gain2);
+                    gain2.connect(ctx.destination);
+                    osc2.start(ctx.currentTime + 0.1);
+                    osc2.stop(ctx.currentTime + 0.35);
+                } catch(e) {}
+            }
+            window.playNotificationSound = playNotificationSound;
+
             // Icon and label for document file types
             
-            // ── PDF URL Safe Helper (bypasses Cloudinary 401 PDF delivery restriction) ──
+            // ── PDF URL Safe Helper ──
             function getSafePdfUrl(url) {
                 if (!url) return '';
-                const strUrl = String(url);
-                const lowerUrl = strUrl.toLowerCase();
-                if (lowerUrl.includes('cloudinary.com') && lowerUrl.includes('/image/upload/')) {
-                    if (lowerUrl.includes('.pdf')) {
-                        return strUrl.replace(/\.pdf(\?.*)?$/i, '.jpg$1');
-                    }
-                }
-                return strUrl;
+                return String(url);
             }
 
             function openPdfUrl(url) {
@@ -26777,7 +26939,8 @@ function isStrategyTask(t) {
                 });
                 conversations.forEach(([id, conv]) => {
                     if (convListeners[id]) return;
-                    const listenerStartedAt = Date.now();
+                    // 10 second buffer to account for device clock drift
+                    const listenerStartedAt = Date.now() - 10000;
                     const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
                     convListeners[id] = onChildAdded(q, snap => {
                         const msg = snap.val();
@@ -26786,6 +26949,12 @@ function isStrategyTask(t) {
                         if (id !== activeConvId) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
                             renderChatBadge();
+                            // Immediately update sidebar DM/Group list badge element in DOM
+                            const unreadBadge = document.getElementById(`unread-badge-${id}`);
+                            if (unreadBadge) {
+                                unreadBadge.textContent = unreadCounts[id];
+                                unreadBadge.classList.remove('hidden');
+                            }
                         }
                     });
                 });
@@ -26804,29 +26973,33 @@ function isStrategyTask(t) {
                 const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
                 toast(`New message from ${title}`, 'info');
 
-                const sound = document.getElementById('chat-notification-sound');
-                if (sound) {
-                    sound.play().catch(e => console.warn('Audio play failed:', e));
+                // Play notification sound via Web Audio API
+                if (typeof playNotificationSound === 'function') {
+                    playNotificationSound();
                 }
 
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    const notification = new Notification(title, {
-                        body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
-                        icon: 'img/logo.png'
-                    });
-                    notification.onclick = async () => {
-                        window.focus();
-                        try { notification.close(); } catch(e){}
-                        switchView('chat');
-                        if (conv.type === 'dm') {
-                            await openDm(msg.senderEmail);
-                        } else { // group chat
-                            await openConversation(convId, conv.name, 'group', conv.profilePicture || '');
-                        }
-                    };
-                    setTimeout(() => {
-                        try { notification.close(); } catch(e){}
-                    }, 4000);
+                if ('Notification' in window) {
+                    if (Notification.permission === 'granted') {
+                        const notification = new Notification(title, {
+                            body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
+                            icon: 'img/onedesk-logo.png'
+                        });
+                        notification.onclick = async () => {
+                            window.focus();
+                            try { notification.close(); } catch(e){}
+                            switchView('chat');
+                            if (conv?.type === 'dm') {
+                                await openDm(msg.senderEmail);
+                            } else { // group chat
+                                await openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                            }
+                        };
+                        setTimeout(() => {
+                            try { notification.close(); } catch(e){}
+                        }, 4000);
+                    } else if (Notification.permission === 'default') {
+                        try { Notification.requestPermission(); } catch(e){}
+                    }
                 }
             }
 
