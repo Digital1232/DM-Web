@@ -389,7 +389,7 @@ function renderEcttTimeDistribution(clientData) {
             <div>
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-sm font-bold text-slate-700">${escapeHtml(type)}</span>
-                    <span class="text-sm font-bold text-slate-600">${formatTime(seconds)} (${pct}%)</span>
+                    <span class="text-sm font-bold text-slate-600">${pct}%</span>
                 </div>
                 <div class="h-3 bg-slate-100 rounded-full overflow-hidden">
                     <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all" style="width: ${pct}%"></div>

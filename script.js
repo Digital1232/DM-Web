@@ -771,23 +771,18 @@ if (initializeApp) {
         if (!db) return;
         onValue(ref(db, 'worksync/qc_reports'), snap => {
             const data = snap.val() || {};
-            const allReports = Object.entries(data).map(([id, r]) => {
+            allQcReports = Object.entries(data).map(([id, r]) => {
                 const entry = { id, ...r };
-                // Ensure qcScore and rating are always calculated or present
-                if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
-                    entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
-                } else if (entry.qcScore === undefined) {
-                    entry.qcScore = 0; // Default if no data to calculate
+                if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
+                    entry.qcScore = Math.min(100, Math.max(0, Math.round(Number(entry.qcScore))));
+                } else if (entry.totalCount !== undefined && entry.totalCount > 0 && entry.checkedCount !== undefined) {
+                    entry.qcScore = Math.min(100, Math.max(0, Math.round((Number(entry.checkedCount) / Number(entry.totalCount)) * 100)));
+                } else if (entry.rating !== undefined && entry.rating > 0) {
+                    entry.qcScore = Math.min(100, Math.max(0, Math.round(Number(entry.rating) * 20)));
+                } else {
+                    entry.qcScore = 0;
                 }
-                // Derive rating from qcScore if not explicitly set or if qcScore was just calculated
-                if (entry.rating === undefined || entry.rating === null || isNaN(entry.rating)) {
-                    entry.rating = Math.max(1, Math.ceil(entry.qcScore / 20)); // Derive rating from qcScore
-                }
-                if (entry.qcScore === undefined) {
-                    const rScore = (entry.rating / 5) * 100;
-                    const cScore = entry.totalCount > 0 ? (entry.checkedCount / entry.totalCount) * 100 : 0;
-                    entry.qcScore = Math.round((rScore + cScore) / 2);
-                }
+                if (!entry.rating) entry.rating = Math.max(1, Math.ceil((entry.qcScore || 0) / 20));
                 return entry;
             });
             allQcReports = allReports; // Cache globally for task history lookups
@@ -8757,20 +8752,31 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
 
     function populateReportUserFilter() {
         const userInput = document.getElementById('report-user-filter');
-        if (!userInput || !isAdmin()) return;
+        const weeklyUserInput = document.getElementById('weekly-report-user-filter');
+        if (!userInput && !weeklyUserInput) return;
 
-        const currentVal = userInput.value;
-        userInput.innerHTML = `<option value="all">All Users</option>`;
-        currentWorkUsers.forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u.email;
-            opt.textContent = u.name;
-            userInput.appendChild(opt);
-        });
-
-        if ([...userInput.options].some(o => o.value === currentVal)) {
-            userInput.value = currentVal;
+        const userMap = new Map();
+        if (Array.isArray(currentWorkUsers)) {
+            currentWorkUsers.forEach(u => { if (u && u.email) userMap.set(u.email, u.name || u.email); });
         }
+        if (Array.isArray(USERS)) {
+            USERS.forEach(u => { if (u && u.email && !userMap.has(u.email)) userMap.set(u.email, u.name || u.email); });
+        }
+
+        const selects = [userInput, weeklyUserInput].filter(Boolean);
+        selects.forEach(selectEl => {
+            const currentVal = selectEl.value || reportSelectedUser || 'all';
+            selectEl.innerHTML = `<option value="all">All Members</option>`;
+            userMap.forEach((name, email) => {
+                const opt = document.createElement('option');
+                opt.value = email;
+                opt.textContent = name;
+                selectEl.appendChild(opt);
+            });
+            if ([...selectEl.options].some(o => o.value === currentVal)) {
+                selectEl.value = currentVal;
+            }
+        });
     }
 
     function initReportFilters() {
@@ -8779,15 +8785,11 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         const toInput = document.getElementById('report-date-to');
 
         const userWrapper = document.getElementById('report-user-filter-wrapper');
-        if (userWrapper) {
-            if (isAdmin()) {
-                userWrapper.classList.remove('hidden');
-                populateReportUserFilter();
-            } else {
-                userWrapper.classList.add('hidden');
-                reportSelectedUser = currentUser.email;
-            }
-        }
+        const weeklyUserWrapper = document.getElementById('weekly-user-filter-wrapper');
+        
+        if (userWrapper) userWrapper.classList.remove('hidden');
+        if (weeklyUserWrapper) weeklyUserWrapper.classList.remove('hidden');
+        populateReportUserFilter();
 
         const datePickerEl = document.getElementById('report-datepicker');
         if (datePickerEl && window.Litepicker) {
@@ -8865,6 +8867,13 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         handleReportFilterChange();
     }
 
+    function onWeeklyUserFilterChange(val) {
+        reportSelectedUser = val;
+        const topUserInput = document.getElementById('report-user-filter');
+        if (topUserInput && topUserInput.value !== val) topUserInput.value = val;
+        renderWeeklyReport();
+    }
+
     function handleReportFilterChange() {
         if (!canViewReports()) return;
         const fromInput = document.getElementById('report-date-from');
@@ -8872,19 +8881,28 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         if (!fromInput || !toInput) return;
         reportDateFrom = fromInput.value;
         reportDateTo = toInput.value;
+        
         const userInput = document.getElementById('report-user-filter');
-        if (isAdmin()) reportSelectedUser = userInput.value;
-        else if (isManager()) reportSelectedUser = 'all';
-        else reportSelectedUser = currentUser.email;
+        const weeklyUserInput = document.getElementById('weekly-report-user-filter');
+        
+        if (userInput) {
+            reportSelectedUser = userInput.value;
+        } else if (weeklyUserInput) {
+            reportSelectedUser = weeklyUserInput.value;
+        }
+
+        if (userInput && weeklyUserInput && userInput.value !== weeklyUserInput.value) {
+            weeklyUserInput.value = userInput.value;
+        }
 
         // Re-render the current report tab
         if (activeView === 'reports') {
-            if (isManager() && !isAdmin() && currentReportTab !== 'client') currentReportTab = 'client';
             switch (currentReportTab) {
                 case 'timing': renderTimingReport(); break;
                 case 'task': renderTaskReport(); break;
                 case 'analytics': renderAnalyticsReport(); break;
                 case 'summary': renderSummaryReport(); break;
+                case 'weekly': renderWeeklyReport(); break;
                 case 'detailed': renderDetailedReport(); break;
                 case 'performance': renderPerformanceReport(); break;
                 case 'client': renderClientReport(); break;
@@ -9238,8 +9256,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
 
     async function switchReportTab(tab) {
         if (!canViewReports()) return;
-        if (isManager() && !isAdmin()) tab = 'client';
-        ['timing', 'task', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide'].forEach(t => {
+        ['timing', 'task', 'detailed', 'analytics', 'summary', 'weekly', 'performance', 'client', 'client-wide'].forEach(t => {
             document.getElementById(`report-panel-${t}`)?.classList.add('hidden');
             const tabBtn = document.getElementById(`report-tab-${t}`)
             if (tabBtn) {
@@ -10116,7 +10133,6 @@ function exportSummaryReport() {
             clientSummary[client].tasks.add(log.taskId);
         });
         Object.values(clientSummary).sort((a,b) => b.duration - a.duration).forEach(c => {
-            const percent = Math.round((c.duration / (totalLoggedSeconds || 1)) * 100);
             csv += `"${c.name}",${c.tasks.size},"${formatTime(c.duration)}",${percent}%\n`;
         });
 
@@ -10148,6 +10164,390 @@ function exportSummaryReport() {
         link.click();
         URL.revokeObjectURL(url);
         toast('Summary CSV exported', 'success');
+    }
+
+    function getWeeksInRange(fromDateStr, toDateStr) {
+        if (!fromDateStr || !toDateStr) return [];
+        const start = new Date(fromDateStr);
+        const end = new Date(toDateStr);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+
+        const weeks = [];
+        let cur = new Date(start);
+        
+        while (cur <= end) {
+            const dayOfWeek = cur.getDay();
+            const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+            const mon = new Date(cur);
+            mon.setDate(cur.getDate() + diffToMon);
+            mon.setHours(0, 0, 0, 0);
+
+            const sun = new Date(mon);
+            sun.setDate(mon.getDate() + 6);
+            sun.setHours(23, 59, 59, 999);
+
+            const weekKey = mon.toISOString().slice(0, 10);
+            if (!weeks.some(w => w.key === weekKey)) {
+                const days = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(mon);
+                    d.setDate(mon.getDate() + i);
+                    days.push(d.toISOString().slice(0, 10));
+                }
+                weeks.push({
+                    key: weekKey,
+                    mon,
+                    sun,
+                    days
+                });
+            }
+            cur.setDate(cur.getDate() + 7);
+        }
+        return weeks;
+    }
+
+    // Universal Timestamp Parser for dates, timestamps, strings, and objects
+    function parseTimestamp(val) {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        if (val && typeof val === 'object') {
+            if (typeof val.toMillis === 'function') return val.toMillis();
+            if (typeof val.seconds === 'number') return val.seconds * 1000;
+            if (typeof val.toDate === 'function') return val.toDate().getTime();
+            if (val instanceof Date) return val.getTime();
+        }
+        if (typeof val === 'string') {
+            const clean = val.trim();
+            if (!clean) return 0;
+            if (clean.includes('-')) {
+                const parts = clean.split('-').map(Number);
+                if (parts.length === 3 && !parts.some(isNaN)) {
+                    const parsed = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+                    if (!isNaN(parsed)) return parsed;
+                }
+            }
+            if (clean.includes('/')) {
+                const parts = clean.split('/');
+                if (parts.length === 3) {
+                    const parsed = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0])).getTime();
+                    if (!isNaN(parsed)) return parsed;
+                }
+            }
+            const parsed = new Date(clean).getTime();
+            if (!isNaN(parsed)) return parsed;
+        }
+        return 0;
+    }
+
+    // Universal Log Timestamp Extractor
+    function getLogTime(log) {
+        if (!log) return 0;
+        return parseTimestamp(log.endTime || log.startTime || log.timestamp || 0);
+    }
+
+    // Task Completion in Period Check
+    function isTaskCompletedInPeriod(t, fromTs, toTs, periodTaskIds = null) {
+        if (!t) return false;
+        const status = (t.status || '').toLowerCase();
+        const completed = (typeof isDone === 'function' && isDone(t.status)) ||
+                          (typeof isInternalDone === 'function' && isInternalDone(t.status)) ||
+                          status === 'done' || status === 'completed' || status === 'approved';
+        if (!completed) return false;
+
+        if (periodTaskIds && periodTaskIds.has(t.id)) return true;
+
+        // Priority 1: Explicit completion timestamp or date
+        const compTs = parseTimestamp(t.completedAt || t.lastCompletedDate);
+        if (compTs > 0) {
+            return compTs >= fromTs && compTs <= toTs;
+        }
+
+        // Priority 2: Update timestamp
+        const upTs = parseTimestamp(t.updatedAt || t.updated);
+        if (upTs > 0 && upTs >= fromTs && upTs <= toTs) return true;
+
+        // Priority 3: Due date or task date
+        const dueTs = parseTimestamp(t.date || t.dueDate || t.duedate);
+        if (dueTs > 0 && dueTs >= fromTs && dueTs <= toTs) return true;
+
+        // Priority 4: Creation timestamp
+        const createdTs = parseTimestamp(t.createdAt || t.created);
+        if (createdTs > 0 && createdTs >= fromTs && createdTs <= toTs) return true;
+
+        // If no date metadata exists at all on completed task, include it
+        const hasAnyDate = Boolean(compTs || upTs || dueTs || createdTs);
+        return !hasAnyDate;
+    }
+
+    // Task Assignment / Relevance in Period Check
+    function isTaskAssignedInPeriod(t, fromTs, toTs, periodTaskIds = null) {
+        if (!t) return false;
+        if (periodTaskIds && periodTaskIds.has(t.id)) return true;
+
+        const cTs = parseTimestamp(t.createdAt || t.created);
+        if (cTs > 0 && cTs >= fromTs && cTs <= toTs) return true;
+
+        const dTs = parseTimestamp(t.dueDate || t.duedate || t.date);
+        if (dTs > 0 && dTs >= fromTs && dTs <= toTs) return true;
+
+        const compTs = parseTimestamp(t.completedAt || t.lastCompletedDate);
+        if (compTs > 0 && compTs >= fromTs && compTs <= toTs) return true;
+
+        const uTs = parseTimestamp(t.updatedAt || t.updated);
+        if (uTs > 0 && uTs >= fromTs && uTs <= toTs) return true;
+
+        const hasAnyDate = Boolean(cTs || dTs || compTs || uTs);
+        return !hasAnyDate;
+    }
+
+    function renderWeeklyReport() {
+        const container = document.getElementById('weekly-report-container');
+        if (!container) return;
+
+        if (!reportDateFrom || !reportDateTo) {
+            container.innerHTML = `<p class="text-center text-slate-400 text-sm py-12">Please select a date range to generate weekly performance reports.</p>`;
+            return;
+        }
+
+        const weeks = getWeeksInRange(reportDateFrom, reportDateTo);
+        if (!weeks.length) {
+            container.innerHTML = `<p class="text-center text-slate-400 text-sm py-12">No valid weeks found in the selected date range.</p>`;
+            return;
+        }
+
+        let targetUsers = [];
+        if (reportSelectedUser === 'all') {
+            targetUsers = USERS && USERS.length ? USERS : [];
+        } else {
+            const single = USERS.find(u => u.email === reportSelectedUser);
+            targetUsers = single ? [single] : [{ email: reportSelectedUser, name: reportSelectedUser, role: 'Team Member' }];
+        }
+
+        let html = '';
+        let grandTotalSeconds = 0;
+        let grandTotalDeliverables = 0;
+
+        weeks.forEach((week, wIndex) => {
+            const weekFromTs = week.mon.getTime();
+            const weekToTs = week.sun.getTime();
+
+            const weekLogs = allTimeLogs.filter(log => {
+                const logTs = getLogTime(log);
+                return logTs >= weekFromTs && logTs <= weekToTs;
+            });
+
+            const weekCompletedTasks = tasks.filter(t => {
+                return isTaskCompletedInPeriod(t, weekFromTs, weekToTs);
+            });
+
+            let weekTotalSeconds = 0;
+            let weekTotalDeliverables = 0;
+            let activeMembersCount = 0;
+
+            const userRows = targetUsers.map(u => {
+                const userLogs = weekLogs.filter(l => l.userId === u.email);
+                const userCompleted = weekCompletedTasks.filter(t => t.userId === u.email || assigneeMatches(t, u.email));
+
+                const dailyHours = week.days.map(dayStr => {
+                    const dayLogs = userLogs.filter(l => {
+                        const logTime = getLogTime(l);
+                        if (!logTime) return false;
+                        return formatLocalDate(new Date(logTime)) === dayStr;
+                    });
+                    return dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                });
+
+                const userTotalSec = dailyHours.reduce((a, b) => a + b, 0);
+                const userDeliverablesCount = userCompleted.length;
+
+                if (userTotalSec > 0 || userDeliverablesCount > 0) {
+                    activeMembersCount++;
+                }
+
+                weekTotalSeconds += userTotalSec;
+                weekTotalDeliverables += userDeliverablesCount;
+
+                return {
+                    user: u,
+                    dailyHours,
+                    userTotalSec,
+                    userDeliverablesCount
+                };
+            });
+
+            const visibleRows = reportSelectedUser === 'all' 
+                ? userRows.filter(r => r.userTotalSec > 0 || r.userDeliverablesCount > 0)
+                : userRows;
+
+            grandTotalSeconds += weekTotalSeconds;
+            grandTotalDeliverables += weekTotalDeliverables;
+
+            const weekTitle = `Week ${wIndex + 1}: ${week.mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${week.sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+            html += `
+            <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all">
+                <div class="flex items-center justify-between flex-wrap gap-4 pb-5 mb-5 border-b border-slate-100">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                            W${wIndex + 1}
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-black text-slate-900 tracking-tight">${weekTitle}</h4>
+                            <p class="text-[11px] font-bold text-slate-400">7 Days Breakdown Matrix</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Hours</p>
+                            <p class="text-base font-black text-indigo-600">${formatTime(weekTotalSeconds)}</p>
+                        </div>
+                        <div class="w-px h-8 bg-slate-100"></div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Deliverables</p>
+                            <p class="text-base font-black text-emerald-600">${weekTotalDeliverables}</p>
+                        </div>
+                        <div class="w-px h-8 bg-slate-100"></div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Team</p>
+                            <p class="text-base font-black text-amber-600">${activeMembersCount}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                <th class="pb-3">Team Member</th>
+                                <th class="pb-3 text-center">Mon</th>
+                                <th class="pb-3 text-center">Tue</th>
+                                <th class="pb-3 text-center">Wed</th>
+                                <th class="pb-3 text-center">Thu</th>
+                                <th class="pb-3 text-center">Fri</th>
+                                <th class="pb-3 text-center text-amber-500">Sat</th>
+                                <th class="pb-3 text-center text-rose-500">Sun</th>
+                                <th class="pb-3 text-right">Total Hours</th>
+                                <th class="pb-3 text-right">Output</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
+                            ${visibleRows.length > 0 ? visibleRows.map(row => {
+                                const uName = escapeHtml(row.user.name || row.user.email || 'User');
+                                const uRole = escapeHtml(row.user.role || 'Member');
+                                return `
+                                <tr class="hover:bg-slate-50/70 transition-colors">
+                                    <td class="py-3 pr-4">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-600 shrink-0 uppercase">
+                                                ${uName.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <p class="font-bold text-slate-900 leading-tight">${uName}</p>
+                                                <p class="text-[10px] text-slate-400">${uRole}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    ${row.dailyHours.map((sec, dIdx) => {
+                                        const isWeekend = dIdx >= 5;
+                                        const formatted = sec > 0 ? formatTime(sec).split(':').slice(0, 2).join(':') : '—';
+                                        const badgeBg = sec > 28800 ? 'bg-emerald-50 text-emerald-700 font-bold' : (sec > 0 ? 'bg-indigo-50 text-indigo-700 font-medium' : (isWeekend ? 'bg-slate-50 text-slate-300' : 'text-slate-300'));
+                                        return `<td class="py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-[10px] ${badgeBg}">${formatted}</span></td>`;
+                                    }).join('')}
+                                    <td class="py-3 text-right font-black text-indigo-600 font-mono">${formatTime(row.userTotalSec)}</td>
+                                    <td class="py-3 text-right font-black text-emerald-600">${row.userDeliverablesCount} task${row.userDeliverablesCount !== 1 ? 's' : ''}</td>
+                                </tr>`;
+                            }).join('') : `<tr><td colspan="10" class="py-6 text-center text-slate-400 italic">No activity recorded for this week.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        });
+
+        const overallHeader = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            ${createStatCard('Total Weekly Hours', formatTime(grandTotalSeconds), 'solar:clock-circle-bold', { bg: 'bg-indigo-50', text: 'text-indigo-600' })}
+            ${createStatCard('Total Deliverables', grandTotalDeliverables, 'solar:box-minimalistic-bold', { bg: 'bg-emerald-50', text: 'text-emerald-600' })}
+            ${createStatCard('Weeks Calculated', weeks.length, 'solar:calendar-bold', { bg: 'bg-amber-50', text: 'text-amber-600' })}
+        </div>`;
+
+        container.innerHTML = overallHeader + `<div class="space-y-6">${html}</div>`;
+    }
+
+    function exportWeeklyReportCsv() {
+        if (!reportDateFrom || !reportDateTo) return toast('Please select a date range first', 'error');
+
+        const weeks = getWeeksInRange(reportDateFrom, reportDateTo);
+        if (!weeks.length) return toast('No weeks data available to export', 'error');
+
+        let targetUsers = [];
+        if (reportSelectedUser === 'all') {
+            targetUsers = USERS && USERS.length ? USERS : [];
+        } else {
+            const single = USERS.find(u => u.email === reportSelectedUser);
+            targetUsers = single ? [single] : [{ email: reportSelectedUser, name: reportSelectedUser, role: 'Team Member' }];
+        }
+
+        const csvLines = [];
+        csvLines.push(['Week Range', 'Employee Name', 'Email', 'Role', 'Mon (h)', 'Tue (h)', 'Wed (h)', 'Thu (h)', 'Fri (h)', 'Sat (h)', 'Sun (h)', 'Total Weekly Hours', 'Deliverables Completed'].join(','));
+
+        weeks.forEach((week, wIndex) => {
+            const weekFromTs = week.mon.getTime();
+            const weekToTs = week.sun.getTime();
+
+            const weekLogs = allTimeLogs.filter(log => {
+                const logTs = log.endTime || log.startTime || 0;
+                return logTs >= weekFromTs && logTs <= weekToTs;
+            });
+
+            const weekCompletedTasks = tasks.filter(t => {
+                const isCompleted = isDone(t.status) || isInternalDone(t.status);
+                if (!isCompleted) return false;
+                const taskDate = t.updatedAt || t.date || t.completedAt;
+                if (!taskDate) return false;
+                const tTs = new Date(taskDate).getTime();
+                return tTs >= weekFromTs && tTs <= weekToTs;
+            });
+
+            const weekLabel = `Week ${wIndex + 1} (${week.mon.toISOString().slice(0,10)} to ${week.sun.toISOString().slice(0,10)})`;
+
+            targetUsers.forEach(u => {
+                const userLogs = weekLogs.filter(l => l.userId === u.email);
+                const userCompleted = weekCompletedTasks.filter(t => t.userId === u.email || assigneeMatches(t, u.email));
+
+                const dailyHours = week.days.map(dayStr => {
+                    const dayLogs = userLogs.filter(l => {
+                        const d = new Date(l.endTime || l.startTime).toISOString().slice(0, 10);
+                        return d === dayStr;
+                    });
+                    const sec = dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                    return (sec / 3600).toFixed(2);
+                });
+
+                const userTotalSec = userLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                const userTotalHours = (userTotalSec / 3600).toFixed(2);
+                const deliverables = userCompleted.length;
+
+                csvLines.push([
+                    `"${weekLabel}"`,
+                    `"${u.name || u.email}"`,
+                    `"${u.email}"`,
+                    `"${u.role || 'Member'}"`,
+                    ...dailyHours,
+                    `"${userTotalHours}"`,
+                    `"${deliverables}"`
+                ].join(','));
+            });
+        });
+
+        const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `worksync-weekly-report-${reportDateFrom}-to-${reportDateTo}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast('Weekly performance report exported', 'success');
     }
 
 function exportSummaryReportPdf() {
@@ -13947,7 +14347,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     window.showFiveThirtyTaskPopup = showFiveThirtyTaskPopup;
     window.switchTasksTab = switchTasksTab;
     window.switchDprTab = switchDprTab; window.submitDpr = submitDpr; window.renderDpr = renderDpr; window.exportDprCsv = exportDprCsv; window.handleReportFilterChange = handleReportFilterChange; window.populateReportUserFilter = populateReportUserFilter;
-    window.switchReportTab = switchReportTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.exportSummaryReport = exportSummaryReport;
+    window.switchReportTab = switchReportTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.renderWeeklyReport = renderWeeklyReport; window.onWeeklyUserFilterChange = onWeeklyUserFilterChange; window.exportWeeklyReportCsv = exportWeeklyReportCsv; window.exportSummaryReport = exportSummaryReport;
     window.exportSummaryReportPdf = exportSummaryReportPdf;
     window.exportReportsCsv = exportReportsCsv; window.renderClientReport = renderClientReport; window.exportClientReport = exportClientReport; window.renderClientWideReport = renderClientWideReport;
     window.diagnoseJira = diagnoseJira; window.renderPerformanceReport = renderPerformanceReport;

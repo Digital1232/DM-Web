@@ -29,6 +29,7 @@
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Social Analytics Import Module -->
     <script src="js/socialAnalyticsImport.js"></script>
     <style>
@@ -8243,6 +8244,12 @@
                                         class="shrink-0 text-slate-400"></iconify-icon>
                                     Daily Summary
                                 </button>
+                                <button onclick="switchReportTab('weekly')" id="report-tab-weekly"
+                                    class="report-tab-btn w-full flex items-center gap-3 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all text-left group border-b border-slate-50">
+                                    <iconify-icon icon="solar:calendar-mark-bold" width="16"
+                                        class="shrink-0 text-slate-400"></iconify-icon>
+                                    Weekly Summary
+                                </button>
                                 <button onclick="switchReportTab('detailed')" id="report-tab-detailed"
                                     class="report-tab-btn w-full flex items-center gap-3 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all text-left group border-b border-slate-50">
                                     <iconify-icon icon="solar:document-bold" width="16"
@@ -8397,6 +8404,44 @@
                             </div>
                             <div class="p-8">
                                 <div id="summary-chart-container" class="w-full min-h-[18rem] h-auto"></div>
+                            </div>
+                        </div>
+
+                        <!-- ── PANEL: Weekly Summary ── -->
+                        <div id="report-panel-weekly"
+                            class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+                            <div class="px-8 pt-7 pb-4 border-b border-slate-50 flex items-start justify-between gap-4 flex-wrap">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <div class="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                            <iconify-icon icon="solar:calendar-mark-bold" class="text-indigo-600"
+                                                width="18"></iconify-icon>
+                                        </div>
+                                        <h3 class="text-base font-black text-slate-900 tracking-tight">
+                                            Weekly Performance & Summary
+                                        </h3>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 ml-10">
+                                        Aggregated weekly hours, deliverables output, and team member matrix.</p>
+                                </div>
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <div id="weekly-user-filter-wrapper" class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+                                        <iconify-icon icon="solar:user-bold" class="text-indigo-600 shrink-0" width="14"></iconify-icon>
+                                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Member</span>
+                                        <select id="weekly-report-user-filter" onchange="onWeeklyUserFilterChange(this.value)" class="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer border-none">
+                                            <option value="all">All Members</option>
+                                        </select>
+                                    </div>
+                                    <span class="report-panel-period text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 uppercase tracking-widest shrink-0"></span>
+                                    <button onclick="exportWeeklyReportCsv()"
+                                        class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg px-3 py-1.5 transition-all shadow-xs">
+                                        <iconify-icon icon="solar:download-minimalistic-bold" width="14"></iconify-icon>
+                                        Export CSV
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-8 space-y-8" id="weekly-report-container">
+                                <!-- Content dynamically populated by renderWeeklyReport() -->
                             </div>
                         </div>
 
@@ -13394,21 +13439,17 @@
                 onValue(ref(db, 'worksync/qc_reports'), snap => {
                     const data = snap.val() || {};
                     const allReports = Object.entries(data).map(([id, r]) => {
+                        if (typeof window.parseQcReportEntry === 'function') {
+                            return window.parseQcReportEntry(id, r);
+                        }
                         const entry = { id, ...r };
-                        // Ensure qcScore and rating are always calculated or present
                         if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
                             entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
                         } else if (entry.qcScore === undefined) {
-                            entry.qcScore = 0; // Default if no data to calculate
+                            entry.qcScore = 0;
                         }
-                        // Derive rating from qcScore if not explicitly set or if qcScore was just calculated
                         if (entry.rating === undefined || entry.rating === null || isNaN(entry.rating)) {
-                            entry.rating = Math.max(1, Math.ceil(entry.qcScore / 20)); // Derive rating from qcScore
-                        }
-                        if (entry.qcScore === undefined) {
-                            const rScore = (entry.rating / 5) * 100;
-                            const cScore = entry.totalCount > 0 ? (entry.checkedCount / entry.totalCount) * 100 : 0;
-                            entry.qcScore = Math.round((rScore + cScore) / 2);
+                            entry.rating = Math.max(1, Math.ceil(entry.qcScore / 20));
                         }
                         return entry;
                     });
@@ -24188,25 +24229,125 @@ function isStrategyTask(t) {
                 return (v || '').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
             }
 
+            const GENERIC_NAME_TOKENS = new Set(['vilpower', 'admin', 'team', 'system', 'qc', 'jira', 'worksync', 'unassigned', 'learning', 'discussion', 'vilpoweradmin']);
+
             function assigneeMatches(task, filterValue) {
+                if (!filterValue) return false;
                 if (!currentUser && filterValue === 'me') return false;
+
                 const filterUser = filterValue === 'me'
                     ? currentUser
                     : (allUsersMap.get((filterValue || '').toLowerCase()) || USERS.find(u => u.email === filterValue));
-                const filterEmail = (filterUser?.email || filterValue || '').toLowerCase();
-                const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
-                const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
-                const taskName = normalizeAssigneeValue(task.assignee || assigneeName(task));
 
-                // Fuzzy partial name matching (handles "Karthika K" vs "Karthika")
-                if (filterName && taskName) {
-                    if (filterName.includes(taskName) || taskName.includes(filterName)) return true;
+                const filterEmail = (filterUser?.email || filterValue || '').toLowerCase();
+                const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
+
+                if (taskEmail && filterEmail && taskEmail === filterEmail) return true;
+
+                const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
+                const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
+
+                if (!filterName || !taskName) return false;
+                if (taskName === filterName) return true;
+
+                // Prevent generic tokens like "vilpower", "admin", "team" from matching every user
+                if (GENERIC_NAME_TOKENS.has(taskName) || GENERIC_NAME_TOKENS.has(filterName)) return false;
+
+                // Strip "vilpower" suffix if present to compare primary user names
+                const cleanFilter = filterName.replace(/vilpower/g, '');
+                const cleanTask = taskName.replace(/vilpower/g, '');
+                if (cleanFilter && cleanTask && cleanFilter === cleanTask) return true;
+
+                // Tokenized first-name match
+                const filterFirstName = cleanFilter.split(/[\s_.-]+/)[0];
+                const taskFirstName = cleanTask.split(/[\s_.-]+/)[0];
+                if (filterFirstName && taskFirstName && !GENERIC_NAME_TOKENS.has(filterFirstName) && !GENERIC_NAME_TOKENS.has(taskFirstName)) {
+                    if (filterFirstName === taskFirstName) return true;
+                    if (filterFirstName.length >= 4 && taskFirstName.length >= 4) {
+                        if (filterFirstName.startsWith(taskFirstName) || taskFirstName.startsWith(filterFirstName)) return true;
+                    }
                 }
 
-                if (taskEmail && taskEmail === filterEmail) return true;
-                if (!filterName || !taskName) return false;
-                return taskName === filterName || taskName.includes(filterName) || filterName.includes(taskName);
+                return false;
             }
+
+            function parseQcReportEntry(id, r) {
+                const entry = { id, ...r };
+                const mistakeCount = Array.isArray(entry.mistakeItems) ? entry.mistakeItems.length : 0;
+                const total = Number(entry.totalCount) > 0 ? Number(entry.totalCount) : (mistakeCount > 0 ? Math.max(15, mistakeCount + (Number(entry.checkedCount) || 0)) : 15);
+                const isRework = entry.actionStatus === 'Rework' || entry.status === 'Rework' || (typeof entry.newStatus === 'string' && entry.newStatus.toLowerCase().includes('rework'));
+
+                let sc = 100;
+                if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
+                    sc = Number(entry.qcScore);
+                    if (mistakeCount > 0) {
+                        const calculatedChecklistScore = Math.max(0, Math.round(((total - mistakeCount) / total) * 100));
+                        if (sc > calculatedChecklistScore + 5) {
+                            sc = calculatedChecklistScore;
+                        }
+                    }
+                } else if (mistakeCount > 0 || (entry.totalCount !== undefined && entry.checkedCount !== undefined)) {
+                    const passed = entry.checkedCount !== undefined ? Number(entry.checkedCount) : Math.max(0, total - mistakeCount);
+                    sc = Math.min(100, Math.max(0, Math.round((passed / total) * 100)));
+                } else if (entry.rating !== undefined && entry.rating > 0) {
+                    sc = Math.min(100, Math.max(0, Math.round(Number(entry.rating) * 20)));
+                } else {
+                    sc = isRework ? 65 : 100;
+                }
+
+                if (isRework) {
+                    const baseScore = Math.max(0, Math.round(((total - mistakeCount) / total) * 100));
+                    sc = Math.min(70, Math.max(20, Math.min(sc, baseScore - 15)));
+                }
+
+                entry.qcScore = Math.min(100, Math.max(0, Math.round(sc)));
+                if (!entry.rating) entry.rating = Math.max(1, Math.ceil((entry.qcScore || 0) / 20));
+                return entry;
+            }
+            window.parseQcReportEntry = parseQcReportEntry;
+
+            function isQcReportForUser(r, usrEmail, userTaskIds = null) {
+                if (!r || !usrEmail) return false;
+                const targetEmail = usrEmail.toLowerCase().trim();
+
+                // 1. Direct Email Match (most accurate)
+                const rEmail = (r.assigneeEmail || '').toLowerCase().trim();
+                if (rEmail && rEmail === targetEmail) return true;
+
+                // 2. Task ID Match (only if task strictly belongs to user)
+                if (r.taskId && userTaskIds && userTaskIds.has(r.taskId)) return true;
+
+                // 3. Name Match
+                const rName = (r.assignee || '').toLowerCase().trim();
+                if (rName) {
+                    const normRName = normalizeAssigneeValue(rName);
+                    if (!GENERIC_NAME_TOKENS.has(rName) && !GENERIC_NAME_TOKENS.has(normRName)) {
+                        if (typeof nameToEmail !== 'undefined' && nameToEmail[rName] && nameToEmail[rName].toLowerCase() === targetEmail) return true;
+                        if (typeof nameToEmailMap !== 'undefined' && nameToEmailMap[rName] && nameToEmailMap[rName].toLowerCase() === targetEmail) return true;
+
+                        const targetUserObj = (typeof allUsersMap !== 'undefined' && allUsersMap.get(targetEmail)) || (typeof knownUserByEmail === 'function' && knownUserByEmail(targetEmail));
+                        if (targetUserObj) {
+                            const rawTargetName = (targetUserObj.name || '').toLowerCase().trim();
+                            const normTargetName = normalizeAssigneeValue(rawTargetName);
+                            if (normRName === normTargetName) return true;
+
+                            const cleanTarget = normTargetName.replace(/vilpower/g, '');
+                            const cleanR = normRName.replace(/vilpower/g, '');
+                            if (cleanTarget && cleanR && cleanTarget === cleanR) return true;
+
+                            const tFirst = cleanTarget.split(/[\s_.-]+/)[0];
+                            const rFirst = cleanR.split(/[\s_.-]+/)[0];
+                            if (tFirst && rFirst && !GENERIC_NAME_TOKENS.has(tFirst) && !GENERIC_NAME_TOKENS.has(rFirst)) {
+                                if (tFirst === rFirst) return true;
+                                if (tFirst.length >= 4 && rFirst.length >= 4 && (tFirst.startsWith(rFirst) || rFirst.startsWith(tFirst))) return true;
+                            }
+                        }
+                    }
+                }
+
+                return false;
+            }
+            window.isQcReportForUser = isQcReportForUser;
 
             function myPendingTasks() {
                 if (!currentUser) return [];
@@ -26672,6 +26813,32 @@ function isStrategyTask(t) {
                     });
             }
 
+            function isThumbnailTask(t) {
+                if (!t) return false;
+                const status = (t.status || '').toLowerCase().trim();
+                const desc = (t.desc || t.summary || t.name || t.title || t.id || '').toLowerCase().trim();
+                const category = (t.category || t.taskType || t.issueType || '').toLowerCase().trim();
+                const labels = Array.isArray(t.clientLabels) ? t.clientLabels.map(l => (l || '').toLowerCase().trim()) : [];
+                return status.includes('thumbnail') ||
+                       desc.includes('thumbnail') ||
+                       category.includes('thumbnail') ||
+                       labels.some(l => l.includes('thumbnail'));
+            }
+
+            function isPosterTask(t) {
+                if (!t) return false;
+                const format = (t.format || '').toLowerCase().trim();
+                const status = (t.status || '').toLowerCase().trim();
+                const desc = (t.desc || t.summary || t.name || t.title || t.id || '').toLowerCase().trim();
+                const category = (t.category || t.taskType || t.issueType || '').toLowerCase().trim();
+                const labels = Array.isArray(t.clientLabels) ? t.clientLabels.map(l => (l || '').toLowerCase().trim()) : [];
+                return format === 'poster' ||
+                       status.includes('poster') ||
+                       desc.includes('poster') ||
+                       category.includes('poster') ||
+                       labels.some(l => l.includes('poster'));
+            }
+
             function showIndivPerfTasks(email, type, name) {
                 const modal = document.getElementById('taskDrilldownModal');
                 const title = document.getElementById('taskDrilldownTitle');
@@ -26682,6 +26849,8 @@ function isStrategyTask(t) {
                 let typeLabel = 'Tasks';
                 if (type === 'completed') typeLabel = 'Completed Tasks';
                 else if (type === 'completedVideos') typeLabel = '🎬 Completed Videos';
+                else if (type === 'thumbnails') typeLabel = '🖼️ Thumbnail Tasks';
+                else if (type === 'posters') typeLabel = '🎨 Poster Tasks';
                 else if (type === 'assigned' || type === 'allAssigned') typeLabel = 'Assigned Tasks';
                 else if (type === 'hold') typeLabel = 'Hold Tasks';
                 else if (type === 'rework') typeLabel = 'Reworked Tasks';
@@ -26768,6 +26937,10 @@ function isStrategyTask(t) {
                             (t.status || '').trim().toLowerCase().includes('rework') ||
                             ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase())
                         );
+                    } else if (type === 'thumbnails') {
+                        matchedTasks = allUserTasks.filter(t => isThumbnailTask(t));
+                    } else if (type === 'posters') {
+                        matchedTasks = allUserTasks.filter(t => isPosterTask(t));
                     }
                 }
 
@@ -26797,6 +26970,7 @@ function isStrategyTask(t) {
                 modal.showModal();
             }
             window.showIndivPerfTasks = showIndivPerfTasks;
+            window.openIndividualTasksModal = showIndivPerfTasks;
 
             function renderDailySummary() {
                 const list = document.getElementById('daily-summary-list');
@@ -27940,6 +28114,119 @@ function isStrategyTask(t) {
                 return t.completedAt || t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0) || 0;
             }
             window.getTaskTs = getTaskTs;
+
+            // Universal Timestamp Parser for dates, timestamps, strings, and objects
+            function parseTimestamp(val) {
+                if (!val) return 0;
+                if (typeof val === 'number') return val;
+                if (val && typeof val === 'object') {
+                    if (typeof val.toMillis === 'function') return val.toMillis();
+                    if (typeof val.seconds === 'number') return val.seconds * 1000;
+                    if (typeof val.toDate === 'function') return val.toDate().getTime();
+                    if (val instanceof Date) return val.getTime();
+                }
+                if (typeof val === 'string') {
+                    const clean = val.trim();
+                    if (!clean) return 0;
+                    if (clean.includes('-')) {
+                        const parsed = parseLocalDate(clean).getTime();
+                        if (!isNaN(parsed)) return parsed;
+                    }
+                    if (clean.includes('/')) {
+                        const parts = clean.split('/');
+                        if (parts.length === 3) {
+                            const parsed = parseLocalDate(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`).getTime();
+                            if (!isNaN(parsed)) return parsed;
+                        }
+                    }
+                    const parsed = new Date(clean).getTime();
+                    if (!isNaN(parsed)) return parsed;
+                }
+                return 0;
+            }
+            window.parseTimestamp = parseTimestamp;
+
+            // Universal Log Timestamp Extractor
+            function getLogTime(log) {
+                if (!log) return 0;
+                return parseTimestamp(log.endTime || log.startTime || log.timestamp || 0);
+            }
+            window.getLogTime = getLogTime;
+
+            // Task Completion in Period Check
+            function isTaskCompletedInPeriod(t, fromTs, toTs, periodTaskIds = null) {
+                if (!t) return false;
+                const status = (t.status || '').toLowerCase();
+                const completed = (typeof isDone === 'function' && isDone(t.status)) ||
+                                  (typeof isInternalDone === 'function' && isInternalDone(t.status)) ||
+                                  status === 'done' || status === 'completed' || status === 'approved';
+                if (!completed) return false;
+
+                if (periodTaskIds && periodTaskIds.has(t.id)) return true;
+
+                // Priority 1: Explicit completion timestamp or date
+                const compTs = parseTimestamp(t.completedAt || t.lastCompletedDate);
+                if (compTs > 0) {
+                    return compTs >= fromTs && compTs <= toTs;
+                }
+
+                // Priority 2: Update timestamp
+                const upTs = parseTimestamp(t.updatedAt || t.updated);
+                if (upTs > 0 && upTs >= fromTs && upTs <= toTs) return true;
+
+                // Priority 3: Due date or task date
+                const dueTs = parseTimestamp(t.date || t.dueDate || t.duedate);
+                if (dueTs > 0 && dueTs >= fromTs && dueTs <= toTs) return true;
+
+                // Priority 4: Creation timestamp
+                const createdTs = parseTimestamp(t.createdAt || t.created);
+                if (createdTs > 0 && createdTs >= fromTs && createdTs <= toTs) return true;
+
+                // If no date metadata exists at all on completed task, include it
+                const hasAnyDate = Boolean(compTs || upTs || dueTs || createdTs);
+                return !hasAnyDate;
+            }
+            window.isTaskCompletedInPeriod = isTaskCompletedInPeriod;
+
+            // Task Assignment / Relevance in Period Check
+            function isTaskAssignedInPeriod(t, fromTs, toTs, periodTaskIds = null) {
+                if (!t) return false;
+                if (periodTaskIds && periodTaskIds.has(t.id)) return true;
+
+                const cTs = parseTimestamp(t.createdAt || t.created);
+                if (cTs > 0 && cTs >= fromTs && cTs <= toTs) return true;
+
+                const dTs = parseTimestamp(t.dueDate || t.duedate || t.date);
+                if (dTs > 0 && dTs >= fromTs && dTs <= toTs) return true;
+
+                const compTs = parseTimestamp(t.completedAt || t.lastCompletedDate);
+                if (compTs > 0 && compTs >= fromTs && compTs <= toTs) return true;
+
+                const uTs = parseTimestamp(t.updatedAt || t.updated);
+                if (uTs > 0 && uTs >= fromTs && uTs <= toTs) return true;
+
+                const hasAnyDate = Boolean(cTs || dTs || compTs || uTs);
+                return !hasAnyDate;
+            }
+            window.isTaskAssignedInPeriod = isTaskAssignedInPeriod;
+
+            // User Task Source Eligibility Check:
+            // Barath, Immanuel, Karthika -> Jira tasks ONLY (!isInternalTask)
+            // Palani & others -> Jira AND Internal tasks (both allowed)
+            function isTaskEligibleForUser(t, userEmail) {
+                if (!t) return false;
+                const email = (userEmail || '').toLowerCase().trim();
+                const isJiraOnlyUser = [
+                    'barathvilpower@gmail.com',
+                    'immanuelvilpower@gmail.com',
+                    'karthikavilpower@gmail.com'
+                ].includes(email);
+                if (isJiraOnlyUser && typeof isInternalTask === 'function' && isInternalTask(t)) {
+                    return false;
+                }
+                return true;
+            }
+            window.isTaskEligibleForUser = isTaskEligibleForUser;
 
 
 
@@ -29229,20 +29516,31 @@ function isStrategyTask(t) {
 
             function populateReportUserFilter() {
                 const userInput = document.getElementById('report-user-filter');
-                if (!userInput || !isAdmin()) return;
+                const weeklyUserInput = document.getElementById('weekly-report-user-filter');
+                if (!userInput && !weeklyUserInput) return;
 
-                const currentVal = userInput.value;
-                userInput.innerHTML = `<option value="all">All Users</option>`;
-                currentWorkUsers.forEach(u => {
-                    const opt = document.createElement('option');
-                    opt.value = u.email;
-                    opt.textContent = u.name;
-                    userInput.appendChild(opt);
-                });
-
-                if ([...userInput.options].some(o => o.value === currentVal)) {
-                    userInput.value = currentVal;
+                const userMap = new Map();
+                if (Array.isArray(currentWorkUsers)) {
+                    currentWorkUsers.forEach(u => { if (u && u.email) userMap.set(u.email, u.name || u.email); });
                 }
+                if (Array.isArray(USERS)) {
+                    USERS.forEach(u => { if (u && u.email && !userMap.has(u.email)) userMap.set(u.email, u.name || u.email); });
+                }
+
+                const selects = [userInput, weeklyUserInput].filter(Boolean);
+                selects.forEach(selectEl => {
+                    const currentVal = selectEl.value || reportSelectedUser || 'all';
+                    selectEl.innerHTML = `<option value="all">All Members</option>`;
+                    userMap.forEach((name, email) => {
+                        const opt = document.createElement('option');
+                        opt.value = email;
+                        opt.textContent = name;
+                        selectEl.appendChild(opt);
+                    });
+                    if ([...selectEl.options].some(o => o.value === currentVal)) {
+                        selectEl.value = currentVal;
+                    }
+                });
             }
 
             function initReportFilters() {
@@ -29274,12 +29572,12 @@ function isStrategyTask(t) {
 
                 const userWrapper = document.getElementById('report-user-filter-wrapper');
                 if (userWrapper) {
-                    if (isAdmin()) {
+                    if (isAdmin() || isManager()) {
                         userWrapper.classList.remove('hidden');
                         populateReportUserFilter();
                     } else {
                         userWrapper.classList.add('hidden');
-                        reportSelectedUser = currentUser.email;
+                        reportSelectedUser = currentUser ? currentUser.email : '';
                     }
                 }
 
@@ -29354,6 +29652,14 @@ function isStrategyTask(t) {
                 handleReportFilterChange();
             }
 
+            function onWeeklyUserFilterChange(val) {
+                const userInput = document.getElementById('report-user-filter');
+                if (userInput) {
+                    userInput.value = val;
+                }
+                handleReportFilterChange();
+            }
+
             function handleReportFilterChange() {
                 if (!canViewReports()) return;
                 const fromInput = document.getElementById('report-date-from');
@@ -29362,9 +29668,17 @@ function isStrategyTask(t) {
                 reportDateFrom = fromInput.value;
                 reportDateTo = toInput.value;
                 const userInput = document.getElementById('report-user-filter');
-                if (isAdmin()) reportSelectedUser = userInput ? userInput.value : 'all';
-                else if (isManager()) reportSelectedUser = 'all';
-                else reportSelectedUser = currentUser.email;
+                const weeklyUserInput = document.getElementById('weekly-report-user-filter');
+
+                if (userInput && weeklyUserInput && userInput.value !== weeklyUserInput.value) {
+                    weeklyUserInput.value = userInput.value;
+                }
+
+                if (isAdmin() || isManager()) {
+                    reportSelectedUser = userInput ? userInput.value : (weeklyUserInput ? weeklyUserInput.value : 'all');
+                } else {
+                    reportSelectedUser = currentUser ? currentUser.email : 'all';
+                }
 
                 // Update period badges on all panels
                 if (reportDateFrom && reportDateTo) {
@@ -29387,6 +29701,7 @@ function isStrategyTask(t) {
                         case 'task': renderTaskReport(); break;
                         case 'analytics': renderAnalyticsReport(); break;
                         case 'summary': renderSummaryReport(); break;
+                        case 'weekly': renderWeeklyReport(); break;
                         case 'detailed': renderDetailedReport(); break;
                         case 'performance': renderPerformanceReport(); break;
                         case 'client': renderClientReport(); break;
@@ -30226,7 +30541,7 @@ function isStrategyTask(t) {
                 if (isManager() && !isAdmin() && !managerAllowedTabs.includes(tab)) {
                     tab = 'client';
                 }
-                const allTabs = ['timing', 'task', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide', 'client-wise-timing', 'indiv-perf', 'client-perf', 'client-delivery'];
+                const allTabs = ['timing', 'task', 'weekly', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide', 'client-wise-timing', 'indiv-perf', 'client-perf', 'client-delivery'];
                 allTabs.forEach(t => {
                     document.getElementById(`report-panel-${t}`)?.classList.add('hidden');
                     const btn = document.getElementById(`report-tab-${t}`);
@@ -30279,6 +30594,1087 @@ function isStrategyTask(t) {
                 }
 
                 handleReportFilterChange();
+            }
+
+            function getWeeksInRange(fromDateStr, toDateStr) {
+                if (!fromDateStr || !toDateStr) return [];
+                const start = new Date(fromDateStr + 'T00:00:00');
+                const end = new Date(toDateStr + 'T23:59:59');
+                if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+
+                const weeks = [];
+                let currentMon = new Date(start);
+                const day = currentMon.getDay();
+                const diff = day === 0 ? -6 : 1 - day; // Monday as start of week
+                currentMon.setDate(currentMon.getDate() + diff);
+                currentMon.setHours(0, 0, 0, 0);
+
+                while (currentMon.getTime() <= end.getTime()) {
+                    const mon = new Date(currentMon);
+                    const sun = new Date(currentMon);
+                    sun.setDate(mon.getDate() + 6);
+                    sun.setHours(23, 59, 59, 999);
+
+                    const days = [];
+                    for (let i = 0; i < 7; i++) {
+                        const d = new Date(mon);
+                        d.setDate(mon.getDate() + i);
+                        days.push(formatLocalDate(d));
+                    }
+
+                    weeks.push({ mon, sun, days });
+                    currentMon.setDate(currentMon.getDate() + 7);
+                }
+                return weeks;
+            }
+
+            function renderWeeklyReport() {
+                const container = document.getElementById('weekly-report-container');
+                if (!container) return;
+
+                if (!reportDateFrom || !reportDateTo) {
+                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-12">Please select a date range to generate weekly performance reports.</p>`;
+                    return;
+                }
+
+                const weeks = getWeeksInRange(reportDateFrom, reportDateTo);
+                if (!weeks.length) {
+                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-12">No valid weeks found in the selected date range.</p>`;
+                    return;
+                }
+
+                const userList = (typeof currentWorkUsers !== 'undefined' && Array.isArray(currentWorkUsers) && currentWorkUsers.length)
+                    ? currentWorkUsers
+                    : ((typeof USERS !== 'undefined' && Array.isArray(USERS) && USERS.length) ? USERS : []);
+
+                let targetUsers = [];
+                if (reportSelectedUser === 'all') {
+                    targetUsers = userList;
+                } else {
+                    const sel = (reportSelectedUser || '').toLowerCase();
+                    const single = userList.find(u => (u.email || u.id || u.name || '').toLowerCase() === sel);
+                    targetUsers = single ? [single] : [{ email: reportSelectedUser, name: reportSelectedUser, role: 'Team Member' }];
+                }
+
+                const targetEmails = targetUsers.map(u => (u.email || u.id || u.name || '').toLowerCase());
+
+                const logsSource = (typeof allTimeLogs !== 'undefined' && Array.isArray(allTimeLogs)) ? allTimeLogs : ((typeof timeLogs !== 'undefined' && Array.isArray(timeLogs)) ? timeLogs : []);
+                const tasksSource = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
+
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000 - 1; // 23:59:59.999 local
+
+                // Filter logs in range for target users
+                const filteredLogs = logsSource.filter(log => {
+                    const logTs = getLogTime(log);
+                    if (logTs < fromTs || logTs > toTs) return false;
+                    const uId = (log.userId || log.email || log.userName || '').toLowerCase();
+                    return targetEmails.includes(uId);
+                });
+
+                const periodTaskIds = new Set(filteredLogs.map(l => l.taskId).filter(Boolean));
+
+                // Helper for task assignment check
+                const isUserTask = (t) => {
+                    const assignee = (t.userId || t.assigneeEmail || t.assignee || t.assigneeName || '').toLowerCase();
+                    if (targetEmails.includes(assignee)) return true;
+                    if (typeof assigneeMatches === 'function') {
+                        return targetEmails.some(email => assigneeMatches(t, email));
+                    }
+                    return false;
+                };
+
+                // Helper for task completion check
+                const isTaskDone = (t) => {
+                    const status = (t.status || '').toLowerCase();
+                    if (typeof isDone === 'function' && isDone(t.status)) return true;
+                    if (typeof isInternalDone === 'function' && isInternalDone(t.status)) return true;
+                    return status === 'done' || status === 'completed' || status === 'approved';
+                };
+
+                // All tasks for target users
+                const userTasks = tasksSource.filter(isUserTask);
+
+                // Completed tasks in selected period
+                const userCompletedTasksInRange = userTasks.filter(t => isTaskCompletedInPeriod(t, fromTs, toTs, periodTaskIds));
+
+                // Assigned / active / relevant tasks in selected period (guarantees completed tasks in period are also included)
+                const userTasksInRange = userTasks.filter(t => isTaskAssignedInPeriod(t, fromTs, toTs, periodTaskIds) || userCompletedTasksInRange.includes(t));
+
+                // 1. HEADER PROFILE & TOP 5 KPIS
+                const isSingleUserSelected = reportSelectedUser && reportSelectedUser !== 'all';
+                const selUserObj = isSingleUserSelected ? targetUsers[0] : null;
+                const empName = isSingleUserSelected ? escapeHtml((selUserObj && selUserObj.name) || reportSelectedUser) : 'All Team Members';
+                const empRole = isSingleUserSelected ? escapeHtml((selUserObj && selUserObj.role) || 'Team Member') : 'Entire Organization';
+                const empId = isSingleUserSelected ? escapeHtml((selUserObj && (selUserObj.empId || selUserObj.employeeId)) || 'VP-024') : `${targetUsers.length} Active Members`;
+                const empInitials = empName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'TM';
+
+                const totalAssigned = userTasksInRange.length;
+                const totalCompleted = userCompletedTasksInRange.length;
+                const completionRatePct = totalAssigned > 0 ? Math.min(100, (totalCompleted / totalAssigned) * 100).toFixed(1) : '0.0';
+                const totalSec = filteredLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                const totalTimeFormatted = (typeof formatTime === 'function') ? formatTime(totalSec) : `${Math.floor(totalSec/3600)}h ${Math.floor((totalSec%3600)/60)}m`;
+
+                // On-Time completion calculation
+                const onTimeTasks = userCompletedTasksInRange.filter(t => {
+                    const dueStr = t.dueDate || t.duedate;
+                    if (!dueStr) return true;
+                    const dueTs = parseTimestamp(dueStr);
+                    if (!dueTs) return true;
+                    const compTs = parseTimestamp(t.completedAt || t.lastCompletedDate || t.updatedAt || t.updated || t.date) || Date.now();
+                    return compTs <= (dueTs + 86399999);
+                });
+                const onTimeRatePct = totalCompleted > 0 ? Math.min(100, Math.round((onTimeTasks.length / totalCompleted) * 100)) : 100;
+
+                const overallHeader = `
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 mb-6">
+                    <!-- Top-Left: Employee Profile Card (Reporting Manager Removed) -->
+                    <div class="xl:col-span-4">
+                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-center h-full">
+                            <div class="flex items-center gap-4">
+                                <div class="relative shrink-0">
+                                    <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 text-white font-black text-xl flex items-center justify-center border-2 border-white shadow-md">
+                                        ${empInitials}
+                                    </div>
+                                    <span class="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
+                                </div>
+                                <div class="space-y-1">
+                                    <h3 class="text-lg font-black text-slate-900 leading-tight">${empName}</h3>
+                                    <div>
+                                        <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full inline-block">${empRole}</span>
+                                    </div>
+                                    <p class="text-[11px] font-bold text-slate-400 font-mono">Employee ID: <span class="text-slate-700 font-black">${empId}</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top-Right: 5 KPI Cards -->
+                    <div class="xl:col-span-8">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 h-full">
+                            <!-- KPI 1: Tasks Assigned -->
+                            <div class="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                        <iconify-icon icon="solar:clipboard-list-bold" width="18"></iconify-icon>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Period</span>
+                                </div>
+                                <div class="mt-3">
+                                    <p class="text-2xl font-black text-slate-900 font-mono">${totalAssigned}</p>
+                                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Tasks Assigned</p>
+                                </div>
+                            </div>
+
+                            <!-- KPI 2: Tasks Completed -->
+                            <div class="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                        <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Completed</span>
+                                </div>
+                                <div class="mt-3">
+                                    <p class="text-2xl font-black text-slate-900 font-mono">${totalCompleted}</p>
+                                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Tasks Completed</p>
+                                </div>
+                            </div>
+
+                            <!-- KPI 3: Completion Rate -->
+                            <div class="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-8 h-8 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                                        <iconify-icon icon="solar:pie-chart-bold" width="18"></iconify-icon>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">${parseFloat(completionRatePct) >= 80 ? 'High' : 'Normal'}</span>
+                                </div>
+                                <div class="mt-3">
+                                    <p class="text-2xl font-black text-slate-900 font-mono">${completionRatePct}%</p>
+                                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Completion Rate</p>
+                                </div>
+                            </div>
+
+                            <!-- KPI 4: Total Working Hours -->
+                            <div class="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                                        <iconify-icon icon="solar:clock-circle-bold" width="18"></iconify-icon>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">${(totalSec / 3600).toFixed(1)} hrs</span>
+                                </div>
+                                <div class="mt-3">
+                                    <p class="text-2xl font-black text-slate-900 font-mono">${totalTimeFormatted}</p>
+                                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Total Working Hours</p>
+                                </div>
+                            </div>
+
+                            <!-- KPI 5: On-Time Completion -->
+                            <div class="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                                        <iconify-icon icon="solar:verified-check-bold" width="18"></iconify-icon>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">${onTimeRatePct >= 85 ? 'Optimal' : 'Standard'}</span>
+                                </div>
+                                <div class="mt-3">
+                                    <p class="text-2xl font-black text-slate-900 font-mono">${onTimeRatePct}%</p>
+                                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">On-Time Completion</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+                // 2. PENDING & OVERDUE TASKS
+                const pendingTasks = userTasks.filter(t => !isTaskDone(t));
+                pendingTasks.sort((a, b) => {
+                    const dA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+                    const dB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+                    return dA - dB;
+                });
+
+                const nowTs = Date.now();
+                let pendingTasksRowsHTML = '';
+                if (pendingTasks.length > 0) {
+                    pendingTasksRowsHTML = pendingTasks.slice(0, 10).map(t => {
+                        const taskTitle = escapeHtml(t.desc || t.title || t.name || 'Untitled Task');
+                        const clientName = escapeHtml(t.client || 'Internal');
+                        const statusStr = escapeHtml(t.status || 'Pending');
+
+                        let dueStr = '—';
+                        let daysPendingBadge = '<span class="font-medium text-slate-400 text-[11px]">0 Days</span>';
+
+                        if (t.dueDate) {
+                            const dueDateObj = new Date(t.dueDate + 'T23:59:59');
+                            dueStr = dueDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            const diffDays = Math.floor((nowTs - dueDateObj.getTime()) / (1000 * 60 * 60 * 24));
+                            if (diffDays > 0) {
+                                daysPendingBadge = `<span class="font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-md text-[11px]">${diffDays} Day${diffDays > 1 ? 's' : ''} Overdue</span>`;
+                            } else if (diffDays === 0) {
+                                daysPendingBadge = `<span class="font-bold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-md text-[11px]">Due Today</span>`;
+                            } else {
+                                const leftDays = Math.abs(diffDays);
+                                daysPendingBadge = `<span class="font-medium text-slate-500 text-[11px]">${leftDays} Day${leftDays > 1 ? 's' : ''} Left</span>`;
+                            }
+                        }
+
+                        let statusBadgeBg = 'bg-slate-100 text-slate-700';
+                        const sLower = statusStr.toLowerCase();
+                        if (sLower.includes('qc')) statusBadgeBg = 'bg-purple-100 text-purple-700';
+                        else if (sLower.includes('progress')) statusBadgeBg = 'bg-amber-100 text-amber-800';
+                        else if (sLower.includes('pending')) statusBadgeBg = 'bg-rose-100 text-rose-700';
+                        else if (sLower.includes('rework')) statusBadgeBg = 'bg-red-100 text-red-700';
+
+                        return `
+                        <tr class="hover:bg-slate-50/60 transition-colors">
+                            <td class="py-3 font-bold text-slate-900">${taskTitle}</td>
+                            <td class="py-3 text-slate-600">${clientName}</td>
+                            <td class="py-3 text-slate-500 font-mono text-[11px]">${dueStr}</td>
+                            <td class="py-3"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeBg}">${statusStr}</span></td>
+                            <td class="py-3 text-right">${daysPendingBadge}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    pendingTasksRowsHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic text-xs">No pending or overdue tasks found for the selected user.</td></tr>`;
+                }
+
+                // 3. QUALITY & QC PERFORMANCE
+                const submittedCount = userTasksInRange.filter(t => isTaskDone(t) || (t.status || '').toLowerCase().includes('qc') || (t.status || '').toLowerCase().includes('rework')).length;
+                const qcPassedCount = userCompletedTasksInRange.length;
+                const qcReworkCount = userTasksInRange.filter(t => (t.status || '').toLowerCase().includes('rework') || (t.reworkCount && t.reworkCount > 0)).length;
+                const totalQcEvaluated = qcPassedCount + qcReworkCount;
+                const qcPassRatePct = totalQcEvaluated > 0 ? ((qcPassedCount / totalQcEvaluated) * 100).toFixed(1) : (submittedCount > 0 ? '100.0' : '0.0');
+                const clientRevisionsCount = userTasksInRange.filter(t => (t.status || '').toLowerCase().includes('revision') || (t.revisions && t.revisions > 0)).length;
+
+                // 4. TIME UTILIZATION BY CATEGORY
+                const categorySecMap = {
+                    'Client Tasks': 0,
+                    'Internal Tasks': 0,
+                    'Learning / Training': 0,
+                    'Meetings': 0,
+                    'Breaks': 0,
+                    'Others': 0
+                };
+
+                filteredLogs.forEach(l => {
+                    const sec = l.durationSeconds || 0;
+                    const cat = (l.category || l.type || '').toLowerCase();
+                    const desc = (l.taskDesc || l.desc || '').toLowerCase();
+                    const client = (l.client || '').toLowerCase();
+
+                    if (cat.includes('learn') || cat.includes('train') || desc.includes('learn') || desc.includes('train')) {
+                        categorySecMap['Learning / Training'] += sec;
+                    } else if (cat.includes('meet') || desc.includes('meet')) {
+                        categorySecMap['Meetings'] += sec;
+                    } else if (cat.includes('break') || desc.includes('break')) {
+                        categorySecMap['Breaks'] += sec;
+                    } else if (client === 'internal' || cat.includes('internal') || desc.includes('internal')) {
+                        categorySecMap['Internal Tasks'] += sec;
+                    } else if (l.client || l.taskId) {
+                        categorySecMap['Client Tasks'] += sec;
+                    } else {
+                        categorySecMap['Others'] += sec;
+                    }
+                });
+
+                const totalCategorySec = Object.values(categorySecMap).reduce((a, b) => a + b, 0) || 1;
+                const catColors = {
+                    'Client Tasks': 'bg-indigo-600',
+                    'Internal Tasks': 'bg-emerald-500',
+                    'Learning / Training': 'bg-violet-500',
+                    'Meetings': 'bg-amber-500',
+                    'Breaks': 'bg-rose-500',
+                    'Others': 'bg-slate-500'
+                };
+
+                const catListHTML = Object.keys(categorySecMap).map(catName => {
+                    const sec = categorySecMap[catName];
+                    const pct = ((sec / totalCategorySec) * 100).toFixed(1);
+                    const formatted = (typeof formatTime === 'function') ? formatTime(sec) : `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+                    return `
+                    <div class="flex items-center justify-between p-1.5 rounded-xl hover:bg-slate-50 transition-colors">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full ${catColors[catName]} shrink-0"></span>
+                            <span class="font-bold text-slate-800 text-xs">${catName}</span>
+                        </div>
+                        <div class="flex items-center gap-2.5 font-mono">
+                            <span class="font-bold text-slate-700 text-xs">${formatted}</span>
+                            <span class="text-[11px] text-slate-400 w-11 text-right">${pct}%</span>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // 5. TASK PERFORMANCE BY CLIENT
+                const clientTaskMap = {};
+                userTasksInRange.forEach(t => {
+                    const client = t.client || 'Internal';
+                    if (!clientTaskMap[client]) {
+                        clientTaskMap[client] = { assigned: 0, completed: 0, pending: 0 };
+                    }
+                    clientTaskMap[client].assigned++;
+                    if (isTaskDone(t)) {
+                        clientTaskMap[client].completed++;
+                    } else {
+                        clientTaskMap[client].pending++;
+                    }
+                });
+
+                const clientRowsKeys = Object.keys(clientTaskMap);
+                let clientRowsHTML = '';
+                if (clientRowsKeys.length > 0) {
+                    clientRowsHTML = clientRowsKeys.map(cName => {
+                        const data = clientTaskMap[cName];
+                        const pct = data.assigned > 0 ? ((data.completed / data.assigned) * 100).toFixed(1) : '0.0';
+                        const barBg = parseFloat(pct) >= 80 ? 'bg-emerald-500' : (parseFloat(pct) >= 50 ? 'bg-amber-500' : 'bg-rose-500');
+                        return `
+                        <tr class="hover:bg-slate-50/60 transition-colors">
+                            <td class="py-2.5 font-bold text-slate-900">${escapeHtml(cName)}</td>
+                            <td class="py-2.5 text-center font-bold text-slate-700">${data.assigned}</td>
+                            <td class="py-2.5 text-center font-bold text-emerald-600">${data.completed}</td>
+                            <td class="py-2.5 text-center font-bold ${data.pending > 0 ? 'text-amber-600' : 'text-slate-400'}">${data.pending}</td>
+                            <td class="py-2.5 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <div class="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="${barBg} h-1.5 rounded-full" style="width: ${pct}%"></div>
+                                    </div>
+                                    <span class="font-bold text-slate-800 font-mono text-[11px] w-10 text-right">${pct}%</span>
+                                </div>
+                            </td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    clientRowsHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic text-xs">No client task data recorded.</td></tr>`;
+                }
+
+                // 6. DAILY PERFORMANCE OVERVIEW
+                const daysList = [];
+                weeks.forEach(w => w.days.forEach(d => { if (!daysList.includes(d)) daysList.push(d); }));
+                const displayDays = daysList.slice(0, 7); // up to 7 days for overview
+
+                const dailyCompletedCounts = [];
+                const dailyWorkHoursArr = [];
+                const dailyProdHoursArr = [];
+                const dailyPendingArr = [];
+
+                const dailyWorkStrMap = [];
+                const dailyProdStrMap = [];
+
+                displayDays.forEach(dayStr => {
+                    const dayLogs = filteredLogs.filter(l => {
+                        const logTime = getLogTime(l);
+                        if (!logTime) return false;
+                        const dStr = formatLocalDate(new Date(logTime));
+                        return dStr === dayStr;
+                    });
+
+                    const workSec = dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                    const breakSec = dayLogs.filter(l => (l.category||'').toLowerCase().includes('break') || (l.desc||'').toLowerCase().includes('break')).reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                    const prodSec = Math.max(0, workSec - breakSec);
+
+                    const dayCompleted = userCompletedTasksInRange.filter(t => {
+                        const tCompTs = parseTimestamp(t.completedAt || t.lastCompletedDate || t.updatedAt || t.updated || t.date);
+                        if (!tCompTs) return false;
+                        const dStr = formatLocalDate(new Date(tCompTs));
+                        return dStr === dayStr;
+                    }).length;
+
+                    const dayPending = userTasks.filter(t => {
+                        if (isTaskDone(t)) return false;
+                        if (!t.dueDate) return true;
+                        return t.dueDate === dayStr;
+                    }).length;
+
+                    dailyCompletedCounts.push(dayCompleted);
+                    dailyWorkHoursArr.push(parseFloat((workSec / 3600).toFixed(2)));
+                    dailyProdHoursArr.push(parseFloat((prodSec / 3600).toFixed(2)));
+                    dailyPendingArr.push(dayPending);
+
+                    const fmtH = (sec) => `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+                    dailyWorkStrMap.push(fmtH(workSec));
+                    dailyProdStrMap.push(fmtH(prodSec));
+                });
+
+                const dayHeaderCols = displayDays.map(dStr => {
+                    const dObj = new Date(dStr + 'T00:00:00');
+                    const label = isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString('en-US', { weekday: 'short' });
+                    return `<th class="pb-2">${label}</th>`;
+                }).join('');
+
+                const dayTasksCols = dailyCompletedCounts.map(c => `<td class="py-2.5">${c}</td>`).join('');
+                const dayWorkCols = dailyWorkStrMap.map(s => `<td class="py-2.5 font-mono text-[11px]">${s}</td>`).join('');
+                const dayProdCols = dailyProdStrMap.map(s => `<td class="py-2.5 font-mono text-[11px]">${s}</td>`).join('');
+                const dayPendingCols = dailyPendingArr.map(p => `<td class="py-2.5">${p}</td>`).join('');
+
+                const sumWorkSec = dailyWorkHoursArr.reduce((a, b) => a + b, 0) * 3600;
+                const sumProdSec = dailyProdHoursArr.reduce((a, b) => a + b, 0) * 3600;
+                const sumCompleted = dailyCompletedCounts.reduce((a, b) => a + b, 0);
+                const sumPending = dailyPendingArr.reduce((a, b) => a + b, 0);
+
+                const fmtSumH = (sec) => `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+
+                // Prepare chart data object for initWeeklyCharts
+                window.lastWeeklyReportChartData = {
+                    timeLabels: Object.keys(categorySecMap),
+                    timeHours: Object.values(categorySecMap).map(s => parseFloat((s/3600).toFixed(2))),
+                    timeDetails: Object.keys(categorySecMap).map(catName => {
+                        const sec = categorySecMap[catName];
+                        const pct = ((sec / totalCategorySec) * 100).toFixed(1);
+                        const formatted = fmtSumH(sec);
+                        return `${formatted} (${pct}%)`;
+                    }),
+                    perfLabels: displayDays.map(dStr => {
+                        const dObj = new Date(dStr + 'T00:00:00');
+                        return isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    }),
+                    perfTasksData: dailyCompletedCounts,
+                    perfWorkHoursData: dailyWorkHoursArr,
+                    perfProdHoursData: dailyProdHoursArr,
+                    perfWorkHoursStr: dailyWorkStrMap,
+                    perfProdHoursStr: dailyProdStrMap
+                };
+
+                const weeklyAnalyticsHTML = `
+                <!-- 1. Pending & Overdue Tasks Card -->
+                <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all mb-6">
+                    <div class="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
+                                <iconify-icon icon="solar:danger-triangle-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-900 tracking-tight">Pending & Overdue Tasks</h4>
+                                <p class="text-[11px] font-bold text-slate-400">Action items requiring immediate focus for selected user(s)</p>
+                            </div>
+                        </div>
+                        <button onclick="switchView('tasks')" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1.5 bg-indigo-50/70 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all">
+                            <span>View All Tasks</span>
+                            <iconify-icon icon="solar:arrow-right-linear" width="14"></iconify-icon>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse min-w-[550px]">
+                            <thead>
+                                <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                    <th class="pb-3">Task</th>
+                                    <th class="pb-3">Client</th>
+                                    <th class="pb-3">Due Date</th>
+                                    <th class="pb-3">Status</th>
+                                    <th class="pb-3 text-right">Days Pending</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
+                                ${pendingTasksRowsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. Quality & QC Performance Card -->
+                <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all mb-6">
+                    <div class="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                                <iconify-icon icon="solar:verified-check-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-900 tracking-tight">Quality & QC Performance</h4>
+                                <p class="text-[11px] font-bold text-slate-400">Design approval & review statistics</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                        <div class="bg-indigo-50/60 border border-indigo-100/80 rounded-2xl p-4 flex flex-col justify-between">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Designs Submitted</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-2xl font-black text-indigo-700 font-mono">${submittedCount}</p>
+                                <iconify-icon icon="solar:document-text-bold" class="text-indigo-400" width="18"></iconify-icon>
+                            </div>
+                        </div>
+                        <div class="bg-emerald-50/60 border border-emerald-100/80 rounded-2xl p-4 flex flex-col justify-between">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-600">QC Passed</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-2xl font-black text-emerald-700 font-mono">${qcPassedCount}</p>
+                                <iconify-icon icon="solar:check-circle-bold" class="text-emerald-500" width="18"></iconify-icon>
+                            </div>
+                        </div>
+                        <div class="bg-rose-50/60 border border-rose-100/80 rounded-2xl p-4 flex flex-col justify-between">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-rose-600">QC Rework</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-2xl font-black text-rose-700 font-mono">${qcReworkCount}</p>
+                                <iconify-icon icon="solar:refresh-square-bold" class="text-rose-500" width="18"></iconify-icon>
+                            </div>
+                        </div>
+                        <div class="bg-teal-50/60 border border-teal-100/80 rounded-2xl p-4 flex flex-col justify-between">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-teal-600">QC Pass Rate</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-2xl font-black text-teal-700 font-mono">${qcPassRatePct}%</p>
+                                <iconify-icon icon="solar:chart-square-bold" class="text-teal-500" width="18"></iconify-icon>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50/60 border border-amber-100/80 rounded-2xl p-4 flex flex-col justify-between">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Client Revisions</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-2xl font-black text-amber-700 font-mono">${clientRevisionsCount}</p>
+                                <iconify-icon icon="solar:pen-new-square-bold" class="text-amber-500" width="18"></iconify-icon>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3 & 5: Time Utilization & Task Performance by Client Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- 3. Time Utilization Card -->
+                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                                    <iconify-icon icon="solar:pie-chart-2-bold" width="20"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-900 tracking-tight">Time Utilization</h4>
+                                    <p class="text-[11px] font-bold text-slate-400">Work category allocation</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row items-center gap-6 my-auto">
+                            <div class="relative w-44 h-44 shrink-0 flex items-center justify-center">
+                                <canvas id="weekly-time-utilization-chart" width="176" height="176"></canvas>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                                    <span class="text-lg font-black text-slate-900 font-mono leading-none">${totalTimeFormatted}</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Total Time</span>
+                                </div>
+                            </div>
+                            <div class="w-full space-y-1.5 text-xs">
+                                ${catListHTML}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Task Performance by Client Card -->
+                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                        <div class="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                                    <iconify-icon icon="solar:users-group-two-rounded-bold" width="20"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-900 tracking-tight">Task Performance by Client</h4>
+                                    <p class="text-[11px] font-bold text-slate-400">Task distribution and completion rates</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[450px]">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                        <th class="pb-2.5">Client / Project</th>
+                                        <th class="pb-2.5 text-center">Assigned</th>
+                                        <th class="pb-2.5 text-center">Completed</th>
+                                        <th class="pb-2.5 text-center">Pending</th>
+                                        <th class="pb-2.5 text-right">Completion</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
+                                    ${clientRowsHTML}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="border-t-2 border-slate-200 bg-slate-50/80 font-black text-slate-900">
+                                        <td class="py-2.5">Total</td>
+                                        <td class="py-2.5 text-center">${totalAssigned}</td>
+                                        <td class="py-2.5 text-center text-emerald-600">${totalCompleted}</td>
+                                        <td class="py-2.5 text-center text-amber-600">${totalAssigned - totalCompleted}</td>
+                                        <td class="py-2.5 text-right">
+                                            <div class="flex items-center justify-end gap-2">
+                                                <div class="w-16 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                                    <div class="bg-indigo-600 h-1.5 rounded-full" style="width: ${completionRatePct}%"></div>
+                                                </div>
+                                                <span class="font-mono text-indigo-700 text-xs w-10 text-right">${completionRatePct}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Daily Performance Overview Card -->
+                <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all space-y-5 mb-6">
+                    <div class="flex items-center justify-between gap-4 pb-4 border-b border-slate-100 flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+                                <iconify-icon icon="solar:chart-2-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-slate-900 tracking-tight">Daily Performance Overview</h4>
+                                <p class="text-[11px] font-bold text-slate-400">Tasks & hours trajectory</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 text-[11px] font-bold">
+                            <span class="inline-flex items-center gap-1.5 text-blue-600"><span class="w-2.5 h-2.5 rounded bg-blue-500"></span> Tasks Completed</span>
+                            <span class="inline-flex items-center gap-1.5 text-emerald-600"><span class="w-2.5 h-1 rounded-full bg-emerald-500"></span> Productive Hours</span>
+                            <span class="inline-flex items-center gap-1.5 text-orange-600"><span class="w-2.5 h-1 rounded-full bg-orange-500"></span> Working Hours</span>
+                        </div>
+                    </div>
+
+                    <div class="w-full h-56 relative">
+                        <canvas id="weekly-daily-perf-chart" class="w-full h-full"></canvas>
+                    </div>
+
+                    <div class="overflow-x-auto border border-slate-100 rounded-2xl bg-slate-50/50 p-2">
+                        <table class="w-full text-center border-collapse text-xs">
+                            <thead>
+                                <tr class="text-[10px] uppercase font-black tracking-widest text-slate-400 border-b border-slate-200/60">
+                                    <th class="pb-2 text-left pl-3">Metric</th>
+                                    ${dayHeaderCols}
+                                    <th class="pb-2 text-right pr-3 font-bold text-slate-700">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200/60 text-slate-700 font-medium">
+                                <tr>
+                                    <td class="py-2.5 text-left pl-3 font-bold text-blue-600">Tasks Completed</td>
+                                    ${dayTasksCols}
+                                    <td class="py-2.5 text-right pr-3 font-black text-blue-700">${sumCompleted}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 text-left pl-3 font-bold text-orange-600">Working Hours</td>
+                                    ${dayWorkCols}
+                                    <td class="py-2.5 text-right pr-3 font-black text-orange-700 font-mono text-[11px]">${fmtSumH(sumWorkSec)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 text-left pl-3 font-bold text-emerald-600">Productive Hours</td>
+                                    ${dayProdCols}
+                                    <td class="py-2.5 text-right pr-3 font-black text-emerald-700 font-mono text-[11px]">${fmtSumH(sumProdSec)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 text-left pl-3 font-bold text-slate-600">Pending Tasks</td>
+                                    ${dayPendingCols}
+                                    <td class="py-2.5 text-right pr-3 font-black text-slate-800">${sumPending}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+                // WEEKLY MATRIX BREAKDOWN
+                let html = '';
+                let grandTotalSeconds = 0;
+                let grandTotalDeliverables = 0;
+
+                weeks.forEach((week, wIndex) => {
+                    const weekFromTs = week.mon.getTime();
+                    const weekToTs = week.sun.getTime();
+
+                    const weekLogs = filteredLogs.filter(log => {
+                        const logTs = log.endTime || log.startTime || 0;
+                        return logTs >= weekFromTs && logTs <= weekToTs;
+                    });
+
+                    const weekCompletedTasks = userCompletedTasksInRange.filter(t => {
+                        const taskDate = t.completedAt || t.updatedAt || t.date || t.updated;
+                        if (!taskDate) return false;
+                        const tTs = new Date(taskDate).getTime();
+                        return tTs >= weekFromTs && tTs <= weekToTs;
+                    });
+
+                    let weekTotalSeconds = 0;
+                    let weekTotalDeliverables = 0;
+                    let activeMembersCount = 0;
+
+                    const userRows = targetUsers.map(u => {
+                        const uEmail = (u.email || u.id || u.name || '').toLowerCase();
+                        const userLogs = weekLogs.filter(l => (l.userId || l.email || l.userName || '').toLowerCase() === uEmail);
+                        const userCompleted = weekCompletedTasks.filter(t => 
+                            (t.userId || t.assigneeEmail || t.assignee || '').toLowerCase() === uEmail || 
+                            (typeof assigneeMatches === 'function' && assigneeMatches(t, uEmail))
+                        );
+
+                        const dailyHours = week.days.map(dayStr => {
+                            const dayLogs = userLogs.filter(l => {
+                                const logTime = l.endTime || l.startTime;
+                                if (!logTime) return false;
+                                const dStr = (typeof formatLocalDate === 'function') ? formatLocalDate(new Date(logTime)) : new Date(logTime).toISOString().slice(0,10);
+                                return dStr === dayStr;
+                            });
+                            return dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                        });
+
+                        const userTotalSec = dailyHours.reduce((a, b) => a + b, 0);
+                        const userDeliverablesCount = userCompleted.length;
+
+                        if (userTotalSec > 0 || userDeliverablesCount > 0) {
+                            activeMembersCount++;
+                        }
+
+                        weekTotalSeconds += userTotalSec;
+                        weekTotalDeliverables += userDeliverablesCount;
+
+                        return {
+                            user: u,
+                            dailyHours,
+                            userTotalSec,
+                            userDeliverablesCount
+                        };
+                    });
+
+                    const visibleRows = reportSelectedUser === 'all' 
+                        ? userRows.filter(r => r.userTotalSec > 0 || r.userDeliverablesCount > 0)
+                        : userRows;
+
+                    grandTotalSeconds += weekTotalSeconds;
+                    grandTotalDeliverables += weekTotalDeliverables;
+
+                    const weekTitle = `Week ${wIndex + 1}: ${week.mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${week.sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+                    html += `
+                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between flex-wrap gap-4 pb-5 mb-5 border-b border-slate-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                                    W${wIndex + 1}
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-900 tracking-tight">${weekTitle}</h4>
+                                    <p class="text-[11px] font-bold text-slate-400">7 Days Breakdown Matrix</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Hours</p>
+                                    <p class="text-base font-black text-indigo-600">${(typeof formatTime === 'function') ? formatTime(weekTotalSeconds) : `${Math.floor(weekTotalSeconds/3600)}h ${Math.floor((weekTotalSeconds%3600)/60)}m`}</p>
+                                </div>
+                                <div class="w-px h-8 bg-slate-100"></div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Deliverables</p>
+                                    <p class="text-base font-black text-emerald-600">${weekTotalDeliverables}</p>
+                                </div>
+                                <div class="w-px h-8 bg-slate-100"></div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Team</p>
+                                    <p class="text-base font-black text-amber-600">${activeMembersCount}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[700px]">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-[10px] uppercase font-black tracking-widest text-slate-400">
+                                        <th class="pb-3">Team Member</th>
+                                        <th class="pb-3 text-center">Mon</th>
+                                        <th class="pb-3 text-center">Tue</th>
+                                        <th class="pb-3 text-center">Wed</th>
+                                        <th class="pb-3 text-center">Thu</th>
+                                        <th class="pb-3 text-center">Fri</th>
+                                        <th class="pb-3 text-center text-amber-500">Sat</th>
+                                        <th class="pb-3 text-center text-rose-500">Sun</th>
+                                        <th class="pb-3 text-right">Total Hours</th>
+                                        <th class="pb-3 text-right">Output</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-50 text-xs text-slate-700">
+                                    ${visibleRows.length > 0 ? visibleRows.map(row => {
+                                        const uName = escapeHtml(row.user.name || row.user.email || 'User');
+                                        const uRole = escapeHtml(row.user.role || 'Member');
+                                        return `
+                                        <tr class="hover:bg-slate-50/70 transition-colors">
+                                            <td class="py-3 pr-4">
+                                                <div class="flex items-center gap-2.5">
+                                                    <div class="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-600 shrink-0 uppercase">
+                                                        ${uName.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <p class="font-bold text-slate-900 leading-tight">${uName}</p>
+                                                        <p class="text-[10px] text-slate-400">${uRole}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            ${row.dailyHours.map((sec, dIdx) => {
+                                                const isWeekend = dIdx >= 5;
+                                                const formatted = sec > 0 ? ((typeof formatTime === 'function') ? formatTime(sec).split(':').slice(0, 2).join(':') : `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`) : '—';
+                                                const badgeBg = sec > 28800 ? 'bg-emerald-50 text-emerald-700 font-bold' : (sec > 0 ? 'bg-indigo-50 text-indigo-700 font-medium' : (isWeekend ? 'bg-slate-50 text-slate-300' : 'text-slate-300'));
+                                                return `<td class="py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-[10px] ${badgeBg}">${formatted}</span></td>`;
+                                            }).join('')}
+                                            <td class="py-3 text-right font-black text-indigo-600 font-mono">${(typeof formatTime === 'function') ? formatTime(row.userTotalSec) : `${Math.floor(row.userTotalSec/3600)}h ${Math.floor((row.userTotalSec%3600)/60)}m`}</td>
+                                            <td class="py-3 text-right font-black text-emerald-600">${row.userDeliverablesCount} task${row.userDeliverablesCount !== 1 ? 's' : ''}</td>
+                                        </tr>`;
+                                    }).join('') : `<tr><td colspan="10" class="py-6 text-center text-slate-400 italic">No activity recorded for this week.</td></tr>`}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                });
+
+                container.innerHTML = overallHeader + weeklyAnalyticsHTML + `<div class="space-y-6">${html}</div>`;
+                setTimeout(() => { initWeeklyCharts(); }, 50);
+            }
+
+            function initWeeklyCharts() {
+                const chartData = window.lastWeeklyReportChartData || {
+                    timeLabels: ['Client Tasks', 'Internal Tasks', 'Learning / Training', 'Meetings', 'Breaks', 'Others'],
+                    timeHours: [0, 0, 0, 0, 0, 0],
+                    timeDetails: [],
+                    perfLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+                    perfTasksData: [0, 0, 0, 0, 0],
+                    perfWorkHoursData: [0, 0, 0, 0, 0],
+                    perfProdHoursData: [0, 0, 0, 0, 0],
+                    perfWorkHoursStr: ['0m', '0m', '0m', '0m', '0m'],
+                    perfProdHoursStr: ['0m', '0m', '0m', '0m', '0m']
+                };
+
+                const timeCanvas = document.getElementById('weekly-time-utilization-chart');
+                if (timeCanvas) {
+                    const timeCtx = timeCanvas.getContext('2d');
+                    if (window.weeklyTimeChartInstance) window.weeklyTimeChartInstance.destroy();
+                    if (window.Chart) {
+                        window.weeklyTimeChartInstance = new Chart(timeCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: chartData.timeLabels,
+                                datasets: [{
+                                    data: chartData.timeHours,
+                                    backgroundColor: ['#4f46e5', '#10b981', '#8b5cf6', '#f59e0b', '#f43f5e', '#64748b'],
+                                    borderWidth: 3,
+                                    borderColor: '#ffffff',
+                                    hoverOffset: 4
+                                }]
+                            },
+                            options: {
+                                cutout: '74%',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(ctx) {
+                                                const details = chartData.timeDetails;
+                                                return ` ${ctx.label}: ${details[ctx.dataIndex] || ctx.raw + 'h'}`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+
+                const perfCanvas = document.getElementById('weekly-daily-perf-chart');
+                if (perfCanvas) {
+                    const perfCtx = perfCanvas.getContext('2d');
+                    if (window.weeklyPerfChartInstance) window.weeklyPerfChartInstance.destroy();
+                    if (window.Chart) {
+                        window.weeklyPerfChartInstance = new Chart(perfCtx, {
+                            data: {
+                                labels: chartData.perfLabels,
+                                datasets: [
+                                    {
+                                        type: 'bar',
+                                        label: 'Tasks Completed',
+                                        data: chartData.perfTasksData,
+                                        backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                                        hoverBackgroundColor: '#2563eb',
+                                        borderRadius: 6,
+                                        yAxisID: 'yTasks',
+                                        barThickness: 22
+                                    },
+                                    {
+                                        type: 'line',
+                                        label: 'Working Hours',
+                                        data: chartData.perfWorkHoursData,
+                                        borderColor: '#f97316',
+                                        backgroundColor: '#f97316',
+                                        borderWidth: 3,
+                                        tension: 0.35,
+                                        pointRadius: 4,
+                                        pointHoverRadius: 6,
+                                        yAxisID: 'yHours'
+                                    },
+                                    {
+                                        type: 'line',
+                                        label: 'Productive Hours',
+                                        data: chartData.perfProdHoursData,
+                                        borderColor: '#10b981',
+                                        backgroundColor: '#10b981',
+                                        borderWidth: 3,
+                                        tension: 0.35,
+                                        pointRadius: 4,
+                                        pointHoverRadius: 6,
+                                        yAxisID: 'yHours'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                scales: {
+                                    x: {
+                                        grid: { display: false },
+                                        ticks: { font: { family: 'Manrope, sans-serif', size: 11, weight: '600' }, color: '#64748b' }
+                                    },
+                                    yTasks: {
+                                        type: 'linear',
+                                        position: 'left',
+                                        title: { display: true, text: 'Tasks', font: { size: 10, weight: '700' }, color: '#3b82f6' },
+                                        grid: { color: '#f1f5f9' },
+                                        ticks: { precision: 0, font: { size: 10 }, color: '#64748b' },
+                                        min: 0
+                                    },
+                                    yHours: {
+                                        type: 'linear',
+                                        position: 'right',
+                                        title: { display: true, text: 'Hours', font: { size: 10, weight: '700' }, color: '#10b981' },
+                                        grid: { drawOnChartArea: false },
+                                        ticks: { font: { size: 10 }, color: '#64748b' },
+                                        min: 0
+                                    }
+                                },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(ctx) {
+                                                if (ctx.dataset.label === 'Tasks Completed') return ` Tasks Completed: ${ctx.raw}`;
+                                                if (ctx.dataset.label === 'Working Hours') {
+                                                    return ` Working Hours: ${chartData.perfWorkHoursStr[ctx.dataIndex] || ctx.raw + 'h'}`;
+                                                }
+                                                if (ctx.dataset.label === 'Productive Hours') {
+                                                    return ` Productive Hours: ${chartData.perfProdHoursStr[ctx.dataIndex] || ctx.raw + 'h'}`;
+                                                }
+                                                return ` ${ctx.dataset.label}: ${ctx.raw}`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
+            function exportWeeklyReportCsv() {
+                if (!reportDateFrom || !reportDateTo) return toast('Please select a date range first', 'error');
+
+                const weeks = getWeeksInRange(reportDateFrom, reportDateTo);
+                if (!weeks.length) return toast('No weeks data available to export', 'error');
+
+                const userList = (typeof currentWorkUsers !== 'undefined' && Array.isArray(currentWorkUsers) && currentWorkUsers.length)
+                    ? currentWorkUsers
+                    : ((typeof USERS !== 'undefined' && Array.isArray(USERS) && USERS.length) ? USERS : []);
+
+                let targetUsers = [];
+                if (reportSelectedUser === 'all') {
+                    targetUsers = userList;
+                } else {
+                    const sel = (reportSelectedUser || '').toLowerCase();
+                    const single = userList.find(u => (u.email || '').toLowerCase() === sel);
+                    targetUsers = single ? [single] : [{ email: reportSelectedUser, name: reportSelectedUser, role: 'Team Member' }];
+                }
+
+                const csvLines = [];
+                csvLines.push(['Week Range', 'Employee Name', 'Email', 'Role', 'Mon (h)', 'Tue (h)', 'Wed (h)', 'Thu (h)', 'Fri (h)', 'Sat (h)', 'Sun (h)', 'Total Weekly Hours', 'Deliverables Completed'].join(','));
+
+                const logsSource = (typeof allTimeLogs !== 'undefined' && Array.isArray(allTimeLogs)) ? allTimeLogs : ((typeof timeLogs !== 'undefined' && Array.isArray(timeLogs)) ? timeLogs : []);
+                const tasksSource = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
+
+                weeks.forEach((week, wIndex) => {
+                    const weekFromTs = week.mon.getTime();
+                    const weekToTs = week.sun.getTime();
+
+                    const weekLogs = logsSource.filter(log => {
+                        const logTs = getLogTime(log);
+                        return logTs >= weekFromTs && logTs <= weekToTs;
+                    });
+
+                    const weekCompletedTasks = tasksSource.filter(t => {
+                        return isTaskCompletedInPeriod(t, weekFromTs, weekToTs);
+                    });
+
+                    const weekLabel = `Week ${wIndex + 1} (${week.mon.toISOString().slice(0,10)} to ${week.sun.toISOString().slice(0,10)})`;
+
+                    targetUsers.forEach(u => {
+                        const uEmail = (u.email || '').toLowerCase();
+                        const userLogs = weekLogs.filter(l => (l.userId || l.email || '').toLowerCase() === uEmail);
+                        const userCompleted = weekCompletedTasks.filter(t => 
+                            (t.userId || t.assigneeEmail || '').toLowerCase() === uEmail || 
+                            (typeof assigneeMatches === 'function' && assigneeMatches(t, uEmail))
+                        );
+
+                        const dailyHours = week.days.map(dayStr => {
+                            const dayLogs = userLogs.filter(l => {
+                                const logTime = getLogTime(l);
+                                if (!logTime) return false;
+                                return formatLocalDate(new Date(logTime)) === dayStr;
+                            });
+                            const sec = dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                            return (sec / 3600).toFixed(2);
+                        });
+
+                        const userTotalSec = userLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
+                        const userTotalHours = (userTotalSec / 3600).toFixed(2);
+                        const deliverables = userCompleted.length;
+
+                        csvLines.push([
+                            `"${weekLabel}"`,
+                            `"${u.name || u.email}"`,
+                            `"${u.email}"`,
+                            `"${u.role || 'Member'}"`,
+                            ...dailyHours,
+                            `"${userTotalHours}"`,
+                            `"${deliverables}"`
+                        ].join(','));
+                    });
+                });
+
+                const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `worksync-weekly-report-${reportDateFrom}-to-${reportDateTo}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+                toast('Weekly performance report exported', 'success');
             }
 
             function renderTimingReport() {
@@ -30409,23 +31805,61 @@ function isStrategyTask(t) {
                 document.getElementById('taskDrilldownModal').showModal();
             }
 
+            function getQcReportTimestamp(r) {
+                if (!r) return 0;
+                if (typeof r.timestamp === 'number' && !isNaN(r.timestamp) && r.timestamp > 0) return r.timestamp;
+                if (r.timestamp) {
+                    const parsed = Number(r.timestamp);
+                    if (!isNaN(parsed) && parsed > 0) return parsed;
+                    const d = new Date(r.timestamp).getTime();
+                    if (!isNaN(d) && d > 0) return d;
+                }
+                if (r.createdAt) {
+                    const d = new Date(r.createdAt).getTime();
+                    if (!isNaN(d) && d > 0) return d;
+                }
+                if (r.date) {
+                    const d = new Date(r.date).getTime();
+                    if (!isNaN(d) && d > 0) return d;
+                }
+                return 0;
+            }
+
             function showReportQcDetails(email, userName) {
-                const reports = (allQcReports || []).filter(r => (r.assigneeEmail || '').toLowerCase() === email.toLowerCase());
+                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+
+                const nameToEmailMap = {};
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    Array.from(allUsersMap.values()).forEach(u => {
+                        if (u && u.name && u.email) nameToEmailMap[(u.name || '').toLowerCase()] = u.email.toLowerCase();
+                    });
+                }
+                const userTaskIds = new Set((tasks || []).filter(t => typeof assigneeMatches === 'function' ? assigneeMatches(t, email) : (t.assigneeEmail || '').toLowerCase() === email.toLowerCase()).map(t => t.id));
+
+                const reports = (allQcReports || []).filter(r => {
+                    const ts = getQcReportTimestamp(r);
+                    if (ts < fromTs || ts >= toTs) return false;
+                    return typeof isQcReportForUser === 'function' ? isQcReportForUser(r, email, userTaskIds) : (r.assigneeEmail || '').toLowerCase() === email.toLowerCase();
+                });
+
                 document.getElementById('drilldown-title').textContent = `QC Reports`;
-                document.getElementById('drilldown-subtitle').textContent = `For ${userName} • ${reports.length} Report${reports.length !== 1 ? 's' : ''}`;
+                document.getElementById('drilldown-subtitle').textContent = `For ${userName} • ${reports.length} Report${reports.length !== 1 ? 's' : ''} in Selected Period`;
                 const container = document.getElementById('drilldown-tasks-container');
                 if (!reports.length) {
-                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No QC reports found for this person.</p>`;
+                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-6">No QC reports found for this person in the selected period.</p>`;
                 } else {
-                    container.innerHTML = reports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).map(r => {
+                    container.innerHTML = reports.sort((a, b) => getQcReportTimestamp(b) - getQcReportTimestamp(a)).map(r => {
                         const scoreColor = r.qcScore >= 85 ? 'text-emerald-600' : r.qcScore >= 60 ? 'text-amber-500' : 'text-rose-500';
+                        const rTs = getQcReportTimestamp(r);
+                        const dateStr = rTs > 0 ? new Date(rTs).toLocaleDateString() : '';
                         return `<div class="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-1 cursor-pointer hover:border-indigo-300 transition-colors" onclick="openQcReportDetails('${r.id}')">
                         <div class="flex items-center justify-between">
                             <span class="text-[10px] font-mono font-black text-indigo-600">${escapeHtml(r.taskId || '')}</span>
                             <span class="text-xs font-black ${scoreColor}">${r.qcScore}%</span>
                         </div>
                         <p class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(r.taskDesc || '')}</p>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase">QC: ${escapeHtml(r.qcUser || '')} · ${new Date(r.timestamp).toLocaleDateString()}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">QC: ${escapeHtml(r.qcUser || '')}${dateStr ? ` · ${dateStr}` : ''}</p>
                     </div>`;
                     }).join('');
                 }
@@ -30539,62 +31973,32 @@ function isStrategyTask(t) {
                         if (t.status === 'Thumbnail Waiting' || t.status === 'Thumbnail' || type.includes('thumbnail') || desc.includes('thumbnail')) userTaskStats[email].thumbnails.push(t);
                     });
 
-                    let periodQcReports = (typeof allQcReports !== 'undefined' ? allQcReports : []).filter(r => (r.timestamp || 0) >= fromTs && (r.timestamp || 0) < toTs);
+                    let periodQcReports = (typeof allQcReports !== 'undefined' ? allQcReports : []).filter(r => {
+                        const ts = getQcReportTimestamp(r);
+                        return ts >= fromTs && ts < toTs;
+                    });
 
                     // If allQcReports hasn't been loaded yet, load it now then re-render
                     if (!allQcReports || allQcReports.length === 0) {
                         get(ref(db, 'worksync/qc_reports')).then(snap => {
                             const data = snap.val() || {};
-                            allQcReports = Object.entries(data).map(([id, r]) => {
-                                const entry = { id, ...r };
-                                if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
-                                    entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
-                                } else if (entry.qcScore === undefined) { entry.qcScore = 0; }
-                                if (!entry.rating) entry.rating = Math.max(1, Math.ceil((entry.qcScore || 0) / 20));
-                                return entry;
-                            });
+                            allQcReports = Object.entries(data).map(([id, r]) => (typeof window.parseQcReportEntry === 'function' ? window.parseQcReportEntry(id, r) : { id, qcScore: 0, ...r }));
                             if (activeView === 'reports') renderTaskReport();
                         }).catch(() => { });
                     }
 
                     const userQcScores = {};
-                    // Build a name→email reverse map for QC reports that only have assignee name
-                    const nameToEmailMap = {};
-                    Array.from(allUsersMap.values()).forEach(u => {
-                        if (u.name && u.email) nameToEmailMap[(u.name || '').toLowerCase()] = u.email.toLowerCase();
-                    });
-                    // Also map from userTaskStats keys by name
-                    Object.entries(userTaskStats).forEach(([email, u]) => {
-                        if (u.name) nameToEmailMap[(u.name || '').toLowerCase()] = email.toLowerCase();
-                    });
 
-                    // Build taskId → assignee email map from our task list
-                    const taskIdToEmail = {};
-                    Object.entries(userTaskStats).forEach(([email, u]) => {
-                        [...u.assigned, ...u.completed].forEach(t => { if (t.id) taskIdToEmail[t.id] = email; });
-                    });
-
-                    // Use ALL qc reports so scores always show (not period-filtered)
-                    (allQcReports || []).forEach(r => {
-                        // Strategy 1: direct email
-                        let email = (r.assigneeEmail || '').toLowerCase();
-                        // Strategy 2: name → email
-                        if (!email && r.assignee) {
-                            email = nameToEmailMap[(r.assignee || '').toLowerCase()] || '';
-                        }
-                        // Strategy 3: name correction — if email found but not in stats, try by name
-                        if (email && !userQcScores[email] && r.assignee) {
-                            const byName = nameToEmailMap[(r.assignee || '').toLowerCase()];
-                            if (byName && userTaskStats[byName]) email = byName;
-                        }
-                        // Strategy 4: taskId → email (most reliable for Jira tasks)
-                        if ((!email || !userTaskStats[email]) && r.taskId && taskIdToEmail[r.taskId]) {
-                            email = taskIdToEmail[r.taskId];
-                        }
-                        if (!email) return;
-                        if (!userQcScores[email]) userQcScores[email] = { scoreSum: 0, count: 0 };
-                        userQcScores[email].scoreSum += (r.qcScore || 0);
-                        userQcScores[email].count++;
+                    // Filter QC reports strictly for the selected time period using robust user matching
+                    periodQcReports.forEach(r => {
+                        const targetEmail = Object.keys(userTaskStats).find(usrEm => {
+                            const taskIds = new Set([...(userTaskStats[usrEm]?.assigned || []), ...(userTaskStats[usrEm]?.completed || [])].map(t => t.id));
+                            return typeof isQcReportForUser === 'function' ? isQcReportForUser(r, usrEm, taskIds) : (r.assigneeEmail || '').toLowerCase() === usrEm.toLowerCase();
+                        });
+                        if (!targetEmail) return;
+                        if (!userQcScores[targetEmail]) userQcScores[targetEmail] = { scoreSum: 0, count: 0 };
+                        userQcScores[targetEmail].scoreSum += (r.qcScore || 0);
+                        userQcScores[targetEmail].count++;
                     });
 
                     window.currentReportTaskStats = userTaskStats;
@@ -31021,21 +32425,7 @@ function isStrategyTask(t) {
                 });
 
                 // Completed Tasks: Count only those completed in the selected period
-                const completedTasksCount = dailyPlanTasks.filter(t => {
-                    const isCompleted = isDone(t.status) || isInternalDone(t.status);
-                    if (!isCompleted) return false;
-                    // Count if any of these conditions are true:
-                    // 1. Has time logs in period
-                    if (periodTaskIds.has(t.id)) return true;
-                    // 2. Duedate is in the selected period
-                    if (t.duedate && t.duedate >= countFromDateStr && t.duedate <= countToDateStr) return true;
-                    // 3. Task was updated/completed in the period
-                    const taskUpdatedTs = t.updatedAt || t.completedAt || 0;
-                    if (taskUpdatedTs >= fromTs && taskUpdatedTs < toTs) return true;
-                    // 4. For internal tasks with lastCompletedDate
-                    if (t.lastCompletedDate && t.lastCompletedDate >= countFromDateStr && t.lastCompletedDate <= countToDateStr) return true;
-                    return false;
-                }).length;
+                const completedTasksCount = dailyPlanTasks.filter(t => isTaskCompletedInPeriod(t, fromTs, toTs, periodTaskIds)).length;
 
                 // In Progress Tasks: Count all that are in progress status (regardless of period)
                 const inProgressTasksCount = dailyPlanTasks.filter(t => {
@@ -33667,13 +35057,8 @@ function isStrategyTask(t) {
                     ];
 
                     // Parse and normalise QC reports
-                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => {
-                        const entry = { id, ...r };
-                        if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
-                            entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
-                        } else if (entry.qcScore === undefined) { entry.qcScore = 0; }
-                        return entry;
-                    });
+                    const parseQcEntry = (typeof window.parseQcReportEntry === 'function') ? window.parseQcReportEntry : (id, r) => ({ id, qcScore: 0, ...r });
+                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => parseQcEntry(id, r));
                     // Also update global cache
                     if (freshQcReports.length > 0) allQcReports = freshQcReports;
 
@@ -33720,6 +35105,12 @@ function isStrategyTask(t) {
                                 'karthikavilpower@gmail.com'
                             ].includes(email.toLowerCase());
 
+                            const isJiraOnlyUser = [
+                                'barathvilpower@gmail.com',
+                                'immanuelvilpower@gmail.com',
+                                'karthikavilpower@gmail.com'
+                            ].includes(email.toLowerCase());
+
                             const isInternalOnlyUser = [
                                 'alexvilpower@gmail.com',
                                 'alex@vilpower.com',
@@ -33728,6 +35119,9 @@ function isStrategyTask(t) {
 
                             const filteredTasks = tasks.filter(t => {
                                 if (isExcludedTask(t)) return false;
+                                if (isJiraOnlyUser && typeof isInternalTask === 'function' && isInternalTask(t)) {
+                                    return false;
+                                }
                                 if (isInternalOnlyUser) {
                                     return isInternalTask(t);
                                 }
@@ -33737,18 +35131,23 @@ function isStrategyTask(t) {
                             const getTaskTs = (t) => t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
 
                             const matchesUserAndPeriod = (t) => {
-                                if (isDailyPlanUser) {
-                                    const userPlans = dailyPlans[eKey(email)];
-                                    if (!userPlans) return false;
-                                    const dpEntry = userPlans[t.id];
-                                    if (!dpEntry || !dpEntry.date) return false;
-                                    const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
-                                    return dpTs >= fromTs && dpTs <= toTs;
-                                }
-                                return assigneeMatches(t, email) && (() => {
+                                const jiraMatch = assigneeMatches(t, email) && (() => {
                                     const ts = getTaskTs(t);
                                     return ts >= fromTs && ts <= toTs;
                                 })();
+                                if (jiraMatch) return true;
+
+                                if (isDailyPlanUser) {
+                                    const userPlans = dailyPlans[eKey(email)];
+                                    if (userPlans) {
+                                        const dpEntry = userPlans[t.id];
+                                        if (dpEntry && dpEntry.date) {
+                                            const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
+                                            if (dpTs >= fromTs && dpTs <= toTs) return true;
+                                        }
+                                    }
+                                }
+                                return false;
                             };
 
                             const completed = filteredTasks.filter(t =>
@@ -33783,47 +35182,26 @@ function isStrategyTask(t) {
                                     new Date(t.duedate).getTime() <= toTs;
                             });
 
-                            // QC score — match ALL reports for this person's tasks
-                            // Strategy 1: email match (assigneeEmail stored in QC report)
-                            // Strategy 2: name match (fallback for older reports)
-                            // Strategy 3: taskId match — find all tasks assigned to this person, match QC reports by taskId
                             const userTaskIds = new Set(
                                 tasks
                                     .filter(t => assigneeMatches(t, email))
                                     .map(t => t.id)
                             );
 
-                            const qcReports = freshQcReports.filter(r => {
-                                // Strategy 1: exact email match
-                                const rEmail = (r.assigneeEmail || '').toLowerCase().trim();
-                                if (rEmail && rEmail === email.toLowerCase()) return true;
-
-                                // Strategy 2: name → email lookup
-                                const rName = (r.assignee || '').toLowerCase().trim();
-                                if (rName && nameToEmail[rName] === email.toLowerCase()) return true;
-
-                                // Strategy 3: name directly matches this user's name
-                                const userName = (user.name || '').toLowerCase().trim();
-                                if (rName && userName && rName === userName) return true;
-
-                                // Strategy 4: QC report taskId belongs to a task assigned to this user
-                                if (r.taskId && userTaskIds.has(r.taskId)) return true;
-
-                                return false;
-                            });
+                            const qcReports = freshQcReports.filter(r => typeof isQcReportForUser === 'function' ? isQcReportForUser(r, email, userTaskIds) : (r.assigneeEmail || '').toLowerCase() === email.toLowerCase());
 
                             // Period-specific QC (submitted within this window)
                             const periodQcReports = qcReports.filter(r =>
                                 (r.timestamp || 0) >= fromTs && (r.timestamp || 0) <= toTs
                             );
-                            // All-time average — the true overall QC score
+                            // All-time average — overall QC score
                             const avgQc = qcReports.length > 0
                                 ? Math.round(qcReports.reduce((s, r) => s + (r.qcScore || 0), 0) / qcReports.length)
                                 : null;
-                            // Period average — fallback to all-time if no period-specific reports
+                            // Period average — null if no reports in period
                             const periodAvgQc = periodQcReports.length > 0
                                 ? Math.round(periodQcReports.reduce((s, r) => s + (r.qcScore || 0), 0) / periodQcReports.length)
-                                : avgQc;
+                                : null;
 
                             return { loggedSeconds, breakSeconds, completed, pending, avgQc: periodAvgQc, allAvgQc: avgQc, qcReports: periodQcReports };
                         };
@@ -34517,25 +35895,18 @@ function isStrategyTask(t) {
 
                 return `
                     <div class="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-slate-800/90 dark:to-slate-900/90 border border-indigo-100 dark:border-slate-700/60 rounded-3xl p-4 sm:p-8 mb-6">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8 items-center">
-                            <div>
-                                <p class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-3">Overall Performance Score</p>
-                                <div class="flex items-baseline gap-2 sm:gap-3">
-                                    <p class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">${curr.performanceScore}</p>
-                                    <span class="text-lg sm:text-2xl ${scoreDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : scoreDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'} font-black">${arrow} ${Math.abs(scorePercent)}%</span>
-                                </div>
-                            </div>
-                            <div class="flex justify-center order-3 sm:order-2">
-                                <div class="text-center">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 items-center">
+                            <div class="flex justify-start">
+                                <div>
                                     <p class="text-xs sm:text-sm font-black text-slate-500 dark:text-slate-300 mb-1 sm:mb-2">Compared with</p>
-                                    <div class="flex items-center gap-2 sm:gap-3 justify-center text-[10px] sm:text-xs font-bold flex-wrap">
+                                    <div class="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold flex-wrap">
                                         <span class="text-slate-900 dark:text-white">${currLabel}</span>
                                         <iconify-icon icon="solar:alt-arrow-right-linear" width="14" class="text-slate-400 dark:text-slate-500"></iconify-icon>
                                         <span class="text-slate-400 dark:text-slate-400">${prevLabel}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-left sm:text-right order-2 sm:order-3">
+                            <div class="text-left sm:text-right">
                                 <p class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-3">Status</p>
                                 <p class="text-lg sm:text-xl font-black ${statusClass}">${statusText}</p>
                             </div>
@@ -34621,13 +35992,8 @@ function isStrategyTask(t) {
                 ]).then(([attSnap, qcSnap, snehaSnap, internalPrepSnap, notifSnap]) => {
                     const attEvents = Object.values(attSnap.val() || {});
                     const taskNotifications = Object.values(notifSnap.val() || {});
-                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => {
-                        const entry = { id, ...r };
-                        if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
-                            entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
-                        } else if (entry.qcScore === undefined) { entry.qcScore = 0; }
-                        return entry;
-                    });
+                    const parseQcEntryTeam = (typeof window.parseQcReportEntry === 'function') ? window.parseQcReportEntry : (id, r) => ({ id, qcScore: 0, ...r });
+                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => parseQcEntryTeam(id, r));
                     // Merge JIRA selections (Sneha) and internal task preparations into one unified list
                     const snehaSelections = [
                         ...Object.values(snehaSnap.val() || {}),
@@ -34677,11 +36043,16 @@ function isStrategyTask(t) {
                             'karthikavilpower@gmail.com'   // Karthika: assigned from daily plan
                         ].includes(usrEmail.toLowerCase());
 
+                        const isJiraOnlyUser = [
+                            'barathvilpower@gmail.com',
+                            'immanuelvilpower@gmail.com',
+                            'karthikavilpower@gmail.com'
+                        ].includes(usrEmail.toLowerCase());
+
                         const isInternalOnlyUser = [
                             'alexvilpower@gmail.com',
                             'alex@vilpower.com',
                             'snehavilpower@gmail.com'
-                            // Karthika removed — she gets both internal + Jira tasks via daily plan
                         ].includes(usrEmail.toLowerCase());
 
                         // Ajith recurring tasks to exclude from his analytics
@@ -34705,9 +36076,8 @@ function isStrategyTask(t) {
                         const filteredTasks = tasks.filter(t => {
                             if (isExcludedTask(t)) return false;
                             if (isAjithRecurringTask(t)) return false;
-                            if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
-                                // Karthika: include all tasks (Jira + internal) — filtered via daily plan
-                                return true;
+                            if (isJiraOnlyUser && typeof isInternalTask === 'function' && isInternalTask(t)) {
+                                return false;
                             }
                             if (isInternalOnlyUser) {
                                 return isInternalTask(t);
@@ -34726,6 +36096,12 @@ function isStrategyTask(t) {
                         };
 
                         const matchesUserAndPeriod = (t) => {
+                            const jiraMatch = assigneeMatches(t, usrEmail) && (() => {
+                                const ts = getTaskTs(t);
+                                return ts >= start && ts <= end;
+                            })();
+                            if (jiraMatch) return true;
+
                             if (isDailyPlanUser) {
                                 const userPlans = dailyPlans[eKey(usrEmail)];
                                 if (userPlans) {
@@ -34735,18 +36111,8 @@ function isStrategyTask(t) {
                                         if (dpTs >= start && dpTs <= end) return true;
                                     }
                                 }
-
-                                // ── FIX: Also include assigned Jira tasks in period, even without daily plan entry ──
-                                // Completed Jira tasks should count even if not explicitly in daily plan
-                                if (!isInternalTask(t) && assigneeMatches(t, usrEmail) && isTaskCompletedStatus(getTaskStatus(t))) {
-                                    const ts = getTaskTs(t);
-                                    if (ts >= start && ts <= end) return true;
-                                }
                             }
-                            return assigneeMatches(t, usrEmail) && (() => {
-                                const ts = getTaskTs(t);
-                                return ts >= start && ts <= end;
-                            })();
+                            return false;
                         };
 
                         const comp = filteredTasks.filter(t =>
@@ -34754,7 +36120,6 @@ function isStrategyTask(t) {
                         );
 
                         // For all users, also capture completed tasks found via timelogs
-                        // that weren't planned but were still worked (keeps count in sync with the log)
                         const periodLogIds = new Set(
                             getPeriodTimeLogs(start, end, usrEmail)
                                 .map(l => l.taskId)
@@ -34762,25 +36127,15 @@ function isStrategyTask(t) {
                         );
                         const logCompIds = new Set(comp.map(t => t.id));
 
-                        // ── FIX: Include internal completed tasks that match the user even if not in daily plan ──
                         filteredTasks
                             .filter(t => {
-                                // Already included
                                 if (logCompIds.has(t.id)) return false;
-
-                                // Must be completed
                                 if (!isTaskCompletedStatus(getTaskStatus(t))) return false;
-
-                                // Must match this user
-                                if (!isExcludedTask(t) && isInternalTask(t) && assigneeMatches(t, usrEmail)) {
-                                    // For internal tasks, also check if completed timestamp is in period
+                                if (!isJiraOnlyUser && !isExcludedTask(t) && isInternalTask(t) && assigneeMatches(t, usrEmail)) {
                                     const ts = getTaskTs(t);
                                     if (ts >= start && ts <= end) return true;
                                 }
-
-                                // Also include via timelogs
                                 if (periodLogIds.has(t.id)) return true;
-
                                 return false;
                             })
                             .forEach(t => {
@@ -34788,19 +36143,33 @@ function isStrategyTask(t) {
                                 logCompIds.add(t.id);
                             });
 
+                        const userTaskIds = new Set(filteredTasks.filter(t => assigneeMatches(t, usrEmail)).map(t => t.id));
+                        const qcList = freshQcReports.filter(r => typeof isQcReportForUser === 'function' ? isQcReportForUser(r, usrEmail, userTaskIds) : (r.assigneeEmail || '').toLowerCase() === usrEmail.toLowerCase());
+                        const periodQc = qcList.filter(r => (r.timestamp || 0) >= start && (r.timestamp || 0) <= end);
+                        const periodReworkReportTaskIds = new Set(
+                            periodQc.filter(r =>
+                                r.actionStatus === 'Rework' ||
+                                (r.mistakeItems && r.mistakeItems.length > 0) ||
+                                isReworkStatus(r.newStatus || r.status || '')
+                            ).map(r => r.taskId).filter(Boolean)
+                        );
+
                         // Build hold and rework BEFORE assigned so we can exclude them
                         const hold = filteredTasks.filter(t =>
                             matchesUserAndPeriod(t) &&
                             ['hold', 'design hold', 'on hold'].includes((getTaskStatus(t) || '').trim().toLowerCase())
                         );
                         const rework = filteredTasks.filter(t =>
-                            matchesUserAndPeriod(t) &&
-                            ((getTaskStatus(t) || '').trim().toLowerCase().includes('rework') ||
-                                ['rework designs', 'rework', 'rework design'].includes((getTaskStatus(t) || '').trim().toLowerCase()))
+                            (matchesUserAndPeriod(t) || periodReworkReportTaskIds.has(t.id)) &&
+                            (
+                                periodReworkReportTaskIds.has(t.id) ||
+                                (getTaskStatus(t) || '').trim().toLowerCase().includes('rework') ||
+                                ['rework designs', 'rework', 'rework design'].includes((getTaskStatus(t) || '').trim().toLowerCase()) ||
+                                (t.reworkCount && t.reworkCount > 0)
+                            )
                         );
 
                         // Assigned = all tasks in period MINUS completed/hold/rework
-                        // (mutually exclusive — no double counting)
                         const compIds = new Set(comp.map(t => t.id));
                         const holdIds = new Set(hold.map(t => t.id));
                         const reworkIds = new Set(rework.map(t => t.id));
@@ -34812,8 +36181,6 @@ function isStrategyTask(t) {
                             !reworkIds.has(t.id)
                         );
 
-                        // For daily-plan users, also include timelog-matched tasks in assigned
-                        // so assigned covers all worked tasks not already in other buckets
                         if (isDailyPlanUser) {
                             const periodLogIds = new Set(
                                 getPeriodTimeLogs(start, end, usrEmail)
@@ -34852,22 +36219,9 @@ function isStrategyTask(t) {
                         );
                         const breakSec = breaks.reduce((s, e) => s + Math.floor((e.duration || 0) / 1000), 0);
 
-                        const userTaskIds = new Set(filteredTasks.filter(t => assigneeMatches(t, usrEmail)).map(t => t.id));
-                        const qcList = freshQcReports.filter(r => {
-                            const rEmail = (r.assigneeEmail || '').toLowerCase().trim();
-                            if (rEmail && rEmail === usrEmail) return true;
-                            const rName = (r.assignee || '').toLowerCase().trim();
-                            if (rName && nameToEmail[rName] === usrEmail) return true;
-                            const userName = (user.name || '').toLowerCase().trim();
-                            if (rName && userName && rName === userName) return true;
-                            if (r.taskId && userTaskIds.has(r.taskId)) return true;
-                            return false;
-                        });
-                        const periodQc = qcList.filter(r => (r.timestamp || 0) >= start && (r.timestamp || 0) <= end);
-
                         const avgQc = periodQc.length > 0
                             ? Math.round(periodQc.reduce((s, r) => s + (r.qcScore || 0), 0) / periodQc.length)
-                            : (qcList.length > 0 ? Math.round(qcList.reduce((s, r) => s + (r.qcScore || 0), 0) / qcList.length) : null);
+                            : null;
 
                         let compList = comp;
                         let assignedList = assigned;
@@ -34985,29 +36339,38 @@ function isStrategyTask(t) {
                     const userAvgBreak = Math.round(currStats.breakSec / currDays);
 
                     const getAiQcScore = (st, start, end) => {
-                        let score = 70;
-                        const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
-                        const completionRate = userAllTasks.length > 0
-                            ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t))).length / userAllTasks.length) * 100)
-                            : 0;
+                        let score = 80;
+                        const compCount = (st.completed || []).length;
+                        const pendCount = (st.pending || []).length;
+                        const total = compCount + pendCount;
+                        const completionRate = total > 0 ? (compCount / total) : 0.8;
+
+                        if (completionRate >= 0.90) score += 10;
+                        else if (completionRate >= 0.75) score += 5;
+                        else if (completionRate < 0.50) score -= 10;
+
                         const nowMidnight = new Date(); nowMidnight.setHours(0, 0, 0, 0);
-                        const overdueCount = st.pending.filter(t => t.duedate && new Date(t.duedate) < nowMidnight).length;
+                        const overdueCount = (st.pending || []).filter(t => t.duedate && new Date(t.duedate) < nowMidnight).length;
 
-                        if (completionRate >= 90) score += 15;
-                        else if (completionRate >= 75) score += 8;
-                        else if (completionRate < 50) score -= 10;
-
-                        if (overdueCount === 0) score += 10;
+                        if (overdueCount === 0 && compCount > 0) score += 5;
                         else if (overdueCount > 2) score -= 10;
 
-                        if (st.completed.length >= 15) score += 5;
-                        else if (st.completed.length < 3) score -= 5;
+                        if ((st.rework || []).length > 2) score -= 15;
+                        else if ((st.rework || []).length > 0) score -= 8;
 
-                        return Math.max(0, Math.min(100, score));
+                        return Math.max(50, Math.min(95, Math.round(score)));
                     };
 
-                    const userQc = currStats.avgQc !== null ? currStats.avgQc : getAiQcScore(currStats, fromTs, toTs);
+                    let userQc = currStats.avgQc !== null ? currStats.avgQc : getAiQcScore(currStats, fromTs, toTs);
                     const userQcIsAi = currStats.avgQc === null;
+
+                    // If user has verified QC reports, also validate against any Jira rework tasks that didn't have separate QC forms
+                    if (!userQcIsAi && currStats.rework && currStats.rework.length > 0) {
+                        const reworkTasksWithoutReport = currStats.rework.filter(t => !currStats.qcReports.some(r => r.taskId === t.id));
+                        if (reworkTasksWithoutReport.length > 0) {
+                            userQc = Math.max(40, userQc - (reworkTasksWithoutReport.length * 4));
+                        }
+                    }
 
                     const completionRate = (userCompleted + userPending) > 0 ? (userCompleted / (userCompleted + userPending)) : 1.0;
                     const completionScore = completionRate * 50;
@@ -35180,12 +36543,18 @@ function isStrategyTask(t) {
                                 workedTasks.push(getEffectiveTask(t));
                             });
 
-                        // Also include directly-assigned tasks from Jira/Internal that may not be in daily plan
-                        tasks.filter(t => !localIsExcludedTask(t) && assigneeMatches(t, email)).forEach(t => {
-                            if (t && t.id && !workedTaskIds.has(t.id)) {
-                                workedTaskIds.add(t.id);
-                                workedTasks.push(getEffectiveTask(t));
-                            }
+                        // Also include directly-assigned tasks from Jira/Internal in the period that may not be in daily plan
+                        tasks.filter(t => {
+                            if (!t || !t.id || workedTaskIds.has(t.id)) return false;
+                            if (localIsExcludedTask(t)) return false;
+                            if (!assigneeMatches(t, email)) return false;
+                            const ts = getTaskTs(t);
+                            const createdTs = t.created ? new Date(t.created).getTime() : 0;
+                            const dateMatches = (ts >= fromTs && ts <= toTs) || (createdTs >= fromTs && createdTs <= toTs);
+                            return dateMatches;
+                        }).forEach(t => {
+                            workedTaskIds.add(t.id);
+                            workedTasks.push(getEffectiveTask(t));
                         });
                         // ── Sync userCompleted and modal list to workedTasks (single source of truth) ──
                         // getStatsFor uses both daily-plan date matching AND timelog discovery which can
@@ -35200,13 +36569,17 @@ function isStrategyTask(t) {
                                 !karthikaHoldTasks.some(x => x.id === id) &&
                                 !karthikaReworkTasks.some(x => x.id === id);
                         });
+                        const karthikaThumbnailTasks = workedTasks.filter(t => isThumbnailTask(t));
+                        const karthikaPosterTasks = workedTasks.filter(t => isPosterTask(t));
                         userCompleted = karthikaCompletedTasks.length;
                         window.indivPerfTaskStats[email] = {
                             completed: karthikaCompletedTasks,
                             assigned: karthikaAssignedTasks,
                             allAssigned: [...karthikaCompletedTasks, ...karthikaAssignedTasks, ...karthikaHoldTasks],
                             hold: karthikaHoldTasks,
-                            rework: karthikaReworkTasks
+                            rework: karthikaReworkTasks,
+                            thumbnails: karthikaThumbnailTasks,
+                            posters: karthikaPosterTasks
                         };
                     } else {
                         currStats.completed.forEach(t => {
@@ -35263,13 +36636,13 @@ function isStrategyTask(t) {
                         // The log includes completed tasks found via timelogs that may not be
                         // in the daily plan (isDailyPlanUser uses plan-date matching in getStatsFor,
                         // which misses tasks logged directly). Count all completed tasks in workedTasks.
-                        const logCompletedCount = workedTasks.filter(t => isTaskCompletedStatus(t.status)).length;
+                        const logCompletedCount = workedTasks.filter(t => isTaskCompletedStatus(t.status) && (typeof isTaskEligibleForUser !== 'function' || isTaskEligibleForUser(t, email))).length;
                         if (logCompletedCount > currStats.completed.length) {
                             userCompleted = logCompletedCount;
                         }
 
                         // Set indivPerfTaskStats with mutually exclusive counts from workedTasks
-                        const elseCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                        const elseCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status) && (typeof isTaskEligibleForUser !== 'function' || isTaskEligibleForUser(t, email)));
                         const elseHold = workedTasks.filter(t => ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()));
                         const elseRework = workedTasks.filter(t => (t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()));
                         const elseCompIds = new Set(elseCompleted.map(t => t.id));
@@ -35285,9 +36658,31 @@ function isStrategyTask(t) {
                             assigned: elseAssigned,
                             allAssigned: [...elseCompleted, ...elseAssigned, ...elseHold],
                             hold: elseHold,
-                            rework: elseRework
+                            rework: elseRework,
+                            thumbnails: workedTasks.filter(t => isThumbnailTask(t)),
+                            posters: workedTasks.filter(t => isPosterTask(t))
                         };
                     }
+
+                    let userLoggedSec = userLogged || 0;
+                    let totalSec = userLoggedSec;
+
+                    let posterContentCount = 0;
+                    let thumbnailContentCount = 0;
+
+                    workedTasks.forEach(t => {
+                        const fmt = (t.format || '').toLowerCase();
+                        const cat = (t.category || t.taskType || t.issueType || '').toLowerCase();
+                        const desc = (t.desc || t.summary || t.name || t.id || '').toLowerCase();
+                        const status = (t.status || '').toLowerCase();
+
+                        if (fmt === 'poster' || desc.includes('poster') || cat.includes('poster') || status.includes('poster')) {
+                            posterContentCount++;
+                        }
+                        if (status.includes('thumbnail') || desc.includes('thumbnail') || cat.includes('thumbnail')) {
+                            thumbnailContentCount++;
+                        }
+                    });
 
                     const getStatusBadgeClass = (status) => {
                         const style = getStatusStyle(status);
@@ -35396,52 +36791,35 @@ function isStrategyTask(t) {
                         `;
                     }
 
-                    // ── Karthika: thumbnail & poster counts from DPR ──
+                    // ── Karthika: thumbnail & poster counts from Jira ──
                     let karthikaBreakdownHtml = '';
                     if (email === 'karthikavilpower@gmail.com') {
-                        const karthikaDprRows = dprEntries.filter(e =>
-                            e.userId === 'karthikavilpower@gmail.com' &&
-                            e.date >= fromDateStr &&
-                            e.date <= toDateStr
-                        );
-                        const posterTotal = karthikaDprRows.filter(e => e.category === 'Posters').reduce((s, e) => s + Number(e.count || 0), 0);
-                        const thumbnailTotal = karthikaDprRows.filter(e => e.category === 'Thumbnails').reduce((s, e) => s + Number(e.count || 0), 0);
-                        const dpThumbnailTasks = workedTasks.filter(t =>
-                            (t.status || '').toLowerCase() === 'thumbnail waiting' ||
-                            (t.status || '').toLowerCase() === 'thumbnail' ||
-                            (t.desc || '').toLowerCase().includes('thumbnail')
-                        ).length;
-                        const dpPosterTasks = workedTasks.filter(t =>
-                            (t.desc || '').toLowerCase().includes('poster')
-                        ).length;
+                        const dpPosterTasks = workedTasks.filter(t => isPosterTask(t)).length;
+                        const dpThumbnailTasks = workedTasks.filter(t => isThumbnailTask(t)).length;
 
                         karthikaBreakdownHtml = `
                         <!-- Karthika Thumbnail & Poster Breakdown -->
                         <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
                             <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
                                 <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Thumbnail & Poster Counts</h4>
-                                <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-pink-50 text-pink-600">DPR + Jira</span>
+                                <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-pink-50 text-pink-600">Jira Daily Plan</span>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-pink-50 border border-pink-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-pink-600 uppercase tracking-wider mb-1">Posters (DPR)</p>
-                                    <p class="text-2xl font-black text-slate-900">${posterTotal}</p>
-                                    <p class="text-[9px] text-slate-400 font-bold">count this period</p>
-                                </div>
-                                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">Thumbnails (DPR)</p>
-                                    <p class="text-2xl font-black text-slate-900">${thumbnailTotal}</p>
-                                    <p class="text-[9px] text-slate-400 font-bold">count this period</p>
-                                </div>
-                                <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1">Poster Tasks (Jira)</p>
+                                <div onclick="openIndividualTasksModal('${email}', 'posters', 'Poster Tasks')" class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all">
+                                    <p class="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                        Poster Tasks (Jira)
+                                        <i class="fa-solid font-normal fa-arrow-up-right-from-square text-[9px] opacity-40"></i>
+                                    </p>
                                     <p class="text-2xl font-black text-slate-900">${dpPosterTasks}</p>
-                                    <p class="text-[9px] text-slate-400 font-bold">daily plan tasks</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">click to view details</p>
                                 </div>
-                                <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
-                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">Thumbnail Tasks (Jira)</p>
+                                <div onclick="openIndividualTasksModal('${email}', 'thumbnails', 'Thumbnail Tasks')" class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all">
+                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                        Thumbnail Tasks (Jira)
+                                        <i class="fa-solid font-normal fa-arrow-up-right-from-square text-[9px] opacity-40"></i>
+                                    </p>
                                     <p class="text-2xl font-black text-slate-900">${dpThumbnailTasks}</p>
-                                    <p class="text-[9px] text-slate-400 font-bold">daily plan tasks</p>
+                                    <p class="text-[9px] text-slate-400 font-bold">click to view details</p>
                                 </div>
                             </div>
                         </div>
@@ -35566,44 +36944,23 @@ function isStrategyTask(t) {
                         `;
                     }).join('');
 
-                    const achievementBadgesHtml = badges.length > 0 ? `
-                        <div class="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-2xl p-4">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Achievements This Week</p>
-                            <div class="grid grid-cols-2 gap-3">
-                                ${badges.map(b => `
-                                    <div class="bg-white border border-violet-100 rounded-xl p-3 text-center">
-                                        <p class="text-2xl">${b.emoji}</p>
-                                        <p class="text-[11px] font-black text-slate-900 mt-1">${b.title}</p>
-                                        <p class="text-[10px] text-slate-600 font-semibold mt-0.5 leading-snug">${b.desc}</p>
+                    const insightsList = (aiInsights.insights && aiInsights.insights.length > 0)
+                        ? aiInsights.insights
+                        : ['Maintain consistent task completion and track weekly progress for performance updates.'];
+
+                    const insightsHtml = `
+                        <div class="bg-emerald-50/60 border border-emerald-100/90 rounded-3xl p-6 shadow-sm mb-6 space-y-4">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">AI PERFORMANCE INSIGHTS</p>
+                            <div class="space-y-3">
+                                ${insightsList.map(insight => `
+                                    <div class="flex items-start gap-3 text-xs sm:text-sm font-bold text-slate-800 leading-relaxed">
+                                        <span class="text-slate-500 font-bold flex-shrink-0 mt-0.5">→</span>
+                                        <span>${insight}</span>
                                     </div>
                                 `).join('')}
                             </div>
                         </div>
-                    ` : '';
-
-                    const insightsHtml = aiInsights.insights.length > 0 ? `
-                        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">AI Performance Insights</p>
-                            ${aiInsights.insights.map(insight => `
-                                <div class="flex gap-2 text-[10px] text-slate-800 font-bold leading-relaxed">
-                                    <span class="flex-shrink-0 mt-0.5">→</span>
-                                    <span>${insight}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : '';
-
-                    const recommendationsHtml = aiInsights.recommendations.length > 0 ? `
-                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Recommendations</p>
-                            ${aiInsights.recommendations.map(rec => `
-                                <div class="flex gap-2 text-[10px] text-slate-800 font-bold leading-relaxed">
-                                    <span class="flex-shrink-0 mt-0.5">💡</span>
-                                    <span>${rec}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : '';
+                    `;
 
                     // ── QC Mistakes & Rework History Panel Calculation ──
                     const periodQc = currStats.qcReports || [];
@@ -36005,37 +37362,13 @@ function isStrategyTask(t) {
                     ${kpiCardsHtml}
                 </div>
 
-                <!-- Achievements & AI Insights -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                    ${achievementBadgesHtml}
-                    <div class="space-y-4">
-                        ${insightsHtml}
-                        ${recommendationsHtml}
-                    </div>
-                </div>
+                <!-- AI Performance Insights -->
+                ${insightsHtml}
 
                 <!-- Original Performance Dashboard -->
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
                     <!-- Left: Performance Score & Core Metrics -->
                     <div class="xl:col-span-1 space-y-6">
-                        <!-- Score Card -->
-                        <div class="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col items-center justify-center text-center">
-                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Performance Score</h4>
-                            
-                            <div class="relative w-36 h-36 flex items-center justify-center rounded-full border-8 border-slate-100 shadow-inner">
-                                <div class="absolute inset-0 rounded-full border-8 ${scoreColor.split(' ')[1]} opacity-20"></div>
-                                <div class="text-center">
-                                    <p class="text-4xl font-black text-slate-900">${performanceScore}</p>
-                                    <p class="text-[9px] font-black text-slate-400 uppercase mt-0.5">out of 100</p>
-                                </div>
-                            </div>
-                            
-                            <p class="text-xs font-bold text-slate-600 mt-4">
-                                ${performanceScore >= 85 ? '✨ Exemplary Performance' : performanceScore >= 65 ? '👍 On Track' : '⚠️ Improvement Needed'}
-                            </p>
-                            <p class="text-[10px] text-slate-400 mt-1 font-semibold max-w-[200px]">Calculated based on tasks, quality, logged work time, and deadlines.</p>
-                        </div>
-
                         <!-- Core Metrics Grid -->
                         <div class="grid grid-cols-2 gap-4">
                             <!-- Completed Tasks (Clickable) -->
@@ -36136,18 +37469,6 @@ function isStrategyTask(t) {
                                 <p class="text-xl font-black text-amber-600">${currStats.rework.length}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.rework.length} prev period</p>
                             </div>
-                            ${isVideoEditor ? `
-                            <!-- Completed Videos tile for Immanuel / Thanush / Barath -->
-                            <div class="bg-blue-50/30 border border-blue-100 hover:border-blue-300 hover:bg-blue-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
-                                 onclick="showIndivPerfTasks('${email}', 'completedVideos', '${escapeHtml(user.name)}')">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-blue-600 uppercase tracking-wider mb-1">Completed Videos</p>
-                                    <iconify-icon icon="solar:eye-bold" class="text-blue-400 group-hover:text-blue-600 transition-colors" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-slate-900">${completedVideoCount}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">completed video tasks</p>
-                            </div>
-                            ` : ''}
                             `}
 
                             <!-- QC Score -->
@@ -36175,120 +37496,18 @@ function isStrategyTask(t) {
                         ${karthikaBreakdownHtml}
                     </div>
 
-                    <!-- Center: Team Comparison & Diagnostic Cards -->
-                    <div class="xl:col-span-1 space-y-6">
-                        <!-- Comparisons -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2.5">Team Comparisons</h4>
-                            
-                            <!-- Tasks Completed -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-xs font-bold">
-                                    <span class="text-slate-600">Tasks Completed</span>
-                                    <span class="text-slate-900">${userCompleted} <span class="text-slate-400">vs ${teamAvgCompleted} (Team)</span></span>
-                                </div>
-                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
-                                    <div class="h-full bg-indigo-600 rounded-full" style="width: ${Math.min(100, (userCompleted / Math.max(teamAvgCompleted * 2, 1)) * 100)}%"></div>
-                                    <div class="absolute top-0 bottom-0 w-0.5 bg-indigo-400 z-10" style="left: ${Math.min(100, (teamAvgCompleted / Math.max(teamAvgCompleted * 2, 1)) * 100)}%" title="Team Avg"></div>
-                                </div>
-                            </div>
-
-                            <!-- QC Score -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-xs font-bold">
-                                    <span class="text-slate-600">QC Accuracy</span>
-                                    <span class="text-slate-900">${userQc}% <span class="text-slate-400">vs ${teamAvgQc}% (Team)</span></span>
-                                </div>
-                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
-                                    <div class="h-full bg-emerald-500 rounded-full" style="width: ${userQc}%"></div>
-                                    <div class="absolute top-0 bottom-0 w-0.5 bg-emerald-400 z-10" style="left: ${teamAvgQc}%" title="Team Avg"></div>
-                                </div>
-                            </div>
-
-                            <!-- Active Work Time -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-xs font-bold">
-                                    <span class="text-slate-600">Avg Work/Day</span>
-                                    <span class="text-slate-900">${fmtDuration(Math.round(userLogged / currDays))} <span class="text-slate-400">vs ${fmtDuration(Math.round(teamAvgLogged / currDays))} (Team)</span></span>
-                                </div>
-                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
-                                    <div class="h-full bg-blue-500 rounded-full" style="width: ${Math.min(100, ((userLogged / currDays) / Math.max((teamAvgLogged / currDays) * 2, 1)) * 100)}%"></div>
-                                    <div class="absolute top-0 bottom-0 w-0.5 bg-blue-400 z-10" style="left: ${Math.min(100, ((teamAvgLogged / currDays) / Math.max((teamAvgLogged / currDays) * 2, 1)) * 100)}%" title="Team Avg"></div>
-                                </div>
-                            </div>
-
-                            <!-- Avg Breaks -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-xs font-bold">
-                                    <span class="text-slate-600">Avg Break/Day</span>
-                                    <span class="text-slate-900">${fmtDuration(userAvgBreak)} <span class="text-slate-400">vs ${fmtDuration(teamAvgBreak)} (Team)</span></span>
-                                </div>
-                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
-                                    <div class="h-full bg-amber-500 rounded-full" style="width: ${Math.min(100, (userAvgBreak / Math.max(teamAvgBreak * 2, 1)) * 100)}%"></div>
-                                    <div class="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-10" style="left: ${Math.min(100, (teamAvgBreak / Math.max(teamAvgBreak * 2, 1)) * 100)}%" title="Team Avg"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Achievements Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2.5">Achievements & Strengths</h4>
-                            ${achievements.length > 0 ? `
-                                <div class="space-y-3">
-                                    ${achievements.map(a => `
-                                        <div class="flex items-start gap-2.5 bg-emerald-50/50 border border-emerald-100 rounded-xl p-3">
-                                            <iconify-icon icon="solar:stars-bold" class="text-emerald-500 shrink-0 mt-0.5" width="16"></iconify-icon>
-                                            <div>
-                                                <p class="text-xs font-black text-slate-800">${escapeHtml(a.title)}</p>
-                                                <p class="text-[10px] text-slate-500 font-semibold mt-0.5">${escapeHtml(a.desc)}</p>
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : `
-                                <p class="text-xs italic text-slate-400">No achievements recorded in this window.</p>
-                            `}
-                        </div>
-
-                        <!-- Lagging/Improvement Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2.5">Lagging Areas</h4>
-                            ${lagging.length > 0 ? `
-                                <div class="space-y-3">
-                                    ${lagging.map(l => `
-                                        <div class="flex items-start gap-2.5 bg-rose-50/50 border border-rose-100 rounded-xl p-3">
-                                            <iconify-icon icon="solar:info-circle-bold" class="text-rose-500 shrink-0 mt-0.5" width="16"></iconify-icon>
-                                            <div>
-                                                <p class="text-xs font-black text-slate-800">${escapeHtml(l.title)}</p>
-                                                <p class="text-[10px] text-slate-500 font-semibold mt-0.5">${escapeHtml(l.desc)}</p>
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : `
-                                <div class="flex items-start gap-2.5 bg-emerald-50/50 border border-emerald-100 rounded-xl p-3">
-                                    <iconify-icon icon="solar:shield-check-bold" class="text-emerald-500 shrink-0 mt-0.5" width="16"></iconify-icon>
-                                    <div>
-                                        <p class="text-xs font-black text-slate-800">Excellent Work!</p>
-                                        <p class="text-[10px] text-slate-500 font-semibold mt-0.5">No critical lagging areas identified for this period.</p>
-                                    </div>
-                                </div>
-                            `}
-                        </div>
-                    </div>
-
-                    <!-- Right: Tasks Worked Log Table -->
-                    <div class="xl:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
+                    <!-- Right: Extended Tasks Worked Log Table (2-column layout) -->
+                    <div class="xl:col-span-2 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
                         <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
                             <div>
                                 <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
                                 <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : email === 'karthikavilpower@gmail.com' ? 'Tasks from Karthika\'s daily plan in this period' : 'Tasks worked, logged, or assigned in period'}</p>
                             </div>
-                            <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">${workedTasks.length} ${email === 'snehavilpower@gmail.com' ? 'worked' : 'tasks'}</span>
+                            <span class="px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">${workedTasks.length} ${email === 'snehavilpower@gmail.com' ? 'worked' : 'tasks'}</span>
                         </div>
                         <div class="overflow-y-auto max-h-[580px] -mx-6 px-6">
                             ${workedTasks.length > 0 ? `
-                                <div class="space-y-3">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     ${workedTasks.map(t => {
                             const qcRep = freshQcReports.find(r => r.taskId === t.id);
                             const qcScoreVal = qcRep ? qcRep.qcScore : null;
@@ -36493,13 +37712,8 @@ function isStrategyTask(t) {
                 Promise.all([
                     get(ref(db, 'worksync/qc_reports'))
                 ]).then(([qcSnap]) => {
-                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => {
-                        const entry = { id, ...r };
-                        if (entry.totalCount !== undefined && entry.checkedCount !== undefined) {
-                            entry.qcScore = entry.totalCount > 0 ? Math.round((entry.checkedCount / entry.totalCount) * 100) : 0;
-                        } else if (entry.qcScore === undefined) { entry.qcScore = 0; }
-                        return entry;
-                    });
+                    const parseQcEntryClient = (typeof window.parseQcReportEntry === 'function') ? window.parseQcReportEntry : (id, r) => ({ id, qcScore: 0, ...r });
+                    const freshQcReports = Object.entries(qcSnap.val() || {}).map(([id, r]) => parseQcEntryClient(id, r));
 
                     const getClientStatsFor = (client, start, end) => {
                         const comp = tasks.filter(t =>
@@ -36529,7 +37743,7 @@ function isStrategyTask(t) {
                         const periodQc = clientQcList.filter(r => (r.timestamp || 0) >= start && (r.timestamp || 0) <= end);
                         const avgQc = periodQc.length > 0
                             ? Math.round(periodQc.reduce((s, r) => s + (r.qcScore || 0), 0) / periodQc.length)
-                            : (clientQcList.length > 0 ? Math.round(clientQcList.reduce((s, r) => s + (r.qcScore || 0), 0) / clientQcList.length) : null);
+                            : null;
 
                         const todayStr = todayIso();
                         const overdue = pend.filter(t => t.duedate && t.duedate < todayStr);
@@ -44867,7 +46081,7 @@ function isStrategyTask(t) {
             window.handleAnnouncementImageFile = handleAnnouncementImageFile; window.removeAnnouncementImagePreview = removeAnnouncementImagePreview;
             window.previewCurrentAnnouncementModal = previewCurrentAnnouncementModal;
             window.switchDprTab = switchDprTab; window.submitDpr = submitDpr; window.submitDprKarthika = submitDprKarthika; window.cancelDprEditKarthika = cancelDprEditKarthika; window.renderDpr = renderDpr; window.exportDprCsv = exportDprCsv; window.editDprEntry = editDprEntry; window.cancelDprEdit = cancelDprEdit; window.handleReportFilterChange = handleReportFilterChange; window.populateReportUserFilter = populateReportUserFilter;
-            window.switchReportTab = switchReportTab; window.switchReportMainTab = switchReportMainTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.exportReportsCsv = exportReportsCsv; window.renderClientReport = renderClientReport; window.exportClientReport = exportClientReport; window.renderClientWideReport = renderClientWideReport; window.renderClientWiseTimingReport = renderClientWiseTimingReport;
+            window.switchReportTab = switchReportTab; window.switchReportMainTab = switchReportMainTab; window.loadAttendanceEvents = loadAttendanceEvents; window.renderTimingReport = renderTimingReport; window.renderWeeklyReport = renderWeeklyReport; window.exportWeeklyReportCsv = exportWeeklyReportCsv; window.onWeeklyUserFilterChange = onWeeklyUserFilterChange; window.renderAnalyticsReport = renderAnalyticsReport; window.renderSummaryReport = renderSummaryReport; window.exportReportsCsv = exportReportsCsv; window.renderClientReport = renderClientReport; window.exportClientReport = exportClientReport; window.renderClientWideReport = renderClientWideReport; window.renderClientWiseTimingReport = renderClientWiseTimingReport;
             window.exportIndivPerfReportPdf = exportIndivPerfReportPdf; window.exportSummaryReportPdf = exportSummaryReportPdf; window.exportPdfReportRouter = exportPdfReportRouter; window.exportIndivPerfReport = exportIndivPerfReport; window.exportClientPerfReport = exportClientPerfReport;
             window.diagnoseJira = diagnoseJira; window.renderPerformanceReport = renderPerformanceReport;
             window.navigateShootCalendar = navigateShootCalendar; window.openShootPlanModal = openShootPlanModal; window.saveShootPlan = saveShootPlan; window.advanceShootGroupStatus = advanceShootGroupStatus; window.renderTimingDetailForDate = renderTimingDetailForDate;
@@ -49240,6 +50454,10 @@ function isStrategyTask(t) {
                             if (!task) return null;
                             // Skip learnings tasks
                             if (task.status === 'Learnings' || task.status === 'Learning') return null;
+                            // Check task source eligibility for the logged user
+                            if (log.userId && typeof isTaskEligibleForUser === 'function' && !isTaskEligibleForUser(task, log.userId)) {
+                                return null;
+                            }
                             return {
                                 ...task,
                                 loggedTime: log.durationSeconds,
