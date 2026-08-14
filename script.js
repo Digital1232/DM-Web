@@ -467,7 +467,7 @@ if (initializeApp) {
                 if (permission === 'granted') {
                     new Notification('Birthday reminder', {
                         body: `${user.name} has a birthday today!`,
-                        icon: user.profilePicture || 'img/logo.png'
+                        icon: user.profilePicture || 'img/Fav-Icon.png'
                     });
                 }
             }).catch(() => { });
@@ -477,7 +477,7 @@ if (initializeApp) {
         if (Notification.permission === 'granted') {
             new Notification('Birthday reminder', {
                 body: `${user.name} has a birthday today!`,
-                icon: user.profilePicture || 'img/logo.png'
+                icon: user.profilePicture || 'img/Fav-Icon.png'
             });
         }
     }
@@ -2349,6 +2349,7 @@ function setQcPerformanceFilter(period) {
         const title = 'Break Limit Exceeded! ⏳';
         const options = {
             body: `You have been on break for ${breakMinutes} minutes. Tap to resume your work session.`,
+            icon: 'img/Fav-Icon.png',
             tag: 'break-exceeded-alert',
             requireInteraction: true
         };
@@ -7805,7 +7806,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             if (Notification.permission === 'granted') {
                 const notification = new Notification(title, {
                     body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
-                    icon: 'img/onedesk-logo.png'
+                    icon: 'img/Fav-Icon.png'
                 });
                 notification.onclick = async () => {
                     window.focus();
@@ -8715,7 +8716,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 renderAnnouncementBadge();
             }
             if ('Notification' in window && Notification.permission === 'granted') {
-                const n = new Notification(item.title || 'Team announcement', { body: item.body || 'Open WorkSync to view the announcement' });
+                const n = new Notification(item.title || 'Team announcement', {
+                    body: item.body || 'Open WorkSync to view the announcement',
+                    icon: 'img/Fav-Icon.png'
+                });
                 n.onclick = () => { window.focus(); switchView('announcements'); };
             }
         });
