@@ -13487,10 +13487,17 @@
 
                     allReports.forEach(r => {
                         if (startTimestamp > 0 && (r.timestamp || 0) < startTimestamp) return;
-                        const email = (r.assigneeEmail || '').toLowerCase();
+                        let email = (r.assigneeEmail || '').toLowerCase();
+                        if (!email) {
+                            const foundUser = (currentWorkUsers || []).find(u => typeof isQcReportForUser === 'function' && isQcReportForUser(r, u.email));
+                            if (foundUser) email = (foundUser.email || '').toLowerCase();
+                        }
+                        if (!email && r.assignee && typeof nameToEmailMap !== 'undefined' && nameToEmailMap[r.assignee.toLowerCase()]) {
+                            email = nameToEmailMap[r.assignee.toLowerCase()];
+                        }
                         if (!email) return;
                         if (!userAggregates[email]) {
-                            const found = (currentWorkUsers || []).find(u => (u.email || '').toLowerCase() === email) || knownUserByEmail(email);
+                            const found = (currentWorkUsers || []).find(u => (u.email || '').toLowerCase() === email) || (typeof knownUserByEmail === 'function' && knownUserByEmail(email));
                             userAggregates[email] = {
                                 name: found?.name || r.assignee || email,
                                 scoreSum: 0,
@@ -13498,10 +13505,10 @@
                                 avatar: found?.profilePicture || (found ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${found.avatar || found.name}` : '')
                             };
                         }
-                        userAggregates[email].scoreSum += r.qcScore;
+                        userAggregates[email].scoreSum += (r.qcScore || 0);
                         userAggregates[email].count++;
                         if (!qcUserPerformance[email]) qcUserPerformance[email] = { scoreSum: 0, count: 0 };
-                        qcUserPerformance[email].scoreSum += r.qcScore;
+                        qcUserPerformance[email].scoreSum += (r.qcScore || 0);
                         qcUserPerformance[email].count++;
                     });
 
@@ -24273,35 +24280,41 @@ function isStrategyTask(t) {
 
             function parseQcReportEntry(id, r) {
                 const entry = { id, ...r };
-                const mistakeCount = Array.isArray(entry.mistakeItems) ? entry.mistakeItems.length : 0;
+                let mistakeItemsList = [];
+                if (Array.isArray(entry.mistakeItems)) {
+                    mistakeItemsList = entry.mistakeItems;
+                } else if (entry.mistakeItems && typeof entry.mistakeItems === 'object') {
+                    mistakeItemsList = Object.values(entry.mistakeItems);
+                } else if (typeof entry.mistakeItems === 'string' && entry.mistakeItems.trim()) {
+                    mistakeItemsList = entry.mistakeItems.split(',').map(s => s.trim()).filter(Boolean);
+                }
+                entry.mistakeItems = mistakeItemsList;
+                const mistakeCount = mistakeItemsList.length;
+
                 const total = Number(entry.totalCount) > 0 ? Number(entry.totalCount) : (mistakeCount > 0 ? Math.max(15, mistakeCount + (Number(entry.checkedCount) || 0)) : 15);
                 const isRework = entry.actionStatus === 'Rework' || entry.status === 'Rework' || (typeof entry.newStatus === 'string' && entry.newStatus.toLowerCase().includes('rework'));
 
-                let sc = 100;
-                if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
-                    sc = Number(entry.qcScore);
-                    if (mistakeCount > 0) {
-                        const calculatedChecklistScore = Math.max(0, Math.round(((total - mistakeCount) / total) * 100));
-                        if (sc > calculatedChecklistScore + 5) {
-                            sc = calculatedChecklistScore;
-                        }
-                    }
-                } else if (mistakeCount > 0 || (entry.totalCount !== undefined && entry.checkedCount !== undefined)) {
-                    const passed = entry.checkedCount !== undefined ? Number(entry.checkedCount) : Math.max(0, total - mistakeCount);
-                    sc = Math.min(100, Math.max(0, Math.round((passed / total) * 100)));
-                } else if (entry.rating !== undefined && entry.rating > 0) {
-                    sc = Math.min(100, Math.max(0, Math.round(Number(entry.rating) * 20)));
-                } else {
-                    sc = isRework ? 65 : 100;
-                }
+                // Base Checklist Score calculated strictly from mistakes
+                const checklistScore = Math.max(0, Math.min(100, Math.round(((total - mistakeCount) / total) * 100)));
 
+                let sc = 100;
                 if (isRework) {
-                    const baseScore = Math.max(0, Math.round(((total - mistakeCount) / total) * 100));
-                    sc = Math.min(70, Math.max(20, Math.min(sc, baseScore - 15)));
+                    // Rework deduction: capped at 70%, with a penalty of 15% from mistake checklist score
+                    sc = Math.min(70, Math.max(20, checklistScore - 15));
+                } else {
+                    if (mistakeCount > 0) {
+                        sc = checklistScore;
+                    } else if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
+                        sc = Number(entry.qcScore);
+                    } else if (entry.rating !== undefined && entry.rating > 0) {
+                        sc = Math.min(100, Math.max(0, Math.round(Number(entry.rating) * 20)));
+                    } else {
+                        sc = 100;
+                    }
                 }
 
                 entry.qcScore = Math.min(100, Math.max(0, Math.round(sc)));
-                if (!entry.rating) entry.rating = Math.max(1, Math.ceil((entry.qcScore || 0) / 20));
+                entry.rating = Math.max(1, Math.min(5, Math.ceil((entry.qcScore || 0) / 20)));
                 return entry;
             }
             window.parseQcReportEntry = parseQcReportEntry;
@@ -31989,16 +32002,27 @@ function isStrategyTask(t) {
 
                     const userQcScores = {};
 
+                    // Build user all task IDs map
+                    const allUserTaskMap = {};
+                    (tasks || []).forEach(t => {
+                        const assEmail = (t.assigneeEmail || t.userId || '').toLowerCase();
+                        if (assEmail) {
+                            if (!allUserTaskMap[assEmail]) allUserTaskMap[assEmail] = new Set();
+                            allUserTaskMap[assEmail].add(t.id);
+                        }
+                    });
+
                     // Filter QC reports strictly for the selected time period using robust user matching
                     periodQcReports.forEach(r => {
                         const targetEmail = Object.keys(userTaskStats).find(usrEm => {
-                            const taskIds = new Set([...(userTaskStats[usrEm]?.assigned || []), ...(userTaskStats[usrEm]?.completed || [])].map(t => t.id));
+                            const taskIds = allUserTaskMap[usrEm] || new Set([...(userTaskStats[usrEm]?.assigned || []), ...(userTaskStats[usrEm]?.completed || [])].map(t => t.id));
                             return typeof isQcReportForUser === 'function' ? isQcReportForUser(r, usrEm, taskIds) : (r.assigneeEmail || '').toLowerCase() === usrEm.toLowerCase();
                         });
                         if (!targetEmail) return;
-                        if (!userQcScores[targetEmail]) userQcScores[targetEmail] = { scoreSum: 0, count: 0 };
+                        if (!userQcScores[targetEmail]) userQcScores[targetEmail] = { scoreSum: 0, count: 0, reports: [] };
                         userQcScores[targetEmail].scoreSum += (r.qcScore || 0);
                         userQcScores[targetEmail].count++;
+                        userQcScores[targetEmail].reports.push(r);
                     });
 
                     window.currentReportTaskStats = userTaskStats;
@@ -32028,15 +32052,42 @@ function isStrategyTask(t) {
                                 const nameKey = nameToEmailMap[(u.name || '').toLowerCase()];
                                 if (nameKey && userQcScores[nameKey]) qcData = userQcScores[nameKey];
                             }
-                            let avgQc = 0;
+
+                            // Check rework tasks for this user in period
+                            const userAllTasks = [...(u.assigned || []), ...(u.completed || [])];
+                            const reworkTasks = userAllTasks.filter(t => (t.status || '').toLowerCase().includes('rework') || (t.reworkCount && t.reworkCount > 0));
+
+                            let avgQc = null;
+                            let isAi = false;
                             if (qcData && qcData.count > 0) {
                                 avgQc = Math.round(qcData.scoreSum / qcData.count);
+                                if (reworkTasks.length > 0) {
+                                    const reportedIds = new Set((qcData.reports || []).map(r => r.taskId).filter(Boolean));
+                                    const unreportedRework = reworkTasks.filter(t => !reportedIds.has(t.id));
+                                    if (unreportedRework.length > 0) {
+                                        avgQc = Math.max(40, avgQc - (unreportedRework.length * 4));
+                                    }
+                                }
+                            } else {
+                                const total = (u.assigned || []).length + (u.completed || []).length;
+                                if (total > 0) {
+                                    const compRate = u.completed.length / total;
+                                    let aiScore = 80;
+                                    if (compRate >= 0.90) aiScore += 10;
+                                    else if (compRate >= 0.75) aiScore += 5;
+                                    else if (compRate < 0.50) aiScore -= 10;
+                                    if (reworkTasks.length > 0) aiScore -= (reworkTasks.length * 6);
+                                    avgQc = Math.max(50, Math.min(95, Math.round(aiScore)));
+                                    isAi = true;
+                                }
                             }
 
                             let qcColor = 'text-slate-400';
-                            if (avgQc >= 90) qcColor = 'text-emerald-600';
-                            else if (avgQc >= 70) qcColor = 'text-amber-500';
-                            else if (avgQc > 0) qcColor = 'text-rose-500';
+                            if (avgQc !== null) {
+                                if (avgQc >= 90) qcColor = 'text-emerald-600';
+                                else if (avgQc >= 70) qcColor = 'text-amber-500';
+                                else qcColor = 'text-rose-500';
+                            }
 
                             tableHTML += `
                             <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
@@ -32051,9 +32102,9 @@ function isStrategyTask(t) {
                                 <td class="px-4 py-3 text-center text-xs font-bold text-indigo-600"><button onclick="showReportTasks('${email}', 'posters', '${escapeHtml(u.name)}')" class="hover:underline hover:text-indigo-600 focus:outline-none">${u.posters.length}</button></td>
                                 <td class="px-4 py-3 text-center text-xs font-bold text-amber-600"><button onclick="showReportTasks('${email}', 'thumbnails', '${escapeHtml(u.name)}')" class="hover:underline hover:text-indigo-600 focus:outline-none">${u.thumbnails.length}</button></td>
                                 <td class="px-4 py-3 text-center text-xs font-black ${qcColor}">
-                                    ${avgQc > 0
-                                    ? `<button onclick="showReportQcDetails('${email}', '${escapeHtml(u.name)}')" class="hover:underline focus:outline-none">${avgQc}%</button>`
-                                    : '-'
+                                    ${avgQc !== null
+                                    ? `<button onclick="showReportQcDetails('${email}', '${escapeHtml(u.name)}')" class="hover:underline focus:outline-none" title="${isAi ? 'Productivity AI Score' : 'Verified QC Score'}">${avgQc}%${isAi ? ' <span class="text-[9px] font-normal text-slate-400">(AI)</span>' : ''}</button>`
+                                    : '—'
                                 }
                                 </td>
                             </tr>
@@ -35219,25 +35270,44 @@ function isStrategyTask(t) {
 
                         // Auto-calculate AI QC score from productivity signals (for users with no real QC data)
                         const computeAiQcScore = (stats, fromTs, toTs) => {
-                            let score = 70;
+                            let score = 75;
                             const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
                             const completionRate = userAllTasks.length > 0
                                 ? Math.round((userAllTasks.filter(t => isTaskCompletedStatus(getTaskStatus(t))).length / userAllTasks.length) * 100)
                                 : 0;
                             const now = new Date(); now.setHours(0, 0, 0, 0);
                             const overdueCount = stats.pending.filter(t => t.duedate && new Date(t.duedate) < now).length;
+                            const reworkCount = userAllTasks.filter(t => (getTaskStatus(t) || '').toLowerCase().includes('rework') || (t.reworkCount && t.reworkCount > 0)).length;
 
-                            if (completionRate >= 90) score += 15;
-                            else if (completionRate >= 75) score += 8;
+                            if (completionRate >= 90) score += 12;
+                            else if (completionRate >= 75) score += 6;
                             else if (completionRate < 50) score -= 10;
 
-                            if (overdueCount === 0) score += 10;
+                            if (overdueCount === 0) score += 8;
                             else if (overdueCount > 2) score -= 10;
+
+                            if (reworkCount > 2) score -= 15;
+                            else if (reworkCount > 0) score -= 8;
 
                             if (stats.completed.length >= 15) score += 5;
                             else if (stats.completed.length < 3) score -= 5;
 
-                            return Math.max(0, Math.min(100, score));
+                            return Math.max(50, Math.min(95, score));
+                        };
+
+                        const getValidatedTeamUserQc = (st, fromTs, toTs) => {
+                            if (st.avgQc === null) return { score: computeAiQcScore(st, fromTs, toTs), isAi: true };
+                            let score = st.avgQc;
+                            const userAllTasks = tasks.filter(t => assigneeMatches(t, email));
+                            const reworkTasks = userAllTasks.filter(t => (getTaskStatus(t) || '').toLowerCase().includes('rework') || (t.reworkCount && t.reworkCount > 0));
+                            if (reworkTasks.length > 0) {
+                                const reportedIds = new Set((st.qcReports || []).map(r => r.taskId).filter(Boolean));
+                                const unreportedRework = reworkTasks.filter(t => !reportedIds.has(t.id));
+                                if (unreportedRework.length > 0) {
+                                    score = Math.max(40, score - (unreportedRework.length * 4));
+                                }
+                            }
+                            return { score, isAi: false };
                         };
 
                         const lwDays = workingDaysIn(prevStartTs, prevEndTs);
@@ -35250,11 +35320,12 @@ function isStrategyTask(t) {
                         const lwAvgBreak = Math.round(lw.breakSeconds / lwDays);
                         const twAvgBreak = Math.round(tw.breakSeconds / twDays);
 
-                        // AI QC score — auto for users with no real QC data
-                        const lwQcDisplay = lw.avgQc !== null ? lw.avgQc : computeAiQcScore(lw, prevStartTs, prevEndTs);
-                        const twQcDisplay = tw.avgQc !== null ? tw.avgQc : computeAiQcScore(tw, currStartTs, currEndTs);
-                        const lwQcIsAi = lw.avgQc === null;
-                        const twQcIsAi = tw.avgQc === null;
+                        const lwQcResult = getValidatedTeamUserQc(lw, prevStartTs, prevEndTs);
+                        const twQcResult = getValidatedTeamUserQc(tw, currStartTs, currEndTs);
+                        const lwQcDisplay = lwQcResult.score;
+                        const twQcDisplay = twQcResult.score;
+                        const lwQcIsAi = lwQcResult.isAi;
+                        const twQcIsAi = twQcResult.isAi;
 
                         let extraBreakdown = '';
                         if (email.toLowerCase() === 'snehavilpower@gmail.com') {
