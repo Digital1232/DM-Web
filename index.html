@@ -11058,16 +11058,7 @@
                 </div>
             </div>
 
-            <!-- Star Rating -->
-            <div>
-                <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Quality Rating *</label>
-                <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 p-3 rounded-xl">
-                    <div id="edit-qc-rating-stars" class="flex gap-1">
-                        <!-- Rendered dynamically -->
-                    </div>
-                    <span id="edit-qc-rating-label" class="text-xs font-bold text-slate-500 ml-2">5 Stars</span>
-                </div>
-            </div>
+
 
             <!-- Checklist Issues -->
             <div>
@@ -13319,12 +13310,12 @@
                             </div>
                             <div class="flex items-center gap-3">
                                 <div class="text-right">
-                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Score</p>
-                                    <p class="text-xs font-black text-indigo-600">${r.qcScore}%</p>
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Issues</p>
+                                    <p class="text-xs font-black ${(Array.isArray(r.mistakeItems) && r.mistakeItems.length > 0) ? 'text-rose-600' : 'text-emerald-600'}">${(Array.isArray(r.mistakeItems) ? r.mistakeItems.length : Math.max(0, (r.totalCount || 0) - (r.checkedCount || 0)))}</p>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Rating</p>
-                                    <p class="text-xs font-black text-amber-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</p>
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Score</p>
+                                    <p class="text-xs font-black text-indigo-600">${r.qcScore}%</p>
                                 </div>
                             </div>
                         </div>
@@ -13406,11 +13397,7 @@
                 const totalItems = [...document.querySelectorAll('input[name="qc_item"]')].length;
 
                 const passedCount = totalItems - mistakeItems.length;
-                const checklistScore = totalItems > 0 ? Math.round((passedCount / totalItems) * 100) : 0;
-
-                // Factor in Feedback & Observations text analysis
-                const notesAdjustment = window._qcNotesAdjustment || 0;
-                const qcScore = Math.max(0, Math.min(100, checklistScore + notesAdjustment));
+                const qcScore = totalItems > 0 ? Math.round((passedCount / totalItems) * 100) : 100;
 
                 // Automate rating: 0-20=1, 21-40=2, 41-60=3, 61-80=4, 81-100=5
                 const autoRating = Math.max(1, Math.ceil(qcScore / 20));
@@ -13640,9 +13627,9 @@
                     <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">QC: ${escapeHtml(r.qcUser || '')} · Assignee: ${escapeHtml(r.assignee || '')} · ${new Date(r.timestamp).toLocaleDateString()}</p>
                 </div>
                 <div class="flex items-center gap-4 shrink-0">
-                    <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Rating</p><p class="text-sm font-black text-amber-500">${'★'.repeat(r.rating || 0)}${'☆'.repeat(5 - (r.rating || 0))}</p></div>
-                    <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Checks</p><p class="text-sm font-black text-indigo-600">${r.checkedCount || 0}/${r.totalCount || 0}</p></div>
-                    <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black ${scoreColor}">${r.qcScore}%</p></div>
+                    <div class="text-center min-w-[55px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Passed</p><p class="text-sm font-black text-emerald-600">${r.checkedCount || 0}/${r.totalCount || 0}</p></div>
+                    <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Issues</p><p class="text-sm font-black ${(Array.isArray(r.mistakeItems) && r.mistakeItems.length > 0) ? 'text-rose-600' : 'text-slate-400'}">${(Array.isArray(r.mistakeItems) ? r.mistakeItems.length : Math.max(0, (r.totalCount || 0) - (r.checkedCount || 0)))}</p></div>
+                    <div class="text-center min-w-[55px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black ${scoreColor}">${r.qcScore}%</p></div>
                     <button onclick="event.stopPropagation(); openEditQcReportModal('${r.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/80 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs" title="Edit QC Report">
                         <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
                         Edit
@@ -14225,16 +14212,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
     function setEditQcRating(rating) {
         editQcCurrentRating = rating;
-        const container = document.getElementById('edit-qc-rating-stars');
-        const label = document.getElementById('edit-qc-rating-label');
-        if (!container) return;
-        let html = '';
-        for (let i = 1; i <= 5; i++) {
-            const active = i <= rating;
-            html += `<button type="button" onclick="setEditQcRating(${i})" class="text-xl ${active ? 'text-amber-400' : 'text-slate-300'} hover:text-amber-400 transition-colors cursor-pointer">★</button>`;
-        }
-        container.innerHTML = html;
-        if (label) label.textContent = `${rating} Star${rating !== 1 ? 's' : ''}`;
     }
 
     function addEditQcCustomItem(category) {
@@ -14509,8 +14486,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">QC Reviewer</p><p class="text-xs font-bold text-slate-700">${report.qcUser}</p></div>
             </div>
             <div class="grid grid-cols-3 gap-3 my-4">
-                <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[9px] font-bold text-indigo-400 uppercase">Score</p><p class="text-lg font-black text-indigo-600">${report.qcScore}%</p></div>
-                <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center"><p class="text-[9px] font-bold text-amber-400 uppercase">Rating</p><p class="text-lg font-black text-amber-500">${'★'.repeat(report.rating || 0)}</p></div>
+                <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[9px] font-bold text-indigo-400 uppercase">QC Score</p><p class="text-lg font-black text-indigo-600">${report.qcScore}%</p></div>
+                <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center"><p class="text-[9px] font-bold text-emerald-500 uppercase">Passed Checks</p><p class="text-lg font-black text-emerald-700">${report.checkedCount || 0}/${report.totalCount || 0}</p></div>
                 <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Duration</p><p class="text-lg font-black text-slate-700">${formatTime(report.durationSeconds || 0)}</p></div>
             </div>
             <div class="space-y-4">
@@ -24535,26 +24512,22 @@ function isStrategyTask(t) {
                 const total = Number(entry.totalCount) > 0 ? Number(entry.totalCount) : (mistakeCount > 0 ? Math.max(15, mistakeCount + (Number(entry.checkedCount) || 0)) : 15);
                 const isRework = entry.actionStatus === 'Rework' || entry.status === 'Rework' || (typeof entry.newStatus === 'string' && entry.newStatus.toLowerCase().includes('rework'));
 
-                // Base Checklist Score calculated strictly from mistakes
-                const checklistScore = Math.max(0, Math.min(100, Math.round(((total - mistakeCount) / total) * 100)));
+                // Base Checklist Score calculated strictly from (Total - Mistakes) / Total
+                const passedCount = Math.max(0, total - mistakeCount);
+                const checklistScore = total > 0 ? Math.max(0, Math.min(100, Math.round((passedCount / total) * 100))) : 100;
 
                 let sc = 100;
-                if (isRework) {
-                    // Rework deduction: capped at 70%, with a penalty of 15% from mistake checklist score
-                    sc = Math.min(70, Math.max(20, checklistScore - 15));
+                if (mistakeCount > 0) {
+                    sc = checklistScore;
+                } else if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
+                    sc = Number(entry.qcScore);
                 } else {
-                    if (mistakeCount > 0) {
-                        sc = checklistScore;
-                    } else if (entry.qcScore !== undefined && entry.qcScore !== null && !isNaN(entry.qcScore)) {
-                        sc = Number(entry.qcScore);
-                    } else if (entry.rating !== undefined && entry.rating > 0) {
-                        sc = Math.min(100, Math.max(0, Math.round(Number(entry.rating) * 20)));
-                    } else {
-                        sc = 100;
-                    }
+                    sc = checklistScore;
                 }
 
                 entry.qcScore = Math.min(100, Math.max(0, Math.round(sc)));
+                entry.checkedCount = Number(entry.checkedCount) > 0 ? Number(entry.checkedCount) : passedCount;
+                entry.totalCount = total;
                 entry.rating = Math.max(1, Math.min(5, Math.ceil((entry.qcScore || 0) / 20)));
                 return entry;
             }
@@ -37037,17 +37010,76 @@ function isStrategyTask(t) {
                     const workedTasks = [];
 
                     // ── SNEHA SPECIAL LOGIC ──
-                    // For Sneha, workedTasks MUST come from localStorage (selections + QC reports),
-                    // NOT Jira/timelogs, because her daily work is logged via selections and QC modal.
+                    // For Sneha, workedTasks MUST come from selections, QC reports, and direct tasks,
+                    // because her daily work is logged via selections and QC modal.
                     if (email === 'snehavilpower@gmail.com') {
                         workedTasks.length = 0; // Clear any Jira timelogs
                         workedTaskIds.clear();
-                        snehaWorkedTasks.forEach(t => {
-                            if (t && t.id && !workedTaskIds.has(t.id)) {
-                                workedTaskIds.add(t.id);
-                                workedTasks.push(t);
-                            }
+
+                        const periodSnehaSelections = (snehaSelections || []).filter(s => {
+                            const uid = (s.userId || '').toLowerCase();
+                            const ts = Number(s.timestamp || 0);
+                            return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
                         });
+
+                        const periodSnehaQcReports = freshQcReports.filter(r => {
+                            const ts = Number(r.timestamp || 0);
+                            return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
+                                ts >= fromTs && ts <= toTs;
+                        });
+
+                        const addSnehaWorkedTask = (t) => {
+                            if (!t || !t.id || workedTaskIds.has(t.id)) return;
+                            workedTaskIds.add(t.id);
+                            workedTasks.push(t);
+                        };
+
+                        // 1. Tasks from selections
+                        periodSnehaSelections.forEach(s => {
+                            if (!s.taskId) return;
+                            let t = (tasks || []).find(tk => tk.id === s.taskId || (tk.id || '').trim().toLowerCase() === (s.taskId || '').trim().toLowerCase());
+                            if (!t) {
+                                t = {
+                                    id: s.taskId,
+                                    desc: s.taskDesc || s.desc || s.taskId,
+                                    title: s.taskDesc || s.desc || s.taskId,
+                                    client: s.client || '',
+                                    status: 'Design Completed',
+                                    assignee: 'Sneha S',
+                                    userId: email,
+                                    assigneeEmail: email
+                                };
+                            }
+                            addSnehaWorkedTask(t);
+                        });
+
+                        // 2. Tasks from QC reports
+                        periodSnehaQcReports.forEach(r => {
+                            if (!r.taskId) return;
+                            let t = (tasks || []).find(tk => tk.id === r.taskId || (tk.id || '').trim().toLowerCase() === (r.taskId || '').trim().toLowerCase());
+                            if (!t) {
+                                t = {
+                                    id: r.taskId,
+                                    desc: r.taskDesc || r.taskId,
+                                    title: r.taskDesc || r.taskId,
+                                    client: r.client || '',
+                                    status: r.actionStatus || r.status || 'Design Completed',
+                                    assignee: r.assignee || 'Sneha S',
+                                    userId: email,
+                                    assigneeEmail: email
+                                };
+                            }
+                            addSnehaWorkedTask(t);
+                        });
+
+                        // 3. Direct assigned tasks
+                        [
+                            ...(currStats.completed || []),
+                            ...(currStats.assigned || []),
+                            ...(currStats.hold || []),
+                            ...(currStats.rework || [])
+                        ].forEach(t => addSnehaWorkedTask(t));
+
                         // Categorize Sneha's tasks properly
                         const snehaCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status) || isAssignedToUser(t, email));
                         const snehaActive = workedTasks.filter(t => isAssignedToUser(t, email) && !isTaskCompletedStatus(t.status) && !['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) && !(t.status || '').trim().toLowerCase().includes('rework'));
@@ -37579,7 +37611,8 @@ function isStrategyTask(t) {
                     let totalReworkEventsCount = 0;
 
                     const mistakeTaskItemsHtml = userMistakeTasks.map(t => {
-                        const reps = userQcReportMap[t.id] || freshQcReports.filter(r => r.taskId === t.id && (r.timestamp || 0) >= fromTs && (r.timestamp || 0) <= toTs);
+                        const rawReps = userQcReportMap[t.id] || freshQcReports.filter(r => r.taskId === t.id && (r.timestamp || 0) >= fromTs && (r.timestamp || 0) <= toTs);
+                        const reps = [...rawReps].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Most recent first
                         const totalReworksForTask = Math.max(t.reworkCount || 0, taskReworkCountMap[t.id] || 0, reps.filter(r => r.actionStatus === 'Rework').length);
                         totalReworkEventsCount += totalReworksForTask;
 
@@ -37598,10 +37631,28 @@ function isStrategyTask(t) {
                             if (r.notes && r.notes.trim() && !allNotes.includes(r.notes.trim())) {
                                 allNotes.push(r.notes.trim());
                             }
-                            if (r.qcScore !== undefined) latestScore = r.qcScore;
-                            if (r.qcUser) reviewerName = r.qcUser;
-                            if (r.timestamp) reviewDate = new Date(r.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                         });
+
+                        if (reps.length > 0) {
+                            const latestRep = reps[0];
+                            reviewerName = latestRep.qcUser || '';
+                            if (latestRep.timestamp) {
+                                reviewDate = new Date(latestRep.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            }
+                        }
+
+                        // Calculate score specifically for the review iteration that had the mistakes
+                        const issueRep = reps.find(r => (r.mistakeItems && r.mistakeItems.length > 0) || r.actionStatus === 'Rework') || reps[reps.length - 1] || reps[0];
+                        let issueScore = 100;
+                        if (allMistakes.length > 0) {
+                            const totalChecks = (issueRep && Number(issueRep.totalCount) > 0) ? Number(issueRep.totalCount) : 26;
+                            const passed = Math.max(0, totalChecks - allMistakes.length);
+                            issueScore = Math.round((passed / totalChecks) * 100);
+                        } else if (issueRep && issueRep.qcScore !== undefined && issueRep.qcScore !== null) {
+                            issueScore = issueRep.qcScore;
+                        }
+
+                        const isResolvedInLaterReview = reps.length > 1 && (reps[0].actionStatus === 'Approved' || (reps[0].mistakeItems || []).length === 0);
 
                         totalMistakesCount += allMistakes.length;
 
@@ -37619,7 +37670,7 @@ function isStrategyTask(t) {
                                     </span>`;
                                 }).join('')}
                             </div>
-                        ` : `<p class="text-[11px] italic text-slate-400 my-1">No checkbox items checked, moved to rework by reviewer notes/status.</p>`;
+                        ` : `<p class="text-[11px] italic text-slate-400 my-1">No checklist issues checked; flagged via reviewer feedback / rework status.</p>`;
 
                         const notesFormattedHtml = allNotes.length > 0 ? `
                             <div class="bg-amber-50/60 border border-amber-100/80 rounded-xl p-2.5 mt-2">
@@ -37627,6 +37678,8 @@ function isStrategyTask(t) {
                                 <p class="text-xs text-slate-700 font-medium italic">"${escapeHtml(allNotes.join(' | '))}"</p>
                             </div>
                         ` : '';
+
+                        const scoreBadgeClass = issueScore >= 95 ? 'bg-amber-100 text-amber-800 border border-amber-200' : issueScore >= 80 ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
 
                         return `
                             <div class="bg-slate-50/70 border border-slate-100 hover:border-slate-200 rounded-2xl p-4 transition-all">
@@ -37640,7 +37693,8 @@ function isStrategyTask(t) {
                                             <iconify-icon icon="solar:refresh-circle-bold" width="12"></iconify-icon>
                                             Rework Count: ${totalReworksForTask} ${totalReworksForTask === 1 ? 'time' : 'times'}
                                         </span>
-                                        ${latestScore !== null ? `<span class="px-2 py-0.5 text-[10px] font-black rounded-full ${latestScore >= 85 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">QC Score: ${latestScore}%</span>` : ''}
+                                        <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full ${scoreBadgeClass}">QC Score: ${issueScore}%</span>
+                                        ${isResolvedInLaterReview ? `<span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Resolved (Review #${reps.length})</span>` : ''}
                                     </div>
                                 </div>
                                 

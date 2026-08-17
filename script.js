@@ -590,12 +590,12 @@ if (initializeApp) {
                             </div>
                             <div class="flex items-center gap-3">
                                 <div class="text-right">
-                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Score</p>
-                                    <p class="text-xs font-black text-indigo-600">${r.qcScore}%</p>
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Issues</p>
+                                    <p class="text-xs font-black ${(Array.isArray(r.mistakeItems) && r.mistakeItems.length > 0) ? 'text-rose-600' : 'text-emerald-600'}">${(Array.isArray(r.mistakeItems) ? r.mistakeItems.length : Math.max(0, (r.totalCount || 0) - (r.checkedCount || 0)))}</p>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Rating</p>
-                                    <p class="text-xs font-black text-amber-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</p>
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Score</p>
+                                    <p class="text-xs font-black text-indigo-600">${r.qcScore}%</p>
                                 </div>
                             </div>
                         </div>
@@ -885,9 +885,9 @@ if (initializeApp) {
                         <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">QC: ${escapeHtml(r.qcUser)} · Assignee: ${escapeHtml(r.assignee)} · ${new Date(r.timestamp).toLocaleDateString()}</p>
                     </div>
                     <div class="flex items-center gap-4 shrink-0">
-                        <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Rating</p><p class="text-sm font-black text-amber-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</p></div>
-                        <div class="text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Checks</p><p class="text-sm font-black text-indigo-600">${r.checkedCount}/${r.totalCount}</p></div>
-                        <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black text-indigo-600">${r.qcScore}%</p></div>
+                        <div class="text-center min-w-[55px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Passed</p><p class="text-sm font-black text-emerald-600">${r.checkedCount || 0}/${r.totalCount || 0}</p></div>
+                        <div class="text-center min-w-[50px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Issues</p><p class="text-sm font-black ${(Array.isArray(r.mistakeItems) && r.mistakeItems.length > 0) ? 'text-rose-600' : 'text-slate-400'}">${(Array.isArray(r.mistakeItems) ? r.mistakeItems.length : Math.max(0, (r.totalCount || 0) - (r.checkedCount || 0)))}</p></div>
+                        <div class="text-center min-w-[55px]"><p class="text-[9px] font-bold text-slate-400 uppercase">Score</p><p class="text-sm font-black text-indigo-600">${r.qcScore}%</p></div>
                     </div>
                 </div>
             `;
@@ -1474,8 +1474,8 @@ function setQcPerformanceFilter(period) {
                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">QC Reviewer</p><p class="text-xs font-bold text-slate-700">${report.qcUser}</p></div>
             </div>
             <div class="grid grid-cols-3 gap-3 my-4">
-                <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[9px] font-bold text-indigo-400 uppercase">Score</p><p class="text-lg font-black text-indigo-600">${report.qcScore}%</p></div>
-                <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center"><p class="text-[9px] font-bold text-amber-400 uppercase">Rating</p><p class="text-lg font-black text-amber-500">${'★'.repeat(report.rating || 0)}</p></div>
+                <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center"><p class="text-[9px] font-bold text-indigo-400 uppercase">QC Score</p><p class="text-lg font-black text-indigo-600">${report.qcScore}%</p></div>
+                <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center"><p class="text-[9px] font-bold text-emerald-500 uppercase">Passed Checks</p><p class="text-lg font-black text-emerald-700">${report.checkedCount || 0}/${report.totalCount || 0}</p></div>
                 <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center"><p class="text-[9px] font-bold text-slate-400 uppercase">Duration</p><p class="text-lg font-black text-slate-700">${formatTime(report.durationSeconds || 0)}</p></div>
             </div>
             <div class="space-y-4">
@@ -14409,16 +14409,6 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
     function setEditQcRating(rating) {
         editQcCurrentRating = rating;
-        const container = document.getElementById('edit-qc-rating-stars');
-        const label = document.getElementById('edit-qc-rating-label');
-        if (!container) return;
-        let html = '';
-        for (let i = 1; i <= 5; i++) {
-            const active = i <= rating;
-            html += `<button type="button" onclick="setEditQcRating(${i})" class="text-xl ${active ? 'text-amber-400' : 'text-slate-300'} hover:text-amber-400 transition-colors cursor-pointer">★</button>`;
-        }
-        container.innerHTML = html;
-        if (label) label.textContent = `${rating} Star${rating !== 1 ? 's' : ''}`;
     }
 
     function addEditQcCustomItem(category) {
