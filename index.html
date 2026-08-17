@@ -27057,7 +27057,7 @@ function isStrategyTask(t) {
                 else if (type === 'completedVideos') typeLabel = '🎬 Completed Videos';
                 else if (type === 'thumbnails') typeLabel = '🖼️ Thumbnail Tasks';
                 else if (type === 'posters') typeLabel = '🎨 Poster Tasks';
-                else if (type === 'assigned' || type === 'allAssigned') typeLabel = 'Assigned Tasks';
+                else if (type === 'assigned' || type === 'allAssigned') typeLabel = (email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks');
                 else if (type === 'hold') typeLabel = 'Hold Tasks';
                 else if (type === 'rework') typeLabel = 'Reworked Tasks';
 
@@ -27100,12 +27100,30 @@ function isStrategyTask(t) {
 
                     // 1. Add tasks from daily plans (for daily-plan users)
                     if (isDailyPlanUser) {
-                        const userPlans = dailyPlans[eKey(email)] || {};
+                        const userPlans = dailyPlans[eKey(email)] || dailyPlans['karthikavilpower@gmail_com'] || {};
                         Object.keys(userPlans).forEach(taskId => {
-                            const t = tasks.find(tk => tk.id === taskId);
-                            if (t && !isExcludedTask(t) && !addedIds.has(taskId)) {
+                            let t = tasks.find(tk => tk && tk.id && tk.id.trim().toLowerCase() === taskId.trim().toLowerCase());
+                            if (!t && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                const ev = strategyEvents[taskId] || Object.values(strategyEvents || {}).find(e => e && (e.jiraId === taskId || e.id === taskId));
+                                if (ev) {
+                                    t = {
+                                        id: ev.jiraId || taskId,
+                                        desc: ev.title || ev.desc || '',
+                                        summary: ev.title || ev.desc || '',
+                                        status: ev.status || 'To Do',
+                                        client: ev.client || '',
+                                        assignee: ev.owner || '',
+                                        owner: ev.owner || '',
+                                        duedate: ev.duedate || ev.date,
+                                        postDate: ev.date,
+                                        isStrategyEvent: true,
+                                        eventId: taskId
+                                    };
+                                }
+                            }
+                            if (t && !isExcludedTask(t) && !addedIds.has(t.id)) {
                                 allUserTasks.push(t);
-                                addedIds.add(taskId);
+                                addedIds.add(t.id);
                             }
                         });
                     }
@@ -36299,6 +36317,165 @@ function isStrategyTask(t) {
                     const getTaskStatusForUser = (t, usrEmail) => { if (!t) return ''; return t.status; };
                     const getTaskStatus = (t) => getTaskStatusForUser(t, email);
 
+                    const getMurugeshDeliveryStats = (start, end) => {
+                        const deliveryTaskSet = new Set();
+                        const murugeshDeliveryTasks = [];
+                        const notifList = (typeof taskNotifications !== 'undefined' && Array.isArray(taskNotifications)) ? taskNotifications : [];
+
+                        (tasks || []).forEach(t => {
+                            if (!t) return;
+                            const st = (t.status || '').toLowerCase().trim();
+                            const isTargetStatus = ['design completed', 'client sent', 'client approved', 'posted', 'done', 'quality check'].includes(st);
+                            const isAssigned = assigneeMatches(t, 'murugeshvilpower@gmail.com') || t.murugeshTask || (t.userId || '').toLowerCase() === 'murugeshvilpower@gmail.com';
+                            const ts = t.updatedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
+                            const inPeriod = ts >= start && ts <= end;
+                            if ((isTargetStatus || isAssigned) && inPeriod) {
+                                if (!deliveryTaskSet.has(t.id)) {
+                                    deliveryTaskSet.add(t.id);
+                                    murugeshDeliveryTasks.push(t);
+                                }
+                            }
+                        });
+
+                        notifList.forEach(n => {
+                            const ts = Number(n.timestamp || 0);
+                            if (ts >= start && ts <= end && n.taskId) {
+                                const type = (n.type || '').toLowerCase();
+                                const nStatus = (n.newStatus || '').toLowerCase();
+                                if (type === 'design_completed' || type === 'client_sent' || nStatus === 'design completed' || nStatus === 'client sent') {
+                                    if (!deliveryTaskSet.has(n.taskId)) {
+                                        const existingTask = (tasks || []).find(t => t.id === n.taskId);
+                                        if (existingTask) {
+                                            deliveryTaskSet.add(existingTask.id);
+                                            murugeshDeliveryTasks.push(existingTask);
+                                        } else {
+                                            deliveryTaskSet.add(n.taskId);
+                                            murugeshDeliveryTasks.push({
+                                                id: n.taskId,
+                                                desc: n.taskDesc || n.taskId,
+                                                client: n.client || '—',
+                                                status: n.newStatus || 'Client Sent',
+                                                manual: !n.taskId.includes('-')
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        let totalPercentSum = 0;
+                        let totalRatingSum = 0;
+                        let ratedCount = 0;
+
+                        const items = murugeshDeliveryTasks.map(t => {
+                            const dcNotif = notifList.find(n => n.taskId === t.id && (n.type === 'design_completed' || (n.newStatus || '').toLowerCase() === 'design completed'));
+                            const dcReport = freshQcReports.find(r => r.taskId === t.id && (r.newStatus === 'Design Completed' || r.actionStatus === 'Approved' || (r.qcScore || 0) >= 85));
+                            
+                            let dcTime = dcNotif ? dcNotif.timestamp : (dcReport ? dcReport.timestamp : null);
+                            if (!dcTime) {
+                                if ((t.status || '').toLowerCase().includes('design completed') || (t.status || '').toLowerCase().includes('client')) {
+                                    dcTime = t.designCompletedAt || t.updatedAt || t.createdAt || null;
+                                }
+                            }
+
+                            const csNotif = notifList.find(n => n.taskId === t.id && (n.type === 'client_sent' || (n.newStatus || '').toLowerCase() === 'client sent'));
+                            let csTime = csNotif ? csNotif.timestamp : null;
+                            if (!csTime && ['client sent', 'client approved', 'posted', 'done'].includes((t.status || '').toLowerCase().trim())) {
+                                csTime = t.clientSentAt || t.completedAt || t.updatedAt || null;
+                            }
+
+                            let durationFormattedStr = '—';
+                            let ratingScoreVal = 0;
+                            let ratingPercentVal = 80;
+                            let ratingStars = '';
+                            let ratingBadge = '';
+                            let ratingStyle = '';
+                            let ratingScoreText = '';
+
+                            if (dcTime && csTime && csTime >= dcTime) {
+                                const diffMs = csTime - dcTime;
+                                const hours = Math.floor(diffMs / 3600000);
+                                const mins = Math.floor((diffMs % 3600000) / 60000);
+                                durationFormattedStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                                if (diffMs <= 2 * 3600 * 1000) {
+                                    ratingScoreVal = 5.0;
+                                    ratingPercentVal = 100;
+                                    ratingStars = '⭐⭐⭐⭐⭐';
+                                    ratingBadge = '⚡ Lightning Delivery (<2h)';
+                                    ratingStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                                } else if (diffMs <= 6 * 3600 * 1000) {
+                                    ratingScoreVal = 4.5;
+                                    ratingPercentVal = 90;
+                                    ratingStars = '⭐⭐⭐⭐½';
+                                    ratingBadge = '🚀 Fast Turnaround (2-6h)';
+                                    ratingStyle = 'bg-blue-50 text-blue-700 border border-blue-200';
+                                } else if (diffMs <= 24 * 3600 * 1000) {
+                                    ratingScoreVal = 3.5;
+                                    ratingPercentVal = 70;
+                                    ratingStars = '⭐⭐⭐½';
+                                    ratingBadge = '👍 Same Day / Standard (6-24h)';
+                                    ratingStyle = 'bg-amber-50 text-amber-700 border border-amber-200';
+                                } else {
+                                    ratingScoreVal = 2.0;
+                                    ratingPercentVal = 40;
+                                    ratingStars = '⭐⭐';
+                                    ratingBadge = '⚠️ Delayed Delivery (>24h)';
+                                    ratingStyle = 'bg-rose-50 text-rose-700 border border-rose-200';
+                                }
+                                ratingScoreText = `${ratingScoreVal.toFixed(1)} / 5.0`;
+                                totalRatingSum += ratingScoreVal;
+                                totalPercentSum += ratingPercentVal;
+                                ratedCount++;
+                            } else if (dcTime && !csTime) {
+                                const diffMs = Math.max(0, Date.now() - dcTime);
+                                const hours = Math.floor(diffMs / 3600000);
+                                const mins = Math.floor((diffMs % 3600000) / 60000);
+                                durationFormattedStr = `Elapsed: ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
+                                ratingStars = '⏳';
+                                ratingBadge = 'Pending Client Send';
+                                ratingStyle = 'bg-slate-100 text-slate-700 border border-slate-200';
+                                ratingScoreText = 'Pending Send';
+                            } else {
+                                durationFormattedStr = 'Status Transition Logged';
+                                ratingStars = '⭐ 4.0';
+                                ratingBadge = 'Completed';
+                                ratingStyle = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+                                ratingScoreText = '4.0 / 5.0';
+                                ratingScoreVal = 4.0;
+                                ratingPercentVal = 80;
+                                totalRatingSum += 4.0;
+                                totalPercentSum += 80;
+                                ratedCount++;
+                            }
+
+                            return {
+                                task: t,
+                                dcTime,
+                                csTime,
+                                durationFormattedStr,
+                                ratingScoreVal,
+                                ratingPercentVal,
+                                ratingStars,
+                                ratingBadge,
+                                ratingStyle,
+                                ratingScoreText
+                            };
+                        });
+
+                        const avgScore = ratedCount > 0 ? Math.round(totalPercentSum / ratedCount) : null;
+                        const avgRating = ratedCount > 0 ? (totalRatingSum / ratedCount).toFixed(1) : '5.0';
+
+                        return {
+                            tasks: murugeshDeliveryTasks,
+                            items,
+                            avgScore,
+                            avgRating,
+                            ratedCount,
+                            totalRatingSum
+                        };
+                    };
+
                     const getStatsFor = (usrEmail, start, end) => {
                         // isExcludedTask defined at outer scope above
 
@@ -36486,9 +36663,19 @@ function isStrategyTask(t) {
                         );
                         const breakSec = breaks.reduce((s, e) => s + Math.floor((e.duration || 0) / 1000), 0);
 
-                        const avgQc = periodQc.length > 0
-                            ? Math.round(periodQc.reduce((s, r) => s + (r.qcScore || 0), 0) / periodQc.length)
-                            : null;
+                        // For Murugesh: quality score is derived from Design Completed -> Client Sent turnaround timing
+                        let avgQc = null;
+                        if ((usrEmail || '').toLowerCase() === 'murugeshvilpower@gmail.com') {
+                            const murugeshDelivery = getMurugeshDeliveryStats(start, end);
+                            if (murugeshDelivery && murugeshDelivery.avgScore !== null) {
+                                avgQc = murugeshDelivery.avgScore;
+                            }
+                        }
+                        if (avgQc === null) {
+                            avgQc = periodQc.length > 0
+                                ? Math.round(periodQc.reduce((s, r) => s + (r.qcScore || 0), 0) / periodQc.length)
+                                : null;
+                        }
 
                         let compList = comp;
                         let assignedList = assigned;
@@ -36593,6 +36780,23 @@ function isStrategyTask(t) {
                         prevSnehaWorkedTaskCount = _prevAll.size + prevQcReports.length;
                     }
 
+                    let prevKarthikaDailyPlanCount = 0;
+                    if (email === 'karthikavilpower@gmail.com') {
+                        const karthikaPlans = dailyPlans[eKey(email)] || dailyPlans['karthikavilpower@gmail_com'] || {};
+                        const prevFromDateStr = new Date(prevStartTs).toISOString().slice(0, 10);
+                        const prevToDateStr = new Date(prevEndTs).toISOString().slice(0, 10);
+                        const prevSet = new Set();
+                        Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
+                            if (!planData || !planData.date) return;
+                            const planTs = new Date(planData.date + 'T00:00:00').getTime();
+                            const pDate = (planData.date || '').slice(0, 10);
+                            if ((planTs >= prevStartTs && planTs <= prevEndTs) || (pDate >= prevFromDateStr && pDate <= prevToDateStr)) {
+                                prevSet.add(taskId);
+                            }
+                        });
+                        prevKarthikaDailyPlanCount = prevSet.size;
+                    }
+
                     let prevUserCompleted = email === 'snehavilpower@gmail.com'
                         ? prevSnehaWorkedTaskCount
                         : prevStats.completed.length;
@@ -36628,11 +36832,12 @@ function isStrategyTask(t) {
                         return Math.max(50, Math.min(95, Math.round(score)));
                     };
 
+                    const isMurugesh = email.toLowerCase() === 'murugeshvilpower@gmail.com';
                     let userQc = currStats.avgQc !== null ? currStats.avgQc : getAiQcScore(currStats, fromTs, toTs);
-                    const userQcIsAi = currStats.avgQc === null;
+                    const userQcIsAi = currStats.avgQc === null && !isMurugesh;
 
                     // If user has verified QC reports, also validate against any Jira rework tasks that didn't have separate QC forms
-                    if (!userQcIsAi && currStats.rework && currStats.rework.length > 0) {
+                    if (!userQcIsAi && !isMurugesh && currStats.rework && currStats.rework.length > 0) {
                         const reworkTasksWithoutReport = currStats.rework.filter(t => !currStats.qcReports.some(r => r.taskId === t.id));
                         if (reworkTasksWithoutReport.length > 0) {
                             userQc = Math.max(40, userQc - (reworkTasksWithoutReport.length * 4));
@@ -36659,8 +36864,13 @@ function isStrategyTask(t) {
                     prevStats.performanceScore = getAiQcScore(prevStats, prevStartTs, prevEndTs) || 50; // Fallback for prev period
 
                     const lagging = [];
-                    if (userQc < 70) lagging.push({ title: "🔍 Review Required", desc: `Average QC rating is ${userQc}%, which is below the quality target of 70%.` });
-                    else if (userQc < 80) lagging.push({ title: "🎯 QC Growth Focus", desc: `Current QC average is ${userQc}%. Aiming for 85%+ quality target.` });
+                    if (isMurugesh) {
+                        if (userQc < 70) lagging.push({ title: "⏳ Turnaround Speed Review", desc: `Average delivery turnaround score is ${userQc}%, which is below the 70% target.` });
+                        else if (userQc < 80) lagging.push({ title: "🚀 Delivery Speed Focus", desc: `Current delivery turnaround score is ${userQc}%. Aiming for 85%+ fast client turnaround.` });
+                    } else {
+                        if (userQc < 70) lagging.push({ title: "🔍 Review Required", desc: `Average QC rating is ${userQc}%, which is below the quality target of 70%.` });
+                        else if (userQc < 80) lagging.push({ title: "🎯 QC Growth Focus", desc: `Current QC average is ${userQc}%. Aiming for 85%+ quality target.` });
+                    }
                     if (overdueCount > 0) lagging.push({ title: "⚠️ Backlog Alert", desc: `Has ${overdueCount} pending task(s) past their due dates.` });
                     if (currStats.rework && currStats.rework.length > 2) lagging.push({ title: "🔄 Rework Iteration Alert", desc: `Has ${currStats.rework.length} task(s) requiring rework iterations.` });
                     if (userLogged < (currDays * 3 * 3600)) lagging.push({ title: "⏳ Active Time Low", desc: `Averaged less than 3 hours of logged active time per day.` });
@@ -37144,7 +37354,7 @@ function isStrategyTask(t) {
                         { label: 'Hold Tasks', prev: prevStats.hold.length, curr: currStats.hold.length, unit: '', higher: false, color: 'red' },
                         { label: 'Rework Tasks', prev: prevStats.rework.length, curr: currStats.rework.length, unit: '', higher: false, color: 'amber' },
                         { label: 'Pending Tasks', prev: prevStats.pending.length, curr: currStats.pending.length, unit: '', higher: false, color: 'pink' },
-                        { label: 'Quality Score', prev: prevStats.avgQc || 0, curr: currStats.avgQc || 0, unit: '%', higher: true, color: 'purple' },
+                        { label: isMurugesh ? 'Delivery Score' : 'Quality Score', prev: prevStats.avgQc || 0, curr: currStats.avgQc || 0, unit: '%', higher: true, color: 'purple' },
                     ];
 
                     // Determine period labels based on date filter
@@ -37393,138 +37603,22 @@ function isStrategyTask(t) {
 
                     // ── Delivery & Timing Report For Murugesh ──
                     let murugeshDeliverySectionHtml = '';
-                    if (email.toLowerCase() === 'murugeshvilpower@gmail.com') {
-                        const deliveryTaskSet = new Set();
-                        const murugeshDeliveryTasks = [];
+                    if (isMurugesh) {
+                        const currDeliveryStats = getMurugeshDeliveryStats(fromTs, toTs);
+                        const murugeshDeliveryTasks = currDeliveryStats.tasks;
 
-                        const relevantMurugeshTasks = tasks.filter(t => {
-                            if (!t) return false;
-                            const st = (t.status || '').toLowerCase().trim();
-                            const isTargetStatus = ['design completed', 'client sent', 'client approved', 'posted', 'done', 'quality check'].includes(st);
-                            const isAssigned = assigneeMatches(t, email) || t.murugeshTask || (t.userId || '').toLowerCase() === email;
-                            const ts = getTaskTs(t);
-                            const inPeriod = ts >= fromTs && ts <= toTs;
-                            return (isTargetStatus || isAssigned) && (inPeriod || workedTasks.some(wt => wt.id === t.id));
-                        });
+                        const formatDateTime = (ts) => {
+                            if (!ts) return '—';
+                            const d = new Date(ts);
+                            if (isNaN(d.getTime())) return '—';
+                            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
+                                   d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                        };
 
-                        relevantMurugeshTasks.forEach(t => {
-                            if (t && t.id && !deliveryTaskSet.has(t.id)) {
-                                deliveryTaskSet.add(t.id);
-                                murugeshDeliveryTasks.push(t);
-                            }
-                        });
-
-                        const notifList = typeof taskNotifications !== 'undefined' ? (taskNotifications || []) : [];
-
-                        // Include tasks from notifications (e.g. JULY-*, AUG-*) that moved to Design Completed or Client Sent
-                        notifList.forEach(n => {
-                            if (n.taskId && (n.type === 'design_completed' || n.type === 'client_sent' || (n.newStatus || '').toLowerCase() === 'design completed' || (n.newStatus || '').toLowerCase() === 'client sent')) {
-                                if (!deliveryTaskSet.has(n.taskId)) {
-                                    const existingTask = tasks.find(t => t.id === n.taskId);
-                                    if (existingTask) {
-                                        deliveryTaskSet.add(existingTask.id);
-                                        murugeshDeliveryTasks.push(existingTask);
-                                    } else {
-                                        deliveryTaskSet.add(n.taskId);
-                                        murugeshDeliveryTasks.push({
-                                            id: n.taskId,
-                                            desc: n.taskDesc || n.taskId,
-                                            client: n.client || '—',
-                                            status: n.newStatus || 'Client Sent',
-                                            manual: !n.taskId.includes('-')
-                                        });
-                                    }
-                                }
-                            }
-                        });
-
-                        let totalRatingSum = 0;
-                        let ratedCount = 0;
-
-                        const deliveryTaskItemsHtml = murugeshDeliveryTasks.map(t => {
-                            const dcNotif = notifList.find(n => n.taskId === t.id && (n.type === 'design_completed' || (n.newStatus || '').toLowerCase() === 'design completed'));
-                            const dcReport = freshQcReports.find(r => r.taskId === t.id && (r.newStatus === 'Design Completed' || r.actionStatus === 'Approved' || (r.qcScore || 0) >= 85));
-                            
-                            let dcTime = dcNotif ? dcNotif.timestamp : (dcReport ? dcReport.timestamp : null);
-                            if (!dcTime) {
-                                if ((t.status || '').toLowerCase().includes('design completed') || (t.status || '').toLowerCase().includes('client')) {
-                                    dcTime = t.designCompletedAt || t.updatedAt || t.createdAt || null;
-                                }
-                            }
-
-                            const csNotif = notifList.find(n => n.taskId === t.id && (n.type === 'client_sent' || (n.newStatus || '').toLowerCase() === 'client sent'));
-                            let csTime = csNotif ? csNotif.timestamp : null;
-                            if (!csTime && ['client sent', 'client approved', 'posted', 'done'].includes((t.status || '').toLowerCase().trim())) {
-                                csTime = t.clientSentAt || t.completedAt || t.updatedAt || null;
-                            }
-
-                            const formatDateTime = (ts) => {
-                                if (!ts) return '—';
-                                const d = new Date(ts);
-                                if (isNaN(d.getTime())) return '—';
-                                return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
-                                       d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-                            };
-
-                            const dcFormattedDate = formatDateTime(dcTime);
-                            const csFormattedDate = formatDateTime(csTime);
-
-                            let durationFormattedStr = '—';
-                            let ratingScoreVal = 0;
-                            let ratingStars = '';
-                            let ratingBadge = '';
-                            let ratingStyle = '';
-                            let ratingScoreText = '';
-
-                            if (dcTime && csTime && csTime >= dcTime) {
-                                const diffMs = csTime - dcTime;
-                                const hours = Math.floor(diffMs / 3600000);
-                                const mins = Math.floor((diffMs % 3600000) / 60000);
-                                durationFormattedStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-
-                                if (diffMs <= 2 * 3600 * 1000) {
-                                    ratingScoreVal = 5.0;
-                                    ratingStars = '⭐⭐⭐⭐⭐';
-                                    ratingBadge = '⚡ Lightning Delivery (<2h)';
-                                    ratingStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                                } else if (diffMs <= 6 * 3600 * 1000) {
-                                    ratingScoreVal = 4.5;
-                                    ratingStars = '⭐⭐⭐⭐½';
-                                    ratingBadge = '🚀 Fast Turnaround (2-6h)';
-                                    ratingStyle = 'bg-blue-50 text-blue-700 border border-blue-200';
-                                } else if (diffMs <= 24 * 3600 * 1000) {
-                                    ratingScoreVal = 3.5;
-                                    ratingStars = '⭐⭐⭐½';
-                                    ratingBadge = '👍 Same Day / Standard (6-24h)';
-                                    ratingStyle = 'bg-amber-50 text-amber-700 border border-amber-200';
-                                } else {
-                                    ratingScoreVal = 2.0;
-                                    ratingStars = '⭐⭐';
-                                    ratingBadge = '⚠️ Delayed Delivery (>24h)';
-                                    ratingStyle = 'bg-rose-50 text-rose-700 border border-rose-200';
-                                }
-                                ratingScoreText = `${ratingScoreVal.toFixed(1)} / 5.0`;
-                                totalRatingSum += ratingScoreVal;
-                                ratedCount++;
-                            } else if (dcTime && !csTime) {
-                                const diffMs = Math.max(0, Date.now() - dcTime);
-                                const hours = Math.floor(diffMs / 3600000);
-                                const mins = Math.floor((diffMs % 3600000) / 60000);
-                                durationFormattedStr = `Elapsed: ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
-                                ratingStars = '⏳';
-                                ratingBadge = 'Pending Client Send';
-                                ratingStyle = 'bg-slate-100 text-slate-700 border border-slate-200';
-                                ratingScoreText = 'Pending Send';
-                            } else {
-                                durationFormattedStr = 'Status Transition Logged';
-                                ratingStars = '⭐ 4.0';
-                                ratingBadge = 'Completed';
-                                ratingStyle = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
-                                ratingScoreText = '4.0 / 5.0';
-                                totalRatingSum += 4.0;
-                                ratedCount++;
-                            }
-
+                        const deliveryTaskItemsHtml = currDeliveryStats.items.map(item => {
+                            const t = item.task;
+                            const dcFormattedDate = formatDateTime(item.dcTime);
+                            const csFormattedDate = formatDateTime(item.csTime);
                             const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
                             const projectKey = (t.id && t.id.includes('-')) ? t.id.split('-')[0].toUpperCase() : null;
                             const projectKeyTagHtml = projectKey ? `<span class="px-2 py-0.5 text-[9px] font-black rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase">Key: ${escapeHtml(projectKey)}</span>` : '';
@@ -37540,8 +37634,8 @@ function isStrategyTask(t) {
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <span class="px-2 py-0.5 text-[9px] font-bold border rounded-full ${badgeClass}">${t.status || 'No Status'}</span>
-                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black ${ratingStyle}">
-                                                ${ratingStars} ${ratingBadge}
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black ${item.ratingStyle}">
+                                                ${item.ratingStars} ${item.ratingBadge}
                                             </span>
                                         </div>
                                     </div>
@@ -37568,20 +37662,21 @@ function isStrategyTask(t) {
                                             <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Delivery Speed & Turnaround</p>
                                             <p class="font-black text-indigo-700 flex items-center gap-1">
                                                 <iconify-icon icon="solar:clock-circle-bold" class="text-indigo-600 shrink-0" width="12"></iconify-icon>
-                                                <span>${durationFormattedStr}</span>
+                                                <span>${item.durationFormattedStr}</span>
                                             </p>
                                         </div>
                                     </div>
 
                                     <div class="flex items-center justify-between text-[9px] text-slate-400 font-semibold pt-1 border-t border-slate-100/60">
                                         <span>Task Handling: <strong class="text-slate-700">Design Completed → Client Sent</strong></span>
-                                        <span>Delivery Rating: <strong class="text-slate-800 font-black">${ratingScoreText}</strong></span>
+                                        <span>Delivery Rating: <strong class="text-slate-800 font-black">${item.ratingScoreText}</strong></span>
                                     </div>
                                 </div>
                             `;
                         }).join('');
 
-                        const avgRatingVal = ratedCount > 0 ? (totalRatingSum / ratedCount).toFixed(1) : '5.0';
+                        const avgRatingVal = currDeliveryStats.avgRating;
+                        const avgScoreVal = currDeliveryStats.avgScore !== null ? currDeliveryStats.avgScore : userQc;
 
                         murugeshDeliverySectionHtml = `
                         <!-- Delivery & Timing Report Panel (Murugesh) -->
@@ -37601,7 +37696,7 @@ function isStrategyTask(t) {
                                         ${murugeshDeliveryTasks.length} ${murugeshDeliveryTasks.length === 1 ? 'Task' : 'Tasks'} Tracked
                                     </span>
                                     <span class="px-3 py-1 text-[10px] font-black rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                        Average Rating: ⭐ ${avgRatingVal} / 5.0
+                                        Average Rating: ⭐ ${avgRatingVal} / 5.0 (${avgScoreVal}%)
                                     </span>
                                 </div>
                             </div>
@@ -37705,7 +37800,7 @@ function isStrategyTask(t) {
                                     <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
                                 </div>
                                 <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.allAssigned || [...currStats.completed, ...currStats.assigned, ...currStats.hold]).length}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.completed.length + prevStats.assigned.length + prevStats.hold.length} prev period</p>
+                                <p class="text-[9px] text-slate-400 font-bold">vs ${email === 'karthikavilpower@gmail.com' ? prevKarthikaDailyPlanCount : (prevStats.completed.length + prevStats.assigned.length + prevStats.hold.length)} prev period</p>
                             </div>
                             <!-- In Progress Tasks -->
                             <div class="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 shadow-sm">
@@ -37738,11 +37833,11 @@ function isStrategyTask(t) {
                             </div>
                             `}
 
-                            <!-- QC Score -->
+                            <!-- QC / Delivery Score -->
                             <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">QC Score</p>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">${isMurugesh ? 'Delivery Score' : 'QC Score'}</p>
                                 <p class="text-xl font-black ${userQc >= 85 ? 'text-emerald-600' : userQc >= 65 ? 'text-amber-500' : 'text-rose-500'}">${userQc}%</p>
-                                <p class="text-[9px] text-slate-400 font-bold">${userQcIsAi ? 'Productivity AI' : 'Verified QC'}</p>
+                                <p class="text-[9px] text-slate-400 font-bold">${isMurugesh ? 'Avg Delivery Rating' : (userQcIsAi ? 'Productivity AI' : 'Verified QC')}</p>
                             </div>
 
                             <!-- Work Logged -->
