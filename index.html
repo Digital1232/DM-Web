@@ -4521,6 +4521,12 @@
                     </div>
                 </div>
 
+                <!-- Status Filter Bar (Pending, Completed, Posted) -->
+                <div id="strategy-status-filter-container"
+                    class="bg-white rounded-3xl p-3.5 shadow-xl border border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+                    <!-- Populated dynamically by renderStrategyStatusFilters() -->
+                </div>
+
                 <!-- Client Filter Tabs -->
                 <div id="strategy-client-tabs-container"
                     class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 flex flex-wrap gap-2 items-center">
@@ -18223,8 +18229,152 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (container) container.innerHTML = tabsHtml;
                 if (containerMonthly) containerMonthly.innerHTML = tabsHtml;
                 if (typeof renderStrategyFormatSummary === 'function') renderStrategyFormatSummary();
+                if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
                 console.log('[renderStrategyClientTabs] Containers updated with', tabs.length, 'tabs');
             }
+
+            let activeStrategyStatusFilter = 'All';
+            window.activeStrategyStatusFilter = activeStrategyStatusFilter;
+
+            function getStrategyStatusCategory(statusName) {
+                const s = (statusName || '').toLowerCase().trim();
+                if (!s) return 'pending';
+
+                const postedList = ['posted', 'published', 'analytics', 'learnings', 'learning', 'done', 'closed', 'resolved'];
+                if (postedList.some(p => s === p || s.includes(p) || p.includes(s))) return 'posted';
+
+                const completedList = [
+                    'quality check', 'qc', 'qc started', 'qc completed',
+                    'design completed', 'design done', 'content completed',
+                    'thumbnail completed', 'thumbnail done', 'thumbnail approved', 'thumbnail ready',
+                    'client sent', 'client send', 'client approved', 'approved', 'completed',
+                    'post pending', 'post scheduled', 'ready for post', 'ready to post'
+                ];
+                if (completedList.some(c => s === c || s.includes(c) || c.includes(s))) return 'completed';
+
+                return 'pending';
+            }
+            window.getStrategyStatusCategory = getStrategyStatusCategory;
+
+            function setStrategyStatusFilter(statusCategory) {
+                activeStrategyStatusFilter = statusCategory;
+                window.activeStrategyStatusFilter = activeStrategyStatusFilter;
+                if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
+                renderStrategyCalendar();
+                renderStrategySidebar();
+            }
+            window.setStrategyStatusFilter = setStrategyStatusFilter;
+
+            function renderStrategyStatusFilters() {
+                const container = document.getElementById('strategy-status-filter-container');
+                if (!container) return;
+
+                const month = strategyCurrentDate.getMonth();
+                const year = strategyCurrentDate.getFullYear();
+
+                const strategyJiraIds = new Set();
+                if (strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        const jId = ev.jiraId || ev.jiraTaskId;
+                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                    });
+                }
+
+                let countPending = 0;
+                let countCompleted = 0;
+                let countPosted = 0;
+                let countTotal = 0;
+
+                // 1. Count Strategy Events
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+                    if (!ev.date) return;
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    if (activeStrategyClientFilter !== 'All') {
+                        const eventClient = ev.client || 'General';
+                        if (eventClient !== activeStrategyClientFilter) return;
+                    }
+
+                    let rawStatus = ev.status || 'To Do';
+                    const evJiraId = ev.jiraId || ev.jiraTaskId;
+                    if (evJiraId) {
+                        const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                        if (matchedJiraTask && matchedJiraTask.status) {
+                            rawStatus = matchedJiraTask.status;
+                        }
+                    }
+                    const cat = getStrategyStatusCategory(rawStatus);
+                    if (cat === 'posted') countPosted++;
+                    else if (cat === 'completed') countCompleted++;
+                    else countPending++;
+                    countTotal++;
+                });
+
+                // 2. Count Jira tasks
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        if (task.manual || isInternalTask(task)) return;
+                        if (activeStrategyClientFilter !== 'All') {
+                            const taskClient = task.client || 'Others';
+                            if (taskClient !== activeStrategyClientFilter) return;
+                        }
+                        const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
+                        if (!targetPostDate) return;
+                        const [ty, tm, td] = targetPostDate.split('-').map(Number);
+                        if (tm - 1 !== month || ty !== year) return;
+
+                        const lowerTaskId = String(task.id).toLowerCase().trim();
+                        if (strategyJiraIds.has(lowerTaskId)) return;
+                        if (!task.id.toUpperCase().startsWith('AUG-')) return;
+
+                        const cat = getStrategyStatusCategory(task.status);
+                        if (cat === 'posted') countPosted++;
+                        else if (cat === 'completed') countCompleted++;
+                        else countPending++;
+                        countTotal++;
+                    });
+                }
+
+                const isAll = activeStrategyStatusFilter === 'All';
+                const isPending = activeStrategyStatusFilter === 'pending';
+                const isCompleted = activeStrategyStatusFilter === 'completed';
+                const isPosted = activeStrategyStatusFilter === 'posted';
+
+                container.innerHTML = `
+                    <div class="flex items-center gap-2.5 text-xs font-bold text-slate-700">
+                        <span class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+                            <iconify-icon icon="solar:filter-bold" width="17"></iconify-icon>
+                        </span>
+                        <div>
+                            <span class="text-xs font-black text-slate-800 tracking-tight">Status Filter</span>
+                            <p class="text-[10px] text-slate-400 font-medium">Filter calendar events by status</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="setStrategyStatusFilter('All')" 
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${isAll ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                            All (${countTotal})
+                        </button>
+                        <button onclick="setStrategyStatusFilter('pending')" 
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isPending ? 'bg-red-500 text-white shadow-md shadow-red-200 ring-2 ring-red-400' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'}">
+                            <span class="w-2 h-2 rounded-full ${isPending ? 'bg-white' : 'bg-red-500'}"></span>
+                            Pending (${countPending})
+                        </button>
+                        <button onclick="setStrategyStatusFilter('completed')" 
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isCompleted ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200 ring-2 ring-emerald-400' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'}">
+                            <span class="w-2 h-2 rounded-full ${isCompleted ? 'bg-white' : 'bg-emerald-500'}"></span>
+                            Completed (${countCompleted})
+                        </button>
+                        <button onclick="setStrategyStatusFilter('posted')" 
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isPosted ? 'bg-blue-600 text-white shadow-md shadow-blue-200 ring-2 ring-blue-400' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}">
+                            <span class="w-2 h-2 rounded-full ${isPosted ? 'bg-white' : 'bg-blue-500'}"></span>
+                            Posted (${countPosted})
+                        </button>
+                    </div>
+                `;
+            }
+            window.renderStrategyStatusFilters = renderStrategyStatusFilters;
 
             function setStrategyClientFilter(client) {
                 activeStrategyClientFilter = client;
@@ -18580,11 +18730,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         // For strategy events, try to find matching Jira task
                         let finalStatus = task.status || 'To Do';
                         if (task.isStrategyEvent && task.jiraId) {
-                            const matchedJiraTask = tasks?.find(t => t.id === task.jiraId);
-                            if (matchedJiraTask) {
+                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(task.jiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(task.jiraId).toLowerCase()));
+                            if (matchedJiraTask && matchedJiraTask.status) {
                                 finalStatus = matchedJiraTask.status;
                             }
                         }
+
+                        if (activeStrategyStatusFilter !== 'All') {
+                            const cat = getStrategyStatusCategory(finalStatus);
+                            if (cat !== activeStrategyStatusFilter) {
+                                return;
+                            }
+                        }
+
                         finalStatus = normalizeStrategyStatus(finalStatus);
 
                         const badgeClass = getStrategyStatusColor(finalStatus, 'pill');
@@ -18619,6 +18777,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 for (let i = 0; i < remainingCells; i++) {
                     grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[90px]"></div>`;
                 }
+
+                if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
             }
 
             function renderStrategySidebar() {
@@ -18653,12 +18813,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (eventClient !== activeStrategyClientFilter) return;
                         }
 
+                        let finalStatus = ev.status || 'To Do';
+                        const evJiraId = ev.jiraId || ev.jiraTaskId;
+                        if (evJiraId) {
+                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                            if (matchedJiraTask && matchedJiraTask.status) {
+                                finalStatus = matchedJiraTask.status;
+                            }
+                        }
+
+                        if (activeStrategyStatusFilter !== 'All') {
+                            const cat = getStrategyStatusCategory(finalStatus);
+                            if (cat !== activeStrategyStatusFilter) return;
+                        }
+
                         activeMonthTasks.push({
                             id: id,
                             date: ev.date,
                             title: ev.title,
                             client: ev.client || 'General',
-                            status: ev.status || 'To Do',
+                            status: finalStatus,
                             desc: ev.desc || 'No goal described.',
                             owner: ev.owner,
                             jiraId: ev.jiraId || ev.jiraTaskId,
@@ -18695,6 +18869,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             (item.client || '').toLowerCase().trim() === (task.client || '').toLowerCase().trim()
                         );
                         if (matchesTitleClient) return;
+
+                        if (activeStrategyStatusFilter !== 'All') {
+                            const cat = getStrategyStatusCategory(task.status);
+                            if (cat !== activeStrategyStatusFilter) return;
+                        }
 
                         activeMonthTasks.push({
                             id: task.id,
@@ -46797,20 +46976,31 @@ function isStrategyTask(t) {
                         if (evJiraId && matchedJiraTaskIds.has(evJiraId)) return;
                         if (evTitleClean && matchedJiraTitles.has(evTitleClean)) return;
 
-                        // Also check using findMatchedStrategyTask helper if available
-                        if (typeof findMatchedStrategyTask === 'function') {
-                            const matchedTask = findMatchedStrategyTask(ev.title, ev.desc, ev.jiraId);
-                            if (matchedTask && matchedJiraTaskIds.has(String(matchedTask.id).toLowerCase())) return;
+                        // Check if we can find a matching Jira task across ALL tasks in the system
+                        let linkedTask = null;
+                        if (evJiraId) {
+                            linkedTask = allTasksList.find(t => String(t.id).toLowerCase() === evJiraId || (t.key && String(t.key).toLowerCase() === evJiraId));
+                        }
+                        if (!linkedTask && typeof findMatchedStrategyTask === 'function') {
+                            linkedTask = findMatchedStrategyTask(ev.title, ev.desc, ev.jiraId || ev.jiraTaskId);
                         }
 
+                        if (linkedTask && matchedJiraTaskIds.has(String(linkedTask.id).toLowerCase())) return;
+
+                        const finalStatus = (linkedTask && linkedTask.status) || ev.jiraStatus || ev.status || 'Strategy Plan';
+                        const finalAssignee = (linkedTask && (linkedTask.assignee || linkedTask.assigneeName)) || ev.jiraAssignee || ev.assignee || 'Strategy Team';
+                        const finalKey = (linkedTask && (linkedTask.key || linkedTask.id)) || ev.jiraId || ev.jiraTaskId || ev.key || (String(evId).startsWith('-') ? 'STRATEGY' : evId);
+                        const finalTitle = (linkedTask && (linkedTask.desc || linkedTask.summary)) || ev.title || 'Strategy Event';
+                        const hasJiraLink = !!(linkedTask || (evJiraId && !evJiraId.startsWith('-')));
+
                         matchedItems.push({
-                            isStrategyEvent: true,
-                            id: evId,
-                            displayKey: ev.jiraId || ev.jiraTaskId || ev.key || (String(evId).startsWith('-') ? 'STRATEGY' : evId),
-                            title: ev.title || 'Strategy Event',
+                            isStrategyEvent: !hasJiraLink,
+                            id: (linkedTask && linkedTask.id) || ev.jiraId || ev.jiraTaskId || evId,
+                            displayKey: finalKey,
+                            title: finalTitle,
                             client: evClient,
-                            status: 'Strategy Plan',
-                            assignee: ev.assignee || 'Strategy Team',
+                            status: finalStatus,
+                            assignee: finalAssignee,
                             date: evDateStr,
                             format: counts.videos > 0 ? 'Video' : 'Poster',
                             count: counts.videos > 0 ? counts.videos : counts.posters
