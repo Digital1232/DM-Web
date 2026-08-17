@@ -12256,6 +12256,24 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
     // UTILS
     let toastTimeout, toastHideTimeout;
+    function dismissToast() {
+        const t = document.getElementById('toast');
+        if (!t) return;
+        clearTimeout(toastTimeout);
+        clearTimeout(toastHideTimeout);
+        t.classList.remove('show');
+        toastHideTimeout = setTimeout(() => {
+            try {
+                if (t.hidePopover && t.hasAttribute('popover')) {
+                    t.hidePopover();
+                }
+            } catch (e) {
+                // Ignore already hidden popover error
+            }
+        }, 300);
+    }
+    window.dismissToast = dismissToast;
+
     function toast(msg, type = 'info', onClick = null) {
         const t = document.getElementById('toast'), ti = document.getElementById('toast-icon'), tt = document.getElementById('toast-title'), tm = document.getElementById('toast-msg');
         if (!t) return;
@@ -12271,6 +12289,12 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
         clearTimeout(toastTimeout);
         clearTimeout(toastHideTimeout);
+
+        try {
+            if (t.parentElement !== document.body) {
+                document.body.appendChild(t);
+            }
+        } catch (e) {}
 
         try {
             if (t.showPopover) t.showPopover();

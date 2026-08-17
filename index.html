@@ -39915,19 +39915,13 @@ function isStrategyTask(t) {
                 clearTimeout(toastTimeout);
                 clearTimeout(toastHideTimeout);
 
-                // If any modal dialog is open, append toast into top open dialog as fallback so it stays above modal backdrop across all browsers
+                // Ensure toast stays attached to document.body and never reparented inside dialogs
                 try {
-                    const openDialogs = Array.from(document.querySelectorAll('dialog[open]'));
-                    if (openDialogs.length > 0) {
-                        const topDialog = openDialogs[openDialogs.length - 1];
-                        if (t.parentElement !== topDialog) {
-                            topDialog.appendChild(t);
-                        }
-                    } else if (t.parentElement !== document.body) {
+                    if (t.parentElement !== document.body) {
                         document.body.appendChild(t);
                     }
                 } catch (dialogErr) {
-                    console.warn('Toast reparent error:', dialogErr);
+                    console.warn('Toast parent error:', dialogErr);
                 }
 
                 try {
@@ -41818,6 +41812,9 @@ function isStrategyTask(t) {
                 const container = document.getElementById('rework-qc-modal-content');
                 if (!modal || !container || !currentUser) return;
 
+                // Dismiss any active toast when modal opens so they don't visually clash
+                try { if (typeof dismissToast === 'function') dismissToast(); } catch(e){}
+
                 const taskId = data.taskId || data.id || '';
                 if (taskId) {
                     poppedAlertTaskIds.add(String(taskId));
@@ -42448,20 +42445,20 @@ function isStrategyTask(t) {
                             } else {
                                 openReworkQcModal(notif);
                             }
-                        }
-
-                        const openNotif = () => {
-                            window.focus();
-                            if (notif.image) openImagePreview(notif.image, notif.title || 'Notification');
-                        };
-
-                        // Show the notification toast
-                        if (notif.body) {
-                            const imageHint = notif.image ? ' — tap to view image' : '';
-                            toast(`🔔 ${notif.title || 'Notification'}: ${notif.body}${imageHint}`, 'info', notif.image ? openNotif : null);
                         } else {
-                            const client = notif.client ? ` (${notif.client})` : '';
-                            toast(`📋 Task status updated: ${notif.taskId}${client} — ${notif.taskDesc}. Moved by ${notif.changedBy}`, 'info');
+                            const openNotif = () => {
+                                window.focus();
+                                if (notif.image) openImagePreview(notif.image, notif.title || 'Notification');
+                            };
+
+                            // Show the notification toast for standard task updates
+                            if (notif.body) {
+                                const imageHint = notif.image ? ' — tap to view image' : '';
+                                toast(`🔔 ${notif.title || 'Notification'}: ${notif.body}${imageHint}`, 'info', notif.image ? openNotif : null);
+                            } else {
+                                const client = notif.client ? ` (${notif.client})` : '';
+                                toast(`📋 Task status updated: ${notif.taskId}${client} — ${notif.taskDesc}. Moved by ${notif.changedBy}`, 'info');
+                            }
                         }
                     });
                 });
