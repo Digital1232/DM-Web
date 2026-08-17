@@ -11832,9 +11832,15 @@
 
             <!-- File Manager Source Folder Selector -->
             <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    File Manager Source Folder
-                </label>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        File Manager Source Folder <span class="text-slate-300 font-normal lowercase">(optional)</span>
+                    </label>
+                    <button type="button" id="strategy-folder-clear-btn" onclick="clearStrategyFolderSelection()" 
+                        class="hidden text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                        <iconify-icon icon="solar:trash-bin-trash-bold" width="12"></iconify-icon> Clear Folder
+                    </button>
+                </div>
                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 overflow-hidden flex-1">
                         <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/50">
@@ -19236,18 +19242,22 @@ function isStrategyTask(t) {
                 return `<p class="text-xs text-slate-900 font-medium ${extraClasses}">${escapeHtml(t.desc || t.summary || '')}</p>`;
             }
 
+            function clearStrategyFolderSelection() {
+                updateStrategyFolderUI('');
+                if (typeof toast === 'function') toast('Source folder cleared', 'info');
+            }
+
             function linkFileManagerSourceForStrategy() {
                 const currentPath = document.getElementById('strategy-folder-path')?.value || '';
-                const title = document.getElementById('strategy-title')?.value?.trim() || 'Campaign';
-                const client = document.getElementById('strategy-client')?.value || 'Quade';
-
-                let defaultSuggestion = currentPath || `Clients / ${client} / 2026 / August / ${title}`;
-
-                const newPath = prompt('Link File Manager Source Folder Path:', defaultSuggestion);
-                if (newPath !== null && newPath.trim() !== '') {
+                const newPath = prompt('Link File Manager Source Folder Path or URL (leave empty to clear):', currentPath || '');
+                if (newPath !== null) {
                     const cleanPath = newPath.trim();
                     updateStrategyFolderUI(cleanPath);
-                    if (typeof toast === 'function') toast('✓ Source folder linked from File Manager', 'success');
+                    if (cleanPath) {
+                        if (typeof toast === 'function') toast('✓ Source folder linked from File Manager', 'success');
+                    } else {
+                        if (typeof toast === 'function') toast('Source folder cleared', 'info');
+                    }
                 }
             }
 
@@ -19256,6 +19266,7 @@ function isStrategyTask(t) {
                 const display = document.getElementById('strategy-folder-display');
                 const subtext = document.getElementById('strategy-folder-subtext');
                 const btnText = document.getElementById('strategy-folder-btn-text');
+                const clearBtn = document.getElementById('strategy-folder-clear-btn');
 
                 if (input) input.value = folderPath || '';
 
@@ -19267,10 +19278,12 @@ function isStrategyTask(t) {
                         subtext.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-600 font-bold text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Linked to File Manager</span>`;
                     }
                     if (btnText) btnText.textContent = 'Change Folder';
+                    if (clearBtn) clearBtn.classList.remove('hidden');
                 } else {
                     if (display) display.textContent = 'No folder linked';
                     if (subtext) subtext.textContent = 'Select source folder from File Manager';
                     if (btnText) btnText.textContent = 'Link Source Folder';
+                    if (clearBtn) clearBtn.classList.add('hidden');
                 }
             }
 
