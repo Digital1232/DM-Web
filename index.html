@@ -12926,6 +12926,54 @@
             let mentionIndex = 0;
             let dailyPlans = {};
             let dailyPlansUnsub = null;
+
+            function getUserDailyPlans(usrEmail) {
+                if (!usrEmail) return {};
+                const src = (window.dailyPlans || dailyPlans || {});
+                if (!src || typeof src !== 'object') return {};
+                const norm = usrEmail.toLowerCase().trim();
+                const ek = typeof eKey === 'function' ? eKey(norm) : norm.replace(/[.#$\\[\\]]/g, '_');
+                const cleanNorm = norm.replace(/[^a-z0-9]/g, '');
+                const merged = {};
+                Object.entries(src).forEach(([key, planObj]) => {
+                    if (!planObj || typeof planObj !== 'object') return;
+                    const lowerKey = key.toLowerCase();
+                    const cleanKey = lowerKey.replace(/[^a-z0-9]/g, '');
+                    if (lowerKey === ek || lowerKey === norm || cleanKey === cleanNorm) {
+                        Object.assign(merged, planObj);
+                    }
+                });
+                return merged;
+            }
+            window.getUserDailyPlans = getUserDailyPlans;
+
+            function isPlanDateInPeriod(planDateVal, startTs, endTs) {
+                if (!planDateVal) return false;
+                let pDateStr = '';
+                if (typeof planDateVal === 'number') {
+                    pDateStr = new Date(planDateVal).toLocaleDateString('en-CA');
+                } else if (typeof planDateVal === 'string') {
+                    const s = planDateVal.trim();
+                    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+                        pDateStr = s.slice(0, 10);
+                    } else if (/^\d+$/.test(s)) {
+                        pDateStr = new Date(parseInt(s, 10)).toLocaleDateString('en-CA');
+                    } else {
+                        const parsed = new Date(s);
+                        if (!isNaN(parsed.getTime())) {
+                            pDateStr = parsed.toLocaleDateString('en-CA');
+                        }
+                    }
+                } else if (planDateVal instanceof Date && !isNaN(planDateVal.getTime())) {
+                    pDateStr = planDateVal.toLocaleDateString('en-CA');
+                }
+                if (!pDateStr) return false;
+                const startDateStr = new Date(startTs).toLocaleDateString('en-CA');
+                const endDateStr = new Date(endTs > startTs ? endTs - 1 : endTs).toLocaleDateString('en-CA');
+                return pDateStr >= startDateStr && pDateStr <= endDateStr;
+            }
+            window.isPlanDateInPeriod = isPlanDateInPeriod;
+
             let dpFilter = 'all';
             let dpViewMode = 'table';
             let taskSortCol = null;
@@ -27100,7 +27148,7 @@ function isStrategyTask(t) {
 
                     // 1. Add tasks from daily plans (for daily-plan users)
                     if (isDailyPlanUser) {
-                        const userPlans = dailyPlans[eKey(email)] || dailyPlans['karthikavilpower@gmail_com'] || {};
+                        const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(email) : (dailyPlans[eKey(email)] || dailyPlans['karthikavilpower@gmail_com'] || {});
                         Object.keys(userPlans).forEach(taskId => {
                             let t = tasks.find(tk => tk && tk.id && tk.id.trim().toLowerCase() === taskId.trim().toLowerCase());
                             if (!t && typeof strategyEvents !== 'undefined' && strategyEvents) {
@@ -27120,6 +27168,21 @@ function isStrategyTask(t) {
                                         eventId: taskId
                                     };
                                 }
+                            }
+                            if (!t) {
+                                const planData = userPlans[taskId] || {};
+                                t = {
+                                    id: taskId,
+                                    desc: planData.desc || planData.title || planData.summary || taskId,
+                                    summary: planData.summary || planData.title || planData.desc || taskId,
+                                    status: planData.status || 'To Do',
+                                    client: planData.client || '',
+                                    assignee: email,
+                                    owner: email,
+                                    duedate: planData.date,
+                                    postDate: planData.date,
+                                    isDailyPlanTask: true
+                                };
                             }
                             if (t && !isExcludedTask(t) && !addedIds.has(t.id)) {
                                 allUserTasks.push(t);
@@ -27145,13 +27208,13 @@ function isStrategyTask(t) {
                         matchedTasks = allUserTasks.filter(t => isTaskCompletedStatus(t.status));
                     } else if (type === 'assigned') {
                         matchedTasks = allUserTasks.filter(t =>
-                            assigneeMatches(t, email) &&
+                            (isDailyPlanUser || assigneeMatches(t, email)) &&
                             !isTaskCompletedStatus(t.status) &&
                             !['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) &&
                             !(t.status || '').trim().toLowerCase().includes('rework')
                         );
                     } else if (type === 'allAssigned') {
-                        matchedTasks = allUserTasks.filter(t => assigneeMatches(t, email));
+                        matchedTasks = isDailyPlanUser ? allUserTasks : allUserTasks.filter(t => assigneeMatches(t, email));
                     } else if (type === 'hold') {
                         matchedTasks = allUserTasks.filter(t =>
                             ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase())
@@ -34434,12 +34497,8 @@ function isStrategyTask(t) {
                         // For daily plan users, check BOTH daily plan AND timestamps
                         console.log(`[DEBUG] ========== DAILY PLAN USER: ${userEmail} ==========`);
                         
-                        const userPlans = dailyPlans[eKey(userEmail)] || {};
+                        const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(userEmail) : (dailyPlans[eKey(userEmail)] || {});
                         const todayIso = new Date(todayStartTsVal).toISOString().slice(0, 10);
-                        const todayPlan = userPlans[todayIso] || {};
-                        
-                        console.log(`[DEBUG] Daily plan for ${todayIso}:`, Object.keys(todayPlan).length, 'tasks');
-                        console.log(`[DEBUG] Timestamp range: ${new Date(todayStartTsVal)} to ${new Date(todayEndTsVal)}`);
                         
                         const completedTasks = [];
                         tasks.forEach(t => {
@@ -34449,7 +34508,12 @@ function isStrategyTask(t) {
                             
                             if (isCompleted && !isExcluded && matches) {
                                 // Check if task is in today's daily plan OR has today's timestamp
-                                let isInPlan = !!todayPlan[t.id];
+                                let isInPlan = false;
+                                if (userPlans[t.id] && userPlans[t.id].date) {
+                                    isInPlan = typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(userPlans[t.id].date, todayStartTsVal, todayEndTsVal) : (userPlans[t.id].date.slice(0,10) === todayIso);
+                                } else if (userPlans[todayIso] && userPlans[todayIso][t.id]) {
+                                    isInPlan = true;
+                                }
                                 
                                 let hasRecentTimestamp = false;
                                 const completedTs = t.completedAt;
@@ -35403,12 +35467,16 @@ function isStrategyTask(t) {
                                 if (jiraMatch) return true;
 
                                 if (isDailyPlanUser) {
-                                    const userPlans = dailyPlans[eKey(email)];
+                                    const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(email) : (dailyPlans[eKey(email)] || {});
                                     if (userPlans) {
                                         const dpEntry = userPlans[t.id];
                                         if (dpEntry && dpEntry.date) {
-                                            const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
-                                            if (dpTs >= fromTs && dpTs <= toTs) return true;
+                                            if (typeof isPlanDateInPeriod === 'function') {
+                                                if (isPlanDateInPeriod(dpEntry.date, fromTs, toTs)) return true;
+                                            } else {
+                                                const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
+                                                if (dpTs >= fromTs && dpTs <= toTs) return true;
+                                            }
                                         }
                                     }
                                 }
@@ -36284,9 +36352,43 @@ function isStrategyTask(t) {
                         ...Object.values(snehaSnap.val() || {}),
                         ...Object.values(internalPrepSnap.val() || {})
                     ];
-                    // Date strings for DPR period filtering (YYYY-MM-DD)
-                    const toDateStr = new Date(toTs - 1).toISOString().slice(0, 10);
-                    const fromDateStr = new Date(fromTs).toISOString().slice(0, 10);
+                    // Date strings for DPR period filtering (YYYY-MM-DD in local timezone)
+                    const toDateStr = formatLocalDate(toTs > fromTs ? toTs - 1 : toTs);
+                    const fromDateStr = formatLocalDate(fromTs);
+
+                    const getUserDailyPlans = (usrEmail) => {
+                        if (typeof window.getUserDailyPlans === 'function') {
+                            return window.getUserDailyPlans(usrEmail);
+                        }
+                        if (!usrEmail || typeof dailyPlans === 'undefined' || !dailyPlans) return {};
+                        const norm = usrEmail.toLowerCase().trim();
+                        const k1 = eKey(norm);
+                        const k2 = norm.replace(/[.#$\\[\\]]/g, '_');
+                        const k3 = norm.replace(/[@.]/g, '_');
+                        const k4 = norm;
+                        return dailyPlans[k1] || dailyPlans[k2] || dailyPlans[k3] || dailyPlans[k4] || dailyPlans['karthikavilpower@gmail_com'] || {};
+                    };
+
+                    const isPlanDateInPeriod = (planDateVal, startTs, endTs) => {
+                        if (!planDateVal) return false;
+                        let pDateStr = '';
+                        if (typeof planDateVal === 'number') {
+                            pDateStr = formatLocalDate(planDateVal);
+                        } else if (typeof planDateVal === 'string') {
+                            const s = planDateVal.trim();
+                            if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+                                pDateStr = s.slice(0, 10);
+                            } else if (/^\d+$/.test(s)) {
+                                pDateStr = formatLocalDate(Number(s));
+                            } else {
+                                pDateStr = formatLocalDate(s);
+                            }
+                        }
+                        if (!pDateStr) return false;
+                        const fStr = formatLocalDate(startTs);
+                        const tStr = formatLocalDate(endTs > startTs ? endTs - 1 : endTs);
+                        return pDateStr >= fStr && pDateStr <= tStr;
+                    };
 
                     // ── Shared helpers defined once at top level of this callback ──
                     const isExcludedTask = (t) => {
@@ -36302,8 +36404,8 @@ function isStrategyTask(t) {
                     const isAssignedToUser = (t, usrEmail) => {
                         if (!t) return false;
                         if (assigneeMatches(t, usrEmail)) return true;
-                        const userPlans = dailyPlans[eKey(usrEmail)];
-                        if (userPlans && userPlans[t.id]) return true;
+                        const userPlans = getUserDailyPlans(usrEmail);
+                        if (userPlans && (userPlans[t.id] || Object.entries(userPlans).some(([k]) => k.trim().toLowerCase() === (t.id || '').trim().toLowerCase()))) return true;
                         return false;
                     };
 
@@ -36529,17 +36631,61 @@ function isStrategyTask(t) {
                             return true;
                         });
 
+                        if (isDailyPlanUser) {
+                            const uPlans = getUserDailyPlans(usrEmail);
+                            Object.entries(uPlans).forEach(([tId, pData]) => {
+                                if (!pData || !pData.date || !tId) return;
+                                if (!isPlanDateInPeriod(pData.date, start, end)) return;
+                                let realTask = tasks.find(tk => tk.id === tId || (tk.id || '').trim().toLowerCase() === tId.trim().toLowerCase());
+                                if (!realTask && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                    const ev = strategyEvents[tId] || Object.values(strategyEvents || {}).find(e => e && (e.jiraId === tId || e.id === tId));
+                                    if (ev) {
+                                        realTask = {
+                                            id: ev.jiraId || tId,
+                                            title: ev.title || ev.desc || tId,
+                                            desc: ev.title || ev.desc || '',
+                                            client: ev.client || '',
+                                            project: ev.client || '',
+                                            status: ev.status || 'To Do',
+                                            assignee: usrEmail,
+                                            assigneeEmail: usrEmail,
+                                            created: pData.date,
+                                            date: pData.date,
+                                            isDailyPlan: true
+                                        };
+                                    }
+                                }
+                                if (realTask && !filteredTasks.some(tk => tk.id === realTask.id || (tk.id || '').trim().toLowerCase() === realTask.id.trim().toLowerCase())) {
+                                    filteredTasks.push(realTask);
+                                }
+                            });
+                        }
+
                         const getEffectiveDateTs = (t) => {
                             if (isDailyPlanUser) {
-                                const userPlans = dailyPlans[eKey(usrEmail)];
-                                if (userPlans && userPlans[t.id] && userPlans[t.id].date) {
-                                    return new Date(userPlans[t.id].date + 'T00:00:00').getTime();
+                                const userPlans = getUserDailyPlans(usrEmail);
+                                const dpEntry = userPlans[t.id] || Object.entries(userPlans).find(([k]) => k.trim().toLowerCase() === (t.id || '').trim().toLowerCase())?.[1];
+                                if (dpEntry && dpEntry.date) {
+                                    return new Date(dpEntry.date).getTime();
                                 }
                             }
                             return getTaskTs(t);
                         };
 
                         const matchesUserAndPeriod = (t) => {
+                            if (usrEmail.toLowerCase() === 'karthikavilpower@gmail.com') {
+                                const userPlans = getUserDailyPlans(usrEmail);
+                                if (userPlans) {
+                                    const dpEntry = userPlans[t.id] || Object.entries(userPlans).find(([k]) => k.trim().toLowerCase() === (t.id || '').trim().toLowerCase())?.[1];
+                                    if (dpEntry && dpEntry.date && isPlanDateInPeriod(dpEntry.date, start, end)) return true;
+                                }
+                                if (isTaskCompletedStatus(getTaskStatus(t)) && assigneeMatches(t, usrEmail)) {
+                                    const compTs = t.completedAt || (t.lastCompletedDate ? new Date(t.lastCompletedDate).getTime() : 0);
+                                    if (compTs >= start && compTs <= end) return true;
+                                }
+                                return false;
+                            }
+
                             const jiraMatch = assigneeMatches(t, usrEmail) && (() => {
                                 const ts = getTaskTs(t);
                                 return ts >= start && ts <= end;
@@ -36547,13 +36693,10 @@ function isStrategyTask(t) {
                             if (jiraMatch) return true;
 
                             if (isDailyPlanUser) {
-                                const userPlans = dailyPlans[eKey(usrEmail)];
+                                const userPlans = getUserDailyPlans(usrEmail);
                                 if (userPlans) {
-                                    const dpEntry = userPlans[t.id];
-                                    if (dpEntry && dpEntry.date) {
-                                        const dpTs = new Date(dpEntry.date + 'T00:00:00').getTime();
-                                        if (dpTs >= start && dpTs <= end) return true;
-                                    }
+                                    const dpEntry = userPlans[t.id] || Object.entries(userPlans).find(([k]) => k.trim().toLowerCase() === (t.id || '').trim().toLowerCase())?.[1];
+                                    if (dpEntry && dpEntry.date && isPlanDateInPeriod(dpEntry.date, start, end)) return true;
                                 }
                             }
                             return false;
@@ -36782,15 +36925,11 @@ function isStrategyTask(t) {
 
                     let prevKarthikaDailyPlanCount = 0;
                     if (email === 'karthikavilpower@gmail.com') {
-                        const karthikaPlans = dailyPlans[eKey(email)] || dailyPlans['karthikavilpower@gmail_com'] || {};
-                        const prevFromDateStr = new Date(prevStartTs).toISOString().slice(0, 10);
-                        const prevToDateStr = new Date(prevEndTs).toISOString().slice(0, 10);
+                        const karthikaPlans = getUserDailyPlans(email);
                         const prevSet = new Set();
                         Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
                             if (!planData || !planData.date) return;
-                            const planTs = new Date(planData.date + 'T00:00:00').getTime();
-                            const pDate = (planData.date || '').slice(0, 10);
-                            if ((planTs >= prevStartTs && planTs <= prevEndTs) || (pDate >= prevFromDateStr && pDate <= prevToDateStr)) {
+                            if (isPlanDateInPeriod(planData.date, prevStartTs, prevEndTs)) {
                                 prevSet.add(taskId);
                             }
                         });
@@ -36848,8 +36987,7 @@ function isStrategyTask(t) {
                     const completionScore = completionRate * 50;
                     const qcComponent = userQc * 0.3;
 
-                    const expectedLoggedSec = currDays * 6 * 3600;
-                    const loggedRate = expectedLoggedSec > 0 ? Math.min(1.0, userLogged / expectedLoggedSec) : 1.0;
+                    const loggedRate = (currDays * 6 * 3600) > 0 ? Math.min(1.0, userLogged / (currDays * 6 * 3600)) : 1.0;
                     const loggedScore = loggedRate * 20;
 
                     const nowMidnight = new Date(); nowMidnight.setHours(0, 0, 0, 0);
@@ -36898,63 +37036,20 @@ function isStrategyTask(t) {
                     const workedTaskIds = new Set();
                     const workedTasks = [];
 
+                    // ── SNEHA SPECIAL LOGIC ──
+                    // For Sneha, workedTasks MUST come from localStorage (selections + QC reports),
+                    // NOT Jira/timelogs, because her daily work is logged via selections and QC modal.
                     if (email === 'snehavilpower@gmail.com') {
-                        const periodSnehaSelections = (snehaSelections || []).filter(s => {
-                            const uid = (s.userId || '').toLowerCase();
-                            const ts = Number(s.timestamp || 0);
-                            return uid === 'snehavilpower@gmail.com' && ts >= fromTs && ts <= toTs;
-                        });
-                        periodSnehaSelections.forEach(s => {
-                            if (s.taskId && !workedTaskIds.has(s.taskId)) {
-                                const t = tasks.find(tk => tk.id === s.taskId);
-                                if (t && !isExcludedTask(t)) {
-                                    workedTaskIds.add(s.taskId);
-
-                                    const allItemsForTask = new Set();
-                                    periodSnehaSelections.filter(sel => sel.taskId === s.taskId).forEach(sel => {
-                                        (sel.selectedItems || []).forEach(item => allItemsForTask.add(item));
-                                    });
-                                    t.snehaItems = Array.from(allItemsForTask);
-
-                                    workedTasks.push(t);
-                                }
-                            }
-                        });
-
-                        const periodQcReports = freshQcReports.filter(r => {
-                            const ts = Number(r.timestamp || 0);
-                            return (r.qcEmail || '').toLowerCase().trim() === 'snehavilpower@gmail.com' &&
-                                ts >= fromTs && ts <= toTs;
-                        });
-                        periodQcReports.forEach(r => {
-                            if (r.taskId && !workedTaskIds.has(r.taskId)) {
-                                const t = tasks.find(tk => tk.id === r.taskId);
-                                if (t && !isExcludedTask(t)) {
-                                    workedTaskIds.add(r.taskId);
-                                    workedTasks.push(t);
-                                }
-                            }
-                        });
-
-                        // Also add her internal tasks
-                        [...currStats.completed, ...currStats.assigned, ...currStats.hold, ...currStats.rework].forEach(t => {
+                        workedTasks.length = 0; // Clear any Jira timelogs
+                        workedTaskIds.clear();
+                        snehaWorkedTasks.forEach(t => {
                             if (t && t.id && !workedTaskIds.has(t.id)) {
                                 workedTaskIds.add(t.id);
                                 workedTasks.push(t);
                             }
                         });
-                        // Sneha: indivPerfTaskStats uses workedTasks as source of truth
-                        // Also include directly-assigned hold/rework tasks from Jira that may not be in daily plan
-                        tasks.filter(t => !isExcludedTask(t) && assigneeMatches(t, email) &&
-                            (['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) ||
-                                (t.status || '').trim().toLowerCase().includes('rework'))
-                        ).forEach(t => {
-                            if (t && t.id && !workedTaskIds.has(t.id)) {
-                                workedTaskIds.add(t.id);
-                                workedTasks.push(t);
-                            }
-                        });
-                        const snehaCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                        // Categorize Sneha's tasks properly
+                        const snehaCompleted = workedTasks.filter(t => isTaskCompletedStatus(t.status) || isAssignedToUser(t, email));
                         const snehaActive = workedTasks.filter(t => isAssignedToUser(t, email) && !isTaskCompletedStatus(t.status) && !['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()) && !(t.status || '').trim().toLowerCase().includes('rework'));
                         const snehaHold = workedTasks.filter(t => ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()));
                         const snehaRework = workedTasks.filter(t => (t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()));
@@ -36966,8 +37061,8 @@ function isStrategyTask(t) {
                             rework: snehaRework
                         };
                     } else if (email === 'karthikavilpower@gmail.com') {
-                        // Karthika: Tasks Worked Log = her daily plan tasks in this period
-                        const karthikaPlans = dailyPlans[eKey(email)] || {};
+                        // Karthika: Tasks Worked Log = her daily plan tasks in this period + any tasks completed in period
+                        const karthikaPlans = getUserDailyPlans(email);
                         const localIsExcludedTask = (t) => {
                             if (!t) return false;
                             const client = (t.client || '').toLowerCase().trim();
@@ -36979,64 +37074,66 @@ function isStrategyTask(t) {
                         };
                         const getEffectiveTask = (t) => { return t; };
                         Object.entries(karthikaPlans).forEach(([taskId, planData]) => {
-                            if (!planData.date) return;
-                            const planTs = new Date(planData.date + 'T00:00:00').getTime();
-                            if (planTs < fromTs || planTs > toTs) return;
-                            const t = tasks.find(tk => tk.id === taskId);
+                            if (!planData) return;
+                            const pDate = planData.date || planData.planDate || planData.duedate;
+                            if (!pDate || !isPlanDateInPeriod(pDate, fromTs, toTs)) return;
+                            let t = tasks.find(tk => tk.id === taskId || (tk.id || '').trim().toLowerCase() === taskId.trim().toLowerCase());
+                            if (!t && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                const ev = strategyEvents[taskId] || Object.values(strategyEvents || {}).find(e => e && (e.jiraId === taskId || e.id === taskId));
+                                if (ev) {
+                                    t = {
+                                        id: ev.jiraId || taskId,
+                                        title: ev.title || ev.desc || taskId,
+                                        desc: ev.title || ev.desc || '',
+                                        client: ev.client || '',
+                                        project: ev.client || '',
+                                        status: ev.status || 'To Do',
+                                        assignee: email,
+                                        assigneeEmail: email,
+                                        created: pDate || new Date().toISOString(),
+                                        date: pDate || '',
+                                        timeSpent: planData.timeSpent || planData.time_spent || 0,
+                                        timeSpentSeconds: planData.timeSpentSeconds || 0,
+                                        isDailyPlan: true
+                                    };
+                                }
+                            }
+                            if (!t) {
+                                t = {
+                                    id: taskId,
+                                    title: planData.title || planData.taskDesc || planData.taskDescription || planData.desc || taskId,
+                                    desc: planData.desc || planData.taskDesc || planData.title || '',
+                                    client: planData.client || '',
+                                    project: planData.client || '',
+                                    status: planData.status || 'To Do',
+                                    assignee: email,
+                                    assigneeEmail: email,
+                                    created: pDate || new Date().toISOString(),
+                                    date: pDate || '',
+                                    timeSpent: planData.timeSpent || planData.time_spent || 0,
+                                    timeSpentSeconds: planData.timeSpentSeconds || 0,
+                                    isDailyPlan: true
+                                };
+                            }
                             if (t && !localIsExcludedTask(t) && !workedTaskIds.has(taskId)) {
                                 workedTaskIds.add(taskId);
                                 workedTasks.push(getEffectiveTask(t));
                             }
                         });
-                        // Also include completed + assigned + hold + rework for completeness
-                        [...currStats.completed, ...currStats.assigned, ...currStats.hold, ...currStats.rework].forEach(t => {
-                            if (t && t.id && !workedTaskIds.has(t.id)) {
-                                workedTaskIds.add(t.id);
-                                workedTasks.push(getEffectiveTask(t));
-                            }
-                        });
 
-                        // ── FIX: Also include all completed Jira tasks assigned to Karthika in period ──
-                        // This ensures completed tasks not in daily plan are still counted
-                        tasks
-                            .filter(t => {
-                                // Skip if already added
-                                if (workedTaskIds.has(t.id)) return false;
-                                // Must be Jira task (not internal)
-                                if (isInternalTask(t)) return false;
-                                // Must be completed
-                                if (!isTaskCompletedStatus(t.status)) return false;
-                                // Must be assigned to Karthika
-                                if (!assigneeMatches(t, email)) return false;
-                                // Must be in period
-                                const ts = getTaskTs(t);
-                                if (ts < fromTs || ts > toTs) return false;
-                                // Must not be excluded
-                                if (localIsExcludedTask(t)) return false;
-                                return true;
-                            })
-                            .forEach(t => {
-                                workedTaskIds.add(t.id);
-                                workedTasks.push(getEffectiveTask(t));
-                            });
-
-                        // Also include directly-assigned tasks from Jira/Internal in the period that may not be in daily plan
+                        // Also include any tasks completed by Karthika in the period
                         tasks.filter(t => {
                             if (!t || !t.id || workedTaskIds.has(t.id)) return false;
                             if (localIsExcludedTask(t)) return false;
                             if (!assigneeMatches(t, email)) return false;
-                            const ts = getTaskTs(t);
-                            const createdTs = t.created ? new Date(t.created).getTime() : 0;
-                            const dateMatches = (ts >= fromTs && ts <= toTs) || (createdTs >= fromTs && createdTs <= toTs);
-                            return dateMatches;
+                            if (!isTaskCompletedStatus(t.status)) return false;
+                            const compTs = t.completedAt || (t.lastCompletedDate ? new Date(t.lastCompletedDate).getTime() : 0);
+                            return compTs >= fromTs && compTs <= toTs;
                         }).forEach(t => {
                             workedTaskIds.add(t.id);
                             workedTasks.push(getEffectiveTask(t));
                         });
-                        // ── Sync userCompleted and modal list to workedTasks (single source of truth) ──
-                        // getStatsFor uses both daily-plan date matching AND timelog discovery which can
-                        // produce a count that diverges from the workedTasks log view. Use workedTasks
-                        // as the definitive list so the tile count and drill-down modal always agree.
+
                         const karthikaCompletedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
                         const karthikaHoldTasks = workedTasks.filter(t => ['hold', 'design hold', 'on hold'].includes((t.status || '').trim().toLowerCase()));
                         const karthikaReworkTasks = workedTasks.filter(t => (t.status || '').trim().toLowerCase().includes('rework') || ['rework designs', 'rework', 'rework design'].includes((t.status || '').trim().toLowerCase()));
@@ -37052,7 +37149,7 @@ function isStrategyTask(t) {
                         window.indivPerfTaskStats[email] = {
                             completed: karthikaCompletedTasks,
                             assigned: karthikaAssignedTasks,
-                            allAssigned: [...karthikaCompletedTasks, ...karthikaAssignedTasks, ...karthikaHoldTasks],
+                            allAssigned: workedTasks.slice(),
                             hold: karthikaHoldTasks,
                             rework: karthikaReworkTasks,
                             thumbnails: karthikaThumbnailTasks,
@@ -52470,14 +52567,14 @@ function isStrategyTask(t) {
                             }
                         });
                     } catch (e) { }
-                } else if (email === 'karthikavilpower@gmail.com') {
-                    // Karthika daily plans
+                } else if (email === 'karthikavilpower@gmail.com' || (typeof isDailyPlanUser !== 'undefined' && isDailyPlanUser)) {
+                    // Daily plans tasks
                     try {
                         const escapeKey = email.replace(/[.#$\\[\\]]/g, '_');
-                        const plans = window.dailyPlans && window.dailyPlans[escapeKey] ? window.dailyPlans[escapeKey] : {};
+                        const plans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(email) : (window.dailyPlans && window.dailyPlans[escapeKey] ? window.dailyPlans[escapeKey] : {});
                         const todayStr = now.toISOString().slice(0, 10);
                         Object.entries(plans).forEach(([tid, p]) => {
-                            if (p.date === todayStr) {
+                            if (p && p.date && (typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(p.date, startOfDay, endOfDay) : p.date === todayStr)) {
                                 workedTaskIds.add(tid);
                             }
                         });
