@@ -18228,16 +18228,103 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.createStrategyTestData = createStrategyTestData;
 
+            function normalizeClientName(name) {
+                const trimmed = String(name || '').trim();
+                if (!trimmed) return '';
+
+                const key = trimmed.toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+                const compactKey = key.replace(/[^a-z0-9]/g, '');
+
+                const customMapping = {
+                    'ezhilvanan': 'Aladi Ezhilvanan',
+                    'aladi ezhilvanan': 'Aladi Ezhilvanan',
+                    'aladiezhilvanan': 'Aladi Ezhilvanan',
+                    '3jo toys': '3Jo Toys',
+                    '3jotoys': '3Jo Toys',
+                    'dreamdaa': 'DreamDaa',
+                    'dream daa': 'DreamDaa',
+                    'ashmithasree': 'Ashmithashree',
+                    'ashmithashree': 'Ashmithashree',
+                    'ashmitha shree': 'Ashmithashree',
+                    'ashmitha sree': 'Ashmithashree',
+                    'hanith citroen': 'Hanith Citroen',
+                    'hanithcitroen': 'Hanith Citroen',
+                    'pg constructions': 'PG Constructions',
+                    'pgconstructions': 'PG Constructions',
+                    'pg construction': 'PG Constructions',
+                    'pgconstruction': 'PG Constructions',
+                    'ramachandran': 'Ramachandran',
+                    'ramachandransupermarket': 'Ramachandran',
+                    'ramachandran supermarket': 'Ramachandran',
+                    'vilpower': 'VilPower',
+                    'vil power': 'VilPower',
+                    'vilpower dm': 'Vilpower DM',
+                    'vilpowerdm': 'Vilpower DM',
+                    'muva herbals': 'Muva Herbals',
+                    'muvaherbals': 'Muva Herbals',
+                    'mr millet': 'Mr.Millet',
+                    'mrmillet': 'Mr.Millet',
+                    'mo power': 'Mopower',
+                    'mopower': 'Mopower',
+                    'salesnaany': 'SalesNaany',
+                    'sales naany': 'SalesNaany',
+                    'gvr': 'GVR',
+                    'genesys': 'Genesys',
+                    'einstein': 'Einstein',
+                    'iniya': 'Iniya',
+                    'skm': 'SKM',
+                    'ses': 'SES',
+                    'ntt': 'NTT',
+                    'vtm': 'VTM',
+                    'ivn': 'IVN',
+                    'quade': 'Quade',
+                    'nivya': 'Nivya',
+                    'university': 'University',
+                    'recurring tasks': 'Recurring Tasks'
+                };
+
+                if (customMapping[key]) return customMapping[key];
+                if (customMapping[compactKey]) return customMapping[compactKey];
+
+                const canonicalClients = [
+                    '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'DreamDaa', 'Einstein',
+                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Mopower',
+                    'Mr.Millet', 'Muva Herbals', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
+                    'Ramachandran', 'Recurring Tasks', 'SalesNaany', 'SES', 'SKM', 'University',
+                    'VilPower', 'Vilpower DM', 'VTM'
+                ];
+
+                const matched = canonicalClients.find(c => {
+                    const cKey = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return cKey === compactKey;
+                });
+                if (matched) return matched;
+
+                return trimmed.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            }
+            window.normalizeClientName = normalizeClientName;
+
             function isMatchingStrategyClient(clientName, filter) {
                 if (!filter || filter === 'All') return true;
                 const c = (clientName || '').trim();
                 if (filter === 'Others') {
-                    return !c || c.toLowerCase() === 'others' || c.toLowerCase() === 'general' || c.toLowerCase() === 'no client';
+                    return !c || c.toLowerCase() === 'others' || c.toLowerCase() === 'general' || c.toLowerCase() === 'no client' || c.toLowerCase() === 'undefined';
                 }
                 if (!c) return false;
-                const normC = normalizeClientName(c).toLowerCase();
-                const normF = normalizeClientName(filter).toLowerCase();
-                return normC === normF || c.toLowerCase() === filter.toLowerCase();
+
+                const normFilter = normalizeClientName(filter);
+                const normFilterLower = normFilter.toLowerCase();
+                const compactFilter = filter.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                const parts = c.split(',').map(p => p.trim()).filter(Boolean);
+                for (const part of parts) {
+                    const normPart = normalizeClientName(part);
+                    if (normPart.toLowerCase() === normFilterLower) return true;
+                    if (part.toLowerCase() === filter.toLowerCase()) return true;
+                    const compactPart = part.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (compactPart === compactFilter) return true;
+                }
+                return false;
             }
             window.isMatchingStrategyClient = isMatchingStrategyClient;
 
@@ -18249,47 +18336,33 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                const nonClients = new Set(['all', 'others', 'client', 'discussion', 'learning', 'general', 'undefined', 'null', '']);
+                const nonClients = new Set(['all', 'others', 'client', 'discussion', 'learning', 'general', 'undefined', 'null', '', 'no client']);
                 const uniqueClients = new Set();
 
-                // 1. Get all registered clients from catalog / customClients / CLIENTS
-                if (typeof getClientCatalog === 'function') {
-                    const catalog = getClientCatalog();
-                    catalog.forEach(c => {
-                        if (c && !nonClients.has(c.toLowerCase().trim())) {
-                            uniqueClients.add(normalizeClientName(c.trim()));
-                        }
-                    });
-                } else if (typeof customClients !== 'undefined' && Array.isArray(customClients)) {
-                    customClients.forEach(c => {
-                        if (c && !nonClients.has(c.toLowerCase().trim())) {
-                            uniqueClients.add(normalizeClientName(c.trim()));
-                        }
-                    });
-                }
-
-                if (typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS)) {
-                    CLIENTS.forEach(c => {
-                        if (c && !nonClients.has(c.toLowerCase().trim())) {
-                            uniqueClients.add(normalizeClientName(c.trim()));
-                        }
-                    });
-                }
-
-                // 2. Add any clients from Strategy Events
+                // 1. Add clients ONLY from Strategy Events that exist
                 if (typeof strategyEvents !== 'undefined' && strategyEvents) {
                     Object.values(strategyEvents).forEach(ev => {
-                        if (ev && ev.client && !nonClients.has(ev.client.toLowerCase().trim())) {
-                            uniqueClients.add(normalizeClientName(ev.client.trim()));
+                        if (ev && ev.client) {
+                            const norm = normalizeClientName(ev.client.trim());
+                            if (norm && !nonClients.has(norm.toLowerCase().trim())) {
+                                uniqueClients.add(norm);
+                            }
                         }
                     });
                 }
 
-                // 3. Add any clients from Jira tasks
+                // 2. Add clients ONLY from Jira / workspace tasks that exist (excluding manual & internal)
                 if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
                     tasks.forEach(task => {
-                        if (task && task.client && !nonClients.has(task.client.toLowerCase().trim())) {
-                            uniqueClients.add(normalizeClientName(task.client.trim()));
+                        const isInternal = typeof isInternalTask === 'function' ? isInternalTask(task) : (task?.manual || task?.internal);
+                        if (task && !task.manual && !isInternal && task.client) {
+                            const parts = String(task.client).split(',');
+                            parts.forEach(p => {
+                                const norm = normalizeClientName(p.trim());
+                                if (norm && !nonClients.has(norm.toLowerCase().trim())) {
+                                    uniqueClients.add(norm);
+                                }
+                            });
                         }
                     });
                 }
@@ -18300,13 +18373,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const tabs = ['All', ...sortedClients];
 
                 // Add "Others" if there are Jira tasks or strategy events without a specific client
-                const hasOthersTasks = tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client.toLowerCase() === 'others' || t.client.toLowerCase() === 'general'));
-                const hasOthersEvents = strategyEvents && Object.values(strategyEvents).some(ev => !ev.client || ev.client.toLowerCase() === 'others' || ev.client.toLowerCase() === 'general');
+                const hasOthersTasks = tasks && tasks.some(t => {
+                    const isInternal = typeof isInternalTask === 'function' ? isInternalTask(t) : (t?.manual || t?.internal);
+                    if (t?.manual || isInternal) return false;
+                    const c = (t?.client || '').toLowerCase().trim();
+                    return !c || c === 'others' || c === 'general' || c === 'no client';
+                });
+                const hasOthersEvents = strategyEvents && Object.values(strategyEvents).some(ev => {
+                    const c = (ev?.client || '').toLowerCase().trim();
+                    return !c || c === 'others' || c === 'general' || c === 'no client';
+                });
                 if ((hasOthersTasks || hasOthersEvents) && !tabs.includes('Others')) {
                     tabs.push('Others');
                 }
 
-                console.log('[renderStrategyClientTabs] Rendering tabs:', tabs.length, 'tabs');
+                console.log('[renderStrategyClientTabs] Rendering tabs with available tasks:', tabs.length, 'tabs', tabs);
 
                 // Ensure the active filter is still valid (if not, reset to 'All')
                 if (!tabs.includes(activeStrategyClientFilter)) {
@@ -22192,20 +22273,6 @@ function isStrategyTask(t) {
 
             function normalizeLabelKey(label) {
                 return String(label || '').trim().toLowerCase();
-            }
-
-            function normalizeClientName(name) {
-                const trimmed = String(name || '').trim();
-                if (!trimmed) return '';
-                const key = trimmed.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
-                const customMapping = {
-                    'ezhilvanan': 'Aladi Ezhilvanan',
-                    '3jo_toys': '3Jo Toys',
-                    'dreamdaa': 'DreamDaa',
-                    'ashmithasree': 'Ashmithashree',
-                    'ashmithashree': 'Ashmithashree'
-                };
-                return customMapping[key] || trimmed;
             }
 
             function resolveClientLabel(label) {
