@@ -13064,6 +13064,9 @@
 
             // Daily Plan Completed vs Active status helpers
             const DAILY_PLAN_COMPLETED_STATUS_SET = new Set([
+                'quality check',
+                'qc started',
+                'qc',
                 'completed',
                 'design completed',
                 'client sent',
@@ -13091,12 +13094,12 @@
                 return !isDailyPlanCompletedTask(status);
             }
 
-            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail'];
-            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework', 'Quality Check'];
-            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework'];
+            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
 
@@ -41459,33 +41462,38 @@ function isStrategyTask(t) {
                 }).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
 
                 if (dpFilter === 'completed') {
-                    // Filter for completed tasks for that day
+                    // Filter for completed tasks (Quality Check, QC Started, Done, Design Completed, etc.)
                     uniquePlans = uniquePlans.filter(t => isDailyPlanCompletedTask(t.status));
                 } else if (dpFilter === 'active') {
-                    // Filter for active/pending tasks only
+                    // Filter for active/pending Pre-QC tasks only
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
-                        return !isDailyPlanCompletedTask(t.status);
+                        return isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else if (dpFilter === 'carryover') {
-                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && !isDailyPlanCompletedTask(t.status));
+                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && isDailyPlanBeforeQcStatus(t.status));
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
                         const desc = (t.desc || '').toLowerCase();
-                        return status.includes('thumbnail') || desc.includes('thumbnail');
+                        return (status.includes('thumbnail') || desc.includes('thumbnail')) && isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else if (dpFilter === 'posters') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
                         const desc = (t.desc || '').toLowerCase();
-                        return status.includes('poster') || desc.includes('poster') ||
+                        return (status.includes('poster') || desc.includes('poster') ||
                             (!status.includes('thumbnail') && !status.includes('video') &&
                                 !desc.includes('thumbnail') && !desc.includes('video') &&
-                                !desc.includes('reel') && desc.includes('design'));
+                                !desc.includes('reel') && desc.includes('design'))) && isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else {
-                    // Default / 'all' view: Show ALL planned tasks (including active and completed today)
+                    // Default / 'all' view: Only show active tasks before Quality Check (Pre-QC)
+                    // Tasks moved to Quality Check or Completed are accessible under the 'Completed' tab
+                    uniquePlans = uniquePlans.filter(t => {
+                        if (activeTaskId && t.id === activeTaskId) return true;
+                        return isDailyPlanBeforeQcStatus(t.status);
+                    });
                 }
                 return uniquePlans;
             }

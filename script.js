@@ -405,6 +405,9 @@ if (initializeApp) {
     const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion'];
     // Daily Plan Completed vs Active status helpers
     const DAILY_PLAN_COMPLETED_STATUS_SET = new Set([
+        'quality check',
+        'qc started',
+        'qc',
         'completed',
         'design completed',
         'client sent',
@@ -432,9 +435,9 @@ if (initializeApp) {
         return !isDailyPlanCompletedTask(status);
     }
 
-    const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+    const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
     const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail'];
-    const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+    const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
     const DAILY_REPORT_TIMES = [
         { hour: 12, minute: 55, label: 'Afternoon (1 PM)' },
         { hour: 15, minute: 55, label: 'Evening (4 PM)' },
