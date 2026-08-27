@@ -18228,6 +18228,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.createStrategyTestData = createStrategyTestData;
 
+            function isMatchingStrategyClient(clientName, filter) {
+                if (!filter || filter === 'All') return true;
+                const c = (clientName || '').trim();
+                if (filter === 'Others') {
+                    return !c || c.toLowerCase() === 'others' || c.toLowerCase() === 'general' || c.toLowerCase() === 'no client';
+                }
+                if (!c) return false;
+                const normC = normalizeClientName(c).toLowerCase();
+                const normF = normalizeClientName(filter).toLowerCase();
+                return normC === normF || c.toLowerCase() === filter.toLowerCase();
+            }
+            window.isMatchingStrategyClient = isMatchingStrategyClient;
+
             function renderStrategyClientTabs() {
                 const container = document.getElementById('strategy-client-tabs-container');
                 const containerMonthly = document.getElementById('monthly-plan-client-tabs-container');
@@ -18236,34 +18249,64 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                // Get unique clients exclusively from Jira tasks (only Jira, not internal)
+                const nonClients = new Set(['all', 'others', 'client', 'discussion', 'learning', 'general', 'undefined', 'null', '']);
                 const uniqueClients = new Set();
-                
-                if (tasks && tasks.length > 0) {
-                    tasks.forEach(task => {
-                        if (!task.manual && !isInternalTask(task) && task.client && task.client !== 'Others') {
-                            const clientUpper = task.client.trim().toUpperCase();
-                            if (clientUpper !== 'VILPOWER' && clientUpper !== 'GENERAL') {
-                                uniqueClients.add(task.client);
-                            }
+
+                // 1. Get all registered clients from catalog / customClients / CLIENTS
+                if (typeof getClientCatalog === 'function') {
+                    const catalog = getClientCatalog();
+                    catalog.forEach(c => {
+                        if (c && !nonClients.has(c.toLowerCase().trim())) {
+                            uniqueClients.add(normalizeClientName(c.trim()));
+                        }
+                    });
+                } else if (typeof customClients !== 'undefined' && Array.isArray(customClients)) {
+                    customClients.forEach(c => {
+                        if (c && !nonClients.has(c.toLowerCase().trim())) {
+                            uniqueClients.add(normalizeClientName(c.trim()));
                         }
                     });
                 }
 
-                const sortedClients = Array.from(uniqueClients).sort();
+                if (typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS)) {
+                    CLIENTS.forEach(c => {
+                        if (c && !nonClients.has(c.toLowerCase().trim())) {
+                            uniqueClients.add(normalizeClientName(c.trim()));
+                        }
+                    });
+                }
+
+                // 2. Add any clients from Strategy Events
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        if (ev && ev.client && !nonClients.has(ev.client.toLowerCase().trim())) {
+                            uniqueClients.add(normalizeClientName(ev.client.trim()));
+                        }
+                    });
+                }
+
+                // 3. Add any clients from Jira tasks
+                if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                    tasks.forEach(task => {
+                        if (task && task.client && !nonClients.has(task.client.toLowerCase().trim())) {
+                            uniqueClients.add(normalizeClientName(task.client.trim()));
+                        }
+                    });
+                }
+
+                const sortedClients = Array.from(uniqueClients).sort((a, b) => a.localeCompare(b));
 
                 // Build tab list starting with "All"
-                const tabs = ['All'];
+                const tabs = ['All', ...sortedClients];
 
-                // Add "Others" if there are Jira tasks without specific client
-                const hasOthers = tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client === 'Others'));
-                if (hasOthers) {
+                // Add "Others" if there are Jira tasks or strategy events without a specific client
+                const hasOthersTasks = tasks && tasks.some(t => !t.manual && !isInternalTask(t) && (!t.client || t.client.toLowerCase() === 'others' || t.client.toLowerCase() === 'general'));
+                const hasOthersEvents = strategyEvents && Object.values(strategyEvents).some(ev => !ev.client || ev.client.toLowerCase() === 'others' || ev.client.toLowerCase() === 'general');
+                if ((hasOthersTasks || hasOthersEvents) && !tabs.includes('Others')) {
                     tabs.push('Others');
                 }
 
-                sortedClients.forEach(c => tabs.push(c));
-                
-                console.log('[renderStrategyClientTabs] Rendering tabs from Jira:', tabs.length, 'tabs');
+                console.log('[renderStrategyClientTabs] Rendering tabs:', tabs.length, 'tabs');
 
                 // Ensure the active filter is still valid (if not, reset to 'All')
                 if (!tabs.includes(activeStrategyClientFilter)) {
@@ -18346,10 +18389,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const [ey, em, ed] = ev.date.split('-').map(Number);
                     if (em - 1 !== month || ey !== year) return;
 
-                    if (activeStrategyClientFilter !== 'All') {
-                        const eventClient = ev.client || 'General';
-                        if (eventClient !== activeStrategyClientFilter) return;
-                    }
+                    if (!isMatchingStrategyClient(ev.client, activeStrategyClientFilter)) return;
 
                     let rawStatus = ev.status || 'To Do';
                     const evJiraId = ev.jiraId || ev.jiraTaskId;
@@ -18370,10 +18410,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
                         if (task.manual || isInternalTask(task)) return;
-                        if (activeStrategyClientFilter !== 'All') {
-                            const taskClient = task.client || 'Others';
-                            if (taskClient !== activeStrategyClientFilter) return;
-                        }
+                        if (!isMatchingStrategyClient(task.client, activeStrategyClientFilter)) return;
                         const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
                         if (!targetPostDate) return;
                         const [ty, tm, td] = targetPostDate.split('-').map(Number);
@@ -18689,11 +18726,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!ev.date) return;
 
                     // Filter by client
-                    if (activeStrategyClientFilter !== 'All') {
-                        const eventClient = ev.client || 'General';
-                        if (eventClient !== activeStrategyClientFilter) {
-                            return; // Skip this event
-                        }
+                    if (!isMatchingStrategyClient(ev.client, activeStrategyClientFilter)) {
+                        return; // Skip this event
                     }
 
                     // Only include if date is in current month
@@ -18722,11 +18756,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
 
                         // Filter by client (if not "All")
-                        if (activeStrategyClientFilter !== 'All') {
-                            const taskClient = task.client || 'Others';
-                            if (taskClient !== activeStrategyClientFilter) {
-                                return; // Skip this task
-                            }
+                        if (!isMatchingStrategyClient(task.client, activeStrategyClientFilter)) {
+                            return; // Skip this task
                         }
 
                         // Group by post date (if task has a due date, post date is 4 days after due date)
@@ -18864,10 +18895,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (em - 1 !== month || ey !== year) return;
 
                         // Filter by client
-                        if (activeStrategyClientFilter !== 'All') {
-                            const eventClient = ev.client || 'General';
-                            if (eventClient !== activeStrategyClientFilter) return;
-                        }
+                        if (!isMatchingStrategyClient(ev.client, activeStrategyClientFilter)) return;
 
                         let finalStatus = ev.status || 'To Do';
                         const evJiraId = ev.jiraId || ev.jiraTaskId;
@@ -18911,10 +18939,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (tm - 1 !== month || ty !== year) return;
 
                         // Filter by client
-                        if (activeStrategyClientFilter !== 'All') {
-                            const taskClient = task.client || 'Others';
-                            if (taskClient !== activeStrategyClientFilter) return;
-                        }
+                        if (!isMatchingStrategyClient(task.client, activeStrategyClientFilter)) return;
 
                         const lowerTaskId = task.id.toLowerCase().trim();
                         if (strategyJiraIds.has(lowerTaskId)) return;
@@ -44727,6 +44752,57 @@ function isStrategyTask(t) {
                 }
             }
 
+            async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail) {
+                if (!task || !newAssigneeEmail) return;
+                const videoEditors = [
+                    'barathvilpower@gmail.com',
+                    'ajithvilpower@gmail.com',
+                    'princevilpower@gmail.com',
+                    'murugeshvilpower@gmail.com',
+                    'alexvilpower@gmail.com',
+                    'alex@vilpower.com'
+                ];
+
+                if (!videoEditors.includes(newAssigneeEmail.toLowerCase())) return;
+
+                const descLower = (task.desc || '').toLowerCase();
+                if (descLower.includes('thumbnail')) return;
+
+                const targetKarthikaEmail = 'karthikavilpower@gmail.com';
+                const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap ? allUsersMap.get(targetKarthikaEmail) : null) || (typeof knownUserByEmail === 'function' ? knownUserByEmail(targetKarthikaEmail) : null);
+                const karthikaName = karthikaUser?.name || 'Karthika';
+
+                // Look for an existing JIRA sub-task under this parent task that is for a thumbnail
+                const thumbnailJiraTask = Array.isArray(tasks) ? tasks.find(t =>
+                    t && t.parentTaskId === task.id &&
+                    (t.desc && t.desc.toLowerCase().includes('thumbnail'))
+                ) : null;
+
+                if (!thumbnailJiraTask) {
+                    console.log('No Jira sub-task for thumbnail found for video task', task.id);
+                    return;
+                }
+
+                try {
+                    const dpRef = ref(db, `worksync/daily_plans/${eKey(targetKarthikaEmail)}/${thumbnailJiraTask.id}`);
+                    await set(dpRef, {
+                        date: todayIso(),
+                        assignedBy: currentUser?.email || 'System',
+                        assignedAt: Date.now()
+                    });
+
+                    if (typeof activeView !== 'undefined' && (activeView === 'dailyplan' || (typeof isDailyPlanTabActive === 'function' && isDailyPlanTabActive()))) {
+                        if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                    }
+                    if (typeof updateStats === 'function') updateStats();
+                    if (typeof toast === 'function') {
+                        toast(`Auto-assigned Jira thumbnail task to Karthika's Daily Plan for ${task.id}`, 'success');
+                    }
+                } catch (e) {
+                    console.error('Failed to auto-assign thumbnail sub-task', e);
+                }
+            }
+
             // ── MONTHLY TEAM PLAN FUNCTIONS ─────────────────────────────────────────
 
             let monthlyPlanCurrentDate = new Date();
@@ -47289,7 +47365,7 @@ function isStrategyTask(t) {
             window.filterQcReportsList = filterQcReportsList; window.renderQcReportsList = renderQcReportsList; window.loadMoreQcReports = loadMoreQcReports;
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
-            window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
+            window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.checkAndCreateThumbnailSubTask = checkAndCreateThumbnailSubTask; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
             window.dismissToast = dismissToast;
             window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.dismissReworkQcModal = dismissReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
