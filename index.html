@@ -40085,39 +40085,97 @@ function isStrategyTask(t) {
                     }
 
                     const transitions = transitionsRes.data.transitions;
-                    console.log(`✓ Available transitions for ${taskId}:`, transitions.map(t => t.name).join(', '));
+                    console.log(`✓ Available transitions for ${taskId}:`, transitions.map(t => `${t.name} (to: ${t.to?.name || 'unknown'})`).join(', '));
 
-                    // 2. Find the transition that matches the target status name
-                    let targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+                    // 2. Find the transition that matches the target status name or transition name
+                    const targetClean = (newStatusName || '').trim().toLowerCase();
+                    let targetTransition = transitions.find(t => {
+                        const tName = (t.name || '').trim().toLowerCase();
+                        const toName = (t.to?.name || '').trim().toLowerCase();
+                        return tName === targetClean || toName === targetClean;
+                    });
+
                     if (!targetTransition) {
-                        const lowName = newStatusName.toLowerCase();
-                        if (lowName === 'design in progress') {
-                            targetTransition = transitions.find(t => 
-                                ['design in progress', 'design in-progress', 'in progress', 'design progress'].includes(t.name.toLowerCase())
-                            );
+                        const lowName = targetClean;
+                        if (lowName === 'design in progress' || lowName === 'in progress') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return ['design in progress', 'design in-progress', 'in progress', 'design progress'].some(s => n.includes(s) || tn.includes(s));
+                            });
                         } else if (lowName === 'content in progress') {
-                            targetTransition = transitions.find(t => 
-                                ['content in progress', 'in progress', 'content progress'].includes(t.name.toLowerCase())
-                            );
-                        } else if (lowName === 'rework designs') {
-                            targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework');
-                        } else if (lowName === 'rework') {
-                            targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework designs');
-                        } else if (lowName === 'completed') {
-                            targetTransition = transitions.find(t => 
-                                ['design completed', 'done', 'completed', 'resolved', 'closed', 'client approved'].includes(t.name.toLowerCase())
-                            );
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return ['content in progress', 'content progress', 'in progress'].some(s => n.includes(s) || tn.includes(s));
+                            });
+                        } else if (lowName === 'rework designs' || lowName === 'rework') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('rework') || tn.includes('rework');
+                            });
+                        } else if (lowName === 'thumbnail waiting' || lowName === 'thumbnail') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('thumbnail') || tn.includes('thumbnail');
+                            });
+                        } else if (lowName === 'quality check' || lowName === 'qc' || lowName === 'qc started') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('quality check') || tn.includes('quality check') || n === 'qc' || tn === 'qc';
+                            });
+                        } else if (lowName === 'shoot' || lowName === 'shoot needed' || lowName === 'shoot planned' || lowName === 'shoot in progress') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('shoot') || tn.includes('shoot');
+                            });
+                        } else if (lowName === 'completed' || lowName === 'done' || lowName === 'design completed') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return ['design completed', 'done', 'completed', 'resolved', 'closed', 'client approved'].some(s => n === s || tn === s);
+                            });
                         } else if (lowName === 'approved' || lowName === 'client approved') {
-                            targetTransition = transitions.find(t => 
-                                ['client approved', 'approved', 'design completed', 'done', 'completed'].includes(t.name.toLowerCase())
-                            );
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return ['client approved', 'approved', 'design completed', 'done', 'completed'].some(s => n === s || tn === s);
+                            });
+                        } else if (lowName === 'client sent') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('client sent') || tn.includes('client sent');
+                            });
+                        } else if (lowName === 'posted') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('posted') || tn.includes('posted');
+                            });
+                        } else if (lowName === 'analysis' || lowName === 'analytics') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('analysis') || tn.includes('analysis') || n.includes('analytics') || tn.includes('analytics');
+                            });
+                        } else if (lowName === 'to do' || lowName === 'design to do') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n.includes('to do') || tn.includes('to do');
+                            });
                         }
                     }
 
                     if (!targetTransition) {
                         console.warn(`✗ Transition to "${newStatusName}" not found. Available:`, transitions.map(t => t.name).join(', '));
                         toast(`Transition to "${newStatusName}" not available for this task in Jira.`, 'error');
-                        return false; // Indicate failure
+                        return false;
                     }
 
                     // 3. Perform the transition by posting the transition ID
@@ -40132,14 +40190,13 @@ function isStrategyTask(t) {
                     if (updateRes.status === 204 || updateRes.success) {
                         console.log(`✓ Jira task ${taskId} synced to "${newStatusName}"`);
                         toast(`✓ Jira synced: ${taskId} → ${newStatusName}`, 'success');
-                        return true; // Indicate success
+                        return true;
                     } else {
                         throw new Error('Failed to update Jira status. ' + jiraErrorMessage(updateRes));
                     }
                 } catch (err) {
                     console.error(`✗ Jira sync failed (attempt ${retryCount + 1}/${maxRetries + 1}):`, err.message);
 
-                    // Retry on network or temporary errors
                     if (retryCount < maxRetries) {
                         console.log(`Retrying Jira status update in 1 second...`);
                         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -40147,7 +40204,7 @@ function isStrategyTask(t) {
                     }
 
                     toast(`✗ Unable to sync Jira. Please try again.`, 'error');
-                    return false; // Indicate failure
+                    return false;
                 }
             }
 
@@ -44177,18 +44234,38 @@ function isStrategyTask(t) {
             }
 
             async function updateTaskStatus(taskId, newStatus) {
-                const taskIndex = tasks.findIndex(t => t.id === taskId);
-                if (taskIndex === -1) return false;
-                const task = tasks[taskIndex];
-                const oldStatus = task.status; if (task.manual) {
+                let taskIndex = tasks.findIndex(t => t && t.id && t.id.toLowerCase() === String(taskId).toLowerCase());
+                let task = taskIndex !== -1 ? tasks[taskIndex] : null;
+
+                if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && (e.jiraId === taskId || e.id === taskId));
+                    if (ev) {
+                        task = {
+                            id: ev.jiraId || taskId,
+                            desc: ev.title,
+                            status: ev.status || 'To Do',
+                            manual: false
+                        };
+                        tasks.push(task);
+                        taskIndex = tasks.length - 1;
+                    }
+                }
+
+                if (!task) {
+                    const isJiraKey = /^[A-Z0-9]+-\d+$/i.test(taskId);
+                    task = { id: taskId, manual: !isJiraKey, status: 'To Do' };
+                    tasks.push(task);
+                    taskIndex = tasks.length - 1;
+                }
+
+                const oldStatus = task.status || 'To Do';
+                const isInternal = isInternalTask(task);
+
+                if (task.manual || isInternal) {
                     try {
-                        const userKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
+                        const userKey = eKey(task.userId || task.assigneeEmail || currentUser?.email || 'unknown');
                         if (task.manual) {
-                            // Normal manual task — write to Firebase
-                            await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatus });
-                        } else if (shouldUpdateLocallyOnly) {
-                            // Karthika updating someone else's Jira task in her daily plan — store status override locally only
-                            await update(ref(db, `worksync/daily_plans/${eKey(currentUser.email)}/${taskId}`), { localStatus: newStatus, localStatusUpdatedAt: Date.now() });
+                            await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatus, updatedAt: Date.now() });
                         }
                         task.status = newStatus;
                         renderDailyPlan();
@@ -44197,30 +44274,22 @@ function isStrategyTask(t) {
                         updateStats();
                         toast('Task status updated', 'success');
 
-                        // Thumbnail notification
                         if (newStatus.toLowerCase() === 'thumbnail waiting' && oldStatus.toLowerCase() !== 'thumbnail waiting') {
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                         }
-
-                        // Rework or QC modal popup notification
                         if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
-
-                        // Design Completed notification for Murugesh, Palani & Nanjil
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
-
-                        // Client Sent notification for Murugesh & admins
                         if (newStatus.toLowerCase().trim() === 'client sent' && (oldStatus || '').toLowerCase().trim() !== 'client sent') {
                             sendClientSentNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
-                        // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
-                    } catch (err) { 
+                    } catch (err) {
                         toast('Failed to update status', 'error');
                         return false;
                     }
@@ -44232,6 +44301,7 @@ function isStrategyTask(t) {
                     if (isInternalTabActive()) renderInternalTasks();
                     updateStats();
                     toast('Syncing status to Jira...', 'info');
+
                     const jiraSuccess = await updateJiraStatus(taskId, newStatus);
                     if (!jiraSuccess) {
                         // Revert local status if Jira sync failed
@@ -44242,225 +44312,23 @@ function isStrategyTask(t) {
                         updateStats();
                         return false;
                     } else {
-                        // Thumbnail notification on successful Jira sync
                         if (newStatus.toLowerCase() === 'thumbnail waiting' && oldStatus.toLowerCase() !== 'thumbnail waiting') {
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                         }
-
-                        // Rework or QC modal popup notification
                         if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
                         }
-
-                        // Design Completed notification for Murugesh, Palani & Nanjil
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
-
-                        // Client Sent notification for Murugesh & admins
                         if (newStatus.toLowerCase().trim() === 'client sent' && (oldStatus || '').toLowerCase().trim() !== 'client sent') {
                             sendClientSentNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
-
-                        // Sync to matching strategy event
                         await syncTaskStatusToStrategy(taskId, newStatus);
                         return true;
                     }
                 }
             }
-
-            async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail) {
-                if (!task || !newAssigneeEmail) return;
-
-                // Skip thumbnail creation for Strategy Calendar events (Strategy Calendar manages its own Jira tasks & subtasks)
-                if (task.isStrategyEvent || task.eventId) {
-                    console.log('Skipping thumbnail creation for Strategy Event task:', task.id);
-                    return;
-                }
-
-                // Skip if this is already a Jira subtask (has a parentId) — strategy events create their own Jira subtasks
-                if (task.parentId) {
-                    return;
-                }
-
-                // Skip if task is linked to a Strategy Event (by jiraId or by title)
-                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
-                    const taskDesc = String(task.desc || task.summary || '').toLowerCase().trim();
-                    const taskId = String(task.id || '').toLowerCase();
-                    const isLinkedToStrategy = Object.values(strategyEvents).some(ev =>
-                        ev && (
-                            (ev.jiraId && taskId && String(ev.jiraId).toLowerCase() === taskId) ||
-                            (ev.title && taskDesc && String(ev.title).toLowerCase().trim() === taskDesc)
-                        )
-                    );
-                    if (isLinkedToStrategy) {
-                        console.log('Skipping thumbnail creation for task linked to Strategy Event:', task.id);
-                        return;
-                    }
-                }
-
-                // Skip thumbnail creation for Poster format tasks
-                if (task.format === 'Poster') {
-                    console.log('Skipping thumbnail creation for Poster format task:', task.id);
-                    return;
-                }
-
-                // Do not auto-create internal manual subtasks if the task is not a Jira task and not explicitly a manual task
-                if (!isJiraCloudTask(task) && !task.manual) {
-                    return;
-                }
-
-                const videoEditors = [
-                    'barathvilpower@gmail.com',
-                    'immanuelvilpower@gmail.com',
-                    'ajithvilpower@gmail.com',
-                    'princevilpower@gmail.com',
-                    'murugeshvilpower@gmail.com',
-                    'alexvilpower@gmail.com',
-                    'alex@vilpower.com'
-                ];
-
-                if (!videoEditors.includes(newAssigneeEmail.toLowerCase())) return;
-
-                const descLower = (task.desc || '').toLowerCase();
-                if (descLower.includes('thumbnail')) return;
-
-                const targetKarthikaEmail = 'karthikavilpower@gmail.com';
-                const karthikaUser = allUsersMap.get(targetKarthikaEmail) || knownUserByEmail(targetKarthikaEmail);
-                const karthikaName = karthikaUser?.name || 'Karthika';
-
-                let assigneeEmail = targetKarthikaEmail;
-                let assigneeNameVal = karthikaName;
-
-                if (!assigneeEmail) {
-                    assigneeEmail = newAssigneeEmail;
-                    const uObj = allUsersMap.get(assigneeEmail.toLowerCase()) || knownUserByEmail(assigneeEmail);
-                    assigneeNameVal = uObj?.name || assigneeEmail.split('@')[0];
-                }
-
-                // Check if sub-task already exists
-                const exists = tasks.some(t =>
-                    (t.parentId === task.id || t.parentTaskId === task.id) ||
-                    (t.desc && t.desc.toLowerCase().includes('thumbnail') && t.desc.toLowerCase().includes(task.id.toLowerCase()))
-                );
-
-                if (exists) {
-                    console.log('Thumbnail sub-task already exists for task', task.id);
-                    return;
-                }
-
-                if (isJiraCloudTask(task)) {
-                    try {
-                        const projectKey = task.id.split('-')[0];
-                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
-                        const subtaskTitle = `Thumbnail – ${task.desc || task.summary || ''}`;
-                        const subtaskPayload = {
-                            fields: {
-                                project: { key: projectKey },
-                                parent: { key: task.id },
-                                summary: subtaskTitle,
-                                issuetype: { name: 'Sub-task' },
-                                duedate: task.duedate || null,
-                                labels: task.clientLabels || []
-                            }
-                        };
-
-                        const karthikaAccountId = await findJiraAccountId(karthikaUser);
-                        if (karthikaAccountId) {
-                            subtaskPayload.fields.assignee = { id: karthikaAccountId };
-                        }
-
-                        const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
-                        if (subRes.success && (subRes.data?.key || subRes.key)) {
-                            const newSubkey = subRes.data?.key || subRes.key;
-                            toast(`Jira thumbnail subtask ${newSubkey} created!`, 'success');
-
-                            // Send notification
-                            await sendThumbnailNotification({
-                                id: newSubkey,
-                                desc: subtaskTitle,
-                                client: task.client || ''
-                            }, currentUser?.name || 'System');
-
-                            // Automatically assign to daily plan
-                            const dpRef = ref(db, `worksync/daily_plans/${eKey(targetKarthikaEmail)}/${newSubkey}`);
-                            await set(dpRef, {
-                                date: todayIso(),
-                                assignedBy: currentUser?.email || 'System',
-                                assignedAt: Date.now()
-                            });
-
-                            await syncTasks(true);
-                        } else {
-                            console.error('Failed to create Jira subtask:', subRes);
-                        }
-                    } catch (err) {
-                        console.error('Error creating Jira subtask:', err);
-                    }
-                } else {
-                    const subTaskId = 'M-' + Date.now();
-                    const subTask = {
-                        id: subTaskId,
-                        parentId: task.id,
-                        desc: `Thumbnail – ${task.desc || task.summary || ''}`,
-                        client: task.client || 'Others',
-                        project: task.project || '',
-                        duedate: task.duedate || null,
-                        priority: task.priority || 'Medium',
-                        clientLabels: task.clientLabels || [],
-                        category: task.category || 'Thumbnails',
-                        taskType: 'manual',
-                        status: 'Thumbnail Waiting',
-                        assignee: assigneeNameVal,
-                        assigneeEmail: assigneeEmail,
-                        manual: true,
-                        userId: assigneeEmail,
-                        createdAt: Date.now()
-                    };
-
-                    if (task.postDate) subTask.postDate = task.postDate;
-                    if (task.referenceLinks) subTask.referenceLinks = task.referenceLinks;
-                    if (task.campaign) subTask.campaign = task.campaign;
-                    if (task.department) subTask.department = task.department;
-                    if (task.fileManagerPath) subTask.fileManagerPath = task.fileManagerPath;
-                    if (task.sourceFolder) subTask.sourceFolder = task.sourceFolder;
-                    if (task.sourceLink) subTask.sourceLink = task.sourceLink;
-                    if (task.driveLink) subTask.driveLink = task.driveLink;
-                    if (task.folderPath) subTask.folderPath = task.folderPath;
-                    if (task.fileSourceUrl) subTask.fileSourceUrl = task.fileSourceUrl;
-                    if (task.isStrategyTask) subTask.isStrategyTask = task.isStrategyTask;
-                    if (task.isStrategyEvent) subTask.isStrategyEvent = task.isStrategyEvent;
-                    if (task.eventId) subTask.eventId = task.eventId;
-                    if (task.strategyEventId) subTask.strategyEventId = task.strategyEventId;
-
-                    try {
-                        await set(ref(db, `worksync/manual_tasks/${eKey(assigneeEmail)}/${subTaskId}`), subTask);
-                        tasks = mergeTasksById([subTask, ...tasks]);
-
-                        // Send notification
-                        await sendThumbnailNotification(subTask, currentUser?.name || 'System');
-
-                        // Assign to Daily Plan
-                        const dpRef = ref(db, `worksync/daily_plans/${eKey(assigneeEmail)}/${subTaskId}`);
-                        await set(dpRef, {
-                            date: todayIso(),
-                            assignedBy: currentUser?.email || 'System',
-                            assignedAt: Date.now()
-                        });
-
-                        renderTasks();
-                        renderDailyPlan();
-                        if (typeof isInternalTabActive === 'function' && isInternalTabActive()) renderInternalTasks();
-                        updateStats();
-                        toast(`Auto-assigned thumbnail sub-task to Karthika for ${task.id}`, 'success');
-                    } catch (e) {
-                        console.error('Failed to auto-assign thumbnail sub-task', e);
-                    }
-                }
-            }
-
-            // Track selected tasks for daily plan assignment
-            let apSelectedTasks = new Set();
 
             function openAssignPlanModal() {
                 document.getElementById('ap-task-search').value = '';

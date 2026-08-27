@@ -12267,39 +12267,97 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             }
 
             const transitions = transitionsRes.data.transitions;
-            console.log(`Available transitions for ${taskId}:`, transitions.map(t => t.name));
+            console.log(`Available transitions for ${taskId}:`, transitions.map(t => `${t.name} (to: ${t.to?.name || 'unknown'})`).join(', '));
 
             // 2. Find the transition that matches the target status name
-            let targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
+            const targetClean = (newStatusName || '').trim().toLowerCase();
+            let targetTransition = transitions.find(t => {
+                const tName = (t.name || '').trim().toLowerCase();
+                const toName = (t.to?.name || '').trim().toLowerCase();
+                return tName === targetClean || toName === targetClean;
+            });
+
             if (!targetTransition) {
-                const lowName = newStatusName.toLowerCase();
-                if (lowName === 'design in progress') {
-                    targetTransition = transitions.find(t => 
-                        ['design in progress', 'design in-progress', 'in progress', 'design progress'].includes(t.name.toLowerCase())
-                    );
+                const lowName = targetClean;
+                if (lowName === 'design in progress' || lowName === 'in progress') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return ['design in progress', 'design in-progress', 'in progress', 'design progress'].some(s => n.includes(s) || tn.includes(s));
+                    });
                 } else if (lowName === 'content in progress') {
-                    targetTransition = transitions.find(t => 
-                        ['content in progress', 'in progress', 'content progress'].includes(t.name.toLowerCase())
-                    );
-                } else if (lowName === 'rework designs') {
-                    targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework');
-                } else if (lowName === 'rework') {
-                    targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework designs');
-                } else if (lowName === 'completed') {
-                    targetTransition = transitions.find(t => 
-                        ['design completed', 'done', 'completed', 'resolved', 'closed', 'client approved'].includes(t.name.toLowerCase())
-                    );
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return ['content in progress', 'content progress', 'in progress'].some(s => n.includes(s) || tn.includes(s));
+                    });
+                } else if (lowName === 'rework designs' || lowName === 'rework') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('rework') || tn.includes('rework');
+                    });
+                } else if (lowName === 'thumbnail waiting' || lowName === 'thumbnail') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('thumbnail') || tn.includes('thumbnail');
+                    });
+                } else if (lowName === 'quality check' || lowName === 'qc' || lowName === 'qc started') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('quality check') || tn.includes('quality check') || n === 'qc' || tn === 'qc';
+                    });
+                } else if (lowName === 'shoot' || lowName === 'shoot needed' || lowName === 'shoot planned' || lowName === 'shoot in progress') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('shoot') || tn.includes('shoot');
+                    });
+                } else if (lowName === 'completed' || lowName === 'done' || lowName === 'design completed') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return ['design completed', 'done', 'completed', 'resolved', 'closed', 'client approved'].some(s => n === s || tn === s);
+                    });
                 } else if (lowName === 'approved' || lowName === 'client approved') {
-                    targetTransition = transitions.find(t => 
-                        ['client approved', 'approved', 'design completed', 'done', 'completed'].includes(t.name.toLowerCase())
-                    );
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return ['client approved', 'approved', 'design completed', 'done', 'completed'].some(s => n === s || tn === s);
+                    });
+                } else if (lowName === 'client sent') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('client sent') || tn.includes('client sent');
+                    });
+                } else if (lowName === 'posted') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('posted') || tn.includes('posted');
+                    });
+                } else if (lowName === 'analysis' || lowName === 'analytics') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('analysis') || tn.includes('analysis') || n.includes('analytics') || tn.includes('analytics');
+                    });
+                } else if (lowName === 'to do' || lowName === 'design to do') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n.includes('to do') || tn.includes('to do');
+                    });
                 }
             }
 
             if (!targetTransition) {
                 toast(`Transition to "${newStatusName}" not available for this task in Jira.`, 'error');
                 console.error(`Transition to "${newStatusName}" not found. Available:`, transitions.map(t => t.name));
-                return false; // Indicate failure
+                return false;
             }
 
             // 3. Perform the transition by posting the transition ID
@@ -12313,19 +12371,17 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
             if (updateRes.status === 204 || updateRes.success) {
                 toast(`Jira task ${taskId} updated to "${newStatusName}"`, 'success');
-                return true; // Indicate success
+                return true;
             } else {
                 throw new Error('Failed to update Jira status. ' + jiraErrorMessage(updateRes));
             }
         } catch (err) {
-            console.error('Jira status update failed:', err);
-            toast(err.message, 'error');
-            return false; // Indicate failure
+            console.error(`Jira update failed:`, err.message);
+            toast(`Unable to update Jira status: ${err.message}`, 'error');
+            return false;
         }
     }
 
-    // UTILS
-    let toastTimeout, toastHideTimeout;
     function dismissToast() {
         const t = document.getElementById('toast');
         if (!t) return;
@@ -13970,14 +14026,35 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
     }
 
     async function updateTaskStatus(taskId, newStatus) {
-        const taskIndex = tasks.findIndex(t => t.id === taskId);
-        if (taskIndex === -1) return false;
-        const task = tasks[taskIndex];
-        const oldStatus = task.status;
+        let taskIndex = tasks.findIndex(t => t && t.id && t.id.toLowerCase() === String(taskId).toLowerCase());
+        let task = taskIndex !== -1 ? tasks[taskIndex] : null;
+
+        if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+            const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && (e.jiraId === taskId || e.id === taskId));
+            if (ev) {
+                task = {
+                    id: ev.jiraId || taskId,
+                    desc: ev.title,
+                    status: ev.status || 'To Do',
+                    manual: false
+                };
+                tasks.push(task);
+                taskIndex = tasks.length - 1;
+            }
+        }
+
+        if (!task) {
+            const isJiraKey = /^[A-Z0-9]+-\d+$/i.test(taskId);
+            task = { id: taskId, manual: !isJiraKey, status: 'To Do' };
+            tasks.push(task);
+            taskIndex = tasks.length - 1;
+        }
+
+        const oldStatus = task.status || 'To Do';
 
         if (task.manual) {
             try {
-                await update(ref(db, `worksync/manual_tasks/${eKey(task.userId)}/${taskId}`), {
+                await update(ref(db, `worksync/manual_tasks/${eKey(task.userId || currentUser?.email || 'unknown')}/${taskId}`), {
                     status: newStatus,
                     updatedAt: Date.now()
                 });
@@ -13989,7 +14066,6 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 updateStats();
                 toast('Task status updated', 'success');
 
-                // Thumbnail notification
                 if (newStatus.toLowerCase() === 'thumbnail' && oldStatus.toLowerCase() !== 'thumbnail') {
                     sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                 }
@@ -14017,7 +14093,6 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 updateStats();
                 return false;
             } else {
-                // Thumbnail notification on successful Jira sync
                 if (newStatus.toLowerCase() === 'thumbnail' && oldStatus.toLowerCase() !== 'thumbnail') {
                     sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
                 }
