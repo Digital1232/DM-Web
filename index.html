@@ -12469,6 +12469,24 @@
                 return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
             }
 
+            function isDesignOrVideoUser(user = currentUser) {
+                if (!user) return false;
+                const userRole = (user.role || '').toLowerCase();
+                const userEmail = (user.email || '').toLowerCase();
+                return [
+                    'barathvilpower@gmail.com',
+                    'immanuelvilpower@gmail.com',
+                    'karthikavilpower@gmail.com',
+                    'anithavilpower@gmail.com'
+                ].includes(userEmail) ||
+                userRole.includes('designer') ||
+                userRole.includes('video') ||
+                userRole.includes('creative') ||
+                userRole.includes('visual') ||
+                userRole.includes('producer') ||
+                userRole.includes('editor');
+            }
+
             // ═══════════════════════════════════════════════════════════
             // PERFORMANCE OPTIMIZATION UTILITIES
             // ═══════════════════════════════════════════════════════════
@@ -13044,39 +13062,41 @@
             const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done', 'Rework'];
             const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed', 'Quality Check', 'Rework'];
 
-            // Daily Plan Pre-QC vs Completed status helpers
-            const DAILY_PLAN_BEFORE_QC_STATUS_SET = new Set([
-                'to do',
-                'to-do',
-                'in progress',
-                'content in progress',
-                'client content approval',
-                'design to do',
-                'design in progress',
-                'design hold',
-                'hold',
-                'on hold',
-                'rework designs',
-                'rework'
+            // Daily Plan Completed vs Active status helpers
+            const DAILY_PLAN_COMPLETED_STATUS_SET = new Set([
+                'completed',
+                'design completed',
+                'client sent',
+                'client approved',
+                'posted',
+                'analytics',
+                'done',
+                'resolved',
+                'closed',
+                'approved',
+                'shoot completed',
+                'shoot cancelled',
+                'skipped',
+                'missed'
             ]);
 
-            function isDailyPlanBeforeQcStatus(status) {
+            function isDailyPlanCompletedTask(status) {
                 if (!status) return false;
                 const s = String(status).trim().toLowerCase();
-                return DAILY_PLAN_BEFORE_QC_STATUS_SET.has(s);
+                return DAILY_PLAN_COMPLETED_STATUS_SET.has(s);
             }
 
-            function isDailyPlanCompletedTask(status) {
+            function isDailyPlanBeforeQcStatus(status) {
                 if (!status) return true;
-                return !isDailyPlanBeforeQcStatus(status);
+                return !isDailyPlanCompletedTask(status);
             }
 
-            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
-            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework'];
-            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework'];
-            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework'];
-            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework'];
+            const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail'];
+            const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework', 'Quality Check'];
+            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Quality Check', 'QC Started', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
 
@@ -23559,9 +23579,11 @@ function isStrategyTask(t) {
                 const status = String(task.status || '').toLowerCase().trim();
                 const client = String(task.client || '').toLowerCase().trim();
                 const desc = String(task.desc || task.summary || task.title || '').toLowerCase().trim();
-                return status === 'learnings' || status === 'learning' ||
-                    client === 'learnings' || client === 'learning' ||
-                    desc.includes('morning learning') || desc.startsWith('learning');
+                return (status === 'learnings' && client === 'learnings') ||
+                    desc.includes('morning learning') ||
+                    desc === 'learning' ||
+                    desc === 'learnings' ||
+                    desc === 'learning session';
             }
 
             function isLearningTask(task) {
@@ -25127,11 +25149,10 @@ function isStrategyTask(t) {
                     }
                 }
 
-                // For internal task, update status to 'In Progress' (except recurring morning learning)
-                const userRole = (currentUser?.role || '').toLowerCase();
-                const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
+                // For internal task, update status to 'Design In Progress' for design team (Barath, Immanuel, Karthika, etc.) or 'In Progress'
+                const isDesign = isDesignOrVideoUser(currentUser);
                 let resolvedStartStatus = startStatus;
-                if (isVideoEditorOrDesigner) {
+                if (isDesign) {
                     resolvedStartStatus = 'Design In Progress';
                 }
 
@@ -25141,7 +25162,7 @@ function isStrategyTask(t) {
                     // For Jira tasks, update to "Design In Progress" or appropriate status
                     const currentStatus = (task.status || '').toLowerCase();
                     let newJiraStatus = 'In Progress';
-                    if (isVideoEditorOrDesigner) {
+                    if (isDesign) {
                         newJiraStatus = 'Design In Progress';
                     } else {
                         const isDesignTask = currentStatus.includes('design');
@@ -25246,12 +25267,14 @@ function isStrategyTask(t) {
                 taskStartTime = Date.now() - (taskSeconds * 1000);
                 startTaskTimer();
                 saveCurrentTaskState('working');
-                // Update status back to In Progress for internal tasks
+                // Update status back to In Progress or Design In Progress for internal tasks
                 if (activeTaskId) {
                     const task = tasks.find(t => t.id === activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         task.isOnHold = false;
-                        updateInternalTaskStatus(activeTaskId, 'In Progress');
+                        const isDesign = isDesignOrVideoUser(currentUser);
+                        const resumeStatus = isDesign ? 'Design In Progress' : 'In Progress';
+                        updateInternalTaskStatus(activeTaskId, resumeStatus);
                     }
                 }
                 updateSessionStatus();
@@ -40065,7 +40088,15 @@ function isStrategyTask(t) {
                     let targetTransition = transitions.find(t => t.name.toLowerCase() === newStatusName.toLowerCase());
                     if (!targetTransition) {
                         const lowName = newStatusName.toLowerCase();
-                        if (lowName === 'rework designs') {
+                        if (lowName === 'design in progress') {
+                            targetTransition = transitions.find(t => 
+                                ['design in progress', 'design in-progress', 'in progress', 'design progress'].includes(t.name.toLowerCase())
+                            );
+                        } else if (lowName === 'content in progress') {
+                            targetTransition = transitions.find(t => 
+                                ['content in progress', 'in progress', 'content progress'].includes(t.name.toLowerCase())
+                            );
+                        } else if (lowName === 'rework designs') {
                             targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework');
                         } else if (lowName === 'rework') {
                             targetTransition = transitions.find(t => t.name.toLowerCase() === 'rework designs');
@@ -41383,20 +41414,28 @@ function isStrategyTask(t) {
                 const mergedUsers = Array.from(allUsersMap.values()).filter(u => u.email && u.email !== '123');
                 if (canViewDailyPlanTeamAccess()) {
                     const selected = getDpSelectedUsers();
-                    return selected.sort((a, b) => {
+                    if (selected.length > 0) {
+                        return selected.sort((a, b) => {
+                            const nameA = (allUsersMap.get(a.toLowerCase())?.name || a).toLowerCase();
+                            const nameB = (allUsersMap.get(b.toLowerCase())?.name || b).toLowerCase();
+                            return nameA.localeCompare(nameB);
+                        });
+                    }
+                    // Default to all team members if none selected yet or checkboxes not yet rendered
+                    return mergedUsers.map(u => u.email.toLowerCase()).sort((a, b) => {
                         const nameA = (allUsersMap.get(a.toLowerCase())?.name || a).toLowerCase();
                         const nameB = (allUsersMap.get(b.toLowerCase())?.name || b).toLowerCase();
                         return nameA.localeCompare(nameB);
                     });
                 }
-                return [currentUser.email];
+                return [currentUser?.email || ''].filter(Boolean);
             }
 
             function getDailyPlanScopeLabel() {
                 if (!canViewDailyPlanTeamAccess()) return currentUser?.name || 'My Plan';
                 const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
                 const checked = Array.from(checkboxes).filter(cb => cb.checked);
-                if (checked.length === 0) return 'No Users';
+                if (checked.length === 0) return 'All Team Members';
                 if (checked.length === checkboxes.length) return 'All Team Members';
                 if (checked.length === 1) {
                     const labelSpan = checked[0].closest('label')?.querySelector('span');
@@ -41420,16 +41459,16 @@ function isStrategyTask(t) {
                 }).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
 
                 if (dpFilter === 'completed') {
-                    // Filter for completed tasks for that day (post-QC statuses)
+                    // Filter for completed tasks for that day
                     uniquePlans = uniquePlans.filter(t => isDailyPlanCompletedTask(t.status));
                 } else if (dpFilter === 'active') {
-                    // Filter for active/pending Pre-QC tasks only
+                    // Filter for active/pending tasks only
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
-                        return isDailyPlanBeforeQcStatus(t.status);
+                        return !isDailyPlanCompletedTask(t.status);
                     });
                 } else if (dpFilter === 'carryover') {
-                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && isDailyPlanBeforeQcStatus(t.status));
+                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && !isDailyPlanCompletedTask(t.status));
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
@@ -41446,11 +41485,7 @@ function isStrategyTask(t) {
                                 !desc.includes('reel') && desc.includes('design'));
                     });
                 } else {
-                    // Default / 'all' view: Only show tasks before Quality Check (Pre-QC)
-                    uniquePlans = uniquePlans.filter(t => {
-                        if (activeTaskId && t.id === activeTaskId) return true;
-                        return isDailyPlanBeforeQcStatus(t.status);
-                    });
+                    // Default / 'all' view: Show ALL planned tasks (including active and completed today)
                 }
                 return uniquePlans;
             }
@@ -41631,12 +41666,12 @@ function isStrategyTask(t) {
                 
                 const stats = {
                     total: uniquePlans.length,
-                    todo: uniquePlans.filter(t => ['to do', 'design to do'].includes(statusToLower(t))).length,
-                    designInProgress: uniquePlans.filter(t => ['in progress', 'design in progress', 'content in progress', 'shoot in progress'].includes(statusToLower(t))).length,
-                    rework: uniquePlans.filter(t => (statusToLower(t).includes('rework') || ['rework designs', 'rework', 'rework design'].includes(statusToLower(t)))).length,
-                    thumbnail: uniquePlans.filter(t => ['thumbnail waiting', 'thumbnail'].includes(statusToLower(t))).length,
-                    hold: uniquePlans.filter(t => ['hold', 'design hold', 'on hold'].includes(statusToLower(t))).length,
-                    qualityCheck: uniquePlans.filter(t => ['quality check', 'qc started'].includes(statusToLower(t))).length,
+                    todo: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['to do', 'to-do', 'design to do', 'backlog', 'selected for development'].includes(statusToLower(t))).length,
+                    designInProgress: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['in progress', 'design in progress', 'content in progress', 'shoot in progress', 'shoot planned', 'active'].includes(statusToLower(t))).length,
+                    rework: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && (statusToLower(t).includes('rework') || ['rework designs', 'rework', 'rework design'].includes(statusToLower(t)))).length,
+                    thumbnail: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['thumbnail waiting', 'thumbnail', 'thumbnail in progress'].includes(statusToLower(t))).length,
+                    hold: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['hold', 'design hold', 'on hold'].includes(statusToLower(t))).length,
+                    qualityCheck: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['quality check', 'qc started', 'in review', 'review', 'testing', 'qa', 'client content approval', 'client review'].includes(statusToLower(t))).length,
                     completed: uniquePlans.filter(t => isDailyPlanCompletedTask(t.status)).length
                 };
                 if (!statsGrid) return;
@@ -44900,11 +44935,12 @@ function isStrategyTask(t) {
                                     <div>
                                         <label class="text-xs font-bold text-slate-700 uppercase tracking-widest block mb-2">🏷️ Status</label>
                                         <select id="plan-task-status" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm font-medium bg-white">
-                                            <option value="Shoot Needed">🔴 Shoot Needed</option>
-                                            <option value="To Do">� To Do</option>
-                                            <option value="Content In Progress">🔄 In Progress</option>
+                                            <option value="To Do">📋 To Do</option>
+                                            <option value="Design In Progress">🎨 Design In Progress</option>
+                                            <option value="Content In Progress">📝 Content In Progress</option>
+                                            <option value="In Progress">🔄 In Progress</option>
                                             <option value="Design To Do">🎨 Design To Do</option>
-                                            <option value="Design In Progress">🎨 Design IP</option>
+                                            <option value="Shoot Needed">🔴 Shoot Needed</option>
                                         </select>
                                     </div>
                                 </div>

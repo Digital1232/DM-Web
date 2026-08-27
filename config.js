@@ -16,6 +16,7 @@ export const USERS = [
     { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
     { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
     { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
+    { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member', avatar: 'Sneha' },
     { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
     { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
     { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
