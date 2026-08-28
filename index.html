@@ -25245,29 +25245,23 @@ function isStrategyTask(t) {
                     }
                 }
 
-                // For internal task, update status to 'Design In Progress' for design team (Barath, Immanuel, Karthika, etc.) or 'In Progress'
-                const isDesign = isDesignOrVideoUser(currentUser);
-                let resolvedStartStatus = startStatus;
-                if (isDesign) {
-                    resolvedStartStatus = 'Design In Progress';
-                }
+                // Check user type for start status: Sneha -> 'Content In Progress', Palani/others -> 'Design In Progress'
+                const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                                (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
+                const isDesign = typeof isDesignOrVideoUser === 'function' && isDesignOrVideoUser(currentUser);
+                let resolvedStartStatus = options.internalStatus || (isSneha ? 'Content In Progress' : 'Design In Progress');
 
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                     await updateInternalTaskStatus(id, resolvedStartStatus);
                 } else if (task && !isInternalTask(task)) {
-                    // For Jira tasks, update to "Design In Progress" or appropriate status
+                    // For Jira tasks: Only Sneha gets "Content In Progress", everyone else (Palani, Designers, etc.) gets "Design In Progress"
                     const currentStatus = (task.status || '').toLowerCase();
-                    let newJiraStatus = 'In Progress';
-                    if (isDesign) {
-                        newJiraStatus = 'Design In Progress';
-                    } else {
-                        const isDesignTask = currentStatus.includes('design');
-                        newJiraStatus = isDesignTask ? 'Design In Progress' : 'In Progress';
-                    }
+                    const newJiraStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
 
-                    // Only update if not already in progress
-                    if ((newJiraStatus === 'Design In Progress' && currentStatus !== 'design in progress') ||
-                        (newJiraStatus === 'In Progress' && !currentStatus.includes('in progress'))) {
+                    // Only update if not already in that status
+                    if ((newJiraStatus === 'Content In Progress' && currentStatus !== 'content in progress') ||
+                        (newJiraStatus === 'Design In Progress' && currentStatus !== 'design in progress') ||
+                        (!currentStatus.includes('in progress'))) {
                         try {
                             await updateTaskStatus(id, newJiraStatus);
                         } catch (err) {
@@ -25363,13 +25357,14 @@ function isStrategyTask(t) {
                 taskStartTime = Date.now() - (taskSeconds * 1000);
                 startTaskTimer();
                 saveCurrentTaskState('working');
-                // Update status back to In Progress or Design In Progress for internal tasks
+                // Update status back to Content In Progress (Sneha) or Design In Progress (Palani / Designers) for internal tasks
                 if (activeTaskId) {
                     const task = tasks.find(t => t.id === activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         task.isOnHold = false;
-                        const isDesign = isDesignOrVideoUser(currentUser);
-                        const resumeStatus = isDesign ? 'Design In Progress' : 'In Progress';
+                        const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                                        (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
+                        const resumeStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
                         updateInternalTaskStatus(activeTaskId, resumeStatus);
                     }
                 }
@@ -28974,6 +28969,74 @@ function isStrategyTask(t) {
                 }
             }
 
+            // ── Ultra-fast client-side image compressor ──────────────────────────
+            async function compressImageForChat(file, maxWidth = 1920, maxHeight = 1920, quality = 0.82) {
+                if (!file || !file.type || !file.type.startsWith('image/')) return file;
+                if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+                if (file.size < 120 * 1024) return file; // Skip if already small (<120KB)
+
+                try {
+                    const bitmap = await createImageBitmap(file);
+                    let { width, height } = bitmap;
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(bitmap, 0, 0, width, height);
+
+                    const mimeType = 'image/jpeg';
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, quality));
+                    if (blob && blob.size < file.size) {
+                        const cleanBase = (file.name || 'image').replace(/\.[^.]+$/, '');
+                        return new File([blob], cleanBase + '.jpg', { type: mimeType, lastModified: Date.now() });
+                    }
+                } catch (err) {
+                    console.warn('Image compression fallback to original:', err);
+                }
+                return file;
+            }
+
+            // ── Direct fast upload pipeline for chat files ────────────────────────
+            async function uploadChatFileFast(file) {
+                if (!file) return null;
+                if (file.isLink) return file;
+                if (file.isGoogleDriveFile) return file;
+                if (file._uploadedData) return file._uploadedData;
+
+                // 1. Compress image client-side for blazing-fast network transfer
+                let toUpload = file;
+                if (file.type && file.type.startsWith('image/')) {
+                    toUpload = await compressImageForChat(file);
+                }
+
+                // 2. Direct upload to Cloudinary/Hostinger CDN
+                try {
+                    const uploaded = await uploadToCloudinary(toUpload);
+                    file._uploadedData = uploaded;
+                    return uploaded;
+                } catch (err) {
+                    console.warn('Fast upload failed, attempting fallback:', err);
+                    if (toUpload.size <= 3 * 1024 * 1024) {
+                        const b64 = await fileToBase64(toUpload);
+                        const fallbackData = {
+                            url: b64,
+                            type: toUpload.type || 'application/octet-stream',
+                            name: file.name,
+                            size: toUpload.size,
+                            cloudinary: false
+                        };
+                        file._uploadedData = fallbackData;
+                        return fallbackData;
+                    }
+                    throw err;
+                }
+            }
+
             async function uploadChatAttachment(event) {
                 const files = Array.from(event.target.files || []);
                 document.getElementById('chat-file-upload').value = '';
@@ -28988,6 +29051,11 @@ function isStrategyTask(t) {
                     toast(`${file.name} skipped — must be less than 100MB`, 'error');
                     return;
                 }
+                // Pre-upload in background immediately while user is still typing!
+                file._uploadPromise = uploadChatFileFast(file).catch(err => {
+                    console.warn('Pre-upload notice:', err);
+                    return null;
+                });
                 stagedAttachments.push(file);
                 if (!deferPreview) renderStagedAttachmentsPreview();
                 document.getElementById('msg-input')?.focus();
@@ -29062,87 +29130,7 @@ function isStrategyTask(t) {
                 if (!activeConvId) {
                     throw new Error('No active conversation');
                 }
-
-                try {
-                    // Read file as base64
-                    const base64Data = await fileToBase64(file);
-                    const base64String = base64Data.split(',')[1]; // Remove data:mime;base64, prefix
-
-                    // Get Firebase ID token
-                    let idToken = null;
-                    try {
-                        // Get from window.auth (exposed from Firebase module)
-                        if (window.auth && window.auth.currentUser) {
-                            idToken = await window.auth.currentUser.getIdToken();
-                        } else {
-                            // Fallback: try to get from window.firebaseAuth
-                            if (window.firebaseAuth && window.firebaseAuth.currentUser) {
-                                idToken = await window.firebaseAuth.currentUser.getIdToken();
-                            } else {
-                                throw new Error('No authenticated user found');
-                            }
-                        }
-                    } catch (err) {
-                        console.warn('Could not get Firebase token:', err);
-                        toast('Please log in to upload files', 'error');
-                        throw new Error('Authentication required');
-                    }
-
-                    if (!idToken) {
-                        throw new Error('Could not obtain authentication token');
-                    }
-
-                    // Try Google Drive API first
-                    try {
-                        const response = await fetch('/api/google-drive/upload', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${idToken}`
-                            },
-                            body: JSON.stringify({
-                                fileName: file.name,
-                                fileBuffer: base64String,
-                                mimeType: file.type || 'application/octet-stream',
-                                conversationId: activeConvId
-                            }),
-                            timeout: 30000
-                        });
-
-                        if (!response.ok) {
-                            throw new Error(`API returned ${response.status}: ${response.statusText}`);
-                        }
-
-                        const text = await response.text();
-                        if (!text) {
-                            throw new Error('Empty response from server');
-                        }
-
-                        const result = JSON.parse(text);
-                        if (!result.success) {
-                            throw new Error(result.message || 'Upload failed');
-                        }
-
-                        return {
-                            url: result.data.webViewLink,
-                            downloadUrl: result.data.webContentLink,
-                            type: file.type,
-                            name: file.name,
-                            driveFileId: result.data.driveFileId,
-                            isGoogleDriveFile: true
-                        };
-                    } catch (googleDriveErr) {
-                        console.warn('Google Drive upload failed, falling back to Cloudinary:', googleDriveErr);
-
-                        // Fallback to Cloudinary
-                        console.log('Attempting Cloudinary upload as fallback...');
-                        const uploaded = await uploadToCloudinary(file);
-                        return uploaded;
-                    }
-                } catch (err) {
-                    console.error('File upload error:', err);
-                    throw err;
-                }
+                return await uploadChatFileFast(file);
             }
 
             function addGoogleDriveLink() {
@@ -29338,71 +29326,78 @@ function isStrategyTask(t) {
                 if (!activeConvId) return;
 
                 const sendBtn = document.getElementById('send-msg-btn');
-                if (sendBtn) {
+                const isTextOnly = stagedAttachments.length === 0;
+                const savedText = text;
+                const savedReplyId = replyToMessageId;
+                const targetConvId = activeConvId;
+
+                // Optimistic UI response: clear input immediately for 0ms perceived latency
+                if (isTextOnly) {
+                    input.value = '';
+                    input.style.height = '46px';
+                    cancelReply();
+                    input.focus();
+                } else if (sendBtn) {
                     sendBtn.disabled = true;
                     sendBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="21"></iconify-icon>`;
                 }
 
                 try {
-                    const payload = { senderEmail: currentUser.email, senderName: currentUser.name, text, timestamp: Date.now() };
-                    
-                    // Add reply reference if replying to a message
-                    if (replyToMessageId) {
-                        payload.replyToId = replyToMessageId;
+                    const payload = {
+                        senderEmail: currentUser.email,
+                        senderName: currentUser.name,
+                        text: savedText,
+                        timestamp: Date.now()
+                    };
+
+                    if (savedReplyId) {
+                        payload.replyToId = savedReplyId;
                     }
-                    
-                    let lastMsg = text;
+
+                    let lastMsg = savedText;
 
                     if (stagedAttachments.length) {
-                        const attachments = [];
-                        for (const item of stagedAttachments) {
-                            try {
-                                if (item.isLink) {
-                                    // Skip links (not part of this implementation)
-                                    continue;
-                                } else if (item.isGoogleDriveFile) {
-                                    // Already uploaded, just add reference
-                                    attachments.push(item);
-                                } else {
-                                    // Upload file to Google Drive
-                                    const uploaded = await uploadFileToGoogleDrive(item);
-                                    attachments.push(uploaded);
-                                }
-                            } catch (err) {
-                                console.error('File upload error:', err);
-                                toast(`Failed to upload ${item.name}: ${err.message}`, 'error');
-                                if (sendBtn) {
-                                    sendBtn.disabled = false;
-                                    sendBtn.innerHTML = `<iconify-icon icon="mdi:send" width="21"></iconify-icon>`;
-                                }
-                                return;
-                            }
-                        }
+                        // Upload all attachments in parallel using pre-upload promises
+                        const currentAttachments = [...stagedAttachments];
+                        input.value = '';
+                        input.style.height = '46px';
+                        clearStagedAttachment();
+                        cancelReply();
 
-                        if (attachments.length > 0) {
-                            payload.attachments = attachments;
-                            if (attachments.length === 1) {
-                                payload.attachmentUrl = attachments[0].url;
-                                payload.attachmentType = attachments[0].type;
-                                payload.attachmentName = attachments[0].name;
+                        const uploadPromises = currentAttachments.map(item => {
+                            if (item.isLink) return Promise.resolve(item);
+                            if (item.isGoogleDriveFile) return Promise.resolve(item);
+                            if (item._uploadedData) return Promise.resolve(item._uploadedData);
+                            return item._uploadPromise || uploadChatFileFast(item);
+                        });
+
+                        const uploadResults = await Promise.all(uploadPromises);
+                        const validAttachments = uploadResults.filter(Boolean);
+
+                        if (validAttachments.length > 0) {
+                            payload.attachments = validAttachments;
+                            if (validAttachments.length === 1) {
+                                payload.attachmentUrl = validAttachments[0].url;
+                                payload.attachmentType = validAttachments[0].type;
+                                payload.attachmentName = validAttachments[0].name;
                             }
-                            lastMsg = text || (attachments.length > 1
-                                ? `📎 ${attachments.length} files`
-                                : `📎 ${attachments[0].name}`);
+                            lastMsg = savedText || (validAttachments.length > 1
+                                ? `📎 ${validAttachments.length} files`
+                                : `📎 ${validAttachments[0].name}`);
                         }
                     }
 
-                    await push(ref(db, `worksync/messages/${activeConvId}`), payload);
-                    await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() });
-
-                    input.value = '';
-                    input.style.height = '46px';
-                    clearStagedAttachment();
-                    
-                    // Clear reply mode after sending
-                    cancelReply();
+                    // Parallel Firebase push & conversation update
+                    await Promise.all([
+                        push(ref(db, `worksync/messages/${targetConvId}`), payload),
+                        update(ref(db, `worksync/conversations/${targetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() })
+                    ]);
                 } catch (err) {
+                    console.error('Failed to send message:', err);
                     toast('Failed to send message: ' + err.message, 'error');
+                    if (isTextOnly) {
+                        input.value = savedText;
+                    }
                 } finally {
                     if (sendBtn) {
                         sendBtn.disabled = false;
@@ -40190,18 +40185,56 @@ function isStrategyTask(t) {
 
                     if (!targetTransition) {
                         const lowName = targetClean;
-                        if (lowName === 'design in progress' || lowName === 'in progress') {
+                        if (lowName === 'design in progress') {
                             targetTransition = transitions.find(t => {
                                 const n = (t.name || '').toLowerCase();
                                 const tn = (t.to?.name || '').toLowerCase();
-                                return ['design in progress', 'design in-progress', 'in progress', 'design progress'].some(s => n.includes(s) || tn.includes(s));
+                                return ['design in progress', 'design in-progress', 'design progress', 'design in_progress', 'start design'].some(s => n.includes(s) || tn.includes(s)) ||
+                                       (n.includes('design') && n.includes('progress')) ||
+                                       (tn.includes('design') && tn.includes('progress'));
                             });
+                            if (!targetTransition) {
+                                targetTransition = transitions.find(t => {
+                                    const n = (t.name || '').toLowerCase();
+                                    const tn = (t.to?.name || '').toLowerCase();
+                                    return n.includes('design') || tn.includes('design');
+                                });
+                            }
                         } else if (lowName === 'content in progress') {
                             targetTransition = transitions.find(t => {
                                 const n = (t.name || '').toLowerCase();
                                 const tn = (t.to?.name || '').toLowerCase();
-                                return ['content in progress', 'content progress', 'in progress'].some(s => n.includes(s) || tn.includes(s));
+                                return ['content in progress', 'content progress', 'content in_progress', 'start content'].some(s => n.includes(s) || tn.includes(s)) ||
+                                       (n.includes('content') && n.includes('progress')) ||
+                                       (tn.includes('content') && tn.includes('progress'));
                             });
+                            if (!targetTransition) {
+                                targetTransition = transitions.find(t => {
+                                    const n = (t.name || '').toLowerCase();
+                                    const tn = (t.to?.name || '').toLowerCase();
+                                    return n.includes('content') || tn.includes('content');
+                                });
+                            }
+                        } else if (lowName === 'in progress') {
+                            targetTransition = transitions.find(t => {
+                                const n = (t.name || '').toLowerCase();
+                                const tn = (t.to?.name || '').toLowerCase();
+                                return n === 'in progress' || tn === 'in progress' || n === 'in-progress' || tn === 'in-progress';
+                            });
+                            if (!targetTransition) {
+                                targetTransition = transitions.find(t => {
+                                    const n = (t.name || '').toLowerCase();
+                                    const tn = (t.to?.name || '').toLowerCase();
+                                    return n.includes('design in progress') || tn.includes('design in progress');
+                                });
+                            }
+                            if (!targetTransition) {
+                                targetTransition = transitions.find(t => {
+                                    const n = (t.name || '').toLowerCase();
+                                    const tn = (t.to?.name || '').toLowerCase();
+                                    return n.includes('in progress') || tn.includes('in progress');
+                                });
+                            }
                         } else if (lowName === 'rework designs' || lowName === 'rework') {
                             targetTransition = transitions.find(t => {
                                 const n = (t.name || '').toLowerCase();
@@ -51867,38 +51900,54 @@ function isStrategyTask(t) {
             var text = input.value.trim();
             if (!text && !fcpStagedAttachments.length) return;
 
+            var savedText = text;
+            var targetId = fcpConvId;
+            var isTextOnly = fcpStagedAttachments.length === 0;
+
+            if (isTextOnly) {
+                input.value = '';
+                input.style.height = 'auto';
+            }
+
             try {
-                var payload = { senderEmail: _fcpCU()?.email, senderName: _fcpCU()?.name, text: text, timestamp: Date.now() };
-                var lastMsg = text;
+                var payload = { senderEmail: _fcpCU()?.email, senderName: _fcpCU()?.name, text: savedText, timestamp: Date.now() };
+                var lastMsg = savedText;
 
                 if (fcpStagedAttachments.length) {
-                    var attachments = [];
-                    for (var i = 0; i < fcpStagedAttachments.length; i++) {
-                        var f = fcpStagedAttachments[i];
+                    var currentFiles = fcpStagedAttachments.slice();
+                    fcpStagedAttachments = [];
+                    fcpUpdateAttachmentPreview();
+                    input.value = '';
+                    input.style.height = 'auto';
+
+                    var uploadPromises = currentFiles.map(async function(f) {
                         try {
-                            var up = await _upload(f);
-                            attachments.push(up);
+                            if (typeof compressImageForChat === 'function' && f.type && f.type.startsWith('image/')) {
+                                f = await compressImageForChat(f);
+                            }
+                            return await _upload(f);
                         } catch (e) {
-                            attachments.push({ url: await _f2b64(f), type: f.type, name: f.name });
+                            return { url: await _f2b64(f), type: f.type, name: f.name };
                         }
-                    }
+                    });
+
+                    var attachments = (await Promise.all(uploadPromises)).filter(Boolean);
                     payload.attachments = attachments;
                     if (attachments.length === 1) {
                         payload.attachmentUrl = attachments[0].url;
                         payload.attachmentType = attachments[0].type;
                         payload.attachmentName = attachments[0].name;
                     }
-                    lastMsg = text || (attachments.length > 1 ? '📎 ' + attachments.length + ' attachments' : '📎 ' + attachments[0].name);
-                    fcpStagedAttachments = [];
-                    fcpUpdateAttachmentPreview();
+                    lastMsg = savedText || (attachments.length > 1 ? '📎 ' + attachments.length + ' attachments' : '📎 ' + attachments[0].name);
                 }
 
-                await _push(_ref('worksync/messages/' + fcpConvId), payload);
-                await _upd(_ref('worksync/conversations/' + fcpConvId), { lastMessage: lastMsg, lastTimestamp: Date.now() });
-                input.value = '';
-                input.style.height = 'auto';
+                await Promise.all([
+                    _push(_ref('worksync/messages/' + targetId), payload),
+                    _upd(_ref('worksync/conversations/' + targetId), { lastMessage: lastMsg, lastTimestamp: Date.now() })
+                ]);
             } catch (err) {
                 if (typeof toast === 'function') _toast('Failed to send: ' + err.message, 'error');
+                if (isTextOnly) input.value = savedText;
             }
         }
 

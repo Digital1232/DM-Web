@@ -6316,25 +6316,22 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             tasks.unshift(taskToMove);
         }
 
-        // For internal task, update status to 'Design In Progress' for design team (Barath, Immanuel, Karthika, etc.) or 'In Progress'
+        // Check user type for start status: Sneha -> 'Content In Progress', Palani/others -> 'Design In Progress'
         const task = tasks.find(t => t.id === id);
-        const isDesign = isDesignOrVideoUser(currentUser);
-        const resolvedStartStatus = isDesign ? 'Design In Progress' : 'In Progress';
+        const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                        (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
+        const isDesign = typeof isDesignOrVideoUser === 'function' && isDesignOrVideoUser(currentUser);
+        const resolvedStartStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
 
         if (task && isInternalTask(task)) {
             await updateInternalTaskStatus(id, resolvedStartStatus);
         } else if (task && !isInternalTask(task)) {
             const currentStatus = (task.status || '').toLowerCase();
-            let newJiraStatus = 'In Progress';
-            if (isDesign) {
-                newJiraStatus = 'Design In Progress';
-            } else {
-                const isDesignTask = currentStatus.includes('design');
-                newJiraStatus = isDesignTask ? 'Design In Progress' : 'In Progress';
-            }
+            const newJiraStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
 
-            if ((newJiraStatus === 'Design In Progress' && currentStatus !== 'design in progress') ||
-                (newJiraStatus === 'In Progress' && !currentStatus.includes('in progress'))) {
+            if ((newJiraStatus === 'Content In Progress' && currentStatus !== 'content in progress') ||
+                (newJiraStatus === 'Design In Progress' && currentStatus !== 'design in progress') ||
+                (!currentStatus.includes('in progress'))) {
                 try {
                     await updateTaskStatus(id, newJiraStatus);
                 } catch (err) {
@@ -6431,8 +6428,9 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const task = tasks.find(t => t.id === activeTaskId);
             if (task && isInternalTask(task)) {
                 task.isOnHold = false;
-                const isDesign = isDesignOrVideoUser(currentUser);
-                const resumeStatus = isDesign ? 'Design In Progress' : 'In Progress';
+                const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                                (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
+                const resumeStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
                 updateInternalTaskStatus(activeTaskId, resumeStatus);
             }
         }
@@ -8452,6 +8450,38 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         }
     }
 
+    // Fast Image Compressor for chat
+    async function compressImageForChat(file, maxWidth = 1920, maxHeight = 1920, quality = 0.82) {
+        if (!file || !file.type || !file.type.startsWith('image/')) return file;
+        if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+        if (file.size < 120 * 1024) return file;
+
+        try {
+            const bitmap = await createImageBitmap(file);
+            let { width, height } = bitmap;
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bitmap, 0, 0, width, height);
+
+            const mimeType = 'image/jpeg';
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, quality));
+            if (blob && blob.size < file.size) {
+                const cleanBase = (file.name || 'image').replace(/\.[^.]+$/, '');
+                return new File([blob], cleanBase + '.jpg', { type: mimeType, lastModified: Date.now() });
+            }
+        } catch (err) {
+            console.warn('Image compression fallback:', err);
+        }
+        return file;
+    }
+
     async function sendMessage() {
         const input = document.getElementById('msg-input');
         const text = input.value.trim();
@@ -8459,7 +8489,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         if (!activeConvId) return;
 
         const sendBtn = document.getElementById('send-msg-btn');
-        if (sendBtn) {
+        const isTextOnly = !stagedAttachment;
+        const savedText = text;
+        const targetConvId = activeConvId;
+
+        // Optimistic UI response: clear immediately
+        if (isTextOnly) {
+            input.value = '';
+            input.focus();
+        } else if (sendBtn) {
             sendBtn.disabled = true;
             sendBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="21"></iconify-icon>`;
         }
@@ -8467,43 +8505,44 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         try {
             let attachmentUrl = null, attachmentType = null, attachmentName = null;
             if (stagedAttachment) {
-                attachmentUrl = await fileToBase64(stagedAttachment);
-                attachmentType = stagedAttachment.type || 'application/octet-stream';
+                let toUpload = stagedAttachment;
+                if (stagedAttachment.type && stagedAttachment.type.startsWith('image/')) {
+                    toUpload = await compressImageForChat(stagedAttachment);
+                }
+                attachmentUrl = await fileToBase64(toUpload);
+                attachmentType = toUpload.type || 'application/octet-stream';
                 attachmentName = stagedAttachment.name;
-                
-                // CRITICAL FIX: Force correct MIME type for PDFs to prevent .ai conversion
-                // Check both file extension and MIME type
+
                 const lowerName = (attachmentName || '').toLowerCase();
                 if (lowerName.endsWith('.pdf') || 
                     attachmentType === 'application/pdf' ||
                     attachmentType === 'application/postscript' ||
                     attachmentType.includes('illustrator') ||
                     attachmentType.includes('postscript')) {
-                    // Force PDF MIME type to prevent browser misidentifying it as .ai
                     attachmentType = 'application/pdf';
-                    
-                    // If filename doesn't have .pdf extension, add it
                     if (!lowerName.endsWith('.pdf')) {
                         attachmentName = (attachmentName || 'document') + '.pdf';
                     }
                 }
+                input.value = '';
+                clearStagedAttachment();
             }
 
-            const payload = { senderEmail: currentUser.email, senderName: currentUser.name, text, timestamp: Date.now(), readBy: {} };
+            const payload = { senderEmail: currentUser.email, senderName: currentUser.name, text: savedText, timestamp: Date.now(), readBy: {} };
             if (attachmentUrl) {
                 payload.attachmentUrl = attachmentUrl;
                 payload.attachmentType = attachmentType;
                 payload.attachmentName = attachmentName;
             }
 
-            await push(ref(db, `worksync/messages/${activeConvId}`), payload);
-            const lastMsg = text || `📎 ${attachmentName}`;
-            await update(ref(db, `worksync/conversations/${activeConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() });
-
-            input.value = '';
-            clearStagedAttachment();
+            const lastMsg = savedText || `📎 ${attachmentName}`;
+            await Promise.all([
+                push(ref(db, `worksync/messages/${targetConvId}`), payload),
+                update(ref(db, `worksync/conversations/${targetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() })
+            ]);
         } catch (err) {
             toast('Failed to send message: ' + err.message, 'error');
+            if (isTextOnly) input.value = savedText;
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;
@@ -12279,18 +12318,56 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
 
             if (!targetTransition) {
                 const lowName = targetClean;
-                if (lowName === 'design in progress' || lowName === 'in progress') {
+                if (lowName === 'design in progress') {
                     targetTransition = transitions.find(t => {
                         const n = (t.name || '').toLowerCase();
                         const tn = (t.to?.name || '').toLowerCase();
-                        return ['design in progress', 'design in-progress', 'in progress', 'design progress'].some(s => n.includes(s) || tn.includes(s));
+                        return ['design in progress', 'design in-progress', 'design progress', 'design in_progress', 'start design'].some(s => n.includes(s) || tn.includes(s)) ||
+                               (n.includes('design') && n.includes('progress')) ||
+                               (tn.includes('design') && tn.includes('progress'));
                     });
+                    if (!targetTransition) {
+                        targetTransition = transitions.find(t => {
+                            const n = (t.name || '').toLowerCase();
+                            const tn = (t.to?.name || '').toLowerCase();
+                            return n.includes('design') || tn.includes('design');
+                        });
+                    }
                 } else if (lowName === 'content in progress') {
                     targetTransition = transitions.find(t => {
                         const n = (t.name || '').toLowerCase();
                         const tn = (t.to?.name || '').toLowerCase();
-                        return ['content in progress', 'content progress', 'in progress'].some(s => n.includes(s) || tn.includes(s));
+                        return ['content in progress', 'content progress', 'content in_progress', 'start content'].some(s => n.includes(s) || tn.includes(s)) ||
+                               (n.includes('content') && n.includes('progress')) ||
+                               (tn.includes('content') && tn.includes('progress'));
                     });
+                    if (!targetTransition) {
+                        targetTransition = transitions.find(t => {
+                            const n = (t.name || '').toLowerCase();
+                            const tn = (t.to?.name || '').toLowerCase();
+                            return n.includes('content') || tn.includes('content');
+                        });
+                    }
+                } else if (lowName === 'in progress') {
+                    targetTransition = transitions.find(t => {
+                        const n = (t.name || '').toLowerCase();
+                        const tn = (t.to?.name || '').toLowerCase();
+                        return n === 'in progress' || tn === 'in progress' || n === 'in-progress' || tn === 'in-progress';
+                    });
+                    if (!targetTransition) {
+                        targetTransition = transitions.find(t => {
+                            const n = (t.name || '').toLowerCase();
+                            const tn = (t.to?.name || '').toLowerCase();
+                            return n.includes('design in progress') || tn.includes('design in progress');
+                        });
+                    }
+                    if (!targetTransition) {
+                        targetTransition = transitions.find(t => {
+                            const n = (t.name || '').toLowerCase();
+                            const tn = (t.to?.name || '').toLowerCase();
+                            return n.includes('in progress') || tn.includes('in progress');
+                        });
+                    }
                 } else if (lowName === 'rework designs' || lowName === 'rework') {
                     targetTransition = transitions.find(t => {
                         const n = (t.name || '').toLowerCase();
