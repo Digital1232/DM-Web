@@ -26,7 +26,7 @@ if (!admin.apps.length) {
     });
 }
 
-const db = admin.firebasestore();
+const db = admin.firestore();
 
 // Google Drive Service Account Configuration
 const driveServiceAccount = {

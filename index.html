@@ -44422,9 +44422,22 @@ function isStrategyTask(t) {
                 }
             }
 
+            // Initialize apSelectedTasks on window with fallback
+            window.apSelectedTasks = window.apSelectedTasks instanceof Set ? window.apSelectedTasks : new Set();
+            let apSelectedTasks = window.apSelectedTasks;
+
             function openAssignPlanModal() {
-                document.getElementById('ap-task-search').value = '';
-                document.getElementById('ap-date').value = document.getElementById('dp-date').value || todayIso();
+                if (!(window.apSelectedTasks instanceof Set)) {
+                    window.apSelectedTasks = new Set();
+                }
+                apSelectedTasks = window.apSelectedTasks;
+
+                const searchInput = document.getElementById('ap-task-search');
+                if (searchInput) searchInput.value = '';
+                const dpDateInput = document.getElementById('dp-date');
+                const apDateInput = document.getElementById('ap-date');
+                if (apDateInput) apDateInput.value = (dpDateInput && dpDateInput.value) || todayIso();
+
                 // Reset due date range
                 const apDueFrom = document.getElementById('ap-due-from');
                 const apDueTo = document.getElementById('ap-due-to');
@@ -44432,7 +44445,7 @@ function isStrategyTask(t) {
                 if (apDueTo) apDueTo.value = '';
 
                 // Clear previous selections
-                apSelectedTasks.clear();
+                window.apSelectedTasks.clear();
                 renderApSelectedTasks();
 
                 const sel = document.getElementById('ap-user');
@@ -44474,32 +44487,47 @@ function isStrategyTask(t) {
                 if (statusSel) statusSel.innerHTML = '<option value="">All Statuses</option>' + statuses.map(s => `<option value="${s}">${escapeHtml(s)}</option>`).join('');
 
                 filterAssignPlanTasks();
-                document.getElementById('assignPlanModal').showModal();
+                const modal = document.getElementById('assignPlanModal');
+                if (modal && typeof modal.showModal === 'function') {
+                    modal.showModal();
+                }
             }
+            window.openAssignPlanModal = openAssignPlanModal;
 
             function addTaskToApSelection(taskId) {
-                apSelectedTasks.add(taskId);
+                if (!taskId) return;
+                if (!(window.apSelectedTasks instanceof Set)) {
+                    window.apSelectedTasks = new Set();
+                }
+                window.apSelectedTasks.add(taskId);
                 renderApSelectedTasks();
                 // Clear search after selection
-                document.getElementById('ap-task-search').value = '';
+                const searchInput = document.getElementById('ap-task-search');
+                if (searchInput) searchInput.value = '';
                 filterAssignPlanTasks();
             }
+            window.addTaskToApSelection = addTaskToApSelection;
 
             function removeTaskFromApSelection(taskId) {
-                apSelectedTasks.delete(taskId);
+                if (window.apSelectedTasks instanceof Set) {
+                    window.apSelectedTasks.delete(taskId);
+                }
                 renderApSelectedTasks();
+                filterAssignPlanTasks();
             }
+            window.removeTaskFromApSelection = removeTaskFromApSelection;
 
             function renderApSelectedTasks() {
                 const container = document.getElementById('ap-selected-tasks');
                 if (!container) return;
 
-                if (apSelectedTasks.size === 0) {
+                const selectedTasks = (window.apSelectedTasks instanceof Set) ? window.apSelectedTasks : new Set();
+                if (selectedTasks.size === 0) {
                     container.innerHTML = '<p class="text-xs text-slate-400 italic self-center">No tasks selected</p>';
                     return;
                 }
 
-                const selectedTasksHtml = Array.from(apSelectedTasks).map(taskId => {
+                const selectedTasksHtml = Array.from(selectedTasks).map(taskId => {
                     let task = tasks.find(t => t.id === taskId);
                     if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
                         // Try direct Firebase key lookup first
@@ -44527,6 +44555,7 @@ function isStrategyTask(t) {
 
                 container.innerHTML = selectedTasksHtml;
             }
+            window.renderApSelectedTasks = renderApSelectedTasks;
 
             function filterAssignPlanTasks() {
                 const list = document.getElementById('ap-task-list');
@@ -44632,7 +44661,7 @@ function isStrategyTask(t) {
                         ? `<span class="text-[8px] font-black bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">Overdue</span>`
                         : '';
                     const rowBg = isOverdue ? 'bg-rose-50/40 border-rose-100 hover:bg-rose-50 hover:border-rose-200' : 'border-transparent hover:bg-slate-100 hover:border-slate-200';
-                    const isSelected = apSelectedTasks.has(t.id);
+                    const isSelected = (window.apSelectedTasks instanceof Set) && window.apSelectedTasks.has(t.id);
                     const selectedClass = isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50' : '';
                     const idDisplay = (t.id && !t.id.startsWith('-')) 
                         ? `<span class="text-indigo-600 font-mono text-xs font-black shrink-0">${t.id}</span>` 
@@ -44656,10 +44685,12 @@ function isStrategyTask(t) {
                 </div>`;
                 }).join('');
             }
+            window.filterAssignPlanTasks = filterAssignPlanTasks;
 
             async function submitAssignPlan() {
-                if (apSelectedTasks.size === 0) return toast('Please select at least one task', 'error');
-                const selectedTaskIds = Array.from(apSelectedTasks);
+                const selectedTasks = (window.apSelectedTasks instanceof Set) ? window.apSelectedTasks : new Set();
+                if (selectedTasks.size === 0) return toast('Please select at least one task', 'error');
+                const selectedTaskIds = Array.from(selectedTasks);
                 const userEmail = document.getElementById('ap-user').value;
                 const date = document.getElementById('ap-date').value;
                 if (!userEmail || !date) return toast('Please select user and date', 'error');
@@ -44771,7 +44802,9 @@ function isStrategyTask(t) {
                         dpDateInput.value = date;
                     }
 
-                    apSelectedTasks.clear();
+                    if (window.apSelectedTasks instanceof Set) {
+                        window.apSelectedTasks.clear();
+                    }
                     if (typeof renderApSelectedTasks === 'function') renderApSelectedTasks();
 
                     renderTasks();
@@ -47436,7 +47469,7 @@ function isStrategyTask(t) {
             window.dismissToast = dismissToast;
             window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.dismissReworkQcModal = dismissReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
-            window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks;
+            window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks; window.apSelectedTasks = apSelectedTasks;
             window.updateInternalTaskStatus = updateInternalTaskStatus;
             window.submitMorningLearningCompletion = submitMorningLearningCompletion;
             window.submitMorningLearningSkip = submitMorningLearningSkip;
