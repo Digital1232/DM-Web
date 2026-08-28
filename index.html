@@ -29260,6 +29260,8 @@ function isStrategyTask(t) {
                 closeMentionDropdown();
             }
 
+            let isSendingChatMsg = false;
+
             function handleMsgKeyDown(e) {
                 if (mentionActive) {
                     const dropdown = document.getElementById('mention-dropdown');
@@ -29303,10 +29305,16 @@ function isStrategyTask(t) {
                 }
 
                 if (e.key === 'Enter') {
+                    if (e.isComposing || e.keyCode === 229) return;
+                    if (e.repeat) {
+                        e.preventDefault();
+                        return;
+                    }
                     if (e.shiftKey) {
                         // Let the default textarea behavior insert a newline
                     } else {
                         e.preventDefault();
+                        e.stopPropagation();
                         sendMessage();
                     }
                 }
@@ -29320,24 +29328,30 @@ function isStrategyTask(t) {
             }
 
             async function sendMessage() {
+                if (isSendingChatMsg) return;
                 const input = document.getElementById('msg-input');
+                if (!input) return;
                 const text = input.value.trim();
                 if (!text && !stagedAttachments.length) return;
                 if (!activeConvId) return;
 
+                isSendingChatMsg = true;
                 const sendBtn = document.getElementById('send-msg-btn');
                 const isTextOnly = stagedAttachments.length === 0;
                 const savedText = text;
                 const savedReplyId = replyToMessageId;
                 const targetConvId = activeConvId;
+                const currentAttachments = [...stagedAttachments];
 
-                // Optimistic UI response: clear input immediately for 0ms perceived latency
-                if (isTextOnly) {
-                    input.value = '';
-                    input.style.height = '46px';
-                    cancelReply();
-                    input.focus();
-                } else if (sendBtn) {
+                // Optimistic UI response: synchronously clear input & staged attachments immediately to prevent duplicate sends
+                input.value = '';
+                input.style.height = '46px';
+                cancelReply();
+                if (stagedAttachments.length) {
+                    clearStagedAttachment();
+                }
+
+                if (sendBtn) {
                     sendBtn.disabled = true;
                     sendBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="21"></iconify-icon>`;
                 }
@@ -29356,14 +29370,8 @@ function isStrategyTask(t) {
 
                     let lastMsg = savedText;
 
-                    if (stagedAttachments.length) {
+                    if (currentAttachments.length) {
                         // Upload all attachments in parallel using pre-upload promises
-                        const currentAttachments = [...stagedAttachments];
-                        input.value = '';
-                        input.style.height = '46px';
-                        clearStagedAttachment();
-                        cancelReply();
-
                         const uploadPromises = currentAttachments.map(item => {
                             if (item.isLink) return Promise.resolve(item);
                             if (item.isGoogleDriveFile) return Promise.resolve(item);
@@ -29399,6 +29407,7 @@ function isStrategyTask(t) {
                         input.value = savedText;
                     }
                 } finally {
+                    isSendingChatMsg = false;
                     if (sendBtn) {
                         sendBtn.disabled = false;
                         sendBtn.innerHTML = `<iconify-icon icon="mdi:send" width="21"></iconify-icon>`;
@@ -51894,32 +51903,35 @@ function isStrategyTask(t) {
             el.scrollTop = el.scrollHeight;
         }
 
+        var fcpIsSending = false;
+
         async function fcpSendMessage() {
+            if (fcpIsSending) return;
             if (!fcpConvId || !_fcpCU()) return;
             var input = document.getElementById('fcp-msg-input');
+            if (!input) return;
             var text = input.value.trim();
             if (!text && !fcpStagedAttachments.length) return;
 
+            fcpIsSending = true;
             var savedText = text;
             var targetId = fcpConvId;
             var isTextOnly = fcpStagedAttachments.length === 0;
+            var currentFiles = fcpStagedAttachments.slice();
 
-            if (isTextOnly) {
-                input.value = '';
-                input.style.height = 'auto';
+            // Optimistic UI response: clear immediately
+            input.value = '';
+            input.style.height = 'auto';
+            if (fcpStagedAttachments.length) {
+                fcpStagedAttachments = [];
+                fcpUpdateAttachmentPreview();
             }
 
             try {
                 var payload = { senderEmail: _fcpCU()?.email, senderName: _fcpCU()?.name, text: savedText, timestamp: Date.now() };
                 var lastMsg = savedText;
 
-                if (fcpStagedAttachments.length) {
-                    var currentFiles = fcpStagedAttachments.slice();
-                    fcpStagedAttachments = [];
-                    fcpUpdateAttachmentPreview();
-                    input.value = '';
-                    input.style.height = 'auto';
-
+                if (currentFiles.length) {
                     var uploadPromises = currentFiles.map(async function(f) {
                         try {
                             if (typeof compressImageForChat === 'function' && f.type && f.type.startsWith('image/')) {
@@ -51948,11 +51960,25 @@ function isStrategyTask(t) {
             } catch (err) {
                 if (typeof toast === 'function') _toast('Failed to send: ' + err.message, 'error');
                 if (isTextOnly) input.value = savedText;
+            } finally {
+                fcpIsSending = false;
             }
         }
 
         function fcpHandleKey(e) {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fcpSendMessage(); }
+            if (e.key === 'Enter') {
+                if (e.isComposing || e.keyCode === 229 || e.repeat) {
+                    e.preventDefault();
+                    return;
+                }
+                if (e.shiftKey) {
+                    // Let newline through
+                } else {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fcpSendMessage();
+                }
+            }
         }
 
         function fcpHandleAttachment(event) {

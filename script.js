@@ -8415,6 +8415,8 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         closeMentionDropdown();
     }
 
+    let isSendingChatMsg = false;
+
     function handleMsgKeyDown(e) {
         if (mentionActive) {
             const dropdown = document.getElementById('mention-dropdown');
@@ -8445,8 +8447,18 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         }
 
         if (e.key === 'Enter') {
-            e.preventDefault();
-            sendMessage();
+            if (e.isComposing || e.keyCode === 229) return;
+            if (e.repeat) {
+                e.preventDefault();
+                return;
+            }
+            if (e.shiftKey) {
+                // Let the default textarea behavior insert a newline
+            } else {
+                e.preventDefault();
+                e.stopPropagation();
+                sendMessage();
+            }
         }
     }
 
@@ -8483,35 +8495,41 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     }
 
     async function sendMessage() {
+        if (isSendingChatMsg) return;
         const input = document.getElementById('msg-input');
+        if (!input) return;
         const text = input.value.trim();
         if (!text && !stagedAttachment) return;
         if (!activeConvId) return;
 
+        isSendingChatMsg = true;
         const sendBtn = document.getElementById('send-msg-btn');
         const isTextOnly = !stagedAttachment;
         const savedText = text;
         const targetConvId = activeConvId;
+        const currentAttachment = stagedAttachment;
 
         // Optimistic UI response: clear immediately
-        if (isTextOnly) {
-            input.value = '';
-            input.focus();
-        } else if (sendBtn) {
+        input.value = '';
+        if (stagedAttachment) {
+            clearStagedAttachment();
+        }
+
+        if (sendBtn) {
             sendBtn.disabled = true;
             sendBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="21"></iconify-icon>`;
         }
 
         try {
             let attachmentUrl = null, attachmentType = null, attachmentName = null;
-            if (stagedAttachment) {
-                let toUpload = stagedAttachment;
-                if (stagedAttachment.type && stagedAttachment.type.startsWith('image/')) {
-                    toUpload = await compressImageForChat(stagedAttachment);
+            if (currentAttachment) {
+                let toUpload = currentAttachment;
+                if (currentAttachment.type && currentAttachment.type.startsWith('image/')) {
+                    toUpload = await compressImageForChat(currentAttachment);
                 }
                 attachmentUrl = await fileToBase64(toUpload);
                 attachmentType = toUpload.type || 'application/octet-stream';
-                attachmentName = stagedAttachment.name;
+                attachmentName = currentAttachment.name;
 
                 const lowerName = (attachmentName || '').toLowerCase();
                 if (lowerName.endsWith('.pdf') || 
@@ -8524,8 +8542,6 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                         attachmentName = (attachmentName || 'document') + '.pdf';
                     }
                 }
-                input.value = '';
-                clearStagedAttachment();
             }
 
             const payload = { senderEmail: currentUser.email, senderName: currentUser.name, text: savedText, timestamp: Date.now(), readBy: {} };
@@ -8544,6 +8560,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             toast('Failed to send message: ' + err.message, 'error');
             if (isTextOnly) input.value = savedText;
         } finally {
+            isSendingChatMsg = false;
             if (sendBtn) {
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = `<iconify-icon icon="mdi:send" width="21"></iconify-icon>`;
