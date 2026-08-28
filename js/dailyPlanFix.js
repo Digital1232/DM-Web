@@ -1,12 +1,20 @@
-// Daily Plan Fix - Verify all functions are globally available
+// Daily Plan Fix - Verify all functions and state are globally available
 // This file is loaded AFTER index.html to ensure all functions are properly defined
 
 console.log('[Daily Plan Fix] Verifying Daily Plan functions...');
 
+// Guarantee window.apSelectedTasks is a Set
+if (!(window.apSelectedTasks instanceof Set)) {
+    window.apSelectedTasks = new Set();
+}
+
 const requiredFunctions = [
+    'openAssignPlanModal',
     'addTaskToApSelection',
     'removeTaskFromApSelection',
     'renderApSelectedTasks',
+    'filterAssignPlanTasks',
+    'submitAssignPlan',
     'updateDpUserLabel',
     'handleDpUserCheckChange'
 ];
