@@ -37,7 +37,22 @@
                 moreTab.classList.add('tab-active');
             }
         }
+
+        // Toggle mobile chat viewport class on content-area
+        const contentArea = document.getElementById('content-area');
+        if (contentArea) {
+            if (view === 'chat') {
+                contentArea.classList.add('chat-view-active');
+                setTimeout(() => {
+                    const msgArea = document.getElementById('messages-area');
+                    if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+                }, 150);
+            } else {
+                contentArea.classList.remove('chat-view-active');
+            }
+        }
     }
+
 
     /**
      * Open Mobile "More" Sheet Menu Drawer
