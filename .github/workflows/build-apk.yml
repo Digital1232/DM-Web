@@ -27,13 +27,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Prepare Web Assets for Capacitor
+        run: |
+          echo "Preparing www directory..."
+          mkdir -p www
+          rsync -av --exclude='node_modules' --exclude='.git' --exclude='android' --exclude='.github' --exclude='www' --exclude='scratch' ./ www/
+
       - name: Initialize Capacitor and Generate Android Project
         run: |
           echo "Installing Capacitor..."
           npm install --no-audit --prefer-offline @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
           
           echo "Initializing Capacitor Project..."
-          npx cap init "One Desk" "com.vilpower.onedesk" --web-dir "."
+          npx cap init "One Desk" "com.vilpower.onedesk" --web-dir "www"
           
           echo "Adding Android Platform..."
           npx cap add android
