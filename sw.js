@@ -3,7 +3,7 @@
  * Provides offline shell support, asset caching, and PWABuilder / TWA compliance.
  */
 
-const CACHE_NAME = 'onedesk-pwa-v1.0.0';
+const CACHE_NAME = 'onedesk-pwa-v1.0.1';
 
 // Core shell assets to pre-cache
 const PRECACHE_ASSETS = [
@@ -14,7 +14,8 @@ const PRECACHE_ASSETS = [
   '/js/mobile-app.js',
   '/img/Fav-Icon.png',
   '/img/favicon.svg',
-  '/img/onedesk-logo.png'
+  '/img/onedesk-logo.png',
+  '/img/loading_logo.gif'
 ];
 
 // Install Event - Pre-cache core shell
@@ -43,18 +44,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Network First with Cache Fallback for dynamic content
+// Fetch Event - Network First with Cache Fallback for same-origin content
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
-  // Ignore non-GET, chrome-extension, or cross-origin analytics/firestore calls from caching
-  if (
-    event.request.method !== 'GET' ||
-    url.protocol.startsWith('chrome-extension') ||
-    url.hostname.includes('firestore.googleapis.com') ||
-    url.hostname.includes('firebaseio.com') ||
-    url.hostname.includes('googleapis.com')
-  ) {
+  // Do not intercept cross-origin requests, chrome extensions, or external APIs
+  if (url.origin !== self.location.origin) {
     return;
   }
 
@@ -70,15 +70,23 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // Fallback to root index for HTML navigation requests
+        if (event.request.mode === 'navigate') {
+          const navFallback = (await caches.match('/index.html')) || (await caches.match('/'));
+          if (navFallback) {
+            return navFallback;
           }
-          // Fallback to root index for HTML navigation requests
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html') || caches.match('/');
-          }
+        }
+        // Fallback error response to ensure a valid Response is always returned
+        return new Response('Network request failed and no offline cache available.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' }
         });
       })
   );

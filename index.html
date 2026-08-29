@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="auth-pending">
 
 <head>
     <meta charset="UTF-8">
@@ -11,11 +10,10 @@
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <meta name="app-version" content="0.0.1">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/Fav-Icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="img/Fav-Icon.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="img/Fav-Icon.png">
-    <link rel="shortcut icon" type="image/png" href="img/Fav-Icon.png">
-    <link rel="apple-touch-icon" href="img/Fav-Icon.png">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="apple-touch-icon" href="img/favicon.svg">
+    <link rel="preload" as="image" href="img/loading_logo.gif" type="image/gif">
     <title>One Desk Endless Productivity</title>
     <link rel="stylesheet" href="dist/output.css">
     <link rel="stylesheet" href="mobile-app.css">
@@ -1728,12 +1726,15 @@
             pointer-events: none;
         }
 
-        html.auth-pending #login-view {
+        html.auth-pending #login-view,
+        html.auth-pending #dashboard-view {
             display: none !important;
         }
 
         html.auth-pending #loading-view {
             display: flex !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
 
         /* Dynamic viewport height for mobile browsers */
@@ -2544,22 +2545,26 @@
     </script>
 
     <script>
-        window.fbAsyncInit = function () {
-            FB.init({
-                appId: '{your-app-id}',
-                cookie: true,
-                xfbml: true,
-                version: 'v20.0'
-            });
-
-            FB.AppEvents.logPageView();
-
-        };
-
+        // Initialize Facebook SDK only if a valid App ID is configured
         (function (d, s, id) {
+            const fbAppId = window.FB_APP_ID || '';
+            if (!fbAppId || fbAppId === '{your-app-id}') {
+                return; // Skip loading unconfigured SDK
+            }
+            window.fbAsyncInit = function () {
+                FB.init({
+                    appId: fbAppId,
+                    cookie: true,
+                    xfbml: true,
+                    version: 'v20.0'
+                });
+                try { FB.AppEvents.logPageView(); } catch (e) {}
+            };
             var js, fjs = d.getElementsByTagName(s)[0];
             if (d.getElementById(id)) { return; }
             js = d.createElement(s); js.id = id;
+            js.async = true;
+            js.onerror = function() { console.info('Facebook SDK not loaded (blocked or offline)'); };
             js.src = "https://connect.facebook.net/en_US/sdk.js";
             fjs.parentNode.insertBefore(js, fjs);
         }(document, 'script', 'facebook-jssdk'));
@@ -2867,12 +2872,11 @@
     <!-- ══════════════════════════════════════════
          LOADING SCREEN
     ══════════════════════════════════════════ -->
-    <div id="loading-view" class="fixed inset-0 z-[70] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="relative flex items-center justify-center mb-6">
-            <div class="absolute -inset-4 bg-indigo-500/20 rounded-full blur-xl animate-pulse"></div>
-            <img src="img/Fav-Icon.png" alt="One Desk" class="w-20 h-20 relative z-10 drop-shadow-md animate-pulse">
+    <div id="loading-view" class="fixed inset-0 z-[70] bg-slate-50 dark:bg-slate-950 flex-col items-center justify-center hidden transition-opacity duration-500">
+        <div class="relative flex items-center justify-center mb-5">
+            <img src="img/loading_logo.gif" alt="Loading..." class="w-32 h-32 object-contain">
         </div>
-        <div class="flex items-center gap-2.5 px-4 py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
+        <div class="flex items-center gap-2.5 px-4 py-2">
             <iconify-icon icon="svg-spinners:ring-resize" width="18" class="text-indigo-600 dark:text-indigo-400"></iconify-icon>
             <p class="text-slate-600 dark:text-slate-300 font-bold text-xs tracking-wider uppercase">Loading your workspace...</p>
         </div>
@@ -12195,6 +12199,7 @@
             console.log('[Module] Firebase imports complete');
         } catch (err) {
             console.error('[Module] Firebase import failed:', err);
+            if (typeof hideInitialLoading === 'function') hideInitialLoading();
             document.documentElement.classList.remove('auth-pending');
             document.getElementById('loading-view')?.classList.add('hidden');
             document.getElementById('login-view')?.classList.remove('hidden');
@@ -15118,6 +15123,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function hideLoadingScreen() {
+                if (typeof hideInitialLoading === 'function') hideInitialLoading();
                 const loader = document.getElementById('loading-view');
                 if (!loader || loader.classList.contains('hidden')) return;
                 loader.style.transition = 'opacity 0.5s ease-out';
@@ -15442,10 +15448,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     appInitialized = false;
                     document.documentElement.classList.remove('has-user');
                     document.documentElement.classList.remove('auth-pending');
+                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
                     
-                    // Show login, hide dashboard
+                    // Show login, hide dashboard and loading views
                     const dashboardView = document.getElementById('dashboard-view');
                     const loginView = document.getElementById('login-view');
+                    const loadingView = document.getElementById('loading-view');
+                    if (loadingView) loadingView.classList.add('hidden');
                     if (dashboardView) dashboardView.classList.add('hidden');
                     if (loginView) loginView.classList.remove('hidden');
                     
@@ -15453,8 +15462,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } catch (e) {
                     console.error('[logout] Unexpected error during logout:', e);
                     // Force UI reset even if something goes wrong
+                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
                     const dashboardView = document.getElementById('dashboard-view');
                     const loginView = document.getElementById('login-view');
+                    const loadingView = document.getElementById('loading-view');
+                    if (loadingView) loadingView.classList.add('hidden');
                     if (dashboardView) dashboardView.classList.add('hidden');
                     if (loginView) loginView.classList.remove('hidden');
                 }
@@ -46512,6 +46524,7 @@ function isStrategyTask(t) {
             // ══════════════════════════════════════════
             const authInitTimeout = setTimeout(() => {
                 if (!appInitialized && !currentUser) {
+                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
                     document.documentElement.classList.remove('auth-pending');
                     document.getElementById('login-view')?.classList.remove('hidden');
                     document.getElementById('loading-view')?.classList.add('hidden');
@@ -46547,6 +46560,9 @@ function isStrategyTask(t) {
                     localStorage.removeItem('worksync_user');
                     document.documentElement.classList.remove('has-user');
                     document.documentElement.classList.remove('auth-pending');
+                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
+                    const loadingView = document.getElementById('loading-view');
+                    if (loadingView) loadingView.classList.add('hidden');
                     document.getElementById('dashboard-view').classList.add('hidden');
                     document.getElementById('login-view').classList.remove('hidden');
                 }
