@@ -418,6 +418,87 @@
         window.addEventListener('resize', restorePosition);
     }
 
+    /**
+     * Mobile App Permission Onboarding
+     */
+    function showPermissionsModal() {
+        const modal = document.getElementById('permissions-modal-overlay');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    function dismissPermissionsModal() {
+        const modal = document.getElementById('permissions-modal-overlay');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        localStorage.setItem('onedesk_permissions_onboarded', 'true');
+    }
+
+    async function requestAllMobilePermissions() {
+        dismissPermissionsModal();
+
+        // 1. Push Notifications
+        try {
+            if (window.PushManager && typeof window.PushManager.init === 'function') {
+                await window.PushManager.init();
+            } else if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+        } catch (e) {
+            console.warn('[Permissions] Notification request error:', e);
+        }
+
+        // 2. Geolocation / Location
+        try {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        console.log('[Permissions] Location granted:', pos.coords.latitude, pos.coords.longitude);
+                    },
+                    (err) => {
+                        console.warn('[Permissions] Location denied or unavailable:', err.message);
+                    },
+                    { timeout: 8000, enableHighAccuracy: true }
+                );
+            }
+        } catch (e) {
+            console.warn('[Permissions] Location request error:', e);
+        }
+
+        // 3. Camera / Media Access
+        try {
+            if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                // Stop tracks immediately after granting
+                stream.getTracks().forEach(track => track.stop());
+                console.log('[Permissions] Camera granted.');
+            }
+        } catch (e) {
+            console.warn('[Permissions] Camera request info:', e.message);
+        }
+
+        if (typeof window.toast === 'function') {
+            window.toast('Permissions configured! One Desk is ready.', 'success');
+        }
+    }
+
+    function checkAndPromptPermissions() {
+        const isMobile = window.innerWidth < 768 || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        if (!isMobile) return;
+
+        const alreadyPrompted = localStorage.getItem('onedesk_permissions_onboarded');
+        if (!alreadyPrompted) {
+            setTimeout(showPermissionsModal, 1500);
+        }
+    }
+
+    // Expose global methods
+    window.showPermissionsModal = showPermissionsModal;
+    window.dismissPermissionsModal = dismissPermissionsModal;
+    window.requestAllMobilePermissions = requestAllMobilePermissions;
+
     // Initialize on DOMContentLoaded
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
@@ -425,6 +506,7 @@
             setupSidebarHook();
             setupSwipeToDismiss();
             setupDraggableChatBubble();
+            checkAndPromptPermissions();
             // Periodic badge sync
             setInterval(syncMobileDrawerBadges, 2500);
         });
@@ -433,7 +515,9 @@
         setupSidebarHook();
         setupSwipeToDismiss();
         setupDraggableChatBubble();
+        checkAndPromptPermissions();
         setInterval(syncMobileDrawerBadges, 2500);
     }
 })();
+
 
