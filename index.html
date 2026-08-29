@@ -3104,6 +3104,14 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Marketing Hub
                     </button>
+                    <button onclick="switchView('sales-hub')" id="nav-sales-hub" data-label="Sales Hub" aria-label="Sales Hub"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left hidden">
+                        <iconify-icon icon="solar:hand-stars-bold-duotone" width="20"
+                            class="group-hover:scale-110 transition-transform text-emerald-600 dark:text-emerald-400"></iconify-icon>
+                        Sales Hub
+                        <span id="sales-hub-badge"
+                            class="hidden ml-auto bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                    </button>
                     <button onclick="switchView('meta-ads')" id="nav-meta-ads" data-label="Meta Ads" aria-label="Meta Ads"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left hidden">
                         <iconify-icon icon="solar:target-linear" width="20"
@@ -9174,12 +9182,280 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ════ SALES HUB & CRM PIPELINE VIEW (Prince & Admin) ════ -->
+                    <div id="view-sales-hub-panel" class="hidden space-y-8 fade-in overflow-y-auto">
+                        
+                        <!-- Header Bar -->
+                        <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xl border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20"
+                                     style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                                    <iconify-icon icon="solar:hand-stars-bold-duotone" width="28" style="color:#fff"></iconify-icon>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">Sales & CRM Hub</h3>
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">Executive Workspace</span>
+                                    </div>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">Manage client pipeline · Proposals · Deal tracking · Revenue goals</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-3 w-full md:w-auto flex-wrap justify-between md:justify-end">
+                                <!-- Tab Switchers -->
+                                <div class="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60 dark:border-slate-700">
+                                    <button type="button" onclick="switchSalesHubTab('pipeline')" data-tab="pipeline"
+                                            class="sales-tab-btn sales-tab-active px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-indigo-600 text-white flex items-center gap-1.5 shadow-sm">
+                                        <iconify-icon icon="solar:widget-2-bold" width="16"></iconify-icon>
+                                        <span>Pipeline</span>
+                                    </button>
+                                    <button type="button" onclick="switchSalesHubTab('table')" data-tab="table"
+                                            class="sales-tab-btn px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center gap-1.5">
+                                        <iconify-icon icon="solar:list-check-bold" width="16"></iconify-icon>
+                                        <span>All Leads</span>
+                                    </button>
+                                    <button type="button" onclick="switchSalesHubTab('quotation')" data-tab="quotation"
+                                            class="sales-tab-btn px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center gap-1.5">
+                                        <iconify-icon icon="solar:bill-list-bold" width="16"></iconify-icon>
+                                        <span>Proposal Tool</span>
+                                    </button>
+                                    <button type="button" onclick="switchSalesHubTab('analytics')" data-tab="analytics"
+                                            class="sales-tab-btn px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center gap-1.5">
+                                        <iconify-icon icon="solar:chart-2-bold" width="16"></iconify-icon>
+                                        <span>Analytics</span>
+                                    </button>
+                                </div>
+
+                                <!-- Add Lead Button -->
+                                <button type="button" onclick="openAddLeadModal()"
+                                        class="flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                        style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
+                                    <iconify-icon icon="solar:user-plus-bold" width="18"></iconify-icon>
+                                    <span>+ Add Lead</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Top KPI Cards -->
+                        <div id="sales-kpi-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+
+                        <!-- Search & Filter Bar -->
+                        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div class="relative w-full sm:w-80">
+                                <iconify-icon icon="solar:magnifer-linear" width="18" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                <input type="search" id="sales-search-input" oninput="filterSalesLeads()" placeholder="Search by client, contact, phone..."
+                                       class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white">
+                            </div>
+
+                            <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap justify-end">
+                                <select id="sales-stage-filter" onchange="filterSalesLeads()"
+                                        class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none">
+                                    <option value="all">All Stages</option>
+                                    <option value="new">New Inquiries</option>
+                                    <option value="contacted">Contacted</option>
+                                    <option value="discussion">Requirement / Demo</option>
+                                    <option value="proposal">Proposal Sent</option>
+                                    <option value="negotiation">Negotiation</option>
+                                    <option value="won">Closed Won 🎉</option>
+                                    <option value="lost">Closed Lost</option>
+                                </select>
+
+                                <select id="sales-source-filter" onchange="filterSalesLeads()"
+                                        class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none">
+                                    <option value="all">All Lead Sources</option>
+                                    <option value="Meta Ads">Meta Ads</option>
+                                    <option value="Referral">Client Referral</option>
+                                    <option value="Website">Website / Inbound</option>
+                                    <option value="Cold Outreach">Cold Outreach</option>
+                                    <option value="Instagram">Instagram DM</option>
+                                    <option value="Networking">Networking</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 1. Kanban Pipeline Board -->
+                        <div id="sales-kanban-board" class="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                            <!-- Injected by JS -->
+                        </div>
+
+                        <!-- 2. Table View Container -->
+                        <div id="sales-table-view-container" class="hidden bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-xl overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
+                                        <th class="py-3 px-4">Client / Brand</th>
+                                        <th class="py-3 px-4">Phone / WhatsApp</th>
+                                        <th class="py-3 px-4">Deal Value</th>
+                                        <th class="py-3 px-4">Pipeline Stage</th>
+                                        <th class="py-3 px-4">Next Follow-up</th>
+                                        <th class="py-3 px-4">Source</th>
+                                        <th class="py-3 px-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sales-table-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    <!-- Injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 3. Quotation Calculator Container -->
+                        <div id="sales-quotation-container" class="hidden">
+                            <!-- Injected by JS -->
+                        </div>
+
+                        <!-- 4. Sales Analytics Container -->
+                        <div id="sales-analytics-container" class="hidden">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
         </main>
     </div>
 
     <!-- ══════════════════════════════════════════
          MODALS
     ══════════════════════════════════════════ -->
+
+    <!-- Modal: Add / Edit Sales Lead -->
+    <dialog id="addLeadModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+        style="max-height:92vh;">
+        <div class="p-6 md:p-8 overflow-y-auto" style="max-height:90vh;">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20"
+                        style="background: linear-gradient(135deg, #10b981, #059669);">
+                        <iconify-icon icon="solar:user-plus-bold" width="24"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black tracking-tight" id="leadModalTitle">Add New Lead</h3>
+                        <p class="text-xs text-slate-400 font-semibold">Track client inquiries, proposals & deals</p>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('addLeadModal').close()"
+                    class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <form id="addLeadForm" onsubmit="saveSalesLead(event)" class="space-y-4">
+                <input type="hidden" id="lead-edit-id" value="">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Client / Brand Name *</label>
+                        <input type="text" id="lead-client-name" required placeholder="e.g. Acme Fashion, Dr. Sharma Clinic"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Contact Person</label>
+                        <input type="text" id="lead-contact-person" placeholder="e.g. John Doe (Founder)"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Phone / WhatsApp *</label>
+                        <input type="text" id="lead-phone" required placeholder="e.g. +91 98765 43210"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Email Address</label>
+                        <input type="email" id="lead-email" placeholder="e.g. contact@brand.com"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Estimated Deal Value (₹) *</label>
+                        <input type="number" id="lead-deal-value" required min="0" step="500" placeholder="e.g. 45000"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Pipeline Stage *</label>
+                        <select id="lead-stage" required
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                            <option value="new">New Inquiries</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="discussion">Requirement / Demo</option>
+                            <option value="proposal">Proposal Sent</option>
+                            <option value="negotiation">Negotiation</option>
+                            <option value="won">Closed Won 🎉</option>
+                            <option value="lost">Closed Lost</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Lead Source</label>
+                        <select id="lead-source"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                            <option value="Meta Ads">Meta Ads</option>
+                            <option value="Referral">Client Referral</option>
+                            <option value="Website">Website / Inbound</option>
+                            <option value="Cold Outreach">Cold Outreach</option>
+                            <option value="Instagram">Instagram DM</option>
+                            <option value="Networking">Networking</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Services Required</label>
+                        <input type="text" id="lead-services" placeholder="e.g. SMM, Performance Ads, Reel Production, Web Dev"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Next Follow-Up Date</label>
+                        <input type="date" id="lead-followup-date"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Notes & Discussion Summary</label>
+                    <textarea id="lead-notes" rows="3" placeholder="Key client pain points, budget constraints, expected kickoff date, etc."
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="document.getElementById('addLeadModal').close()"
+                        class="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit"
+                        class="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/25 transition-all">Save Lead</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Modal: Monthly Sales Target Settings -->
+    <dialog id="editSalesTargetModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-md border-none overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-black">Set Monthly Sales Target</h3>
+                <button onclick="document.getElementById('editSalesTargetModal').close()" class="text-slate-400 hover:text-slate-600">
+                    <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                </button>
+            </div>
+            <form onsubmit="saveSalesTarget(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Target Revenue for Current Month (₹)</label>
+                    <input type="number" id="monthly-target-input" min="10000" step="10000" required
+                        class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-black outline-none focus:ring-2 focus:ring-emerald-500/20">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('editSalesTargetModal').close()"
+                        class="px-4 py-2 text-xs font-bold text-slate-500">Cancel</button>
+                    <button type="submit"
+                        class="px-5 py-2 text-xs font-black text-white bg-emerald-600 rounded-xl">Save Target</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
 
     <!-- Modal: Social Analytics Add Entry -->
     <dialog id="saAddModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden"
@@ -12494,6 +12770,28 @@
                 return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
             }
 
+            function canViewSalesHub() {
+                if (!currentUser) return false;
+                const email = (currentUser.email || '').toLowerCase().trim();
+                const name = (currentUser.name || '').toLowerCase();
+                const role = (currentUser.role || '').toLowerCase();
+                const allowedEmails = [
+                    'digitalmarketing@vilpower.com', // Palanirajan R
+                    'palanirajan@vilpower.com',       // Palanirajan R
+                    'nanjil@vilpower.com',           // Nanjil Manohar S
+                    'murugeshvilpower@gmail.com',    // Murugesh Kumar A
+                    'princevilpower@gmail.com',      // Prince (Sales Executive)
+                    'prince@vilpower.com'
+                ];
+                return isAdmin() ||
+                    isManager() ||
+                    name.includes('palanirajan') ||
+                    allowedEmails.includes(email) ||
+                    role.includes('sales') ||
+                    role.includes('business development') ||
+                    role.includes('executive');
+            }
+
             function isDesignOrVideoUser(user = currentUser) {
                 if (!user) return false;
                 const userRole = (user.role || '').toLowerCase();
@@ -15123,16 +15421,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function hideLoadingScreen() {
+                document.documentElement.classList.remove('auth-pending');
+                document.documentElement.classList.remove('has-user');
                 if (typeof hideInitialLoading === 'function') hideInitialLoading();
                 const loader = document.getElementById('loading-view');
-                if (!loader || loader.classList.contains('hidden')) return;
-                loader.style.transition = 'opacity 0.5s ease-out';
+                if (!loader) return;
+                loader.style.transition = 'opacity 0.25s ease-out';
                 loader.style.opacity = '0';
                 setTimeout(() => {
                     loader.classList.add('hidden');
+                    loader.style.display = 'none';
                     loader.style.opacity = '1';
                     loader.style.transition = '';
-                }, 500);
+                }, 250);
             }
 
             async function finishLogin() {
@@ -15141,18 +15442,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 console.log("Initializing workspace for", currentUser.email);
 
                 try {
-                    // PERFORMANCE: Skip cache rendering here, do it after view switch
-                    // This makes UI appear much faster
+                    // PERFORMANCE: Immediately remove blocking CSS classes and show dashboard
+                    document.documentElement.classList.remove('auth-pending');
+                    document.documentElement.classList.remove('has-user');
+                    document.getElementById('login-view')?.classList.add('hidden');
+                    document.getElementById('dashboard-view')?.classList.remove('hidden');
+                    hideLoadingScreen();
+
                     applyUserUI();
                     loadBoardSettings();
                     loadInternalBoardSettings();
-
-                    // Explicitly show the dashboard and hide login IMMEDIATELY
-                    document.getElementById('login-view')?.classList.add('hidden');
-                    document.getElementById('dashboard-view')?.classList.remove('hidden');
-
-                    // Fade out loader smoothly after a brief moment so user can see logo on page reload
-                    setTimeout(hideLoadingScreen, 600);
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
                     const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements'];
@@ -15528,6 +15827,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('nav-monthly-plan')?.classList.toggle('hidden', !canViewMonthlyPlan());
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
+                document.getElementById('nav-sales-hub')?.classList.toggle('hidden', !canViewSalesHub());
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
                 document.getElementById('nav-dailyplan')?.classList.toggle('hidden', !canViewDailyPlanTeamAccess());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
@@ -46522,15 +46822,30 @@ function isStrategyTask(t) {
             // ══════════════════════════════════════════
             //  INITIALIZATION
             // ══════════════════════════════════════════
+            // Fast-boot immediately if user is cached in localStorage (zero wait on mobile)
+            if (currentUser && !appInitialized) {
+                console.log("Fast-booting workspace from cache for", currentUser.email);
+                finishLogin();
+            }
+
             const authInitTimeout = setTimeout(() => {
-                if (!appInitialized && !currentUser) {
+                if (!appInitialized) {
                     if (typeof hideInitialLoading === 'function') hideInitialLoading();
                     document.documentElement.classList.remove('auth-pending');
-                    document.getElementById('login-view')?.classList.remove('hidden');
-                    document.getElementById('loading-view')?.classList.add('hidden');
-                    toast('Session restore took too long. Please sign in manually.', 'error');
+                    document.documentElement.classList.remove('has-user');
+                    const loadingView = document.getElementById('loading-view');
+                    if (loadingView) {
+                        loadingView.classList.add('hidden');
+                        loadingView.style.display = 'none';
+                    }
+                    if (!currentUser) {
+                        document.getElementById('login-view')?.classList.remove('hidden');
+                        document.getElementById('dashboard-view')?.classList.add('hidden');
+                    } else {
+                        finishLogin();
+                    }
                 }
-            }, 8000);
+            }, 3000);
 
             onAuthStateChanged(auth, async (fbUser) => {
                 clearTimeout(authInitTimeout);
@@ -54537,6 +54852,12 @@ function isStrategyTask(t) {
                         </div>
                         <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Reports</span>
                     </button>
+                    <button type="button" onclick="selectMobileAppView('sales-hub')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                            <iconify-icon icon="solar:chart-square-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Sales Hub</span>
+                    </button>
                     <button type="button" onclick="selectMobileAppView('daily-summary')" class="mobile-app-tile">
                         <div class="tile-icon-box bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
                             <iconify-icon icon="solar:notes-bold-duotone"></iconify-icon>
@@ -54630,6 +54951,7 @@ function isStrategyTask(t) {
     </div>
 
     <script src="js/mobile-app.js"></script>
+    <script src="js/sales-hub.js"></script>
 
 </body>
 

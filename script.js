@@ -141,6 +141,28 @@ if (initializeApp) {
         return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
     }
 
+    function canViewSalesHub() {
+        if (!currentUser) return false;
+        const email = (currentUser.email || '').toLowerCase().trim();
+        const name = (currentUser.name || '').toLowerCase();
+        const role = (currentUser.role || '').toLowerCase();
+        const allowedEmails = [
+            'digitalmarketing@vilpower.com', // Palanirajan R
+            'palanirajan@vilpower.com',       // Palanirajan R
+            'nanjil@vilpower.com',           // Nanjil Manohar S
+            'murugeshvilpower@gmail.com',    // Murugesh Kumar A
+            'princevilpower@gmail.com',      // Prince (Sales Executive)
+            'prince@vilpower.com'
+        ];
+        return isAdmin() ||
+            isManager() ||
+            name.includes('palanirajan') ||
+            allowedEmails.includes(email) ||
+            role.includes('sales') ||
+            role.includes('business development') ||
+            role.includes('executive');
+    }
+
     function isDesignOrVideoUser(user = currentUser) {
         if (!user) return false;
         const userRole = (user.role || '').toLowerCase();
@@ -1947,6 +1969,7 @@ function setQcPerformanceFilter(period) {
         document.getElementById('nav-daily-summary')?.classList.toggle('hidden', !canViewDailySummary());
         document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
         document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
+        document.getElementById('nav-sales-hub')?.classList.toggle('hidden', !canViewSalesHub());
         document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
         document.getElementById('report-group-client')?.classList.remove('hidden');
         if (hasClientWideAccess() && !isAdmin() && !isManager()) {
@@ -2834,7 +2857,7 @@ function setQcPerformanceFilter(period) {
 
         activeView = view;
         localStorage.setItem('worksync_activeView', view);
-        ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'marketing-hub', 'meta-integration'].forEach(v => {
+        ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'projects', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports', 'users', 'daily-summary', 'event-org', 'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org', 'strategy-calendar', 'marketing-hub', 'meta-integration', 'sales-hub', 'sales-client-view'].forEach(v => {
             document.getElementById(`view-${v}-panel`)?.classList.add('hidden');
             const navEl = document.getElementById(`nav-${v}`);
             if (navEl) navEl.classList.remove('nav-active');
@@ -2867,7 +2890,9 @@ function setQcPerformanceFilter(period) {
             'dm-content-org': 'DM Content Organiser Board',
             'strategy-calendar': 'Strategy Calendar',
             'marketing-hub': 'Marketing Hub',
-            'meta-integration': 'Meta Business Integration'
+            'meta-integration': 'Meta Business Integration',
+            'sales-hub': 'Sales & Client CRM Hub',
+            'sales-client-view': 'Sales Client Profile'
         };
         document.getElementById('view-title').textContent = titles[view] || 'WorkSync';
 
@@ -2902,6 +2927,8 @@ function setQcPerformanceFilter(period) {
             switchMarketingTab(tab);
         }
         else if (view === 'meta-integration') { initMetaIntegration(); }
+        else if (view === 'sales-hub') { if (window.initSalesHub) window.initSalesHub(); }
+        else if (view === 'sales-client-view') { if (window.renderSalesClientProfile) window.renderSalesClientProfile(); }
         else if (view === 'event-org') { renderEventOrgPanel(); }
         else if (view === 'leave-org') { renderLeaveOrgPanel(); }
         else if (view === 'learnings-org') { renderLearningsOrgPanel(); }
