@@ -4,13 +4,29 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <meta name="app-version" content="0.0.1">
+    <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
-    <link rel="apple-touch-icon" href="img/favicon.svg">
+    <link rel="apple-touch-icon" href="img/Fav-Icon.png">
     <title>One Desk Endless Productivity</title>
     <link rel="stylesheet" href="dist/output.css">
+    <link rel="stylesheet" href="mobile-app.css">
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => console.log('[PWA] Service Worker registered:', reg.scope))
+                    .catch((err) => console.warn('[PWA] Service Worker registration failed:', err));
+            });
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         if (window.tailwind) {
@@ -54352,6 +54368,249 @@ function isStrategyTask(t) {
             </div>
         </form>
     </dialog>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MOBILE APP BOTTOM NAVIGATION BAR (Visible on < 768px)
+         ══════════════════════════════════════════════════════════════════ -->
+    <nav id="mobile-app-bottom-bar" class="mobile-bottom-bar md:hidden">
+        <!-- 1. Dashboard -->
+        <button type="button" id="mob-tab-dashboard" onclick="switchView('dashboard')" class="mobile-tab-btn tab-active" aria-label="Dashboard">
+            <span class="tab-indicator"></span>
+            <iconify-icon icon="solar:home-smile-bold-duotone"></iconify-icon>
+            <span>Home</span>
+        </button>
+
+        <!-- 2. Tasks Hub -->
+        <button type="button" id="mob-tab-tasks" onclick="switchView('tasks')" class="mobile-tab-btn" aria-label="Tasks">
+            <span class="tab-indicator"></span>
+            <iconify-icon icon="solar:checklist-bold-duotone"></iconify-icon>
+            <span>Tasks</span>
+            <span id="mob-task-badge" class="mobile-tab-badge hidden">0</span>
+        </button>
+
+        <!-- 3. Weekly Matrix -->
+        <button type="button" id="mob-tab-matrix" onclick="switchView('weekly-matrix')" class="mobile-tab-btn" aria-label="Matrix Planner">
+            <span class="tab-indicator"></span>
+            <iconify-icon icon="solar:calendar-date-bold-duotone"></iconify-icon>
+            <span>Matrix</span>
+        </button>
+
+        <!-- 4. Team Chat -->
+        <button type="button" id="mob-tab-chat" onclick="switchView('chat')" class="mobile-tab-btn" aria-label="Team Chat">
+            <span class="tab-indicator"></span>
+            <iconify-icon icon="solar:chat-round-dots-bold-duotone"></iconify-icon>
+            <span>Chat</span>
+            <span id="mob-chat-badge" class="mobile-tab-badge hidden">0</span>
+        </button>
+
+        <!-- 5. More / App Drawer -->
+        <button type="button" id="mob-tab-more" onclick="openMobileAppMenu()" class="mobile-tab-btn" aria-label="More Features">
+            <span class="tab-indicator"></span>
+            <iconify-icon icon="solar:widget-add-bold-duotone"></iconify-icon>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         MOBILE APP "MORE" SHEET MENU DRAWER (Slide-Up Native App Sheet)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="mobile-drawer-overlay" class="mobile-drawer-overlay md:hidden" onclick="closeMobileAppMenu()"></div>
+
+    <div id="mobile-drawer-sheet" class="mobile-drawer-sheet md:hidden">
+        <!-- Top Grab Handle -->
+        <div class="drawer-handle-bar"></div>
+
+        <!-- Sheet Header with User Profile -->
+        <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="relative cursor-pointer" onclick="selectMobileAppView('dashboard'); openProfile();">
+                    <img id="mob-drawer-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E"
+                        class="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 object-cover shadow-sm">
+                    <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+                </div>
+                <div>
+                    <p id="mob-drawer-user-name" class="text-sm font-black text-slate-900 dark:text-slate-100">User Name</p>
+                    <p id="mob-drawer-user-role" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeMobileAppMenu()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+                <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Scrollable Features Grid -->
+        <div class="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+            
+            <!-- Category: Operations & Planning -->
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Operations & Planning</p>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="selectMobileAppView('shoots')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400">
+                            <iconify-icon icon="solar:camera-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Shoot Cal</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('strategy-calendar')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                            <iconify-icon icon="solar:calendar-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Strategy Cal</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('plan-tracking')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                            <iconify-icon icon="solar:chart-square-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Production</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('monthly-plan')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+                            <iconify-icon icon="solar:calendar-mark-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Monthly Plan</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('projects')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400">
+                            <iconify-icon icon="solar:folder-with-files-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Projects</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('qc')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                            <iconify-icon icon="solar:shield-check-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">QC Portal</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category: Marketing & Reports -->
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Marketing & Analytics</p>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="selectMobileAppView('marketing-hub')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400">
+                            <iconify-icon icon="solar:chart-2-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Marketing Hub</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('social-analytics')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400">
+                            <iconify-icon icon="solar:pie-chart-2-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Social Analytics</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('meta-ads')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                            <iconify-icon icon="solar:target-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Meta Ads</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('dpr')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400">
+                            <iconify-icon icon="solar:document-text-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">DPR Report</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('reports')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                            <iconify-icon icon="solar:graph-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Reports</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('daily-summary')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
+                            <iconify-icon icon="solar:notes-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Daily Summary</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category: Collaboration & Tools -->
+            <div>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Collaboration & Work</p>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="selectMobileAppView('discussions')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400">
+                            <iconify-icon icon="solar:chat-square-call-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Discussions</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('announcements')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                            <iconify-icon icon="solar:bell-bing-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Announce</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('files-manager')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                            <iconify-icon icon="solar:cloud-storage-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Drive Files</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('notes')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400">
+                            <iconify-icon icon="solar:pen-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">My Notes</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('hr')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                            <iconify-icon icon="solar:user-hand-up-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">HR Portal</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('rewards')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                            <iconify-icon icon="solar:cup-star-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Rewards</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category: Admin Management (Conditional) -->
+            <div id="mob-drawer-admin-section">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Admin & Management</p>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="selectMobileAppView('users')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400">
+                            <iconify-icon icon="solar:users-group-two-rounded-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Users</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('clients-admin')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+                            <iconify-icon icon="solar:tag-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Clients</span>
+                    </button>
+                    <button type="button" onclick="selectMobileAppView('organisers-admin')" class="mobile-app-tile">
+                        <div class="tile-icon-box bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+                            <iconify-icon icon="solar:users-group-rounded-bold-duotone"></iconify-icon>
+                        </div>
+                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Organisers</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Drawer Footer Actions -->
+        <div class="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between">
+            <button type="button" onclick="toggleDarkModeTheme()" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <iconify-icon icon="solar:moon-bold-duotone" width="16"></iconify-icon>
+                <span>Theme</span>
+            </button>
+
+            <button type="button" onclick="logout()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/30">
+                <iconify-icon icon="solar:logout-linear" width="16"></iconify-icon>
+                <span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="js/mobile-app.js"></script>
 
 </body>
 
