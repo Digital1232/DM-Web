@@ -6305,7 +6305,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         await doStartTask(id);
     }
 
-    async function doStartTask(id) {
+    async function doStartTask(id, options = {}) {
         // If another task is active, log its time before switching.
         if (activeTaskId && activeTaskId !== id) {
             stopTaskTimer();
@@ -6343,16 +6343,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             tasks.unshift(taskToMove);
         }
 
-        // Check user type for start status: Sneha -> 'Content In Progress', Palani/others -> 'Design In Progress'
+        // For internal tasks, default start status is 'In Progress' (or options.internalStatus if specified)
         const task = tasks.find(t => t.id === id);
-        const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
-                        (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
-        const isDesign = typeof isDesignOrVideoUser === 'function' && isDesignOrVideoUser(currentUser);
-        const resolvedStartStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
+        const resolvedStartStatus = (options && options.internalStatus) || 'In Progress';
 
         if (task && isInternalTask(task)) {
             await updateInternalTaskStatus(id, resolvedStartStatus);
         } else if (task && !isInternalTask(task)) {
+            const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                            (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
             const currentStatus = (task.status || '').toLowerCase();
             const newJiraStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
 
@@ -6455,10 +6454,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const task = tasks.find(t => t.id === activeTaskId);
             if (task && isInternalTask(task)) {
                 task.isOnHold = false;
-                const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
-                                (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
-                const resumeStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
-                updateInternalTaskStatus(activeTaskId, resumeStatus);
+                updateInternalTaskStatus(activeTaskId, 'In Progress');
             }
         }
         renderTasks();

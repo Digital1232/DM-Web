@@ -25671,16 +25671,15 @@ function isStrategyTask(t) {
                     }
                 }
 
-                // Check user type for start status: Sneha -> 'Content In Progress', Palani/others -> 'Design In Progress'
-                const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
-                                (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
-                const isDesign = typeof isDesignOrVideoUser === 'function' && isDesignOrVideoUser(currentUser);
-                let resolvedStartStatus = options.internalStatus || (isSneha ? 'Content In Progress' : 'Design In Progress');
+                // For internal tasks, default start status is 'In Progress' (or options.internalStatus if specified)
+                let resolvedStartStatus = options.internalStatus || 'In Progress';
 
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                     await updateInternalTaskStatus(id, resolvedStartStatus);
                 } else if (task && !isInternalTask(task)) {
                     // For Jira tasks: Only Sneha gets "Content In Progress", everyone else (Palani, Designers, etc.) gets "Design In Progress"
+                    const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
+                                    (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
                     const currentStatus = (task.status || '').toLowerCase();
                     const newJiraStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
 
@@ -25783,15 +25782,12 @@ function isStrategyTask(t) {
                 taskStartTime = Date.now() - (taskSeconds * 1000);
                 startTaskTimer();
                 saveCurrentTaskState('working');
-                // Update status back to Content In Progress (Sneha) or Design In Progress (Palani / Designers) for internal tasks
+                // Update status back to In Progress for internal tasks
                 if (activeTaskId) {
                     const task = tasks.find(t => t.id === activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         task.isOnHold = false;
-                        const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
-                                        (currentUser?.email || '').toLowerCase() === 'snehavilpower@gmail.com';
-                        const resumeStatus = isSneha ? 'Content In Progress' : 'Design In Progress';
-                        updateInternalTaskStatus(activeTaskId, resumeStatus);
+                        updateInternalTaskStatus(activeTaskId, 'In Progress');
                     }
                 }
                 updateSessionStatus();
