@@ -48,6 +48,72 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Social Analytics Import Module -->
     <script src="js/socialAnalyticsImport.js"></script>
+    <script>
+        window.getInitialsAvatar = window.getInitialsAvatar || function(nameOrEmail) {
+            var str = (nameOrEmail || '?').toString().trim();
+            if (str.includes('@')) {
+                str = str.split('@')[0].replace(/[._-]/g, ' ');
+            }
+            var parts = str.split(/\s+/).filter(Boolean);
+            var initials = '';
+            if (parts.length >= 2) {
+                initials = (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+            } else if (parts.length === 1) {
+                var p = parts[0];
+                initials = p.length >= 2 ? p.slice(0, 2).toUpperCase() : p.toUpperCase();
+            } else {
+                initials = '?';
+            }
+            initials = initials.replace(/[^A-Z0-9]/g, '');
+            if (!initials) initials = '?';
+
+            var palettes = [
+                ['#4f46e5', '#7c3aed'],
+                ['#0891b2', '#0284c7'],
+                ['#059669', '#10b981'],
+                ['#d97706', '#f59e0b'],
+                ['#dc2626', '#e11d48'],
+                ['#7c3aed', '#c026d3'],
+                ['#2563eb', '#3b82f6'],
+                ['#0d9488', '#14b8a6'],
+                ['#db2777', '#f43f5e'],
+                ['#475569', '#334155']
+            ];
+            var hash = 0;
+            for (var i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+            var palette = palettes[Math.abs(hash) % palettes.length];
+            var gradId = 'g_' + Math.abs(hash);
+            var fontSize = initials.length > 1 ? '23' : '27';
+
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' +
+                '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
+                '<stop offset="0%" stop-color="' + palette[0] + '"/>' +
+                '<stop offset="100%" stop-color="' + palette[1] + '"/>' +
+                '</linearGradient></defs>' +
+                '<rect width="64" height="64" rx="16" fill="url(#' + gradId + ')"/>' +
+                '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" font-size="' + fontSize + '" fill="#ffffff" letter-spacing="0.5">' + initials + '</text>' +
+                '</svg>';
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        };
+
+        window.handleAvatarError = window.handleAvatarError || function(img, nameOrEmail) {
+            if (!img) return;
+            img.onerror = null;
+            img.src = window.getInitialsAvatar(nameOrEmail || '?');
+        };
+
+        window.getUserAvatarSrc = window.getUserAvatarSrc || function(userOrEmail) {
+            if (!userOrEmail) return window.getInitialsAvatar('?');
+            if (typeof userOrEmail === 'string') {
+                var email = userOrEmail.toLowerCase().trim();
+                var user = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) ? allUsersMap.get(email) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(email) : null);
+                if (user && user.profilePicture) return user.profilePicture;
+                return (user && user.profilePicture) || window.getInitialsAvatar((user && user.name) || email);
+            }
+            if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+            return window.getInitialsAvatar(userOrEmail.name || userOrEmail.email || '?');
+        };
+    </script>
     <style>
         .drag-handle {
             cursor: grab;
@@ -13478,7 +13544,7 @@
             }
 
             function showBirthdayModal(user) {
-                document.getElementById('birthday-avatar').src = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar || user.name}`;
+                document.getElementById('birthday-avatar').src = user.profilePicture || getUserAvatarSrc(user);
                 document.getElementById('birthday-name').textContent = user.name;
                 const modal = document.getElementById('birthdayModal');
                 if (modal && !modal.matches(':popover-open') && !modal.open) {
@@ -13896,7 +13962,7 @@
                                 name: found?.name || r.assignee || email,
                                 scoreSum: 0,
                                 count: 0,
-                                avatar: found?.profilePicture || (found ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${found.avatar || found.name}` : '')
+                                avatar: found?.profilePicture || (found ? getUserAvatarSrc(found) : '')
                             };
                         }
                         userAggregates[email].scoreSum += (r.qcScore || 0);
@@ -13921,7 +13987,7 @@
                             return `
                         <div class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm flex items-center justify-between">
                             <div class="flex items-center gap-3 min-w-0">
-                                <img src="${u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`}" class="w-8 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100">
+                                <img src="${getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${(u.name || '').replace(/'/g, "\\'")}')" class="w-8 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100">
                                 <div class="min-w-0"><p class="text-xs font-black text-slate-900 truncate">${escapeHtml(u.name)}</p><p class="text-[9px] text-slate-400 font-bold uppercase">${u.count} Tasks</p></div>
                             </div>
                             <div class="${color} border px-3 py-1.5 rounded-xl text-center min-w-[70px]">
@@ -14179,7 +14245,7 @@
         inspectorStats[defaultSnehaEmail] = {
             name: 'Sneha S',
             email: defaultSnehaEmail,
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sneha',
+            avatar: getUserAvatarSrc('Sneha'),
             auditsCount: 0,
             approvedCount: 0,
             reworkCount: 0,
@@ -14197,7 +14263,7 @@
                 inspectorStats[email] = {
                     name: found?.name || r.qcUser || 'Sneha S',
                     email: email,
-                    avatar: found?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.qcUser || 'Sneha'}`,
+                    avatar: found?.profilePicture || getUserAvatarSrc(found || r.qcUser || 'Sneha'),
                     auditsCount: 0,
                     approvedCount: 0,
                     reworkCount: 0,
@@ -14224,7 +14290,7 @@
                 inspectorStats[email] = {
                     name: found?.name || m.qcUser || 'Sneha S',
                     email: email,
-                    avatar: found?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.qcUser || 'Sneha'}`,
+                    avatar: found?.profilePicture || getUserAvatarSrc(found || m.qcUser || 'Sneha'),
                     auditsCount: 0,
                     approvedCount: 0,
                     reworkCount: 0,
@@ -15803,7 +15869,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function applyUserUI() {
                 if (!currentUser) return;
-                const avatar = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+                const avatar = currentUser.profilePicture || getUserAvatarSrc(currentUser);
                 document.getElementById('user-avatar').src = avatar;
                 document.getElementById('user-name').textContent = currentUser.name;
                 document.getElementById('user-role').textContent = currentUser.role;
@@ -15988,7 +16054,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // PROFILE
             function openProfile() {
                 if (!currentUser) return;
-                document.getElementById('profile-pic').src = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+                document.getElementById('profile-pic').src = currentUser.profilePicture || getUserAvatarSrc(currentUser);
                 document.getElementById('p-name').value = currentUser.name || '';
                 const roleSelect = document.getElementById('p-role');
                 let hasOption = Array.from(roleSelect.options).some(opt => opt.value === currentUser.role);
@@ -24197,7 +24263,17 @@ function isStrategyTask(t) {
             let murugeshTasksEnsureStarted = false;
 
             async function ensureMurugeshDailyTasks() {
-                if (!currentUser || currentUser.email.toLowerCase() !== 'murugeshvilpower@gmail.com') return;
+                const targetEmail = 'murugeshvilpower@gmail.com';
+                const userEmail = (currentUser?.email || '').toLowerCase().trim();
+                const userName = (currentUser?.name || '').toLowerCase().trim();
+                const isMurugesh = currentUser && (
+                    userEmail === targetEmail ||
+                    userEmail === 'murugesh@vilpower.com' ||
+                    userEmail === 'murugeshkumar@vilpower.com' ||
+                    userEmail.includes('murugesh') ||
+                    userName.includes('murugesh')
+                );
+                if (!isMurugesh && !isAdmin() && !isManager()) return;
 
                 // Reset the flag each new day (same pattern as morning learning setup)
                 const todayKey = todayIso();
@@ -24206,12 +24282,20 @@ function isStrategyTask(t) {
                     murugeshTasksEnsureStarted = false;
                     sessionStorage.removeItem('murugeshTasks_lastRun');
                 }
-                if (murugeshTasksEnsureStarted) return;
+
+                const hasAllMurugeshTasksInMemory = MURUGESH_TASKS_CONFIG.every((cfg, i) => {
+                    const baseIdStr = cfg.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                    const taskId = `M-${baseIdStr}-${i}`;
+                    return tasks.some(t => t && t.id === taskId);
+                });
+
+                if (murugeshTasksEnsureStarted && hasAllMurugeshTasksInMemory) return;
                 murugeshTasksEnsureStarted = true;
                 sessionStorage.setItem('murugeshTasks_lastRun', todayKey);
 
                 try {
-                    const email = currentUser.email;
+                    const email = targetEmail;
+                    const assigneeName = 'Murugesh Kumar A';
                     const ownerKey = eKey(email);
                     const today = todayKey;
 
@@ -24252,7 +24336,7 @@ function isStrategyTask(t) {
                                 client: taskConfig.client || 'Others',
                                 status: 'To do',
                                 priority: 'Medium',
-                                assignee: currentUser.name,
+                                assignee: assigneeName,
                                 assigneeEmail: email,
                                 manual: true,
                                 taskType: 'internal',
@@ -24297,6 +24381,17 @@ function isStrategyTask(t) {
                                 const idx = tasks.findIndex(t => t.id === taskId);
                                 if (idx >= 0) Object.assign(tasks[idx], updates);
                             }
+
+                            const mergedTask = {
+                                ...existing,
+                                ...updates,
+                                id: taskId,
+                                manual: true,
+                                taskType: 'internal',
+                                murugeshTask: true,
+                                duedate: updates.duedate || existing.duedate || today
+                            };
+                            tasks = mergeTasksById([mergedTask, ...tasks]);
                         }
                     }
 
@@ -27083,7 +27178,7 @@ function isStrategyTask(t) {
                             <div class="flex items-start justify-between gap-4 mb-4">
                                 <div class="flex items-center gap-3 min-w-0">
                                     <div class="relative shrink-0">
-                                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
+                                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
                                         <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 ${online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
                                     </div>
                                     <div class="min-w-0">
@@ -28142,7 +28237,7 @@ function isStrategyTask(t) {
                     return `
                 <button id="dm-btn-${convId}" onclick="openDm('${u.email}')" class="group w-full flex items-center gap-3 px-5 py-1.5 hover:bg-slate-50 transition-all text-left ${activeClass}">
                     <div class="relative shrink-0">
-                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
+                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${(u.name || u.email || '').replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
                         <div id="online-${eKey(u.email)}" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-slate-300 border-2 border-white rounded-full"></div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -28281,7 +28376,7 @@ function isStrategyTask(t) {
                 if (!snap.exists()) {
                     await set(ref(db, `worksync/conversations/${id}`), { type: 'dm', members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true }, lastTimestamp: Date.now() });
                 }
-                openConversation(id, other.name, 'dm', other.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.avatar || other.name}`);
+                openConversation(id, other.name, 'dm', other.profilePicture || getUserAvatarSrc(other));
             }
 
             async function openConversation(convId, name, type, avatar) {
@@ -29547,7 +29642,7 @@ function isStrategyTask(t) {
 
                 dropdown.innerHTML = filtered.map((u, i) => `
                 <div onclick="selectMention('${escapeHtml(u.name || u.email).replace(/'/g, "\\'")}')" class="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 transition-colors ${i === mentionIndex ? 'bg-indigo-50 border-l-2 border-indigo-600' : ''}">
-                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-6 h-6 rounded-md object-cover bg-slate-100">
+                    <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-6 h-6 rounded-md object-cover bg-slate-100">
                     <div class="min-w-0">
                         <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(u.name)}</p>
                         <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')}</p>
@@ -32634,7 +32729,7 @@ function isStrategyTask(t) {
                             if (reportSelectedUser !== 'all' && reportSelectedUser !== email) return;
                             userTaskStats[email] = {
                                 name: u.name,
-                                avatar: u.profilePicture || (u.avatar ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar}` : ''),
+                                avatar: u.profilePicture || getUserAvatarSrc(u),
                                 assigned: [],
                                 completed: [],
                                 posters: [],
@@ -32670,7 +32765,7 @@ function isStrategyTask(t) {
                             const foundUser = (currentWorkUsers || []).find(u => (u.email || '').toLowerCase() === email) || knownUserByEmail(email);
                             userTaskStats[email] = {
                                 name: foundUser?.name || assignee,
-                                avatar: foundUser?.profilePicture || (foundUser ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${foundUser.avatar || foundUser.name}` : ''),
+                                avatar: foundUser?.profilePicture || (foundUser ? getUserAvatarSrc(foundUser) : ''),
                                 assigned: [],
                                 completed: [],
                                 posters: [],
@@ -35828,7 +35923,7 @@ function isStrategyTask(t) {
 
                     const cards = TARGET_EMAILS.map(email => {
                         const user = allUsersMap.get(email.toLowerCase()) || knownUserByEmail(email) || { name: email, email, role: '' };
-                        const avatar = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.avatar || user.name || email)}`;
+                        const avatar = user.profilePicture || getUserAvatarSrc(user || email);
 
                         const getTaskStatus = (t) => { if (!t) return ''; return t.status; };
 
@@ -40795,7 +40890,7 @@ function isStrategyTask(t) {
                 list.innerHTML = allUsers.map(u => `
                 <div class="flex items-center justify-between p-5 hover:bg-slate-50 transition-all border-b border-slate-50">
                     <div class="flex items-center gap-4">
-                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover">
+                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover">
                         <div>
                             <p class="text-sm font-bold text-slate-900">${escapeHtml(u.name)}</p>
                             <p class="text-[10px] text-slate-400 font-bold uppercase">${escapeHtml(u.role || 'User')} · ${escapeHtml(u.email)}</p>
@@ -40818,12 +40913,12 @@ function isStrategyTask(t) {
                     const snap = await get(ref(db, `worksync/users/${eKey(email)}`));
                     const u = { ...(knownUserByEmail(email) || {}), ...(snap.val() || {}) };
                     nameInp.value = u.name || ''; emailInp.value = u.email || ''; emailInp.readOnly = true; emailInp.classList.add('opacity-60');
-                    roleInp.value = u.role || 'Employee'; phoneInp.value = u.phone || ''; picImg.src = u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`;
+                    roleInp.value = u.role || 'Employee'; phoneInp.value = u.phone || ''; picImg.src = u.profilePicture || getUserAvatarSrc(u);
                     empIdInp.value = u.empId || ''; birthdayInp.value = u.birthday || '';
                     document.getElementById('au-delete-btn').classList.remove('hidden');
                 } else {
                     nameInp.value = ''; emailInp.value = ''; emailInp.readOnly = false; emailInp.classList.remove('opacity-60');
-                    roleInp.value = 'Employee'; phoneInp.value = ''; picImg.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=NewUser`;
+                    roleInp.value = 'Employee'; phoneInp.value = ''; picImg.src = getInitialsAvatar('New User');
                     empIdInp.value = ''; birthdayInp.value = '';
                     document.getElementById('au-delete-btn').classList.add('hidden');
                 }
@@ -41498,7 +41593,7 @@ function isStrategyTask(t) {
                         const user = allUsersMap.get(email.toLowerCase());
                         return {
                             name: user?.name || email.split('@')[0],
-                            avatar: user?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.avatar || user?.name || email}`
+                            avatar: user?.profilePicture || getUserAvatarSrc(user || email)
                         };
                     });
 
@@ -43983,7 +44078,7 @@ function isStrategyTask(t) {
                     const attended = pastWeekdays.filter(d => (attendanceByDate[d]?.attended || new Set()).has(u.email.toLowerCase())).length;
                     const missed = pastWeekdays.length - attended;
                     const rate = pastWeekdays.length > 0 ? Math.round((attended / pastWeekdays.length) * 100) : 0;
-                    const avatar = u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.name || u.email)}`;
+                    const avatar = u.profilePicture || getUserAvatarSrc(u);
                     const rateColor = rate >= 80 ? 'text-emerald-600' : rate >= 50 ? 'text-amber-500' : 'text-rose-500';
                     html += `
                 <div class="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center gap-3">
@@ -44019,7 +44114,7 @@ function isStrategyTask(t) {
 
                 learningUsers.forEach((u, uIdx) => {
                     const rowBg = uIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
-                    const avatar = u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.name || u.email)}`;
+                    const avatar = u.profilePicture || getUserAvatarSrc(u);
                     html += `<tr class="${rowBg}">
                     <td class="text-left py-2 px-3">
                         <div class="flex items-center gap-2">
@@ -52038,7 +52133,7 @@ function isStrategyTask(t) {
                     var conv = _fcpCC()[cid] || {};
                     var lastMsg = conv.lastMessage ? conv.lastMessage.slice(0, 30) + (conv.lastMessage.length > 30 ? '…' : '') : '';
                     var unread = _fcpUC()[cid] || 0;
-                    var avatarSrc = u.profilePicture || ('https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(u.avatar || u.name || u.email));
+                    var avatarSrc = u.profilePicture || (window.getUserAvatarSrc ? window.getUserAvatarSrc(u) : window.getInitialsAvatar(u.name || u.email));
                     return fcpUserRow(u.email, u.name, u.role, avatarSrc, cid, lastMsg, unread);
                 }).join('');
 

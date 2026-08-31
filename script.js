@@ -496,7 +496,7 @@ if (initializeApp) {
     }
 
     function showBirthdayModal(user) {
-        document.getElementById('birthday-avatar').src = user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.avatar || user.name}`;
+        document.getElementById('birthday-avatar').src = user.profilePicture || getUserAvatarSrc(user);
         document.getElementById('birthday-name').textContent = user.name;
         const modal = document.getElementById('birthdayModal');
         if (modal && !modal.matches(':popover-open') && !modal.open) {
@@ -871,7 +871,7 @@ if (initializeApp) {
                         name: found?.name || r.assignee || email,
                         scoreSum: 0,
                         count: 0,
-                        avatar: found?.profilePicture || (found ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${found.avatar || found.name}` : '')
+                        avatar: found?.profilePicture || (found ? getUserAvatarSrc(found) : '')
                     };
                 }
                 userAggregates[email].scoreSum += r.qcScore;
@@ -896,7 +896,7 @@ if (initializeApp) {
                     return `
                         <div class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm flex items-center justify-between">
                             <div class="flex items-center gap-3 min-w-0">
-                                <img src="${u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`}" class="w-8 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100">
+                                <img src="${getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${(u.name || '').replace(/'/g, "\\'")}')" class="w-8 h-8 rounded-lg object-cover bg-slate-50 border border-slate-100">
                                 <div class="min-w-0"><p class="text-xs font-black text-slate-900 truncate">${escapeHtml(u.name)}</p><p class="text-[9px] text-slate-400 font-bold uppercase">${u.count} Tasks</p></div>
                             </div>
                             <div class="${color} border px-3 py-1.5 rounded-xl text-center min-w-[70px]">
@@ -1095,7 +1095,7 @@ if (initializeApp) {
         inspectorStats[defaultSnehaEmail] = {
             name: 'Sneha S',
             email: defaultSnehaEmail,
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sneha',
+            avatar: getUserAvatarSrc('Sneha'),
             auditsCount: 0,
             approvedCount: 0,
             reworkCount: 0,
@@ -1113,7 +1113,7 @@ if (initializeApp) {
                 inspectorStats[email] = {
                     name: found?.name || r.qcUser || 'Sneha S',
                     email: email,
-                    avatar: found?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.qcUser || 'Sneha'}`,
+                    avatar: found?.profilePicture || getUserAvatarSrc(found || r.qcUser || 'Sneha'),
                     auditsCount: 0,
                     approvedCount: 0,
                     reworkCount: 0,
@@ -1140,7 +1140,7 @@ if (initializeApp) {
                 inspectorStats[email] = {
                     name: found?.name || m.qcUser || 'Sneha S',
                     email: email,
-                    avatar: found?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.qcUser || 'Sneha'}`,
+                    avatar: found?.profilePicture || getUserAvatarSrc(found || m.qcUser || 'Sneha'),
                     auditsCount: 0,
                     approvedCount: 0,
                     reworkCount: 0,
@@ -1948,7 +1948,7 @@ function setQcPerformanceFilter(period) {
 
     function applyUserUI() {
         if (!currentUser) return;
-        const avatar = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+        const avatar = currentUser.profilePicture || getUserAvatarSrc(currentUser);
         document.getElementById('user-avatar').src = avatar;
         document.getElementById('user-name').textContent = currentUser.name;
         document.getElementById('user-role').textContent = currentUser.role;
@@ -2093,7 +2093,7 @@ function setQcPerformanceFilter(period) {
     // PROFILE
     function openProfile() {
         if (!currentUser) return;
-        document.getElementById('profile-pic').src = currentUser.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar || currentUser.name}`;
+        document.getElementById('profile-pic').src = currentUser.profilePicture || getUserAvatarSrc(currentUser);
         document.getElementById('p-name').value = currentUser.name || '';
         const roleSelect = document.getElementById('p-role');
         let hasOption = Array.from(roleSelect.options).some(opt => opt.value === currentUser.role);
@@ -3436,7 +3436,7 @@ function setQcPerformanceFilter(period) {
                         }
                     }
                     if (!userAvatar) {
-                        userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(assigneeName)}`;
+                        userAvatar = getUserAvatarSrc(assigneeName);
                     }
 
                     tableHtml += `
@@ -7117,7 +7117,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                         <div class="flex items-start justify-between gap-4 mb-4">
                             <div class="flex items-center gap-3 min-w-0">
                                 <div class="relative shrink-0">
-                                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
+                                    <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
                                     <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 ${online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
                                 </div>
                                 <div class="min-w-0">
@@ -7810,7 +7810,39 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     }
 
     // CHAT
-    function eKey(email) { return email.replace(/[@.]/g, '_'); }
+    function getInitialsAvatar(nameOrEmail) {
+        const str = (nameOrEmail || "?").trim();
+        const initial = (str.charAt(0) || "?").toUpperCase().replace(/[^A-Za-z0-9]/g, "?");
+        const colors = ["#4f46e5", "#0891b2", "#059669", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#2563eb", "#0d9488", "#e11d48"];
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+        const color = colors[Math.abs(hash) % colors.length];
+        const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"" + color + "\"/><text x=\"50%\" y=\"54%\" dominant-baseline=\"middle\" text-anchor=\"middle\" font-family=\"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif\" font-weight=\"bold\" font-size=\"28\" fill=\"#ffffff\">" + initial + "</text></svg>";
+        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }
+
+    function handleAvatarError(img, nameOrEmail) {
+        if (!img) return;
+        img.onerror = null;
+        img.src = getInitialsAvatar(nameOrEmail || "?");
+    }
+    window.handleAvatarError = handleAvatarError;
+
+    function getUserAvatarSrc(userOrEmail) {
+        if (!userOrEmail) return getInitialsAvatar("?");
+        if (typeof userOrEmail === "string") {
+            const email = userOrEmail.toLowerCase().trim();
+            const user = (typeof allUsersMap !== "undefined" && allUsersMap && allUsersMap.get) ? allUsersMap.get(email) : (typeof knownUserByEmail === "function" ? knownUserByEmail(email) : null);
+            if (user && user.profilePicture) return user.profilePicture;
+            return (user && user.profilePicture) || getInitialsAvatar((user && user.name) || email);
+        }
+        if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+        return getInitialsAvatar(userOrEmail.name || userOrEmail.email || "?");
+    }
+    window.getUserAvatarSrc = getUserAvatarSrc;
+    window.getInitialsAvatar = getInitialsAvatar;
+
+    function eKey(email) { return email.replace(/[@.]/g, "_"); }
     function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
 
     function registerOnline() {
@@ -7828,6 +7860,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const groups = Object.entries(convs).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
             renderGroupList(groups);
             watchConversationNotifications(Object.entries(convs).filter(([, c]) => c.members && c.members[myKey]));
+        });
+        onValue(ref(db, 'worksync/users'), snap => {
+            const usersObj = snap.val() || {};
+            if (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.set) {
+                Object.values(usersObj).forEach(u => {
+                    if (u && u.email) allUsersMap.set(u.email.toLowerCase().trim(), u);
+                });
+                renderDmList();
+            }
         });
     }
 
@@ -7920,10 +7961,11 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const convId = dmId(currentUser.email, u.email);
             const unread = unreadCounts[convId] || 0;
             const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
+            const safeUserName = (u.name || u.email || '').replace(/'/g, "\\'");
             return `
                 <button id="dm-btn-${convId}" onclick="openDm('${u.email}')" class="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-all text-left ${activeClass}">
                     <div class="relative shrink-0">
-                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
+                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeUserName}')" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
                         <div id="online-${eKey(u.email)}" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-slate-300 border-2 border-white rounded-full"></div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -7952,8 +7994,9 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             const badgeClass = unread > 0 ? '' : 'hidden'; // Use unreadCounts directly
             const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
 
+            const safeGroupEscaped = (name || 'Group').replace(/'/g, "\\'");
             const avatarHtml = g.profilePicture
-                ? `<img src="${g.profilePicture}" class="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200">`
+                ? `<img src="${g.profilePicture}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeGroupEscaped}')" class="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200">`
                 : `<div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black shrink-0">${escapeHtml(name.charAt(0))}</div>`;
 
             return `
@@ -7978,12 +8021,13 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     async function openDm(otherEmail) {
         const id = dmId(currentUser.email, otherEmail);
         const userSnap = await get(ref(db, `worksync/users/${eKey(otherEmail)}`));
-        const other = userSnap.val() || knownUserByEmail(otherEmail) || { name: otherEmail.split('@')[0] };
+        const other = userSnap.val() || (allUsersMap && allUsersMap.get(otherEmail.toLowerCase())) || (typeof knownUserByEmail === 'function' ? knownUserByEmail(otherEmail) : null) || { name: otherEmail.split('@')[0] };
         const snap = await get(ref(db, `worksync/conversations/${id}`));
         if (!snap.exists()) {
             await set(ref(db, `worksync/conversations/${id}`), { type: 'dm', members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true }, lastTimestamp: Date.now() });
         }
-        openConversation(id, other.name, 'dm', other.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.avatar || other.name}`);
+        const avatar = other.profilePicture || getUserAvatarSrc(other);
+        openConversation(id, other.name, 'dm', avatar);
     }
 
     async function openConversation(convId, name, type, avatar) {
@@ -7994,8 +8038,9 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
         document.getElementById('chat-active-header').classList.remove('hidden');
         document.getElementById('chat-input-area').classList.remove('hidden');
         document.getElementById('chat-conv-name').textContent = name;
-        document.getElementById('chat-conv-avatar').textContent = name.charAt(0);
-        if (avatar) document.getElementById('chat-conv-avatar').innerHTML = `<img src="${avatar}" class="w-full h-full rounded-xl object-cover">`;
+        const displayAvatar = avatar || getUserAvatarSrc(name);
+        const safeConvEscaped = (name || '').replace(/'/g, "\\'");
+        document.getElementById('chat-conv-avatar').innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-xl object-cover">`;
 
         activeGroupMembers = [];
         if (type === 'group') {
@@ -8140,9 +8185,18 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                     </div>
                 </div>` : '';
 
+        const senderUser = msg.senderEmail ? (allUsersMap.get(msg.senderEmail.toLowerCase()) || (typeof knownUserByEmail === 'function' && knownUserByEmail(msg.senderEmail))) : null;
+        const senderAvatar = (senderUser && senderUser.profilePicture) || getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName);
+        const safeSenderName = (msg.senderName || msg.senderEmail || '?').replace(/'/g, "\\'");
+
         const div = document.createElement('div');
-        div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in`;
+        div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in items-end gap-2`;
         div.innerHTML = `
+                ${!isMe ? `
+                    <div class="w-7 h-7 rounded-lg overflow-hidden shrink-0 mb-1">
+                        <img src="${senderAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200" title="${escapeHtml(msg.senderName || '')}">
+                    </div>
+                ` : ''}
                 <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}">
                     ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}">
@@ -8401,7 +8455,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
 
         dropdown.innerHTML = filtered.map((u, i) => `
                 <div onclick="selectMention('${escapeHtml(u.name || u.email).replace(/'/g, "\\'")}')" class="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 transition-colors ${i === mentionIndex ? 'bg-indigo-50 border-l-2 border-indigo-600' : ''}">
-                    <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-6 h-6 rounded-md object-cover bg-slate-100">
+                    <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-6 h-6 rounded-md object-cover bg-slate-100">
                     <div class="min-w-0">
                         <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(u.name)}</p>
                         <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')}</p>
@@ -11451,7 +11505,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             return `
                 <div class="border border-slate-100 rounded-2xl p-5 bg-white shadow-sm">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                        <div class="flex items-center gap-4"><img src="${p.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.avatar || p.name}`}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover"><div><p class="text-sm font-bold text-slate-900">${escapeHtml(p.name)}</p><p class="text-[10px] text-slate-400 font-bold uppercase">${escapeHtml(p.role || 'User')}</p></div></div>
+                        <div class="flex items-center gap-4"><img src="${p.profilePicture || getUserAvatarSrc(p)}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover"><div><p class="text-sm font-bold text-slate-900">${escapeHtml(p.name)}</p><p class="text-[10px] text-slate-400 font-bold uppercase">${escapeHtml(p.role || 'User')}</p></div></div>
                         <div class="bg-indigo-50 text-indigo-600 rounded-xl px-4 py-2 text-center"><p class="text-[10px] font-bold uppercase">Total Time</p><p class="text-lg font-black font-mono">${p.totalTime}</p></div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -12619,7 +12673,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
         list.innerHTML = allUsers.map(u => `
                 <div class="flex items-center justify-between p-5 hover:bg-slate-50 transition-all border-b border-slate-50">
                     <div class="flex items-center gap-4">
-                        <img src="${u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover">
+                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-12 h-12 rounded-xl bg-white border border-slate-200 object-cover">
                         <div>
                             <p class="text-sm font-bold text-slate-900">${escapeHtml(u.name)}</p>
                             <p class="text-[10px] text-slate-400 font-bold uppercase">${escapeHtml(u.role || 'User')} · ${escapeHtml(u.email)}</p>
@@ -12642,12 +12696,12 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
             const snap = await get(ref(db, `worksync/users/${eKey(email)}`));
             const u = { ...(knownUserByEmail(email) || {}), ...(snap.val() || {}) };
             nameInp.value = u.name || ''; emailInp.value = u.email || ''; emailInp.readOnly = true; emailInp.classList.add('opacity-60');
-            roleInp.value = u.role || 'Employee'; phoneInp.value = u.phone || ''; picImg.src = u.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.avatar || u.name}`;
+            roleInp.value = u.role || 'Employee'; phoneInp.value = u.phone || ''; picImg.src = u.profilePicture || getUserAvatarSrc(u);
             empIdInp.value = u.empId || ''; birthdayInp.value = u.birthday || '';
             document.getElementById('au-delete-btn').classList.remove('hidden');
         } else {
             nameInp.value = ''; emailInp.value = ''; emailInp.readOnly = false; emailInp.classList.remove('opacity-60');
-            roleInp.value = 'Employee'; phoneInp.value = ''; picImg.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=NewUser`;
+            roleInp.value = 'Employee'; phoneInp.value = ''; picImg.src = getInitialsAvatar('New User');
             empIdInp.value = ''; birthdayInp.value = '';
             document.getElementById('au-delete-btn').classList.add('hidden');
         }
@@ -12983,7 +13037,7 @@ if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 const user = allUsers.get(email.toLowerCase());
                 return {
                     name: user?.name || email.split('@')[0],
-                    avatar: user?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.avatar || user?.name || email}`
+                    avatar: user?.profilePicture || getUserAvatarSrc(user || email)
                 };
             });
 
