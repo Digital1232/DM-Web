@@ -134,6 +134,8 @@ function normalizeDateStringToISO(rawDate) {
     return '';
 }
 
+let monthlyPlansUnsub = null;
+
 /**
  * Realtime Firebase Database Listener (Aggregates Strategy Calendar & Daily Plan tasks)
  */
@@ -147,20 +149,27 @@ function setupFirebaseRealtimeListener() {
         return;
     }
 
+    if (monthlyPlansUnsub) {
+        try { monthlyPlansUnsub(); } catch (e) {}
+        monthlyPlansUnsub = null;
+    }
+
     isFirebaseConnected = true;
 
     try {
         const plansRef = rtdb.ref(db, 'worksync/monthly_plans');
-        rtdb.onValue(plansRef, (snapshot) => {
-            rawMonthlyPlansData = snapshot.val();
+        monthlyPlansUnsub = rtdb.onValue(plansRef, (snapshot) => {
+            rawMonthlyPlansData = snapshot.val() || {};
             mergeAndRenderAllStrategyTasks();
         }, (error) => {
-            console.error('[MatrixEngine] Monthly Plans Sync Error:', error);
+            console.warn('[MatrixEngine] Monthly Plans Sync (requires Firebase RTDB permission):', error.message || error);
         });
     } catch (err) {
-        console.error('[MatrixEngine] Failed to setup RTDB listeners:', err);
+        console.warn('[MatrixEngine] Failed to setup RTDB listeners:', err);
     }
 }
+
+window.setupFirebaseRealtimeListener = setupFirebaseRealtimeListener;
 
 /**
  * Standardized Task Parser with Date Normalization

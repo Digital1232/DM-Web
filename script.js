@@ -10192,6 +10192,7 @@
                         <option value="Content Writer &amp; QC Associate">Content Writer &amp; QC Associate</option>
                         <option value="Social Media Analyst Associate">Social Media Analyst Associate</option>
                         <option value="Video Producer Associate">Video Producer Associate</option>
+                        <option value="Junior Video Editor">Junior Video Editor</option>
                         <option value="Graphic Designer Associate">Graphic Designer Associate</option>
                         <option value="Web Developer Associate">Web Developer Associate</option>
                     </select>
@@ -11321,6 +11322,7 @@
                         <option value="Content Writer & QC Associate">Content Writer & QC Associate</option>
                         <option value="Social Media Analyst Associate">Social Media Analyst Associate</option>
                         <option value="Video Producer Associate">Video Producer Associate</option>
+                        <option value="Junior Video Editor">Junior Video Editor</option>
                         <option value="Graphic Designer Associate">Graphic Designer Associate</option>
                         <option value="Web Developer Associate">Web Developer Associate</option>
                     </select>
@@ -15633,6 +15635,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     initTaskNotifications();
                     loadAllNotificationsForUser();
                     initOrganisersListener();
+                    if (typeof window.setupFirebaseRealtimeListener === 'function') window.setupFirebaseRealtimeListener();
 
                     // PERFORMANCE: Load only CRITICAL data synchronously
                     // Other data loads in background after view appears
@@ -15840,6 +15843,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Clean up all listeners and timers
                     try {
                         Object.values(convListeners).forEach(off => off && off());
+                        if (chatConversationsUnsub) { try { chatConversationsUnsub(); } catch(e) {} chatConversationsUnsub = null; }
                         if (checkoutReasonsUnsub) { checkoutReasonsUnsub(); checkoutReasonsUnsub = null; }
                         if (currentWorkUnsub) currentWorkUnsub();
                         if (todayReportUnsub) todayReportUnsub();
@@ -28236,9 +28240,15 @@ function isStrategyTask(t) {
                 renderDmList();
             }
 
+            let chatConversationsUnsub = null;
             function initChat() {
-                if (!db || !currentUser) return;
-                onValue(ref(db, 'worksync/conversations'), snap => {
+                if (!db || !currentUser || !currentUser.email) return;
+                if (chatConversationsUnsub) {
+                    try { chatConversationsUnsub(); } catch (e) {}
+                    chatConversationsUnsub = null;
+                }
+                chatConversationsUnsub = onValue(ref(db, 'worksync/conversations'), snap => {
+                    if (!currentUser || !currentUser.email) return;
                     chatConversations = snap.val() || {};
                     const myKey = eKey(currentUser.email);
                     const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
@@ -28265,7 +28275,7 @@ function isStrategyTask(t) {
                     const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
                     convListeners[id] = onChildAdded(q, snap => {
                         const msg = snap.val();
-                        if (!msg || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
+                        if (!msg || !currentUser || !currentUser.email || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
                         notifyIncomingMessage(msg, conv, id);
                         if (id !== activeConvId) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
@@ -40754,6 +40764,7 @@ function isStrategyTask(t) {
                 } else {
                     // Regular users load only their own tasks
                     onValue(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}`), snap => {
+                        if (!currentUser || !currentUser.email) return;
                         // Cleanup target tasks if owned by this user
                         const targetIds = ['M-1779279416802', 'M-1777551877624'];
                         const userTasksMap = snap.val() || {};
@@ -47359,15 +47370,26 @@ function isStrategyTask(t) {
                 try {
                     if (fbUser) {
                         const snap = await get(ref(db, `worksync/users/${eKey(fbUser.email)}`)); // Fetch user data from Firebase
+                        const hardcoded = knownUserByEmail(fbUser.email);
                         if (snap.exists()) {
-                            currentUser = { ...snap.val(), ...(knownUserByEmail(fbUser.email) || {}), uid: fbUser.uid };
-                            localStorage.setItem('worksync_user', JSON.stringify(currentUser));
-                            document.documentElement.classList.add('has-user');
-                            await finishLogin();
+                            currentUser = { ...snap.val(), ...(hardcoded || {}), uid: fbUser.uid };
                         } else {
-                            console.warn(`User ${fbUser.email} authenticated but not found in DB. Forcing logout.`);
-                            await logout();
+                            currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : {
+                                email: fbUser.email,
+                                name: fbUser.displayName || fbUser.email.split('@')[0],
+                                role: 'Junior Video Editor',
+                                avatar: 'Muthu',
+                                uid: fbUser.uid
+                            };
+                            try {
+                                await set(ref(db, `worksync/users/${eKey(fbUser.email)}`), currentUser);
+                            } catch (setErr) {
+                                console.warn('[Auth] Could not auto-create user in RTDB:', setErr);
+                            }
                         }
+                        localStorage.setItem('worksync_user', JSON.stringify(currentUser));
+                        document.documentElement.classList.add('has-user');
+                        await finishLogin();
                     } else {
                         // User is signed out. The logout() function handles state and UI cleanup.
                         // This block is a fallback for external sign-out events.
