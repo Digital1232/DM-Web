@@ -13095,21 +13095,14 @@
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
                 projectKey: 'SEP',
-                projectKeys: ['SEP', 'AUG'],
+                projectKeys: ['SEP'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
             };
 
             function getJiraProjectKeyForDate(dateStr) {
-                if (!dateStr) return JIRA.projectKey || 'SEP';
-                const month = String(dateStr).split('-')[1];
-                if (month === '09') return 'SEP';
-                if (month === '08') return 'AUG';
-                if (month === '07') return 'JULY';
-                if (month === '06') return 'JUN';
-                if (month === '05') return 'MAY';
-                return JIRA.projectKey || 'SEP';
+                return 'SEP';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
@@ -19001,7 +18994,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         const lowerTaskId = String(task.id).toLowerCase().trim();
                         if (strategyJiraIds.has(lowerTaskId)) return;
-                        if (!task.id.toUpperCase().startsWith('SEP-') && !task.id.toUpperCase().startsWith('AUG-')) return;
+                        if (!task.id.toUpperCase().startsWith('SEP-')) return;
 
                         const cat = getStrategyStatusCategory(task.status);
                         if (cat === 'posted') countPosted++;
@@ -19356,8 +19349,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     return; // Already rendered as Strategy Event
                                 }
 
-                                // Filter non-AUG Jira tasks from grid unless linked to a Strategy Event
-                                if (!task.id.toUpperCase().startsWith('AUG-')) {
+                                // Filter non-SEP Jira tasks from grid unless linked to a Strategy Event
+                                if (!task.id.toUpperCase().startsWith('SEP-')) {
                                     return;
                                 }
 
@@ -23190,7 +23183,7 @@ function isStrategyTask(t) {
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
                 }
                 try {
-                    const projectKeys = JIRA.projectKeys || ['SEP', 'AUG'];
+                    const projectKeys = JIRA.projectKeys || ['SEP'];
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
