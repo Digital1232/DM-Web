@@ -3122,7 +3122,10 @@ function setQcPerformanceFilter(period) {
         // Populating owners dropdown in modal
         const ownerSelect = document.getElementById('strategy-owner');
         if (ownerSelect) {
-            if (!allUsersMap.size) allUsersMap = await getAllUsers();
+            if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
+            allUsersMap = await getAllUsers();
+            window.allUsersMap = allUsersMap;
+        }
             const users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u => `
                     <option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} (${escapeHtml(u.email)})</option>
@@ -7838,7 +7841,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     async function renderDmList() {
         const container = document.getElementById('dm-list');
         if (!container || !currentUser) return;
-        if (!allUsersMap.size) allUsersMap = await getAllUsers();
+        if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
+            allUsersMap = await getAllUsers();
+            window.allUsersMap = allUsersMap;
+        }
         const others = Array.from(allUsersMap.values())
             .filter(u => u.email && u.email !== currentUser.email)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));

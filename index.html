@@ -15606,7 +15606,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         loadDiscussions(),
                         loadQcReports(),
                         loadSnehaSelections(),
-                        getAllUsers().then(users => { allUsersMap = users; return users; })
+                        getAllUsers().then(users => { allUsersMap = users; window.allUsersMap = users; if (activeView === 'chat') renderDmList(); return users; })
                     ]);
 
                     // Run morning learning and daily task setup in parallel AFTER allUsersMap is ready
@@ -18425,7 +18425,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Populating owners dropdown in modal
                 const ownerSelect = document.getElementById('strategy-owner');
                 if (ownerSelect) {
-                    if (!allUsersMap.size) allUsersMap = await getAllUsers();
+                    if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
+                    allUsersMap = await getAllUsers();
+                    window.allUsersMap = allUsersMap;
+                }
                     const users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                     ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u => `
                     <option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} (${escapeHtml(u.email)})</option>
@@ -28264,7 +28267,10 @@ function isStrategyTask(t) {
             async function renderDmList() {
                 const container = document.getElementById('dm-list');
                 if (!container || !currentUser) return;
-                if (!allUsersMap.size) allUsersMap = await getAllUsers();
+                if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
+                    allUsersMap = await getAllUsers();
+                    window.allUsersMap = allUsersMap;
+                }
 
                 const pinnedKey = `worksync_pinned_chats_${eKey(currentUser.email)}`;
                 const pinnedList = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
