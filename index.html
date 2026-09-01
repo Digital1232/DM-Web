@@ -15622,6 +15622,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
                     restoreTimerState();
                     restoreCheckinFromFirebase();
+                    initLiveAttendanceSync();
                     initDailyReportScheduler();
                     initFiveThirtyScheduler();
                     restoreActiveTask();
@@ -15898,6 +15899,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     updateOrganiserNavVisibility();
                     resetTimerUI();
                     setTimerState('idle');
+                syncActiveSessionToFirebase('idle');
                     
                     if (typeof hideFloatBtn === 'function') hideFloatBtn();
                     if (typeof hideWaterWidget === 'function') hideWaterWidget();
@@ -16980,8 +16982,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem('worksync_totalBreakDuration', '0');
                 localStorage.removeItem('worksync_breakStartTime');
                 setTimerState('running');
+                syncActiveSessionToFirebase('running');
                 timerRef = setInterval(tickTimer, 1000);
                 logAttendanceEvent('check_in');
+                syncActiveSessionToFirebase('running');
                 updateSessionStatus();
                 toast('Checked In Successfully', 'success');
                 registerOnline();
@@ -17069,6 +17073,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem('worksync_breakStartTime', String(breakStartTime));
                 setTimerState('paused');
                 logAttendanceEvent('break_start');
+                syncActiveSessionToFirebase('paused');
                 // Auto-hold any active task when going on break
                 if (activeTaskId && !taskOnHold) {
                     holdTask();
@@ -17597,6 +17602,137 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             // ── Restore check-in state from Firebase (handles new browser / cleared storage) ──
+            
+            // ── Live Attendance Real-time Bidirectional Sync (Web <-> Mobile App) ──
+            function syncActiveSessionToFirebase(stateOverride) {
+                if (!currentUser || !db) return;
+                try {
+                    const state = stateOverride || (isCheckedIn ? (breakStartTime ? 'paused' : 'running') : 'idle');
+                    const userKey = eKey(currentUser.email);
+                    const sessionData = {
+                        state: state,
+                        checkInTime: checkInTime || null,
+                        breakStartTime: breakStartTime || null,
+                        totalBreakDuration: totalBreakDuration || 0,
+                        date: typeof todayIso === 'function' ? todayIso() : new Date().toISOString().slice(0, 10),
+                        userEmail: currentUser.email,
+                        userName: currentUser.name || '',
+                        updatedAt: Date.now()
+                    };
+                    set(ref(db, `worksync/active_sessions/${userKey}`), sessionData).catch(err => {
+                        console.warn('[syncActiveSessionToFirebase] error:', err);
+                    });
+                } catch (err) {
+                    console.warn('[syncActiveSessionToFirebase] error:', err);
+                }
+            }
+            window.syncActiveSessionToFirebase = syncActiveSessionToFirebase;
+
+            let activeSessionUnsub = null;
+            function initLiveAttendanceSync() {
+                if (!currentUser || !db) return;
+                if (activeSessionUnsub) {
+                    try { activeSessionUnsub(); } catch(e){}
+                    activeSessionUnsub = null;
+                }
+
+                try {
+                    const userKey = eKey(currentUser.email);
+                    const sessionRef = ref(db, `worksync/active_sessions/${userKey}`);
+
+                    activeSessionUnsub = onValue(sessionRef, (snapshot) => {
+                        if (!snapshot.exists()) return;
+                        const session = snapshot.val();
+                        if (!session) return;
+
+                        const today = typeof todayIso === 'function' ? todayIso() : new Date().toISOString().slice(0, 10);
+                        if (session.date && session.date !== today) return;
+
+                        const remoteState = session.state || 'idle';
+                        const remoteCheckInTime = session.checkInTime ? parseInt(session.checkInTime, 10) : null;
+                        const remoteBreakStartTime = session.breakStartTime ? parseInt(session.breakStartTime, 10) : null;
+                        const remoteTotalBreak = session.totalBreakDuration ? parseInt(session.totalBreakDuration, 10) : 0;
+
+                        if (remoteState === 'running' && remoteCheckInTime) {
+                            const localState = localStorage.getItem('worksync_timerState');
+                            const localCheckIn = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
+
+                            if (localState !== 'running' || localCheckIn !== remoteCheckInTime || !isCheckedIn) {
+                                isCheckedIn = true;
+                                checkInTime = remoteCheckInTime;
+                                breakStartTime = null;
+                                totalBreakDuration = remoteTotalBreak;
+
+                                localStorage.setItem('worksync_timerState', 'running');
+                                localStorage.setItem('worksync_checkInTime', String(checkInTime));
+                                localStorage.setItem('worksync_totalBreakDuration', String(totalBreakDuration));
+                                localStorage.removeItem('worksync_breakStartTime');
+
+                                setTimerState('running');
+                                clearInterval(timerRef);
+                                timerRef = setInterval(tickTimer, 1000);
+                                tickTimer();
+
+                                const modal = document.getElementById('breakStatusModal');
+                                if (modal && modal.open) modal.close();
+                                const floating = document.getElementById('breakFloatingReminder');
+                                if (floating) floating.classList.add('hidden');
+                                stopBreakTimer();
+                            }
+                        } else if (remoteState === 'paused' && remoteCheckInTime) {
+                            const localState = localStorage.getItem('worksync_timerState');
+                            if (localState !== 'paused' || !breakStartTime) {
+                                isCheckedIn = true;
+                                checkInTime = remoteCheckInTime;
+                                breakStartTime = remoteBreakStartTime || Date.now();
+                                totalBreakDuration = remoteTotalBreak;
+
+                                localStorage.setItem('worksync_timerState', 'paused');
+                                localStorage.setItem('worksync_checkInTime', String(checkInTime));
+                                localStorage.setItem('worksync_breakStartTime', String(breakStartTime));
+                                localStorage.setItem('worksync_totalBreakDuration', String(totalBreakDuration));
+
+                                clearInterval(timerRef);
+                                const workMs = (breakStartTime - checkInTime) - totalBreakDuration;
+                                seconds = Math.floor(Math.max(0, workMs / 1000));
+                                const formatted = formatTime(seconds);
+                                const timerDisp = document.getElementById('timer-display');
+                                if (timerDisp) timerDisp.textContent = formatted;
+                                const headerDisp = document.getElementById('header-timer-display');
+                                if (headerDisp) headerDisp.textContent = formatted;
+
+                                setTimerState('paused');
+                                openBreakPopup();
+                            }
+                        } else if (remoteState === 'idle') {
+                            if (isCheckedIn) {
+                                clearInterval(timerRef);
+                                isCheckedIn = false;
+                                checkInTime = null;
+                                breakStartTime = null;
+                                totalBreakDuration = 0;
+
+                                localStorage.removeItem('worksync_timerState');
+                                localStorage.removeItem('worksync_checkInTime');
+                                localStorage.removeItem('worksync_totalBreakDuration');
+                                localStorage.removeItem('worksync_breakStartTime');
+
+                                resetTimerUI();
+                                setTimerState('idle');
+                                const modal = document.getElementById('breakStatusModal');
+                                if (modal && modal.open) modal.close();
+                                const floating = document.getElementById('breakFloatingReminder');
+                                if (floating) floating.classList.add('hidden');
+                                stopBreakTimer();
+                            }
+                        }
+                    });
+                } catch (err) {
+                    console.warn('[initLiveAttendanceSync] error:', err);
+                }
+            }
+            window.initLiveAttendanceSync = initLiveAttendanceSync;
+
             async function restoreCheckinFromFirebase() {
                 // If localStorage already restored state, nothing to do
                 if (isCheckedIn) return;
