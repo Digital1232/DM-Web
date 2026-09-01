@@ -16478,6 +16478,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function getSafePdfUrl(url, name) {
                 if (!url) return '';
                 let strUrl = String(url);
+                if (strUrl.startsWith('data:')) return strUrl;
                 const isPdf = (name || strUrl).toLowerCase().includes('.pdf');
                 // For Cloudinary image-uploaded PDFs, add fl_attachment to force download instead of inline render
                 if (isPdf && strUrl.includes('cloudinary.com') && strUrl.includes('/image/upload/')) {
@@ -28561,9 +28562,39 @@ function isStrategyTask(t) {
 
             function normalizeMessageAttachments(msg) {
                 if (!msg || msg.unsent) return [];
-                if (Array.isArray(msg.attachments) && msg.attachments.length) return msg.attachments;
-                if (msg.attachmentUrl) {
-                    return [{ url: msg.attachmentUrl, type: msg.attachmentType || '', name: msg.attachmentName || '' }];
+                let list = [];
+                if (Array.isArray(msg.attachments)) {
+                    list = msg.attachments;
+                } else if (msg.attachments && typeof msg.attachments === 'object') {
+                    list = Object.values(msg.attachments);
+                } else if (Array.isArray(msg.files)) {
+                    list = msg.files;
+                } else if (msg.files && typeof msg.files === 'object') {
+                    list = Object.values(msg.files);
+                } else if (msg.attachment && typeof msg.attachment === 'object') {
+                    list = [msg.attachment];
+                } else if (msg.file && typeof msg.file === 'object') {
+                    list = [msg.file];
+                }
+
+                if (list.length > 0) {
+                    return list.filter(a => a && (a.url || a.link || a.fileUrl || a.data)).map(a => ({
+                        url: a.url || a.link || a.fileUrl || a.data || '',
+                        type: a.type || a.mimeType || a.fileType || '',
+                        name: a.name || a.fileName || a.title || 'Document',
+                        size: a.size || a.fileSize || 0,
+                        isLink: !!a.isLink,
+                        isGoogleDriveFile: !!a.isGoogleDriveFile
+                    }));
+                }
+
+                if (msg.attachmentUrl || msg.fileUrl || msg.url) {
+                    return [{
+                        url: msg.attachmentUrl || msg.fileUrl || msg.url,
+                        type: msg.attachmentType || msg.fileType || '',
+                        name: msg.attachmentName || msg.fileName || 'Document',
+                        size: msg.attachmentSize || msg.fileSize || 0
+                    }];
                 }
                 return [];
             }
@@ -28830,7 +28861,7 @@ function isStrategyTask(t) {
                     }
 
                     fileAttachments.forEach(a => {
-                        const isDoc = a.isDoc || a.url?.startsWith('data:');
+                        const safeUrl = getSafePdfUrl(a.url, a.name);
                         const meta = docFileIcon(a.type, a.name);
                         const bgClass = isMe
                             ? 'bg-white hover:bg-slate-50 border-slate-200'
@@ -28838,33 +28869,41 @@ function isStrategyTask(t) {
                         const textClass = isMe ? 'text-slate-800' : 'text-slate-800';
                         const subClass = isMe ? 'text-slate-400' : 'text-slate-400';
                         const sizeTxt = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
+                        const safeName = escapeHtml(a.name || 'Document');
+                        const isLink = a.isLink || a.isGoogleDriveFile;
 
-                        // Create download link with download attribute
                         attachmentHtml += `
                         <div class="${text ? 'mb-2' : ''} mt-1 group/attachment">
-                            <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl border cursor-pointer transition-colors"
+                            <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl border transition-all shadow-sm"
                                style="text-decoration:none">
-                                <iconify-icon icon="${meta.icon}" width="22" style="color:${meta.color};flex-shrink:0"></iconify-icon>
-                                <div class="min-w-0">
-                                    <p class="text-xs font-bold ${textClass} truncate max-w-[160px]">${escapeHtml(a.name || 'File')}</p>
+                                <iconify-icon icon="${meta.icon}" width="24" style="color:${meta.color};flex-shrink:0"></iconify-icon>
+                                <div class="min-w-0 pr-1 cursor-pointer" onclick="window.open('${safeUrl}', '_blank', 'noopener,noreferrer')">
+                                    <p class="text-xs font-bold ${textClass} truncate max-w-[170px] hover:text-indigo-600 transition-colors" title="${safeName}">${safeName}</p>
                                     <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''}</p>
                                 </div>
-                                <div class="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                                    <a href="${getSafePdfUrl(a.url)}" target="_blank" rel="noopener noreferrer"
-                                       class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity"
-                                       title="Open file">
-                                        <iconify-icon icon="solar:square-arrow-right-up-bold" width="14" class="${isMe ? 'text-slate-400 hover:text-slate-600' : 'text-slate-300 hover:text-slate-600'}"></iconify-icon>
+                                <div class="flex items-center gap-1 flex-shrink-0 ml-1">
+                                    <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
+                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100/80 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
+                                       title="Open in new tab">
+                                        <iconify-icon icon="solar:square-arrow-right-up-bold" width="14"></iconify-icon>
                                     </a>
-                                    <a href="${getSafePdfUrl(a.url)}" download="${escapeHtml(a.name || 'file')}"
-                                       class="flex items-center justify-center h-5 w-5 rounded hover:opacity-70 transition-opacity opacity-0 group-hover/attachment:opacity-100"
+                                    ${!isLink ? `
+                                    <a href="${safeUrl}" download="${safeName}"
+                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100/80 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
                                        title="Download file"
                                        onclick="event.stopPropagation()">
-                                        <iconify-icon icon="solar:download-square-bold" width="14" class="${isMe ? 'text-slate-400 hover:text-slate-600' : 'text-slate-300 hover:text-slate-600'}"></iconify-icon>
-                                    </a>
+                                        <iconify-icon icon="solar:download-square-bold" width="14"></iconify-icon>
+                                    </a>` : ''}
                                 </div>
                             </div>
                         </div>`;
                     });
+                }
+
+                // Guard against rendering completely empty bubbles
+                const hasBodyContent = !!(replyToHtml || attachmentHtml || (text && text.trim()));
+                if (!hasBodyContent && !msg.unsent) {
+                    return;
                 }
 
                 const existingReactions = [];
@@ -29545,18 +29584,23 @@ function isStrategyTask(t) {
                 // 2. Direct upload to Cloudinary/Hostinger CDN
                 try {
                     const uploaded = await uploadToCloudinary(toUpload);
-                    file._uploadedData = uploaded;
-                    return uploaded;
+                    if (uploaded && uploaded.url) {
+                        file._uploadedData = uploaded;
+                        return uploaded;
+                    }
+                    throw new Error('Upload returned no URL');
                 } catch (err) {
-                    console.warn('Fast upload failed, attempting fallback:', err);
-                    if (toUpload.size <= 3 * 1024 * 1024) {
+                    console.warn('Upload failed, attempting direct base64 fallback:', err);
+                    // Universal base64 fallback for documents/files up to 8MB
+                    if (toUpload.size <= 8 * 1024 * 1024) {
                         const b64 = await fileToBase64(toUpload);
                         const fallbackData = {
                             url: b64,
                             type: toUpload.type || 'application/octet-stream',
-                            name: file.name,
+                            name: file.name || 'document',
                             size: toUpload.size,
-                            cloudinary: false
+                            cloudinary: false,
+                            isDoc: !file.type?.startsWith('image/')
                         };
                         file._uploadedData = fallbackData;
                         return fallbackData;
@@ -29899,16 +29943,24 @@ function isStrategyTask(t) {
                     let lastMsg = savedText;
 
                     if (currentAttachments.length) {
-                        // Upload all attachments in parallel using pre-upload promises
-                        const uploadPromises = currentAttachments.map(item => {
-                            if (item.isLink) return Promise.resolve(item);
-                            if (item.isGoogleDriveFile) return Promise.resolve(item);
-                            if (item._uploadedData) return Promise.resolve(item._uploadedData);
-                            return item._uploadPromise || uploadChatFileFast(item);
+                        // Upload all attachments in parallel, properly awaiting pre-upload promises and retrying failed ones
+                        const uploadPromises = currentAttachments.map(async item => {
+                            if (item.isLink) return item;
+                            if (item.isGoogleDriveFile) return item;
+                            if (item._uploadedData) return item._uploadedData;
+                            if (item._uploadPromise) {
+                                try {
+                                    const res = await item._uploadPromise;
+                                    if (res && res.url) return res;
+                                } catch (e) {
+                                    console.warn('Pre-upload promise rejected:', e);
+                                }
+                            }
+                            return await uploadChatFileFast(item);
                         });
 
                         const uploadResults = await Promise.all(uploadPromises);
-                        const validAttachments = uploadResults.filter(Boolean);
+                        const validAttachments = uploadResults.filter(a => a && a.url);
 
                         if (validAttachments.length > 0) {
                             payload.attachments = validAttachments;
@@ -29920,7 +29972,18 @@ function isStrategyTask(t) {
                             lastMsg = savedText || (validAttachments.length > 1
                                 ? `📎 ${validAttachments.length} files`
                                 : `📎 ${validAttachments[0].name}`);
+                        } else if (!savedText.trim()) {
+                            // Critical: File upload failed and no text was typed — abort sending empty bubble
+                            toast('Failed to upload file. Please check connection and try again.', 'error');
+                            stagedAttachments = currentAttachments;
+                            renderStagedAttachmentsPreview();
+                            return;
                         }
+                    }
+
+                    if (!savedText.trim() && !payload.attachments && !payload.attachmentUrl) {
+                        // Guard against empty message push
+                        return;
                     }
 
                     // Parallel Firebase push & conversation update
@@ -29933,6 +29996,9 @@ function isStrategyTask(t) {
                     toast('Failed to send message: ' + err.message, 'error');
                     if (isTextOnly) {
                         input.value = savedText;
+                    } else {
+                        stagedAttachments = currentAttachments;
+                        renderStagedAttachmentsPreview();
                     }
                 } finally {
                     isSendingChatMsg = false;
