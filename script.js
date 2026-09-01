@@ -330,6 +330,9 @@ if (initializeApp) {
     if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
         USERS.forEach(u => allUsersMap.set(u.email.toLowerCase(), { ...u }));
     }
+    if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+        USERS.forEach(u => allUsersMap.set(u.email.toLowerCase(), { ...u }));
+    }
     let todayTimeLogs = [];
     let todayReportUnsub = null;
     let announcementsUnsub = null;
@@ -7684,15 +7687,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     window.handleAvatarError = handleAvatarError;
 
     function getUserAvatarSrc(userOrEmail) {
-        if (!userOrEmail) return 'https://api.dicebear.com/7.x/avataaars/svg?seed=User';
+        if (!userOrEmail) return getInitialsAvatar('User');
         if (typeof userOrEmail === "object") {
             if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+            var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
             if (userOrEmail.email && typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) {
                 var fullU = allUsersMap.get(userOrEmail.email.toLowerCase().trim());
                 if (fullU && fullU.profilePicture) return fullU.profilePicture;
             }
-            var seed = userOrEmail.avatar || userOrEmail.name || userOrEmail.email || 'User';
-            return 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+            return getInitialsAvatar(displayName);
         }
         if (typeof userOrEmail === "string") {
             var key = userOrEmail.toLowerCase().trim();
@@ -7718,10 +7721,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 });
             }
             if (user && user.profilePicture) return user.profilePicture;
-            var seed = (user && (user.avatar || user.name)) || userOrEmail.split('@')[0] || userOrEmail || 'User';
-            return 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+            var finalName = (user && (user.name || user.avatar)) || userOrEmail.split('@')[0] || userOrEmail;
+            return getInitialsAvatar(finalName);
         }
-        return 'https://api.dicebear.com/7.x/avataaars/svg?seed=User';
+        return getInitialsAvatar('User');
     }
     window.getUserAvatarSrc = getUserAvatarSrc;
     window.getInitialsAvatar = getInitialsAvatar;
