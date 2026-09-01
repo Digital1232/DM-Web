@@ -20925,6 +20925,42 @@ function isStrategyTask(t) {
                 }
             }
 
+            function navigatePlanTracking(dir) {
+                if (dir === 0) {
+                    ptCurrentDate = new Date();
+                } else {
+                    ptCurrentDate.setMonth(ptCurrentDate.getMonth() + dir);
+                }
+                renderPlanTrackingView();
+            }
+
+            function switchPlanTab(tab) {
+                ptActiveTab = tab;
+                const pccBtn = document.getElementById('pt-tab-pcc');
+                const calBtn = document.getElementById('pt-tab-calendar');
+                const pccPanel = document.getElementById('pt-panel-pcc');
+                const calPanel = document.getElementById('pt-panel-calendar');
+                const navWrapper = document.getElementById('pt-calendar-nav-wrapper');
+
+                if (pccBtn && calBtn) {
+                    if (tab === 'pcc') {
+                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
+                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
+                        if (pccPanel) pccPanel.classList.remove('hidden');
+                        if (calPanel) calPanel.classList.add('hidden');
+                        if (navWrapper) navWrapper.classList.add('hidden');
+                        if (typeof renderPccDashboard === 'function') renderPccDashboard();
+                    } else {
+                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
+                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
+                        if (calPanel) calPanel.classList.remove('hidden');
+                        if (pccPanel) pccPanel.classList.add('hidden');
+                        if (navWrapper) navWrapper.classList.remove('hidden');
+                        renderPlanCalendar();
+                    }
+                }
+            }
+
             function renderPlanTrackingView() {
                 const monthTitle = document.getElementById('pt-month-title');
                 if (monthTitle) {
