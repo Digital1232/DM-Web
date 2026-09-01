@@ -19,6 +19,7 @@ export const USERS = [
     { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member', avatar: 'Sneha' },
     { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
     { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
+    { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
     { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
 ];
 
@@ -54,6 +55,10 @@ export const LEAVE_APPROVAL_CHAINS = {
         'nanjil@vilpower.com'
     ],
     'alex@vilpower.com': [
+        'digitalmarketing@vilpower.com',
+        'nanjil@vilpower.com'
+    ],
+    'ajithvilpower@gmail.com': [
         'digitalmarketing@vilpower.com',
         'nanjil@vilpower.com'
     ],

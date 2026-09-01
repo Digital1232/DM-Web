@@ -4880,6 +4880,60 @@ function isStrategyTask(t) {
                 await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
                 toast('Strategy event updated!', 'success');
                 closeStrategyEventModal();
+
+                // Background sync of task status, title (summary), description, assignee, labels & due date to Jira
+                (async () => {
+                    try {
+                        const existingEv = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents[id] : null;
+                        const targetJiraId = jiraId || (existingEv ? (existingEv.jiraId || existingEv.jiraTaskId) : null);
+                        const jiraKey = targetJiraId || (id && id.includes('-') ? id : null);
+
+                        if (jiraKey) {
+                            const fieldsToUpdate = {
+                                summary: title,
+                                duedate: calculatedDueDate
+                            };
+
+                            if (desc) {
+                                fieldsToUpdate.description = {
+                                    type: 'doc',
+                                    version: 1,
+                                    content: [
+                                        {
+                                            type: 'paragraph',
+                                            content: [
+                                                {
+                                                    type: 'text',
+                                                    text: desc
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                };
+                            }
+
+                            if (owner && typeof findJiraAccountId === 'function') {
+                                const assigneeUser = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) ? allUsersMap.get(owner.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(owner) : { email: owner, name: owner });
+                                const accountId = await findJiraAccountId(assigneeUser);
+                                if (accountId) {
+                                    fieldsToUpdate.assignee = { id: accountId };
+                                }
+                            }
+
+                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(jiraKey)}`;
+                            const jiraRes = await jiraRequest(jiraUrl, 'put', { fields: fieldsToUpdate });
+                            if (jiraRes && jiraRes.success) {
+                                console.log(`Successfully updated Jira task ${jiraKey} with:`, fieldsToUpdate);
+                            }
+                        }
+
+                        if (typeof syncTasks === 'function') {
+                            await syncTasks(true);
+                        }
+                    } catch (bgErr) {
+                        console.error('Background Jira update error:', bgErr);
+                    }
+                })();
             } else {
                 // Create
                 evPayload.createdAt = Date.now();
@@ -5007,31 +5061,53 @@ function isStrategyTask(t) {
     async function deleteStrategyEvent() {
         if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
 
-        const id = document.getElementById('strategy-event-id').value;
-        const jiraId = document.getElementById('strategy-jira-id').value?.trim();
+        const id = document.getElementById('strategy-event-id')?.value;
+        const jiraId = document.getElementById('strategy-jira-id')?.value?.trim();
         if (!id && !jiraId) return;
 
         if (!confirm('Are you sure you want to delete this strategy campaign and its Jira task?')) return;
 
         try {
-            if (id && typeof strategyEvents !== 'undefined' && strategyEvents[id]) {
+            const existingEv = (id && typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents[id] : null;
+
+            if (id) {
                 await remove(ref(db, `worksync/strategy_events/${id}`));
-            } else if (id && !id.includes('-')) {
-                await remove(ref(db, `worksync/strategy_events/${id}`));
+                if (typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[id]) {
+                    delete strategyEvents[id];
+                }
             }
 
-            const targetJiraKey = jiraId || (id && id.includes('-') ? id : null);
+            let targetJiraKey = jiraId || (existingEv ? (existingEv.jiraId || existingEv.jiraTaskId) : null);
+            if (!targetJiraKey && id && id.includes('-')) {
+                targetJiraKey = id;
+            }
+            if (!targetJiraKey && existingEv && typeof findMatchedStrategyTask === 'function') {
+                const matched = findMatchedStrategyTask(existingEv.title, existingEv.desc);
+                if (matched && !matched.manual && matched.id && matched.id.includes('-')) {
+                    targetJiraKey = matched.id;
+                }
+            }
+
             if (targetJiraKey) {
                 try {
-                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(targetJiraKey)}`;
-                    await jiraRequest(jiraUrl, 'delete');
+                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(targetJiraKey)}?deleteSubtasks=true`;
+                    const delRes = await jiraRequest(jiraUrl, 'delete');
+                    if (delRes && delRes.success) {
+                        console.log(`Jira task ${targetJiraKey} deleted successfully`);
+                    } else {
+                        console.warn(`Jira delete response for ${targetJiraKey}:`, delRes);
+                    }
                 } catch (jiraErr) {
                     console.warn('Failed to delete Jira issue directly:', jiraErr);
                 }
 
-                if (typeof tasks !== 'undefined' && tasks) {
-                    const idx = tasks.findIndex(t => t.id.toLowerCase() === targetJiraKey.toLowerCase());
-                    if (idx !== -1) tasks.splice(idx, 1);
+                if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                    tasks = tasks.filter(t => {
+                        if (!t) return false;
+                        const isMain = String(t.id || '').toLowerCase() === targetJiraKey.toLowerCase();
+                        const isSub = t.parentId === targetJiraKey || t.parentKey === targetJiraKey || t.parent === targetJiraKey || t.parentTaskId === targetJiraKey;
+                        return !isMain && !isSub;
+                    });
                 }
             }
 
@@ -5039,272 +5115,14 @@ function isStrategyTask(t) {
             closeStrategyEventModal();
             if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
             if (typeof renderTasks === 'function') renderTasks();
+            if (typeof syncTasks === 'function') {
+                syncTasks(true).catch(e => console.warn('Background sync after delete failed:', e));
+            }
         } catch (err) {
             console.error(err);
-            toast('Failed to delete event', 'error');
+            toast('Failed to delete event: ' + err.message, 'error');
         }
     }
-
-    // Generate Jira link for task ID
-function generateJiraLink(taskId) {
-    if (!taskId) return '#';
-    // Extract Jira key (e.g., "JULY-123" from full ID)
-    const jiraKey = taskId.split('-').length > 1 
-        ? taskId.substring(0, taskId.lastIndexOf('-')) + '-' + taskId.split('-').pop()
-        : taskId;
-    
-    return `https://worksync.atlassian.net/browse/${encodeURIComponent(jiraKey)}`;
-}
-
-// Populate Top Performer widget
-function populateTopPerformer() {
-    if (!isAdmin()) return; // Only for admins
-
-    const performerDiv = document.getElementById('cr-sidebar-performer');
-    if (!performerDiv) return;
-
-    try {
-        // Calculate top performer based on completed tasks and hours worked
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStart = today.getTime();
-        const todayEnd = todayStart + 86400000;
-
-        // Count tasks completed today per user
-        const userTaskCount = {};
-        const userHoursMap = {};
-
-        // Count completed tasks
-        tasks.filter(t => isDone(t.status)).forEach(t => {
-            const ts = t.updatedAt || t.completedAt || (t.duedate ? new Date(t.duedate).getTime() : 0) || t.createdAt;
-            if (ts >= todayStart && ts < todayEnd) {
-                const assignee = assigneeName(t) || 'Unknown';
-                userTaskCount[assignee] = (userTaskCount[assignee] || 0) + 1;
-            }
-        });
-
-        // Sum hours from timelogs
-        allTimeLogs.forEach(log => {
-            if ((log.endTime || log.startTime || 0) >= todayStart && (log.endTime || log.startTime || 0) < todayEnd) {
-                const userName = log.userName || log.userId || 'Unknown';
-                userHoursMap[userName] = (userHoursMap[userName] || 0) + (log.durationSeconds || 0);
-            }
-        });
-
-        // Find top performer (by task count, then by hours)
-        let topPerformer = null;
-        let maxTasks = 0;
-
-        Object.entries(userTaskCount).forEach(([name, count]) => {
-            if (count > maxTasks) {
-                maxTasks = count;
-                topPerformer = name;
-            }
-        });
-
-        if (!topPerformer) {
-            performerDiv.classList.add('hidden');
-            return;
-        }
-
-        // Find user data
-        const userEmail = Array.from(allUsersMap.values()).find(u => u.name === topPerformer)?.email || topPerformer;
-        const userData = allUsersMap.get(userEmail.toLowerCase());
-        const fallbackAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(topPerformer)}`;
-        const avatar = userData?.profilePicture && userData.profilePicture.trim() !== '' ? userData.profilePicture : fallbackAvatar;
-        const hours = userHoursMap[topPerformer] || 0;
-        const hoursFormatted = Math.round(hours / 3600);
-
-        // Update widget
-        const avatarImg = document.getElementById('cs-performer-avatar');
-        avatarImg.src = avatar;
-        avatarImg.onerror = function() {
-            this.src = fallbackAvatar;
-            this.onerror = null; // Prevent infinite loop
-        };
-        document.getElementById('cs-performer-name').textContent = topPerformer;
-        document.getElementById('cs-performer-role').textContent = userData?.role || 'Team Member';
-        document.getElementById('cs-performer-tasks').textContent = userTaskCount[topPerformer] || 0;
-        document.getElementById('cs-performer-hours').textContent = hoursFormatted + 'h';
-
-        performerDiv.classList.remove('hidden');
-    } catch (err) {
-        console.error('Failed to populate top performer widget:', err);
-    }
-}
-
-// Fetch Jira tasks for strategy event modal
-async function fetchJiraTasksForStrategy() {
-    try {
-        const searchField = document.getElementById('strategy-jira-search');
-        const dropdown = document.getElementById('strategy-jira-dropdown');
-        
-        // Get current title as search term
-        const title = document.getElementById('strategy-title').value.trim();
-        const searchTerm = searchField.value.trim() || title;
-        
-        if (!searchTerm) {
-            toast('Enter a search term or task title', 'warning');
-            return;
-        }
-
-        // Show loading state
-        dropdown.innerHTML = '<div class="p-3 text-center"><iconify-icon icon="svg-spinners:ring-resize" width="20" class="text-indigo-400"></iconify-icon><p class="text-xs text-slate-500 mt-1">Searching Jira...</p></div>';
-        dropdown.classList.remove('hidden');
-
-        // Build JQL query to search for matching tasks safely
-        let jql;
-        if (/^[A-Za-z0-9]+-\d+$/i.test(searchTerm)) {
-            const escapedKey = escapeJqlValue(searchTerm);
-            jql = `key = "${escapedKey}" OR summary ~ "${escapedKey}" OR description ~ "${escapedKey}" ORDER BY updated DESC`;
-        } else {
-            // Replace JQL special characters with spaces to prevent parser syntax errors on text search
-            const sanitized = searchTerm.replace(/[\\+\-&|!(){}\[\]^~*?:"]/g, ' ').trim().replace(/\s+/g, ' ');
-            const escapedTerm = escapeJqlValue(sanitized);
-            
-            if (!escapedTerm) {
-                dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No search term after sanitization</div>';
-                return;
-            }
-            
-            jql = `summary ~ "${escapedTerm}" OR description ~ "${escapedTerm}" ORDER BY updated DESC`;
-        }
-        const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=20&fields=key,summary,status,assignee`;
-        
-        const res = await jiraRequest(url, 'get');
-        
-        if (res.success && res.data?.issues) {
-            const issues = res.data.issues;
-            
-            if (issues.length === 0) {
-                dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No matching Jira tasks found</div>';
-                return;
-            }
-
-            // Build dropdown HTML
-            let html = '';
-            issues.forEach(issue => {
-                const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
-                const status = issue.fields?.status?.name || 'Unknown';
-                html += `
-                    <div onclick="selectJiraTaskForStrategy('${issue.key}', '${issue.fields.summary.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" 
-                         class="p-3 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-indigo-50 transition-colors">
-                        <div class="flex items-start justify-between gap-2">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-[10px] font-bold text-indigo-600">${issue.key}</p>
-                                <p class="text-xs text-slate-800 truncate">${escapeHtml(issue.fields.summary)}</p>
-                                <div class="flex gap-2 mt-1">
-                                    <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">📌 ${status}</span>
-                                    <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">👤 ${escapeHtml(assignee)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            dropdown.innerHTML = html;
-        } else {
-            const errMsg = jiraErrorMessage(res);
-            dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Error: ${escapeHtml(errMsg)}</div>`;
-        }
-    } catch (err) {
-        console.error('Failed to fetch Jira tasks:', err);
-        dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Failed to search Jira: ${escapeHtml(err.message || err)}</div>`;
-    }
-}
-
-// Search Jira tasks as user types
-function searchJiraTasksForStrategy() {
-    const searchField = document.getElementById('strategy-jira-search');
-    if (!searchField) return;
-    const searchTerm = searchField.value.trim();
-    
-    if (searchTerm.length >= 2) {
-        fetchJiraTasksForStrategy();
-    } else {
-        const dropdown = document.getElementById('strategy-jira-dropdown');
-        if (dropdown) dropdown.classList.add('hidden');
-    }
-}
-
-// Select a Jira task from dropdown
-function selectJiraTaskForStrategy(taskId, taskSummary) {
-    const elId = document.getElementById('strategy-jira-id'); if (elId) elId.value = taskId;
-    const elSearch = document.getElementById('strategy-jira-search'); if (elSearch) elSearch.value = `${taskId}: ${taskSummary}`;
-    const elSel = document.getElementById('strategy-jira-selected'); if (elSel) elSel.innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
-    const elClear = document.getElementById('strategy-jira-clear-btn'); if (elClear) elClear.classList.remove('hidden');
-    const elDrop = document.getElementById('strategy-jira-dropdown'); if (elDrop) elDrop.classList.add('hidden');
-    
-    toast(`✅ Linked to Jira task ${taskId}`, 'success');
-}
-
-// Update Jira ID display when loading event
-function loadStrategyJiraDisplay() {
-    const elId = document.getElementById('strategy-jira-id');
-    const jiraId = elId ? elId.value : '';
-    const jiraSearch = document.getElementById('strategy-jira-search');
-    const jiraSelected = document.getElementById('strategy-jira-selected');
-    const clearBtn = document.getElementById('strategy-jira-clear-btn');
-    
-    if (jiraId) {
-        if (jiraSearch) jiraSearch.value = jiraId;
-        if (jiraSelected) jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>`;
-        if (clearBtn) clearBtn.classList.remove('hidden');
-        
-        fetchStrategyJiraStatus(jiraId);
-    } else {
-        if (jiraSearch) jiraSearch.value = '';
-        if (jiraSelected) jiraSelected.innerHTML = 'No task selected';
-        if (clearBtn) clearBtn.classList.add('hidden');
-    }
-    
-    const dropdown = document.getElementById('strategy-jira-dropdown');
-    if (dropdown) dropdown.classList.add('hidden');
-}
-
-// Fetch Jira task status and sync with strategy event
-async function fetchStrategyJiraStatus(jiraTaskId) {
-    if (!jiraTaskId) return;
-    
-    try {
-        const statusDisplay = document.getElementById('strategy-jira-status');
-        if (!statusDisplay) return;
-        
-        statusDisplay.innerHTML = '<span class="text-xs text-slate-500">Loading status...</span>';
-        
-        // Find the task in our local tasks array to get its current status
-        const task = tasks.find(t => t.id === jiraTaskId);
-        
-        if (task) {
-            // Display live status from local tasks data
-            const statusClass = getStatusColorClass(task.status);
-            const statusHtml = `
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-bold uppercase text-slate-600">Status:</span>
-                    <span class="text-xs font-black px-2 py-1 rounded-lg ${statusClass}">
-                        ${escapeHtml(task.status || 'Unknown')}
-                    </span>
-                </div>
-            `;
-            statusDisplay.innerHTML = statusHtml;
-            
-            // Also update the strategy event with current task status
-            const eventId = document.getElementById('strategy-event-id').value;
-            if (eventId && strategyEvents[eventId]) {
-                strategyEvents[eventId].jiraStatus = task.status;
-            }
-        } else {
-            statusDisplay.innerHTML = '<span class="text-xs text-slate-500">Task not found in system</span>';
-        }
-    } catch (err) {
-        console.error('Error fetching Jira status:', err);
-        const statusDisplay = document.getElementById('strategy-jira-status');
-        if (statusDisplay) {
-            statusDisplay.innerHTML = '<span class="text-xs text-red-500">Error loading status</span>';
-        }
-    }
-}
 
 // Helper function to get status color class
 function getStatusColorClass(status) {

@@ -20524,32 +20524,50 @@ function isStrategyTask(t) {
                                     await updateTaskStatus(matchedTask.id, status);
                                 }
 
-                                // 2. Update Jira task fields (summary/title & due date) if Jira task exists
+                                // 2. Update Jira task fields (summary/title, description, assignee, labels & due date) if Jira task exists
                                 if (jiraKey) {
-                                    const fieldsToUpdate = {};
+                                    const fieldsToUpdate = {
+                                        summary: title,
+                                        duedate: calculatedDueDate
+                                    };
 
-                                    // If title renamed or summary differs from strategy title
-                                    if (oldTitle && oldTitle !== title) {
-                                        fieldsToUpdate.summary = title;
-                                    } else if (matchedTask && (matchedTask.summary || matchedTask.desc) !== title) {
-                                        fieldsToUpdate.summary = title;
+                                    if (desc) {
+                                        fieldsToUpdate.description = {
+                                            type: 'doc',
+                                            version: 1,
+                                            content: [
+                                                {
+                                                    type: 'paragraph',
+                                                    content: [
+                                                        {
+                                                            type: 'text',
+                                                            text: desc
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        };
                                     }
 
-                                    // If due date changed
-                                    if (!matchedTask || matchedTask.duedate !== calculatedDueDate) {
-                                        fieldsToUpdate.duedate = calculatedDueDate;
-                                    }
-
-                                    if (Object.keys(fieldsToUpdate).length > 0) {
-                                        const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(jiraKey)}`;
-                                        const jiraRes = await jiraRequest(jiraUrl, 'put', { fields: fieldsToUpdate });
-                                        if (jiraRes && jiraRes.success) {
-                                            console.log(`Successfully updated Jira task ${jiraKey} with:`, fieldsToUpdate);
-                                        } else {
-                                            console.error(`Failed to update Jira task ${jiraKey}:`, jiraErrorMessage(jiraRes));
+                                    if (owner && typeof findJiraAccountId === 'function') {
+                                        const assigneeUser = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) ? allUsersMap.get(owner.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(owner) : { email: owner, name: owner });
+                                        const accountId = await findJiraAccountId(assigneeUser);
+                                        if (accountId) {
+                                            fieldsToUpdate.assignee = { id: accountId };
                                         }
                                     }
 
+                                    if (client) {
+                                        fieldsToUpdate.labels = [client.replace(/\s+/g, '_')];
+                                    }
+
+                                    const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(jiraKey)}`;
+                                    const jiraRes = await jiraRequest(jiraUrl, 'put', { fields: fieldsToUpdate });
+                                    if (jiraRes && jiraRes.success) {
+                                        console.log(`Successfully updated Jira task ${jiraKey} with:`, fieldsToUpdate);
+                                    } else {
+                                        console.error(`Failed to update Jira task ${jiraKey}:`, jiraErrorMessage(jiraRes));
+                                    }
                                 } else if (matchedTask && (matchedTask.manual || isInternalTask(matchedTask))) {
                                     // 3. If manual/internal task, update desc/summary in Firebase manual_tasks
                                     const assigneeKey = eKey(matchedTask.assigneeEmail || matchedTask.userId || '');
@@ -20840,34 +20858,57 @@ function isStrategyTask(t) {
             async function deleteStrategyEvent() {
                 if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
 
-                const id = document.getElementById('strategy-event-id').value;
-                const jiraId = document.getElementById('strategy-jira-id').value?.trim();
+                const id = document.getElementById('strategy-event-id')?.value;
+                const jiraId = document.getElementById('strategy-jira-id')?.value?.trim();
                 if (!id && !jiraId) return;
 
                 if (!confirm('Are you sure you want to delete this strategy campaign and its Jira task?')) return;
 
                 try {
-                    // Delete from Firebase if strategy event exists
-                    if (id && strategyEvents && strategyEvents[id]) {
+                    const existingEv = (id && typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents[id] : null;
+
+                    // Delete from Firebase
+                    if (id) {
                         await remove(ref(db, `worksync/strategy_events/${id}`));
-                    } else if (id && !id.includes('-')) {
-                        await remove(ref(db, `worksync/strategy_events/${id}`));
+                        if (typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[id]) {
+                            delete strategyEvents[id];
+                        }
                     }
 
-                    // Delete from Jira Cloud if linked Jira ID exists or if id is a Jira task key (e.g. JULY-123 or AUG-45)
-                    const targetJiraKey = jiraId || (id && id.includes('-') ? id : null);
+                    // Determine target Jira task key
+                    let targetJiraKey = jiraId || (existingEv ? (existingEv.jiraId || existingEv.jiraTaskId) : null);
+                    if (!targetJiraKey && id && id.includes('-')) {
+                        targetJiraKey = id;
+                    }
+                    if (!targetJiraKey && existingEv && typeof findMatchedStrategyTask === 'function') {
+                        const matched = findMatchedStrategyTask(existingEv.title, existingEv.desc);
+                        if (matched && !matched.manual && matched.id && matched.id.includes('-')) {
+                            targetJiraKey = matched.id;
+                        }
+                    }
+
                     if (targetJiraKey) {
                         try {
-                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(targetJiraKey)}`;
-                            await jiraRequest(jiraUrl, 'delete');
+                            // Pass deleteSubtasks=true so Jira deletes issues with subtasks (like thumbnails)
+                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(targetJiraKey)}?deleteSubtasks=true`;
+                            const delRes = await jiraRequest(jiraUrl, 'delete');
+                            if (delRes && delRes.success) {
+                                console.log(`Jira task ${targetJiraKey} deleted successfully`);
+                            } else {
+                                console.warn(`Jira delete response for ${targetJiraKey}:`, delRes);
+                            }
                         } catch (jiraErr) {
                             console.warn('Failed to delete Jira issue directly:', jiraErr);
                         }
 
-                        // Remove from local tasks array
-                        if (typeof tasks !== 'undefined' && tasks) {
-                            const idx = tasks.findIndex(t => t.id.toLowerCase() === targetJiraKey.toLowerCase());
-                            if (idx !== -1) tasks.splice(idx, 1);
+                        // Remove main task and its subtasks from local tasks array
+                        if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                            tasks = tasks.filter(t => {
+                                if (!t) return false;
+                                const isMain = String(t.id || '').toLowerCase() === targetJiraKey.toLowerCase();
+                                const isSub = t.parentId === targetJiraKey || t.parentKey === targetJiraKey || t.parent === targetJiraKey || t.parentTaskId === targetJiraKey;
+                                return !isMain && !isSub;
+                            });
                         }
                     }
 
@@ -20875,190 +20916,12 @@ function isStrategyTask(t) {
                     closeStrategyEventModal();
                     if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
                     if (typeof renderTasks === 'function') renderTasks();
+                    if (typeof syncTasks === 'function') {
+                        syncTasks(true).catch(e => console.warn('Background sync after delete failed:', e));
+                    }
                 } catch (err) {
                     console.error(err);
-                    toast('Failed to delete event', 'error');
-                }
-            }
-
-            // ══════════════════════════════════════════════════════════════════
-            // PLAN TRACKING — Palani's Production Calendar
-            // ══════════════════════════════════════════════════════════════════
-
-            let ptCurrentDate = new Date();
-            let ptActiveTab = 'calendar';
-
-            const PT_TEAM = [
-                { email: 'barathvilpower@gmail.com', name: 'Barath', label: 'Design', pct: 50, color: 'violet', taskTypes: ['Design To Do', 'Design In Progress', 'Rework Designs', 'Design Hold', 'Quality Check', 'Thumbnail Waiting'] },
-                { email: 'immanuelvilpower@gmail.com', name: 'Immanuel', label: 'Video', pct: 10, color: 'amber', taskTypes: ['In Progress', 'To Do', 'Design In Progress'] },
-                { email: 'karthikavilpower@gmail.com', name: 'Karthika', label: 'Thumbnails', pct: null, color: 'pink', taskTypes: ['Thumbnail Waiting'] }
-            ];
-
-            function canViewPlanTracking() {
-                if (!currentUser) return false;
-                const allowed = [
-                    'digitalmarketing@vilpower.com',  // Palani
-                    'nanjil@vilpower.com',             // Nanjil
-                    'murugeshvilpower@gmail.com'       // Murugesh
-                ];
-                return allowed.includes(currentUser.email.toLowerCase()) || isAdmin();
-            }
-
-            function ptDateStr(date) {
-                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-            }
-
-            function ptAddDays(dateStr, days) {
-                const d = new Date(dateStr + 'T00:00:00');
-                d.setDate(d.getDate() + days);
-                return ptDateStr(d);
-            }
-
-            function ptFormatDate(dateStr) {
-                if (!dateStr) return '';
-                const d = new Date(dateStr + 'T00:00:00');
-                return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
-            }
-
-            /** Match Jira tasks to a strategy event by title keywords + client label + due date window.
-             *  Includes done tasks so we can correctly show "on-track" for posted items. */
-            function ptMatchedTasks(ev) {
-                if (!ev || !ev.date) return [];
-                const windowStart = ptAddDays(ev.date, -14); // look back 14 days
-                const windowEnd = ptAddDays(ev.date, 3);   // allow 3 days after post (late posts)
-
-                // Build keyword tokens from the strategy event title
-                const stopWords = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'with', 'by', 'from', 'as', 'it', 'its', 'this', 'that', 'these', 'those', 'i', 'we', 'you', 'he', 'she', 'they']);
-                const titleTokens = (ev.title || '').toLowerCase()
-                    .replace(/[^a-z0-9\s]/g, ' ')
-                    .split(/\s+/)
-                    .filter(w => w.length > 2 && !stopWords.has(w));
-
-                return tasks.filter(t => {
-                    // Production Control Center is ONLY for Jira tasks
-                    if (t.manual || isInternalTask(t)) return false;
-
-                    // ── Client match (required) ──
-                    const clientMatch = ev.client && t.client && t.client.toLowerCase() === ev.client.toLowerCase();
-                    const labelMatch = ev.client && (t.clientLabels || []).some(l => l.toLowerCase().includes(ev.client.toLowerCase()));
-                    if (!clientMatch && !labelMatch) return false;
-
-                    // ── Title keyword match ──
-                    // If the strategy event title has keywords, at least one must appear in the Jira task description
-                    if (titleTokens.length > 0) {
-                        const descLower = (t.desc || '').toLowerCase();
-                        const hasKeyword = titleTokens.some(token => descLower.includes(token));
-                        if (!hasKeyword) return false;
-                    }
-
-                    // ── Due date window (if task has a due date) ──
-                    if (t.duedate) {
-                        return t.duedate >= windowStart && t.duedate <= windowEnd;
-                    }
-                    // No due date — include by client + keyword match alone
-                    return true;
-                });
-            }
-
-            /** Get all Jira tasks due on a specific date (non-done) */
-            function ptTasksDueOn(dateStr) {
-                return tasks.filter(t => t.duedate === dateStr && !isDone(t.status) && !t.manual && !isInternalTask(t));
-            }
-
-            /** Determine production track status for an event */
-            function ptTrackStatus(ev) {
-                const today = ptDateStr(new Date());
-                const deadline = ptAddDays(ev.date, -3); // D-3 production deadline
-                const matched = ptMatchedTasks(ev);
-
-                if (matched.length === 0) return 'no-tasks';
-
-                if (isDone(ev.status || '')) return 'on-track';
-
-                const anyDone = matched.some(t => isDone(t.status));
-                if (anyDone) return 'on-track';
-
-                const allDone = matched.every(t => isDone(t.status));
-                if (allDone) return 'on-track';
-
-                if (today > deadline) return 'at-risk';
-
-                const anyStillPlanned = matched.some(t => isTodo(t.status));
-                if (today > ptAddDays(ev.date, -5) && anyStillPlanned) return 'watch';
-
-                return 'on-track';
-            }
-
-            function ptTrackBadge(status) {
-                const map = {
-                    'on-track': '<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full text-[9px] font-black">✓ On Track</span>',
-                    'watch': '<span class="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full text-[9px] font-black">⚠ Watch</span>',
-                    'at-risk': '<span class="bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full text-[9px] font-black">✕ At Risk</span>',
-                    'no-tasks': '<span class="bg-slate-50 text-slate-400 border border-slate-100 px-2 py-0.5 rounded-full text-[9px] font-black">No Jira</span>',
-                };
-                return map[status] || '';
-            }
-
-            // Deprecated Plan Tracking events helper for compatibility
-            function ptMonthEvents() {
-                const month = ptCurrentDate.getMonth();
-                const year = ptCurrentDate.getFullYear();
-                return Object.entries(strategyEvents)
-                    .map(([id, ev]) => ({ id, ...ev }))
-                    .filter(ev => {
-                        if (!ev.date) return false;
-                        const d = new Date(ev.date + 'T00:00:00');
-                        return d.getMonth() === month && d.getFullYear() === year;
-                    })
-                    .sort((a, b) => a.date.localeCompare(b.date));
-            }
-
-            function initPlanTracking() {
-                if (!strategyEventsUnsub) {
-                    if (db) {
-                        strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
-                            strategyEvents = snap.val() || {};
-                            renderPlanTrackingView();
-                        });
-                    }
-                } else {
-                    renderPlanTrackingView();
-                }
-            }
-
-            function navigatePlanTracking(dir) {
-                if (dir === 0) {
-                    ptCurrentDate = new Date();
-                } else {
-                    ptCurrentDate.setMonth(ptCurrentDate.getMonth() + dir);
-                }
-                renderPlanTrackingView();
-            }
-
-            function switchPlanTab(tab) {
-                ptActiveTab = tab;
-                const pccBtn = document.getElementById('pt-tab-pcc');
-                const calBtn = document.getElementById('pt-tab-calendar');
-                const pccPanel = document.getElementById('pt-panel-pcc');
-                const calPanel = document.getElementById('pt-panel-calendar');
-                const navWrapper = document.getElementById('pt-calendar-nav-wrapper');
-
-                if (pccBtn && calBtn) {
-                    if (tab === 'pcc') {
-                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
-                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
-                        if (pccPanel) pccPanel.classList.remove('hidden');
-                        if (calPanel) calPanel.classList.add('hidden');
-                        if (navWrapper) navWrapper.classList.add('hidden');
-                        renderPccDashboard();
-                    } else {
-                        calBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all';
-                        pccBtn.className = 'px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all';
-                        if (calPanel) calPanel.classList.remove('hidden');
-                        if (pccPanel) pccPanel.classList.add('hidden');
-                        if (navWrapper) navWrapper.classList.remove('hidden');
-                        renderPlanCalendar();
-                    }
+                    toast('Failed to delete event: ' + err.message, 'error');
                 }
             }
 
@@ -24453,7 +24316,8 @@ function isStrategyTask(t) {
             let ajithTasksEnsureStarted = false;
 
             async function ensureAjithDailyTasks() {
-                if (!currentUser || currentUser.email.toLowerCase() !== 'ajithvilpower@gmail.com') return;
+                const isAjith = currentUser && currentUser.email.toLowerCase() === 'ajithvilpower@gmail.com';
+                if (!isAjith && !isAdmin() && !isManager()) return;
 
                 // Reset the flag each new day (same pattern as morning learning / Murugesh setup)
                 const todayKey = todayIso();
@@ -24462,7 +24326,7 @@ function isStrategyTask(t) {
                     ajithTasksEnsureStarted = false;
                     sessionStorage.removeItem('ajithTasks_lastRun');
                 }
-                if (ajithTasksEnsureStarted) return;
+                if (ajithTasksEnsureStarted && !isAdmin() && !isManager()) return;
 
                 // ── Leave check: skip recurring tasks if Ajith is on approved leave today ──
                 try {
@@ -24500,9 +24364,10 @@ function isStrategyTask(t) {
                 sessionStorage.setItem('ajithTasks_lastRun', todayKey);
 
                 try {
-                    const email = currentUser.email;
+                    const email = 'ajithvilpower@gmail.com';
                     const ownerKey = eKey(email);
                     const today = todayKey;
+                    const assigneeName = 'Ajith';
 
                     // Clean up old recurring tasks that are no longer for Ajith
                     try {
@@ -24547,7 +24412,7 @@ function isStrategyTask(t) {
                                 client: taskConfig.client || 'Internal',
                                 status: 'To do',
                                 priority: 'Medium',
-                                assignee: currentUser.name,
+                                assignee: assigneeName,
                                 assigneeEmail: email,
                                 manual: true,
                                 taskType: 'internal',
