@@ -1,107 +1,257 @@
 /* ==========================================================================
-   MOBILE APP-STYLE STYLING & ADAPTIVE RESPONSIVE FRAMEWORK
-   One Desk Endless Productivity - Mobile Native App UI Experience
+   ONE DESK - ULTRA-REALISTIC NATIVE MOBILE APP DESIGN SYSTEM
+   Adaptive Hybrid Framework: Cupertino / Material You Luxury Styling
+   Zero Web-Code Interference - 100% Pure Visual & Ergonomic Elevation
    ========================================================================== */
 
-/* ── 1. Root & Safe Area Setup ── */
+/* ── 1. DESIGN TOKENS & SYSTEM ROOT ── */
 :root {
-  --mobile-bottom-nav-height: 64px;
-  --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --mobile-safe-top: env(safe-area-inset-top, 0px);
-  --mobile-nav-total-h: calc(var(--mobile-bottom-nav-height) + var(--mobile-safe-bottom));
+  --mob-nav-height: 64px;
+  --mob-header-height: 56px;
+  --mob-safe-top: env(safe-area-inset-top, 0px);
+  --mob-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mob-nav-total-h: calc(var(--mob-nav-height) + var(--mob-safe-bottom));
+  
+  /* Primary Accent & Glow Palette */
+  --mob-accent-primary: #4f46e5;
+  --mob-accent-primary-hover: #4338ca;
+  --mob-accent-glow: rgba(79, 70, 229, 0.25);
+  --mob-accent-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  
+  /* Light Theme Glass & Surfaces */
+  --mob-bg: #f8fafc;
+  --mob-surface: #ffffff;
+  --mob-surface-elevated: #ffffff;
+  --mob-surface-subtle: #f1f5f9;
+  --mob-glass-bg: rgba(255, 255, 255, 0.88);
+  --mob-glass-border: rgba(226, 232, 240, 0.8);
+  --mob-border-subtle: rgba(226, 232, 240, 0.7);
+  --mob-card-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  --mob-elevated-shadow: 0 12px 36px -4px rgba(15, 23, 42, 0.1), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  
+  /* Radii */
+  --mob-radius-sm: 10px;
+  --mob-radius-md: 14px;
+  --mob-radius-lg: 18px;
+  --mob-radius-xl: 24px;
+  --mob-radius-2xl: 30px;
+  
+  /* Easing Physics */
+  --mob-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+  --mob-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --mob-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* iOS & Mobile Web App Touch Optimization */
+html.dark {
+  /* Dark Theme Glass & Surfaces */
+  --mob-bg: #0b0f19;
+  --mob-surface: #131b2e;
+  --mob-surface-elevated: #1a243d;
+  --mob-surface-subtle: #182238;
+  --mob-glass-bg: rgba(19, 27, 46, 0.88);
+  --mob-glass-border: rgba(255, 255, 255, 0.09);
+  --mob-border-subtle: rgba(255, 255, 255, 0.07);
+  --mob-accent-primary: #818cf8;
+  --mob-accent-glow: rgba(129, 140, 248, 0.35);
+  --mob-accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  --mob-card-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.35), 0 2px 8px -1px rgba(0, 0, 0, 0.2);
+  --mob-elevated-shadow: 0 16px 44px -4px rgba(0, 0, 0, 0.5), 0 6px 16px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* ── 2. GLOBAL APP TOUCH & ERGONOMIC OPTIMIZATIONS ── */
 @media (max-width: 767.98px) {
   html, body {
     height: 100%;
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  /* Main viewport padding adjustment to clear bottom navigation */
+  /* Allow text selection in inputs, textareas, messages, and notes */
+  input, textarea, [contenteditable="true"], .selectable-text, #messages-area p, #messages-area span {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
+
+  /* Smooth Native Momentum Scrolling on Viewport */
   #content-area {
-    padding: 12px 12px calc(var(--mobile-nav-total-h) + 16px) 12px !important;
+    padding: 14px 12px calc(var(--mob-nav-total-h) + 18px) 12px !important;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
   }
 
-  /* Compact Native Top App Header on Mobile */
-  #legacy-global-header {
-    height: 52px !important;
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-    padding-top: var(--mobile-safe-top) !important;
-    gap: 8px !important;
+  /* Hide Desktop Sidebar on Mobile */
+  aside:not(.mobile-forced-show) {
+    display: none !important;
   }
 
+  /* Tactile Native Tap Feedback on all Mobile Interactive Elements */
+  button:active,
+  a:active,
+  .mobile-tab-btn:active,
+  .mobile-app-tile:active,
+  .card-touch-active:active {
+    transform: scale(0.96) !important;
+    transition: transform 0.12s var(--mob-smooth) !important;
+  }
+}
+
+/* ── 3. NATIVE APP TOP APP BAR (HEADER) ── */
+@media (max-width: 767.98px) {
+  #legacy-global-header {
+    height: calc(var(--mob-header-height) + var(--mob-safe-top)) !important;
+    padding-top: var(--mob-safe-top) !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    gap: 8px !important;
+    background: var(--mob-glass-bg) !important;
+    backdrop-filter: blur(24px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+    border-bottom: 1px solid var(--mob-glass-border) !important;
+    box-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.04) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 45 !important;
+  }
+
+  html.dark #legacy-global-header {
+    background: rgba(15, 23, 42, 0.85) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Header Title */
   #view-title {
-    font-size: 0.95rem !important;
+    font-size: 1.05rem !important;
     font-weight: 800 !important;
-    letter-spacing: -0.02em !important;
+    letter-spacing: -0.025em !important;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 130px;
+    max-width: 140px;
+    background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
-  /* Compact attendance timer in header on mobile */
+  html.dark #view-title {
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Hamburger Menu Button -> Modern App Icon Pill */
+  #legacy-global-header button[onclick="toggleSidebar()"] {
+    width: 38px !important;
+    height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--mob-radius-md) !important;
+    background: var(--mob-surface-subtle) !important;
+    border: 1px solid var(--mob-border-subtle) !important;
+    color: #475569 !important;
+    margin-left: 0 !important;
+    transition: all 0.2s var(--mob-smooth) !important;
+  }
+
+  html.dark #legacy-global-header button[onclick="toggleSidebar()"] {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #cbd5e1 !important;
+  }
+
+  /* Compact Attendance Capsule Widget */
   #legacy-global-header .flex.items-center.gap-3.px-3.py-1 {
-    padding: 2px 8px !important;
-    gap: 6px !important;
-    border-radius: 12px !important;
+    padding: 3px 8px !important;
+    gap: 5px !important;
+    border-radius: 999px !important;
+    background: var(--mob-surface-subtle) !important;
+    border: 1px solid var(--mob-border-subtle) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03) !important;
   }
 
-  #header-timer-status {
-    display: none !important;
+  html.dark #legacy-global-header .flex.items-center.gap-3.px-3.py-1 {
+    background: #182238 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
   }
 
   #header-timer-display {
     font-size: 11px !important;
+    font-weight: 800 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   }
 
+  #header-timer-status,
   #system-status-dot,
   #system-status-text,
   #legacy-global-header .w-px.h-6 {
     display: none !important;
   }
 
-  /* Hide desktop sidebar on mobile, replacing it with the Mobile Bottom App Bar */
-  aside:not(.mobile-forced-show) {
-    display: none !important;
+  /* Check-in / Out Action Buttons inside Header */
+  #header-btn-checkin,
+  #header-btn-checkout,
+  #header-btn-break {
+    padding: 4px 9px !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    border-radius: 999px !important;
+    letter-spacing: -0.01em !important;
+  }
+
+  /* Notification Bell Button */
+  #legacy-notification-bell {
+    width: 38px !important;
+    height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--mob-radius-md) !important;
+    background: var(--mob-surface-subtle) !important;
+    border: 1px solid var(--mob-border-subtle) !important;
+    color: #475569 !important;
+    transition: all 0.2s var(--mob-smooth) !important;
+  }
+
+  html.dark #legacy-notification-bell {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #cbd5e1 !important;
   }
 }
 
-/* ── 2. Mobile Bottom Navigation Bar ── */
+/* ── 4. REALISTIC NATIVE BOTTOM NAVIGATION BAR ── */
 .mobile-bottom-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--mobile-nav-total-h);
-  padding-bottom: var(--mobile-safe-bottom);
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  height: var(--mob-nav-total-h);
+  padding-bottom: var(--mob-safe-bottom);
+  background: var(--mob-glass-bg);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-top: 1px solid var(--mob-glass-border);
   z-index: 60;
   display: flex;
   align-items: center;
   justify-content: space-around;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.06);
+  transition: transform 0.3s var(--mob-smooth), background-color 0.2s ease;
 }
 
 html.dark .mobile-bottom-bar {
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top-color: rgba(30, 41, 59, 0.85);
-  box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border-top-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.45);
 }
 
-/* Bottom Bar Tab Button */
+/* Individual Bottom Tab Button */
 .mobile-tab-btn {
   position: relative;
   flex: 1;
@@ -109,8 +259,8 @@ html.dark .mobile-bottom-bar {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 4px;
-  min-height: 48px;
+  padding: 6px 2px;
+  min-height: 50px;
   color: #64748b;
   font-size: 10px;
   font-weight: 600;
@@ -120,54 +270,44 @@ html.dark .mobile-bottom-bar {
   border: none;
   cursor: pointer;
   user-select: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-user-select: none;
+  transition: all 0.2s var(--mob-smooth);
 }
 
-.mobile-tab-btn:active {
-  transform: scale(0.92);
+html.dark .mobile-tab-btn {
+  color: #94a3b8;
 }
 
 .mobile-tab-btn iconify-icon {
-  font-size: 22px;
-  margin-bottom: 2px;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+  font-size: 23px;
+  margin-bottom: 3px;
+  transition: transform 0.3s var(--mob-bounce), color 0.2s ease, filter 0.2s ease;
 }
 
 /* Active State for Mobile Bottom Tab */
 .mobile-tab-btn.tab-active {
-  color: #4f46e5 !important;
+  color: var(--mob-accent-primary) !important;
   font-weight: 800 !important;
 }
 
-html.dark .mobile-tab-btn.tab-active {
-  color: #818cf8 !important;
-}
-
 .mobile-tab-btn.tab-active iconify-icon {
-  transform: translateY(-2px) scale(1.12);
-  color: #4f46e5 !important;
-  filter: drop-shadow(0 2px 8px rgba(79, 70, 229, 0.35));
+  transform: translateY(-3px) scale(1.15);
+  color: var(--mob-accent-primary) !important;
+  filter: drop-shadow(0 3px 10px var(--mob-accent-glow));
 }
 
-html.dark .mobile-tab-btn.tab-active iconify-icon {
-  color: #818cf8 !important;
-  filter: drop-shadow(0 2px 8px rgba(129, 140, 248, 0.4));
-}
-
+/* Top Glow Indicator Capsule on Active Tab */
 .mobile-tab-btn .tab-indicator {
   position: absolute;
-  top: 2px;
-  width: 20px;
-  height: 3px;
-  background: #4f46e5;
+  top: 0;
+  width: 28px;
+  height: 3.5px;
+  background: var(--mob-accent-primary);
   border-radius: 999px;
   opacity: 0;
   transform: scaleX(0);
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-
-html.dark .mobile-tab-btn .tab-indicator {
-  background: #818cf8;
+  box-shadow: 0 2px 8px var(--mob-accent-glow);
+  transition: transform 0.3s var(--mob-bounce), opacity 0.25s ease;
 }
 
 .mobile-tab-btn.tab-active .tab-indicator {
@@ -175,42 +315,48 @@ html.dark .mobile-tab-btn .tab-indicator {
   transform: scaleX(1);
 }
 
-/* Badge count pill for tabs */
+/* Badge Count Pill on Bottom Tabs */
 .mobile-tab-badge {
   position: absolute;
-  top: 4px;
-  right: calc(50% - 16px);
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: 3px;
+  right: calc(50% - 18px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4.5px;
   border-radius: 999px;
-  background: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #ffffff;
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 9.5px;
+  font-weight: 900;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid #ffffff;
   line-height: 1;
-  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.45);
+  animation: mobBadgePulse 2.5s infinite;
 }
 
 html.dark .mobile-tab-badge {
   border-color: #0f172a;
 }
 
-/* ── 3. Mobile "More" App Sheet Drawer ── */
+@keyframes mobBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* ── 5. REALISTIC "MORE" APP SHEET DRAWER (NATIVE APPS TRAY) ── */
 .mobile-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 70;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.3s var(--mob-smooth);
 }
 
 .mobile-drawer-overlay.active {
@@ -223,38 +369,40 @@ html.dark .mobile-tab-badge {
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: 85vh;
-  background: #ffffff;
-  border-top-left-radius: 28px;
-  border-top-right-radius: 28px;
+  max-height: 88vh;
+  background: var(--mob-surface);
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
   z-index: 75;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.22);
   transform: translateY(105%);
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.35s var(--mob-smooth);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: var(--mobile-safe-bottom);
+  padding-bottom: max(16px, var(--mob-safe-bottom));
+  border-top: 1px solid var(--mob-glass-border);
 }
 
 html.dark .mobile-drawer-sheet {
-  background: #161f30;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+  background: #121a2d;
+  border-top-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -12px 50px rgba(0, 0, 0, 0.7);
 }
 
 .mobile-drawer-sheet.active {
   transform: translateY(0);
 }
 
-/* Drawer Grab Handle */
+/* Tactile Pull/Grab Handle Bar */
 .drawer-handle-bar {
-  width: 36px;
-  height: 4.5px;
+  width: 42px;
+  height: 5px;
   background: #cbd5e1;
   border-radius: 999px;
-  margin: 10px auto 4px auto;
+  margin: 12px auto 6px auto;
   flex-shrink: 0;
+  transition: background-color 0.2s ease;
 }
 
 html.dark .drawer-handle-bar {
@@ -267,42 +415,50 @@ html.dark .drawer-handle-bar {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 12px 6px;
-  border-radius: 18px;
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
+  padding: 14px 8px 12px 8px;
+  border-radius: var(--mob-radius-lg);
+  background: var(--mob-surface-subtle);
+  border: 1px solid var(--mob-border-subtle);
   text-align: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s var(--mob-smooth);
   cursor: pointer;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .mobile-app-tile:active {
-  transform: scale(0.95);
-  background: #eef2ff;
+  transform: scale(0.94);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 html.dark .mobile-app-tile {
-  background: #1a253a;
-  border-color: #26334a;
+  background: #172138;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 html.dark .mobile-app-tile:active {
-  background: #23314d;
+  background: #1f2d4d;
 }
 
+/* Squircle Icon Box with Soft Depth */
 .mobile-app-tile .tile-icon-box {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 6px;
-  font-size: 22px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  margin-bottom: 8px;
+  font-size: 24px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s var(--mob-bounce);
 }
 
-/* ── 4. Mobile Bottom Sheet Dialog Overrides ── */
+.mobile-app-tile:active .tile-icon-box {
+  transform: scale(1.06);
+}
+
+/* ── 6. REALISTIC BOTTOM SHEETS FOR ALL MODAL DIALOGS ── */
 @media (max-width: 767.98px) {
   dialog[open]:not(#fiveThirtyPopup):not(#birthdayModal) {
     position: fixed !important;
@@ -310,22 +466,30 @@ html.dark .mobile-app-tile:active {
     margin: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
-    max-height: 88vh !important;
+    max-height: 90vh !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
-    border-top-left-radius: 24px !important;
-    border-top-right-radius: 24px !important;
-    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25) !important;
-    animation: mobileSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    border-top-left-radius: 28px !important;
+    border-top-right-radius: 28px !important;
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.3) !important;
+    animation: mobSheetSlideUp 0.35s var(--mob-smooth) forwards !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    padding-bottom: max(16px, var(--mobile-safe-bottom)) !important;
+    padding-bottom: max(20px, var(--mob-safe-bottom)) !important;
+    border: none !important;
+    border-top: 1px solid var(--mob-glass-border) !important;
+    background: var(--mob-surface) !important;
   }
 
-  @keyframes mobileSlideUp {
+  html.dark dialog[open]:not(#fiveThirtyPopup):not(#birthdayModal) {
+    background: #131b2e !important;
+    border-top-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  @keyframes mobSheetSlideUp {
     from {
       transform: translateY(100%);
-      opacity: 0.8;
+      opacity: 0.85;
     }
     to {
       transform: translateY(0);
@@ -333,18 +497,52 @@ html.dark .mobile-app-tile:active {
     }
   }
 
-  /* Horizontal swipeable tab bars for mobile */
+  /* Form & Input Enhancements on Mobile */
+  dialog input,
+  dialog select,
+  dialog textarea,
+  #content-area input,
+  #content-area select,
+  #content-area textarea {
+    min-height: 44px;
+    border-radius: var(--mob-radius-md) !important;
+    font-size: 14px !important;
+  }
+
+  /* Sticky Action Buttons at Modal Footer */
+  dialog form > div:last-child,
+  dialog .modal-footer,
+  dialog .p-4.bg-slate-50.border-t {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: var(--mob-surface) !important;
+    border-top: 1px solid var(--mob-border-subtle) !important;
+    z-index: 20 !important;
+  }
+
+  html.dark dialog form > div:last-child,
+  html.dark dialog .modal-footer,
+  html.dark dialog .p-4.bg-slate-50.border-t {
+    background: #131b2e !important;
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+  }
+}
+
+/* ── 7. SWIPEABLE SEGMENTED TABS & PILL CONTROLS ── */
+@media (max-width: 767.98px) {
   #tasks-hub-tabs,
   #mh-tabs-container,
   #org-tabs-container,
   .mobile-horizontal-scroll {
+    display: flex !important;
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
     white-space: nowrap !important;
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
-    padding-bottom: 4px !important;
+    padding: 6px 4px 8px 4px !important;
+    gap: 8px !important;
   }
 
   #tasks-hub-tabs::-webkit-scrollbar,
@@ -354,43 +552,64 @@ html.dark .mobile-app-tile:active {
     display: none !important;
   }
 
-  /* Mobile floating chat widget adjust */
-  #float-chat-panel {
-    inset: auto 0 0 0 !important;
-    bottom: var(--mobile-nav-total-h) !important;
-    right: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 70vh !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border-top-left-radius: 24px !important;
-    border-top-right-radius: 24px !important;
-  }
-
-  #float-chat-bubble-btn,
-  #float-chat-btn {
-    bottom: calc(var(--mobile-nav-total-h) + 12px) !important;
-    right: 14px !important;
-  }
-
-  /* Mobile toast position adjust */
-  .toast, #toast {
-    bottom: calc(var(--mobile-nav-total-h) + 12px) !important;
-    right: 12px !important;
-    left: 12px !important;
-    max-width: calc(100% - 24px) !important;
+  /* Modern Pill Tab Buttons */
+  #tasks-hub-tabs button,
+  #mh-tabs-container button,
+  .mobile-horizontal-scroll button {
+    flex-shrink: 0 !important;
+    border-radius: 999px !important;
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    min-height: 38px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.2s var(--mob-smooth) !important;
   }
 }
 
-/* ── 5. Mobile Native Chat UI Framework ── */
+/* ── 8. REALISTIC NATIVE CARD ELEVATION & LISTS ── */
 @media (max-width: 767.98px) {
-  /* Eliminate content-area outer scroll when in chat view on mobile */
+  /* Kanban Columns & Task Cards */
+  [data-kanban-col],
+  [data-internal-kanban-col] {
+    border-radius: var(--mob-radius-xl) !important;
+    box-shadow: var(--mob-card-shadow) !important;
+    border: 1px solid var(--mob-border-subtle) !important;
+  }
+
+  /* Task / Matrix Cards */
+  .matrix-task-card,
+  [data-task-id],
+  .kanban-task-card {
+    border-radius: var(--mob-radius-md) !important;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+    border: 1px solid var(--mob-border-subtle) !important;
+    transition: transform 0.15s var(--mob-smooth), box-shadow 0.15s ease !important;
+  }
+
+  .matrix-task-card:active,
+  [data-task-id]:active,
+  .kanban-task-card:active {
+    transform: scale(0.97) !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  /* KPI & Metric Stat Cards */
+  .stat-card,
+  .kpi-card,
+  #dashboard-view .grid > div {
+    border-radius: var(--mob-radius-lg) !important;
+    box-shadow: var(--mob-card-shadow) !important;
+  }
+}
+
+/* ── 9. REALISTIC MOBILE NATIVE CHAT UI ── */
+@media (max-width: 767.98px) {
   body:has(#view-chat-panel:not(.hidden)) #content-area,
   #content-area.chat-view-active {
-    padding: 0 0 var(--mobile-nav-total-h) 0 !important;
+    padding: 0 0 var(--mob-nav-total-h) 0 !important;
     overflow: hidden !important;
-    height: calc(100dvh - 52px) !important;
+    height: calc(100dvh - var(--mob-header-height)) !important;
     display: flex !important;
     flex-direction: column !important;
   }
@@ -408,62 +627,24 @@ html.dark .mobile-app-tile:active {
     flex: 1 1 0% !important;
   }
 
-  /* Conversation Sidebar (Messages & Groups List) on Mobile */
-  #view-chat-panel.no-active-chat .chat-sidebar-view {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-height: 100% !important;
-    padding: 10px 12px !important;
-    gap: 10px !important;
-    overflow: hidden !important;
-    flex: 1 1 0% !important;
-    min-height: 0 !important;
-  }
-
-  #view-chat-panel.no-active-chat .chat-sidebar-view > div {
-    flex: 1 1 0% !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    height: auto !important;
-    display: flex !important;
-    flex-direction: column !important;
-    border-radius: 18px !important;
-    overflow: hidden !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
-  }
-
-  #view-chat-panel.no-active-chat #dm-list,
-  #view-chat-panel.no-active-chat #group-list {
-    flex: 1 1 0% !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-  /* Active Chat Window (Fixed Header, Scrollable Messages, Fixed Input) on Mobile */
+  /* Active Chat Window */
   #view-chat-panel.active-chat #chat-window-wrapper {
     display: flex !important;
     flex-direction: column !important;
     width: 100% !important;
     height: 100% !important;
-    max-height: 100% !important;
-    min-height: 0 !important;
     flex: 1 1 0% !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
-    overflow: hidden !important;
-    position: relative !important;
-    background: #f8fafc !important;
+    background: var(--mob-bg) !important;
   }
 
   html.dark #view-chat-panel.active-chat #chat-window-wrapper {
-    background: #0b1120 !important;
+    background: #090e1a !important;
   }
 
-  /* Fixed Chat Header */
+  /* Sticky Chat Header */
   #chat-active-header {
     position: sticky !important;
     top: 0 !important;
@@ -472,49 +653,35 @@ html.dark .mobile-app-tile:active {
     z-index: 40 !important;
     flex-shrink: 0 !important;
     padding: 10px 14px !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03) !important;
+    background: var(--mob-glass-bg) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-bottom: 1px solid var(--mob-glass-border) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
   }
 
   html.dark #chat-active-header {
-    background: rgba(15, 23, 42, 0.96) !important;
-    border-bottom-color: #1e293b !important;
+    background: rgba(19, 27, 46, 0.95) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
   }
 
-  #chat-conv-avatar {
-    width: 36px !important;
-    height: 36px !important;
-    border-radius: 10px !important;
-    font-size: 13px !important;
-  }
-
-  #chat-conv-name {
-    font-size: 13px !important;
-    line-height: 1.2 !important;
-  }
-
-  /* Scrollable Messages Area */
+  /* Scrollable Message Bubbles Area */
   #messages-area {
     flex: 1 1 0% !important;
     min-height: 0 !important;
-    height: auto !important;
     overflow-y: auto !important;
-    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
     padding: 14px 12px 16px 12px !important;
     scroll-behavior: smooth !important;
     overscroll-behavior-y: contain !important;
-    background: #f8fafc !important;
+    background: var(--mob-bg) !important;
   }
 
   html.dark #messages-area {
-    background: #0b1120 !important;
+    background: #090e1a !important;
   }
 
-  /* Fixed Chat Box / Input Area at bottom */
+  /* Fixed Native Chat Input Bar */
   #chat-input-area {
     position: sticky !important;
     bottom: 0 !important;
@@ -522,63 +689,74 @@ html.dark .mobile-app-tile:active {
     right: 0 !important;
     z-index: 40 !important;
     flex-shrink: 0 !important;
-    padding: 8px 10px !important;
-    gap: 6px !important;
-    background: rgba(255, 255, 255, 0.98) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border-top: 1px solid #e2e8f0 !important;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.05) !important;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+    background: var(--mob-surface) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-top: 1px solid var(--mob-border-subtle) !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04) !important;
   }
 
   html.dark #chat-input-area {
-    background: rgba(15, 23, 42, 0.98) !important;
-    border-top-color: #1e293b !important;
+    background: #131b2e !important;
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
   }
 
-  /* Compact Input Row on Mobile */
   #chat-input-area textarea,
   #chat-input-area input[type="text"],
   #chat-message-input {
     font-size: 14px !important;
-    padding: 8px 12px !important;
-    border-radius: 14px !important;
+    padding: 10px 14px !important;
+    border-radius: var(--mob-radius-xl) !important;
+    min-height: 42px !important;
+    max-height: 120px !important;
   }
 
-  /* Floating Chat Sheet Optimization */
+  /* Floating Chat Widget */
   #float-chat-panel {
-    border-radius: 20px 20px 0 0 !important;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2) !important;
+    inset: auto 0 0 0 !important;
+    bottom: var(--mob-nav-total-h) !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 75vh !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 28px !important;
+    border-top-right-radius: 28px !important;
+    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.25) !important;
   }
 
-  #fcp-conv-view {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    overflow: hidden !important;
+  #float-chat-bubble-btn,
+  #float-chat-btn {
+    bottom: calc(var(--mob-nav-total-h) + 14px) !important;
+    right: 14px !important;
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4) !important;
   }
 
-  #fcp-messages-area {
-    flex: 1 1 0% !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding: 12px 10px !important;
+  /* Toast Notification */
+  .toast, #toast {
+    bottom: calc(var(--mob-nav-total-h) + 14px) !important;
+    right: 14px !important;
+    left: 14px !important;
+    max-width: calc(100% - 28px) !important;
+    border-radius: var(--mob-radius-lg) !important;
+    box-shadow: var(--mob-elevated-shadow) !important;
   }
 }
 
-/* Draggable Chat Bubble Global Styles */
+/* ── 10. DRAGGABLE CHAT BUBBLE GLOBAL SMOOTHING ── */
 #float-chat-btn {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: transform 0.2s var(--mob-smooth), box-shadow 0.2s ease;
 }
 
 #float-chat-btn.is-dragging {
   cursor: grabbing !important;
-  transform: scale(1.08) !important;
-  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.5) !important;
+  transform: scale(1.1) !important;
+  box-shadow: 0 16px 40px rgba(79, 70, 229, 0.55) !important;
   transition: none !important;
 }
-
-
