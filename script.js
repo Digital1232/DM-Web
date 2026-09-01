@@ -7866,15 +7866,15 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     window.handleAvatarError = handleAvatarError;
 
     function getUserAvatarSrc(userOrEmail) {
-        if (!userOrEmail) return getInitialsAvatar('User');
+        if (!userOrEmail) return 'https://api.dicebear.com/7.x/avataaars/svg?seed=User';
         if (typeof userOrEmail === "object") {
             if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
-            var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
             if (userOrEmail.email && typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) {
                 var fullU = allUsersMap.get(userOrEmail.email.toLowerCase().trim());
                 if (fullU && fullU.profilePicture) return fullU.profilePicture;
             }
-            return getInitialsAvatar(displayName);
+            var seed = userOrEmail.avatar || userOrEmail.name || userOrEmail.email || 'User';
+            return 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
         }
         if (typeof userOrEmail === "string") {
             var key = userOrEmail.toLowerCase().trim();
@@ -7900,10 +7900,10 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
                 });
             }
             if (user && user.profilePicture) return user.profilePicture;
-            var finalName = (user && (user.name || user.avatar)) || userOrEmail.split('@')[0] || userOrEmail;
-            return getInitialsAvatar(finalName);
+            var seed = (user && (user.avatar || user.name)) || userOrEmail.split('@')[0] || userOrEmail || 'User';
+            return 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
         }
-        return getInitialsAvatar('User');
+        return 'https://api.dicebear.com/7.x/avataaars/svg?seed=User';
     }
     window.getUserAvatarSrc = getUserAvatarSrc;
     window.getInitialsAvatar = getInitialsAvatar;
