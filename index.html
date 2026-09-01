@@ -13504,8 +13504,39 @@
                 </span>`;
             }
 
-            const MANUAL_TASK_STATUSES = ['To Do', 'In Progress', 'Hold', 'On Hold', 'Backlog', 'Selected for Development', 'In Review', 'Review', 'Testing', 'QA', 'Approved', 'Resolved', 'Closed', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Rework Designs', 'Thumbnail Waiting', 'Thumbnail', 'Design Hold', 'Quality Check', 'Design Completed', 'Client Sent', 'Client Approved', 'Posted', 'Analytics', 'Done', 'Rework'];
-            const INTERNAL_TASK_STATUSES = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Completed', 'Hold', 'Learnings', 'Discussion', 'Skipped', 'Missed', 'Quality Check', 'Rework'];
+            const MANUAL_TASK_STATUSES = [
+                'To Do',
+                'Shoot Needed',
+                'Content In Progress',
+                'Client Content Approval',
+                'Design To Do',
+                'Design In Progress',
+                'Design Hold',
+                'Rework Designs',
+                'Thumbnail Waiting',
+                'Quality Check',
+                'Design Completed',
+                'Client Sent',
+                'Client Approved',
+                'Posted',
+                'Analytics',
+                'Done'
+            ];
+            const INTERNAL_TASK_STATUSES = [
+                'To do',
+                'Shoot Needed',
+                'Shoot Planned',
+                'Shoot In Progress',
+                'Shoot Completed',
+                'In Progress',
+                'Rework',
+                'Learnings',
+                'Discussion',
+                'Completed',
+                'Hold',
+                'Skipped',
+                'Missed'
+            ];
 
             // Daily Plan Completed vs Active status helpers
             const DAILY_PLAN_COMPLETED_STATUS_SET = new Set([
@@ -40501,11 +40532,13 @@ function isStrategyTask(t) {
 
                 // Populate Status dropdown
                 const statusSelect = document.getElementById('et-status');
-                const allStatuses = isInternalTask(task)
-                    ? [...new Set([...INTERNAL_TASK_STATUSES, task.status])].filter(Boolean)
-                    : [...new Set([...MANUAL_TASK_STATUSES, ...tasks.filter(t => !isInternalTask(t)).map(t => t.status).filter(Boolean), task.status])].filter(Boolean).sort();
-                statusSelect.innerHTML = allStatuses.map(s => `<option value="${s}" ${s.trim().toLowerCase() === (task.status || '').trim().toLowerCase() ? 'selected' : ''}>${s}</option>`).join('');
-                statusSelect.value = task.status || 'To Do';
+                const baseStatuses = isInternalTask(task) ? INTERNAL_TASK_STATUSES : MANUAL_TASK_STATUSES;
+                const currentStatus = task.status ? task.status.trim() : '';
+                const allStatuses = (currentStatus && !baseStatuses.some(s => s.toLowerCase() === currentStatus.toLowerCase()))
+                    ? [...baseStatuses, currentStatus]
+                    : [...baseStatuses];
+                statusSelect.innerHTML = allStatuses.map(s => `<option value="${s}" ${s.trim().toLowerCase() === currentStatus.toLowerCase() ? 'selected' : ''}>${s}</option>`).join('');
+                statusSelect.value = task.status || (isInternalTask(task) ? 'To do' : 'To Do');
 
                 // Populate Assignee dropdown
                 const assigneeSelect = document.getElementById('et-assignee'); // Use allUsersMap
@@ -42632,7 +42665,7 @@ function isStrategyTask(t) {
                 // Status dropdown
                 const statusSel = document.getElementById('dp-batch-status');
                 if (statusSel) {
-                    const statusOptions = [...new Set([...MANUAL_TASK_STATUSES, ...INTERNAL_TASK_STATUSES, ...tasks.map(x => x.status).filter(Boolean)])].filter(Boolean).sort();
+                    const statusOptions = [...new Set([...MANUAL_TASK_STATUSES, ...INTERNAL_TASK_STATUSES])];
                     statusSel.innerHTML = '<option value="">— Keep Unchanged —</option>' + statusOptions.map(s => `<option value="${s}">${s}</option>`).join('');
                 }
 
@@ -42812,12 +42845,14 @@ function isStrategyTask(t) {
                     const taskKeyHtml = (t.manual || isInternal)
                         ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>`
                         : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
-                    const statusOptions = isInternal
-                        ? [...new Set([...INTERNAL_TASK_STATUSES, t.status])].filter(Boolean)
-                        : [...new Set([...MANUAL_TASK_STATUSES, ...tasks.filter(x => !isInternalTask(x)).map(x => x.status).filter(Boolean), t.status])].filter(Boolean).sort();
+                    const baseStatuses = isInternal ? INTERNAL_TASK_STATUSES : MANUAL_TASK_STATUSES;
+                    const currentStatus = t.status ? t.status.trim() : '';
+                    const statusOptions = (currentStatus && !baseStatuses.some(s => s.toLowerCase() === currentStatus.toLowerCase()))
+                        ? [...baseStatuses, currentStatus]
+                        : [...baseStatuses];
                     const statusSelectHtml = `
                     <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
-                        ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === (t.status || '').trim().toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
+                        ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === currentStatus.toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
                     const userLive = currentWorkUsers.find(u => (u.email || '').toLowerCase() === t.plannedForUser.toLowerCase());
