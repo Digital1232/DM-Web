@@ -20925,6 +20925,139 @@ function isStrategyTask(t) {
                 }
             }
 
+            // ══════════════════════════════════════════════════════════════════
+            // PLAN TRACKING — Palani's Production Calendar
+            // ══════════════════════════════════════════════════════════════════
+
+            let ptCurrentDate = new Date();
+            let ptActiveTab = 'calendar';
+
+            const PT_TEAM = [
+                { email: 'barathvilpower@gmail.com', name: 'Barath', label: 'Design', pct: 50, color: 'violet', taskTypes: ['Design To Do', 'Design In Progress', 'Rework Designs', 'Design Hold', 'Quality Check', 'Thumbnail Waiting'] },
+                { email: 'immanuelvilpower@gmail.com', name: 'Immanuel', label: 'Video', pct: 10, color: 'amber', taskTypes: ['In Progress', 'To Do', 'Design In Progress'] },
+                { email: 'karthikavilpower@gmail.com', name: 'Karthika', label: 'Thumbnails', pct: null, color: 'pink', taskTypes: ['Thumbnail Waiting'] }
+            ];
+
+            function canViewPlanTracking() {
+                if (!currentUser) return false;
+                const allowed = [
+                    'digitalmarketing@vilpower.com',  // Palani
+                    'nanjil@vilpower.com',             // Nanjil
+                    'murugeshvilpower@gmail.com'       // Murugesh
+                ];
+                return allowed.includes(currentUser.email.toLowerCase()) || isAdmin();
+            }
+
+            function ptDateStr(date) {
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            }
+
+            function ptAddDays(dateStr, days) {
+                const d = new Date(dateStr + 'T00:00:00');
+                d.setDate(d.getDate() + days);
+                return ptDateStr(d);
+            }
+
+            function ptFormatDate(dateStr) {
+                if (!dateStr) return '';
+                const d = new Date(dateStr + 'T00:00:00');
+                return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
+            }
+
+            function ptMatchedTasks(ev) {
+                if (!ev || !ev.date) return [];
+                const windowStart = ptAddDays(ev.date, -14);
+                const windowEnd = ptAddDays(ev.date, 3);
+
+                const stopWords = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'with', 'by', 'from', 'as', 'it', 'its', 'this', 'that', 'these', 'those', 'i', 'we', 'you', 'he', 'she', 'they']);
+                const titleTokens = (ev.title || '').toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, ' ')
+                    .split(/\s+/)
+                    .filter(w => w.length > 2 && !stopWords.has(w));
+
+                return tasks.filter(t => {
+                    if (t.manual || isInternalTask(t)) return false;
+                    const clientMatch = ev.client && t.client && t.client.toLowerCase() === ev.client.toLowerCase();
+                    const labelMatch = ev.client && (t.clientLabels || []).some(l => l.toLowerCase().includes(ev.client.toLowerCase()));
+                    if (!clientMatch && !labelMatch) return false;
+
+                    if (titleTokens.length > 0) {
+                        const descLower = (t.desc || '').toLowerCase();
+                        const hasKeyword = titleTokens.some(token => descLower.includes(token));
+                        if (!hasKeyword) return false;
+                    }
+
+                    if (t.duedate) {
+                        return t.duedate >= windowStart && t.duedate <= windowEnd;
+                    }
+                    return true;
+                });
+            }
+
+            function ptTasksDueOn(dateStr) {
+                return tasks.filter(t => t.duedate === dateStr && !isDone(t.status) && !t.manual && !isInternalTask(t));
+            }
+
+            function ptTrackStatus(ev) {
+                const today = ptDateStr(new Date());
+                const deadline = ptAddDays(ev.date, -3);
+                const matched = ptMatchedTasks(ev);
+
+                if (matched.length === 0) return 'no-tasks';
+                if (isDone(ev.status || '')) return 'on-track';
+
+                const anyDone = matched.some(t => isDone(t.status));
+                if (anyDone) return 'on-track';
+
+                const allDone = matched.every(t => isDone(t.status));
+                if (allDone) return 'on-track';
+
+                if (today > deadline) return 'at-risk';
+
+                const anyStillPlanned = matched.some(t => isTodo(t.status));
+                if (today > ptAddDays(ev.date, -5) && anyStillPlanned) return 'watch';
+
+                return 'on-track';
+            }
+
+            function ptTrackBadge(status) {
+                const map = {
+                    'on-track': '<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full text-[9px] font-black">✓ On Track</span>',
+                    'watch': '<span class="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full text-[9px] font-black">⚠ Watch</span>',
+                    'at-risk': '<span class="bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full text-[9px] font-black">✕ At Risk</span>',
+                    'no-tasks': '<span class="bg-slate-50 text-slate-400 border border-slate-100 px-2 py-0.5 rounded-full text-[9px] font-black">No Jira</span>',
+                };
+                return map[status] || '';
+            }
+
+            function ptMonthEvents() {
+                const month = ptCurrentDate.getMonth();
+                const year = ptCurrentDate.getFullYear();
+                return Object.entries(strategyEvents)
+                    .map(([id, ev]) => ({ id, ...ev }))
+                    .filter(ev => {
+                        if (!ev.date) return false;
+                        const d = new Date(ev.date + 'T00:00:00');
+                        return d.getMonth() === month && d.getFullYear() === year;
+                    })
+                    .sort((a, b) => a.date.localeCompare(b.date));
+            }
+
+            function initPlanTracking() {
+                if (!strategyEventsUnsub) {
+                    if (db) {
+                        strategyEventsUnsub = onValue(ref(db, 'worksync/strategy_events'), (snap) => {
+                            strategyEvents = snap.val() || {};
+                            renderPlanTrackingView();
+                        });
+                    }
+                } else {
+                    renderPlanTrackingView();
+                }
+            }
+
+            window.canViewPlanTracking = canViewPlanTracking;
+
             function navigatePlanTracking(dir) {
                 if (dir === 0) {
                     ptCurrentDate = new Date();
