@@ -103,23 +103,25 @@
         };
 
         window.getUserAvatarSrc = function(userOrEmail) {
+            var map = (typeof allUsersMap !== 'undefined' && allUsersMap) || window.allUsersMap;
             if (!userOrEmail) return window.getInitialsAvatar ? window.getInitialsAvatar('User') : '';
             if (typeof userOrEmail === 'object') {
                 if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
-                var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
-                if (userOrEmail.email && typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) {
-                    var fullU = allUsersMap.get(userOrEmail.email.toLowerCase().trim());
+                var email = (userOrEmail.email || '').toLowerCase().trim();
+                if (email && map && map.get) {
+                    var fullU = map.get(email);
                     if (fullU && fullU.profilePicture) return fullU.profilePicture;
                 }
+                var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
                 return window.getInitialsAvatar ? window.getInitialsAvatar(displayName) : '';
             }
             if (typeof userOrEmail === 'string') {
                 var key = userOrEmail.toLowerCase().trim();
                 var user = null;
-                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
-                    if (allUsersMap.get) user = allUsersMap.get(key);
-                    if (!user && allUsersMap.values) {
-                        user = Array.from(allUsersMap.values()).find(function(u) {
+                if (map) {
+                    if (map.get) user = map.get(key);
+                    if (!user && map.values) {
+                        user = Array.from(map.values()).find(function(u) {
                             return (u.email && u.email.toLowerCase().trim() === key) ||
                                    (u.name && u.name.toLowerCase().trim() === key) ||
                                    (u.avatar && u.avatar.toLowerCase().trim() === key);
@@ -52164,6 +52166,7 @@ function isStrategyTask(t) {
         }
 
         function fcpRenderDmList() {
+
             try {
                 var el = document.getElementById('fcp-dm-list');
                 if (!el) return;
