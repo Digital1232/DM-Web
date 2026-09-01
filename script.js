@@ -12762,6 +12762,7 @@
                 { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager - Digital Executions & Delivery', avatar: 'Palanirajan' },
                 { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A', role: 'Manager - Social Media & Client Accounts', avatar: 'Murugesh' },
                 { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual', avatar: 'Barath' },
+                { email: 'muthuvilpower@gmail.com', name: 'Muthu', role: 'Junior Video Editor', avatar: 'Muthu' },
                 { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member', avatar: 'Sneha' },
                 { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
@@ -12915,6 +12916,7 @@
                 const userEmail = (user.email || '').toLowerCase();
                 return [
                     'barathvilpower@gmail.com',
+                    'muthuvilpower@gmail.com',
                     'immanuelvilpower@gmail.com',
                     'karthikavilpower@gmail.com',
                     'anithavilpower@gmail.com'
@@ -13161,6 +13163,10 @@
                     'nanjil@vilpower.com'
                 ],
                 'barathvilpower@gmail.com': [
+                    'digitalmarketing@vilpower.com',
+                    'nanjil@vilpower.com'
+                ],
+                'muthuvilpower@gmail.com': [
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
@@ -20991,6 +20997,7 @@ function isStrategyTask(t) {
 
             const PT_TEAM = [
                 { email: 'barathvilpower@gmail.com', name: 'Barath', label: 'Design', pct: 50, color: 'violet', taskTypes: ['Design To Do', 'Design In Progress', 'Rework Designs', 'Design Hold', 'Quality Check', 'Thumbnail Waiting'] },
+                { email: 'muthuvilpower@gmail.com', name: 'Muthu', label: 'Video', pct: null, color: 'blue', taskTypes: ['In Progress', 'To Do', 'Design In Progress'] },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel', label: 'Video', pct: 10, color: 'amber', taskTypes: ['In Progress', 'To Do', 'Design In Progress'] },
                 { email: 'karthikavilpower@gmail.com', name: 'Karthika', label: 'Thumbnails', pct: null, color: 'pink', taskTypes: ['Thumbnail Waiting'] }
             ];
@@ -21774,7 +21781,7 @@ function isStrategyTask(t) {
                             const assigneeEmail = (t.assigneeEmail || '').toLowerCase();
                             const userObj = USERS.find(u => u.email.toLowerCase() === assigneeEmail);
                             const userDept = userObj?.email === 'snehavilpower@gmail.com' ? 'content team' :
-                                ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
+                                ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
                                     ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'].includes(userObj?.email) ? 'qc' :
                                         userObj?.email === 'ajithvilpower@gmail.com' ? 'posting' : '';
                             if (userDept !== deptFilter.toLowerCase()) return false;
@@ -22172,7 +22179,7 @@ function isStrategyTask(t) {
                 if (deptHealthList) {
                     const depts = [
                         { name: 'Content Team', emails: ['snehavilpower@gmail.com'] },
-                        { name: 'Design', emails: ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'] },
+                        { name: 'Design', emails: ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'] },
                         { name: 'QC', emails: ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'] },
                         { name: 'Posting', emails: ['ajithvilpower@gmail.com'] }
                     ];
@@ -22381,7 +22388,7 @@ function isStrategyTask(t) {
                         const assigneeEmail = (t.assigneeEmail || '').toLowerCase();
                         const userObj = USERS.find(u => u.email.toLowerCase() === assigneeEmail);
                         const userDept = userObj?.email === 'snehavilpower@gmail.com' ? 'content team' :
-                            ['barathvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
+                            ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'karthikavilpower@gmail.com', 'immanuelvilpower@gmail.com'].includes(userObj?.email) ? 'design' :
                                 ['murugeshvilpower@gmail.com', 'digitalmarketing@vilpower.com'].includes(userObj?.email) ? 'qc' :
                                     userObj?.email === 'ajithvilpower@gmail.com' ? 'posting' : '';
                         if (userDept !== deptFilter.toLowerCase()) return false;
@@ -27774,6 +27781,7 @@ function isStrategyTask(t) {
 
                     const isDailyPlanUser = [
                         'barathvilpower@gmail.com',
+                        'muthuvilpower@gmail.com',
                         'immanuelvilpower@gmail.com',
                         'karthikavilpower@gmail.com'
                     ].includes(email.toLowerCase());
@@ -29192,6 +29200,7 @@ function isStrategyTask(t) {
                 const email = (userEmail || '').toLowerCase().trim();
                 const isJiraOnlyUser = [
                     'barathvilpower@gmail.com',
+                    'muthuvilpower@gmail.com',
                     'immanuelvilpower@gmail.com',
                     'karthikavilpower@gmail.com'
                 ].includes(email);
@@ -35203,6 +35212,7 @@ function isStrategyTask(t) {
                     // Determine if user gets tasks from daily plans
                     const isDailyPlanUser = [
                         'barathvilpower@gmail.com',
+                        'muthuvilpower@gmail.com',
                         'immanuelvilpower@gmail.com',
                         'karthikavilpower@gmail.com'
                     ].includes(userEmail.toLowerCase());
@@ -36153,12 +36163,14 @@ function isStrategyTask(t) {
 
                             const isDailyPlanUser = [
                                 'barathvilpower@gmail.com',
+                                'muthuvilpower@gmail.com',
                                 'immanuelvilpower@gmail.com',
                                 'karthikavilpower@gmail.com'
                             ].includes(email.toLowerCase());
 
                             const isJiraOnlyUser = [
                                 'barathvilpower@gmail.com',
+                                'muthuvilpower@gmail.com',
                                 'immanuelvilpower@gmail.com',
                                 'karthikavilpower@gmail.com'
                             ].includes(email.toLowerCase());
@@ -37308,12 +37320,14 @@ function isStrategyTask(t) {
                         const getTaskStatus = (t) => getTaskStatusForUser(t, usrEmail);
                         const isDailyPlanUser = [
                             'barathvilpower@gmail.com',
+                            'muthuvilpower@gmail.com',
                             'immanuelvilpower@gmail.com',
                             'karthikavilpower@gmail.com'   // Karthika: assigned from daily plan
                         ].includes(usrEmail.toLowerCase());
 
                         const isJiraOnlyUser = [
                             'barathvilpower@gmail.com',
+                            'muthuvilpower@gmail.com',
                             'immanuelvilpower@gmail.com',
                             'karthikavilpower@gmail.com'
                         ].includes(usrEmail.toLowerCase());
@@ -38183,7 +38197,7 @@ function isStrategyTask(t) {
                     }
 
                     // ── Completed Video Count for video editors (Immanuel, Barath) ──
-                    const VIDEO_EDITOR_EMAILS = ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com'];
+                    const VIDEO_EDITOR_EMAILS = ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'immanuelvilpower@gmail.com'];
                     const isVideoEditor = VIDEO_EDITOR_EMAILS.includes(email.toLowerCase());
 
                     // For video editors, Jira tasks = video production work. Internal tasks are admin/recurring.
@@ -38644,7 +38658,7 @@ function isStrategyTask(t) {
                                 <p class="text-xl font-black text-slate-900">${userCompleted}</p>
                                 <p class="text-[9px] text-slate-400 font-bold">vs ${prevUserCompleted} prev period</p>
                                 ${(() => {
-                            const videoEditors = ['barathvilpower@gmail.com', 'immanuelvilpower@gmail.com', 'karthikavilpower@gmail.com'];
+                            const videoEditors = ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'immanuelvilpower@gmail.com', 'karthikavilpower@gmail.com'];
                             const shootCountUsers = ['immanuelvilpower@gmail.com', 'ajithvilpower@gmail.com'];
                             if (!videoEditors.includes(email) && !shootCountUsers.includes(email)) return '';
                             const completedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
@@ -45721,6 +45735,8 @@ function isStrategyTask(t) {
                 if (!task || !newAssigneeEmail) return;
                 const videoEditors = [
                     'barathvilpower@gmail.com',
+                    'muthuvilpower@gmail.com',
+                    'immanuelvilpower@gmail.com',
                     'ajithvilpower@gmail.com',
                     'princevilpower@gmail.com',
                     'murugeshvilpower@gmail.com',

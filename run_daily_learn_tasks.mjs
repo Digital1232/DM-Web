@@ -21,6 +21,7 @@ const USERS = [
   { email: 'digitalmarketing@vilpower.com',  name: 'Palanirajan R' },
   { email: 'murugeshvilpower@gmail.com',     name: 'Murugesh Kumar A' },
   { email: 'barathvilpower@gmail.com',       name: 'Barath Magesh M' },
+  { email: 'muthuvilpower@gmail.com',       name: 'Muthu' },
   { email: 'karthikavilpower@gmail.com',       name: 'Karthika K' },
   { email: 'immanuelvilpower@gmail.com',     name: 'Immanuel Raja S' },
 ];
