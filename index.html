@@ -4365,6 +4365,26 @@
                                 </table>
                             </div>
                         </div>
+                    
+                        <!-- Sticky Daily Plan Batch Action Bar -->
+                        <div id="dp-batch-bar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl px-5 py-3 shadow-2xl border border-slate-700/50 flex items-center gap-4 transition-all">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+                                <span id="dp-batch-count" class="text-xs font-bold text-slate-200">0 tasks selected</span>
+                            </div>
+                            <div class="h-4 w-px bg-slate-700"></div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="openDpBatchEditModal()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm">
+                                    <iconify-icon icon="solar:pen-2-bold" width="14"></iconify-icon> Bulk Edit
+                                </button>
+                                <button type="button" onclick="batchDeleteFromDailyPlan()" class="flex items-center gap-1.5 bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm">
+                                    <iconify-icon icon="solar:trash-bin-trash-bold" width="14"></iconify-icon> Delete from Plan
+                                </button>
+                                <button type="button" onclick="clearDpSelection()" class="text-xs font-bold text-slate-400 hover:text-white px-2 py-1 transition-colors">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
                     </div><!-- /tasks-tab-dailyplan -->
 
                 <!-- ════ COMPLETED TASKS TAB ════ -->
@@ -42463,6 +42483,199 @@ function isStrategyTask(t) {
                     </div>
                 `).join('');
             }
+
+
+            // ══════════════════════════════════════════════════════════════════════
+            // DAILY PLAN MULTI-SELECT, BATCH EDIT & DELETE
+            // ══════════════════════════════════════════════════════════════════════
+            let selectedDpTasks = new Map(); // taskId -> { taskId, userEmail, date, status }
+
+            function handleDpCheckboxChange(taskId, userEmail, date, status, checked) {
+                if (checked) {
+                    selectedDpTasks.set(taskId, { taskId, userEmail, date, status });
+                } else {
+                    selectedDpTasks.delete(taskId);
+                }
+                updateDpSelectionState();
+            }
+            window.handleDpCheckboxChange = handleDpCheckboxChange;
+
+            function toggleSelectAllDpTasks(isChecked) {
+                const checkboxes = document.querySelectorAll('.dp-task-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = isChecked;
+                    const tid = cb.dataset.taskId;
+                    const uEmail = cb.dataset.userEmail;
+                    const d = cb.dataset.date;
+                    const s = cb.dataset.status;
+                    if (isChecked && tid) {
+                        selectedDpTasks.set(tid, { taskId: tid, userEmail: uEmail, date: d, status: s });
+                    } else if (tid) {
+                        selectedDpTasks.delete(tid);
+                    }
+                });
+                updateDpSelectionState();
+            }
+            window.toggleSelectAllDpTasks = toggleSelectAllDpTasks;
+
+            function clearDpSelection() {
+                selectedDpTasks.clear();
+                const selectAllCb = document.getElementById('dp-select-all');
+                if (selectAllCb) selectAllCb.checked = false;
+                document.querySelectorAll('.dp-task-checkbox').forEach(cb => cb.checked = false);
+                updateDpSelectionState();
+            }
+            window.clearDpSelection = clearDpSelection;
+
+            function updateDpSelectionState() {
+                const count = selectedDpTasks.size;
+                const bar = document.getElementById('dp-batch-bar');
+                const countEl = document.getElementById('dp-batch-count');
+                const selectAllCb = document.getElementById('dp-select-all');
+                const checkboxes = document.querySelectorAll('.dp-task-checkbox');
+
+                if (countEl) countEl.textContent = `${count} task${count !== 1 ? 's' : ''} selected`;
+                if (bar) {
+                    if (count > 0) bar.classList.remove('hidden');
+                    else bar.classList.add('hidden');
+                }
+                if (selectAllCb && checkboxes.length > 0) {
+                    selectAllCb.checked = checkboxes.length === count;
+                    selectAllCb.indeterminate = count > 0 && count < checkboxes.length;
+                }
+            }
+            window.updateDpSelectionState = updateDpSelectionState;
+
+            function openDpBatchEditModal() {
+                if (!isAdmin()) return toast('Only admins can edit plan entries', 'error');
+                if (!selectedDpTasks.size) return toast('Please select tasks first', 'warning');
+
+                const summaryEl = document.getElementById('dp-batch-edit-summary');
+                if (summaryEl) summaryEl.textContent = `Editing ${selectedDpTasks.size} selected task${selectedDpTasks.size !== 1 ? 's' : ''}`;
+
+                // Populate assignee dropdown
+                const sel = document.getElementById('dp-batch-assignee');
+                if (sel) {
+                    sel.innerHTML = '<option value="">— Keep Unchanged —</option>' + Array.from(allUsersMap.values())
+                        .filter(u => u.email && u.email !== '123')
+                        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                        .map(u => `<option value="${u.email}">${escapeHtml(u.name || u.email)}</option>`)
+                        .join('');
+                }
+
+                // Status dropdown
+                const statusSel = document.getElementById('dp-batch-status');
+                if (statusSel) {
+                    const statusOptions = [...new Set([...MANUAL_TASK_STATUSES, ...INTERNAL_TASK_STATUSES, ...tasks.map(x => x.status).filter(Boolean)])].filter(Boolean).sort();
+                    statusSel.innerHTML = '<option value="">— Keep Unchanged —</option>' + statusOptions.map(s => `<option value="${s}">${s}</option>`).join('');
+                }
+
+                const dateInp = document.getElementById('dp-batch-date');
+                if (dateInp) dateInp.value = '';
+
+                document.getElementById('dpBatchEditModal').showModal();
+            }
+            window.openDpBatchEditModal = openDpBatchEditModal;
+
+            async function saveDpBatchEdit() {
+                if (!isAdmin()) return toast('Only admins can edit plan entries', 'error');
+                if (!selectedDpTasks.size) return toast('No tasks selected', 'warning');
+
+                const newAssignee = document.getElementById('dp-batch-assignee').value;
+                const newDate = document.getElementById('dp-batch-date').value;
+                const newStatus = document.getElementById('dp-batch-status').value;
+
+                if (!newAssignee && !newDate && !newStatus) {
+                    return toast('Please select at least one field to update', 'warning');
+                }
+
+                const btn = document.getElementById('dp-batch-save-btn');
+                if (btn) { btn.disabled = true; btn.textContent = 'Applying changes…'; }
+
+                try {
+                    const updates = {};
+                    const selectedList = Array.from(selectedDpTasks.values());
+
+                    for (const item of selectedList) {
+                        const targetUser = newAssignee || item.userEmail;
+                        const targetDate = newDate || item.date || todayIso();
+
+                        // Update daily plan entry
+                        updates[`worksync/daily_plans/${eKey(targetUser)}/${item.taskId}`] = {
+                            date: targetDate,
+                            assignedBy: currentUser.email,
+                            assignedAt: Date.now()
+                        };
+
+                        // If reassigned to another user, remove from old user
+                        if (newAssignee && newAssignee.toLowerCase() !== item.userEmail.toLowerCase()) {
+                            updates[`worksync/daily_plans/${eKey(item.userEmail)}/${item.taskId}`] = null;
+                        }
+
+                        // Status update if selected
+                        if (newStatus) {
+                            const task = tasks.find(t => t.id === item.taskId);
+                            if (task) {
+                                if (task.manual || isInternalTask(task)) {
+                                    task.status = newStatus;
+                                    updates[`worksync/manual_tasks/${item.taskId}/status`] = newStatus;
+                                } else {
+                                    // Jira task status transition
+                                    updateTaskStatus(item.taskId, newStatus).catch(e => console.warn('Jira status update warning:', e));
+                                }
+                            }
+                        }
+                    }
+
+                    await update(ref(db), updates);
+                    clearDpSelection();
+                    document.getElementById('dpBatchEditModal').close();
+                    renderTasks();
+                    renderDailyPlan();
+                    if (isInternalTabActive()) renderInternalTasks();
+                    updateStats();
+                    toast(`✓ Successfully updated ${selectedList.length} tasks`, 'success');
+                } catch (err) {
+                    console.error('Batch edit error:', err);
+                    toast('Batch edit failed: ' + err.message, 'error');
+                } finally {
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon> Apply to All'; }
+                }
+            }
+            window.saveDpBatchEdit = saveDpBatchEdit;
+
+            async function batchDeleteFromDailyPlan() {
+                if (!isAdmin()) return toast('Only admins can remove tasks from plans', 'error');
+                const count = selectedDpTasks.size;
+                if (!count) return toast('Please select tasks first', 'warning');
+
+                if (!confirm(`Are you sure you want to remove ${count} selected task${count !== 1 ? 's' : ''} from the Daily Plan?`)) return;
+
+                try {
+                    const updates = {};
+                    const selectedList = Array.from(selectedDpTasks.values());
+
+                    selectedList.forEach(item => {
+                        const uKey = eKey((item.userEmail || '').toLowerCase());
+                        updates[`worksync/daily_plans/${uKey}/${item.taskId}`] = null;
+                        if (dailyPlans[uKey]) {
+                            delete dailyPlans[uKey][item.taskId];
+                        }
+                    });
+
+                    await update(ref(db), updates);
+                    clearDpSelection();
+                    renderTasks();
+                    renderDailyPlan();
+                    if (isInternalTabActive()) renderInternalTasks();
+                    updateStats();
+                    toast(`✓ Removed ${count} tasks from Daily Plan`, 'success');
+                } catch (err) {
+                    console.error('Batch delete error:', err);
+                    toast('Batch delete failed: ' + err.message, 'error');
+                }
+            }
+            window.batchDeleteFromDailyPlan = batchDeleteFromDailyPlan;
 
             function renderDailyPlan() {
                 const tbody = document.getElementById('dp-tasks-tbody');
