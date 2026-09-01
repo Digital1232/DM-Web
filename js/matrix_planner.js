@@ -51,7 +51,9 @@ const DEFAULT_ASSIGNEES = [
 function initMatrixPlannerEngine() {
     console.log('[MatrixEngine] Initializing Matrix Planning Engine...');
     initClientsAndAssignees();
-    setupFirebaseRealtimeListener();
+    if (window.currentUser || (window.auth && window.auth.currentUser)) {
+        setupFirebaseRealtimeListener();
+    }
     renderMatrixPlanner();
 }
 
@@ -149,6 +151,10 @@ function setupFirebaseRealtimeListener() {
         return;
     }
 
+    if (!window.currentUser && (!window.auth || !window.auth.currentUser)) {
+        return;
+    }
+
     if (monthlyPlansUnsub) {
         try { monthlyPlansUnsub(); } catch (e) {}
         monthlyPlansUnsub = null;
@@ -162,6 +168,10 @@ function setupFirebaseRealtimeListener() {
             rawMonthlyPlansData = snapshot.val() || {};
             mergeAndRenderAllStrategyTasks();
         }, (error) => {
+            if (error && (error.code === 'PERMISSION_DENIED' || String(error).includes('permission_denied'))) {
+                // Ignore permission error if user is unauthenticated or restricted by DB rules
+                return;
+            }
             console.warn('[MatrixEngine] Monthly Plans Sync (requires Firebase RTDB permission):', error.message || error);
         });
     } catch (err) {

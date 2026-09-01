@@ -15844,6 +15844,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     try {
                         Object.values(convListeners).forEach(off => off && off());
                         if (chatConversationsUnsub) { try { chatConversationsUnsub(); } catch(e) {} chatConversationsUnsub = null; }
+                        if (discussionsUnsub) { try { discussionsUnsub(); } catch(e) {} discussionsUnsub = null; }
+                        if (allNotifUnsub) { try { allNotifUnsub(); } catch(e) {} allNotifUnsub = null; }
+                        if (taskNotifUnsub) { try { taskNotifUnsub(); } catch(e) {} taskNotifUnsub = null; }
                         if (checkoutReasonsUnsub) { checkoutReasonsUnsub(); checkoutReasonsUnsub = null; }
                         if (currentWorkUnsub) currentWorkUnsub();
                         if (todayReportUnsub) todayReportUnsub();
@@ -26806,9 +26809,12 @@ function isStrategyTask(t) {
                 }
             }
 
+            let discussionsUnsub = null;
             function loadDiscussions() {
                 try {
-                    onValue(ref(db, 'worksync/discussions'), (snapshot) => {
+                    if (discussionsUnsub) { try { discussionsUnsub(); } catch(e) {} discussionsUnsub = null; }
+                    discussionsUnsub = onValue(ref(db, 'worksync/discussions'), (snapshot) => {
+                        if (!currentUser || !currentUser.email) return;
                         const allDiscussions = [];
                         const idSet = new Set();
 
@@ -26826,7 +26832,7 @@ function isStrategyTask(t) {
                                 }
 
                                 // Auto-trigger popup for other participants when status becomes in-progress
-                                const myEmail = (currentUser.email || '').toLowerCase();
+                                const myEmail = (currentUser?.email || '').toLowerCase();
                                 const isParticipant = (disc.participants || []).some(p => (p || '').toLowerCase() === myEmail);
                                 if (disc.status === 'in-progress' && isParticipant) {
                                     const hasJoined = (disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail);
@@ -30476,7 +30482,7 @@ function isStrategyTask(t) {
                 const q = query(ref(db, 'worksync/announcements'), limitToLast(1));
                 announcementNotifyUnsub = onChildAdded(q, snap => {
                     const item = snap.val();
-                    if (!item || item.authorEmail === currentUser.email || (item.createdAt || 0) < listenerStartedAt) return;
+                    if (!item || !currentUser || !currentUser.email || item.authorEmail === currentUser.email || (item.createdAt || 0) < listenerStartedAt) return;
 
                     const sound = document.getElementById('announcement-notification-sound');
                     if (sound) {
@@ -36032,7 +36038,7 @@ function isStrategyTask(t) {
 
                 allTimeLogsUnsub = onValue(q, snap => {
                     allTimeLogs = snap.val() ? Object.values(snap.val()) : [];
-                    console.log("loadAllTimeLogs: canViewReports", canViewReports(), "currentUser.email", currentUser.email);
+                    console.log("loadAllTimeLogs: canViewReports", canViewReports(), "currentUser.email", currentUser?.email);
                     if (canViewReports()) {
                         console.log("loadAllTimeLogs: report access - allTimeLogs length:", allTimeLogs.length, "Unique users:", [...new Set(allTimeLogs.map(log => log.userId))]);
                     }
@@ -39911,6 +39917,7 @@ function isStrategyTask(t) {
             }
 
             function loadMyRequests() {
+                if (!currentUser || !currentUser.email) return;
                 const q = query(ref(db, 'worksync/requests'), orderByChild('userId'), equalTo(currentUser.email));
                 onValue(q, snap => {
                     const list = Object.entries(snap.val() || {}).sort((a, b) => b[1].submittedAt - a[1].submittedAt);
@@ -39967,7 +39974,7 @@ function isStrategyTask(t) {
                 onValue(ref(db, 'worksync/requests'), snap => {
                     const list = Object.entries(snap.val() || {}).sort((a, b) => b[1].submittedAt - a[1].submittedAt);
                     const filterVal = document.getElementById('approval-filter')?.value || 'pending';
-                    const myEmail = currentUser.email.toLowerCase();
+                    const myEmail = (currentUser?.email || '').toLowerCase();
 
                     const pendingForMe = list.filter(([, r]) => {
                         if (filterVal === 'pending') return isRequestPendingForApprover(r, myEmail);
@@ -40024,6 +40031,7 @@ function isStrategyTask(t) {
                     return;
                 }
                 onValue(ref(db, 'worksync/requests'), snap => {
+                    if (!currentUser || !currentUser.email) return;
                     const list = Object.values(snap.val() || {});
                     const count = list.filter(r => isRequestPendingForApprover(r, currentUser.email)).length;
                     badge.textContent = count;
@@ -43730,16 +43738,17 @@ function isStrategyTask(t) {
 
             let taskNotifUnsub = null;
             function initTaskNotifications() {
-                if (!db || !currentUser) return;
-                if (taskNotifUnsub) taskNotifUnsub();
+                if (!db || !currentUser || !currentUser.email) return;
+                if (taskNotifUnsub) { try { taskNotifUnsub(); } catch(e) {} taskNotifUnsub = null; }
 
                 const notifRef = query(ref(db, 'worksync/task_notifications'), orderByChild('timestamp'), limitToLast(20));
                 let isFirstLoad = true;
                 taskNotifUnsub = onValue(notifRef, snap => {
+                    if (!currentUser || !currentUser.email) return;
                     const data = snap.val();
                     if (!data || isFirstLoad) { isFirstLoad = false; return; }
 
-                    const myEmail = currentUser.email.toLowerCase();
+                    const myEmail = (currentUser?.email || '').toLowerCase();
                     Object.entries(data).forEach(([id, notif]) => {
                         if (shownTaskNotifIds.has(id)) return;
 
@@ -43796,15 +43805,18 @@ function isStrategyTask(t) {
 
             let notificationsList = [];
             let unreadNotifCount = 0;
+            let allNotifUnsub = null;
 
             function loadAllNotificationsForUser() {
-                if (!db || !currentUser) return;
+                if (!db || !currentUser || !currentUser.email) return;
                 const notifRef = query(ref(db, 'worksync/task_notifications'), orderByChild('timestamp'), limitToLast(50));
-                onValue(notifRef, snap => {
+                if (allNotifUnsub) { try { allNotifUnsub(); } catch(e) {} allNotifUnsub = null; }
+                allNotifUnsub = onValue(notifRef, snap => {
+                    if (!currentUser || !currentUser.email) return;
                     const data = snap.val() || {};
                     notificationsList = [];
                     unreadNotifCount = 0;
-                    const myEmail = currentUser.email.toLowerCase();
+                    const myEmail = (currentUser?.email || '').toLowerCase();
 
                     Object.entries(data).forEach(([id, notif]) => {
                         const targets = (notif.notifyEmails || []).map(e => e.toLowerCase());
