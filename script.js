@@ -192,20 +192,22 @@ if (initializeApp) {
 
     const JIRA = {
         domain: 'vilpowerdigitalmarketing.atlassian.net',
-        projectKey: 'AUG',
-        projectKeys: ['AUG'],
+        projectKey: 'SEP',
+        projectKeys: ['SEP', 'AUG'],
         apiUrl: '/api/jira',
         gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
         useLocalApi: false
     };
 
     function getJiraProjectKeyForDate(dateStr) {
-        if (!dateStr) return JIRA.projectKey || 'AUG';
+        if (!dateStr) return JIRA.projectKey || 'SEP';
         const month = String(dateStr).split('-')[1];
-        // July key removed
+        if (month === '09') return 'SEP';
+        if (month === '08') return 'AUG';
+        if (month === '07') return 'JULY';
         if (month === '06') return 'JUN';
         if (month === '05') return 'MAY';
-        return JIRA.projectKey || 'AUG';
+        return JIRA.projectKey || 'SEP';
     }
 
     function calculateDueDate4DaysBefore(dateStr) {
@@ -325,6 +327,9 @@ if (initializeApp) {
     let currentWorkRefreshRef = null;
     let currentWorkFilterKey = '';
     let allUsersMap = new Map(); // Global map for all users
+    if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+        USERS.forEach(u => allUsersMap.set(u.email.toLowerCase(), { ...u }));
+    }
     let todayTimeLogs = [];
     let todayReportUnsub = null;
     let announcementsUnsub = null;
@@ -5536,7 +5541,7 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
             if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
         }
         try {
-            const projectKeys = JIRA.projectKeys || ['AUG'];
+            const projectKeys = JIRA.projectKeys || ['SEP', 'AUG'];
             const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
             const manualTasks = tasks.filter(t => t.manual);
 
@@ -7807,14 +7812,50 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
 
     // CHAT
     function getInitialsAvatar(nameOrEmail) {
-        const str = (nameOrEmail || "?").trim();
-        const initial = (str.charAt(0) || "?").toUpperCase().replace(/[^A-Za-z0-9]/g, "?");
-        const colors = ["#4f46e5", "#0891b2", "#059669", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#2563eb", "#0d9488", "#e11d48"];
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
-        const color = colors[Math.abs(hash) % colors.length];
-        const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"" + color + "\"/><text x=\"50%\" y=\"54%\" dominant-baseline=\"middle\" text-anchor=\"middle\" font-family=\"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif\" font-weight=\"bold\" font-size=\"28\" fill=\"#ffffff\">" + initial + "</text></svg>";
-        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        var str = (nameOrEmail || '?').toString().trim();
+        if (str.includes('@')) {
+            str = str.split('@')[0].replace(/[._-]/g, ' ');
+        }
+        var parts = str.split(/\s+/).filter(Boolean);
+        var initials = '';
+        if (parts.length >= 2) {
+            initials = (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        } else if (parts.length === 1) {
+            var p = parts[0];
+            initials = p.length >= 2 ? p.slice(0, 2).toUpperCase() : p.toUpperCase();
+        } else {
+            initials = '?';
+        }
+        initials = initials.replace(/[^A-Z0-9]/g, '');
+        if (!initials) initials = '?';
+
+        var palettes = [
+            ['#4f46e5', '#7c3aed'],
+            ['#0891b2', '#0284c7'],
+            ['#059669', '#10b981'],
+            ['#d97706', '#f59e0b'],
+            ['#dc2626', '#e11d48'],
+            ['#7c3aed', '#c026d3'],
+            ['#2563eb', '#3b82f6'],
+            ['#0d9488', '#14b8a6'],
+            ['#db2777', '#f43f5e'],
+            ['#475569', '#334155']
+        ];
+        var hash = 0;
+        for (var i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+        var palette = palettes[Math.abs(hash) % palettes.length];
+        var gradId = 'g_' + Math.abs(hash);
+        var fontSize = initials.length > 1 ? '23' : '27';
+
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' +
+            '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="' + palette[0] + '"/>' +
+            '<stop offset="100%" stop-color="' + palette[1] + '"/>' +
+            '</linearGradient></defs>' +
+            '<rect width="64" height="64" rx="16" fill="url(#' + gradId + ')"/>' +
+            '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" font-size="' + fontSize + '" fill="#ffffff" letter-spacing="0.5">' + initials + '</text>' +
+            '</svg>';
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 
     function handleAvatarError(img, nameOrEmail) {
@@ -7825,15 +7866,44 @@ async function jiraRequest(jiraUrl, method = 'get', payload = null, retries = 2)
     window.handleAvatarError = handleAvatarError;
 
     function getUserAvatarSrc(userOrEmail) {
-        if (!userOrEmail) return getInitialsAvatar("?");
-        if (typeof userOrEmail === "string") {
-            const email = userOrEmail.toLowerCase().trim();
-            const user = (typeof allUsersMap !== "undefined" && allUsersMap && allUsersMap.get) ? allUsersMap.get(email) : (typeof knownUserByEmail === "function" ? knownUserByEmail(email) : null);
-            if (user && user.profilePicture) return user.profilePicture;
-            return (user && user.profilePicture) || getInitialsAvatar((user && user.name) || email);
+        if (!userOrEmail) return getInitialsAvatar('User');
+        if (typeof userOrEmail === "object") {
+            if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+            var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
+            if (userOrEmail.email && typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) {
+                var fullU = allUsersMap.get(userOrEmail.email.toLowerCase().trim());
+                if (fullU && fullU.profilePicture) return fullU.profilePicture;
+            }
+            return getInitialsAvatar(displayName);
         }
-        if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
-        return getInitialsAvatar(userOrEmail.name || userOrEmail.email || "?");
+        if (typeof userOrEmail === "string") {
+            var key = userOrEmail.toLowerCase().trim();
+            var user = null;
+            if (typeof allUsersMap !== "undefined" && allUsersMap) {
+                if (allUsersMap.get) user = allUsersMap.get(key);
+                if (!user && allUsersMap.values) {
+                    user = Array.from(allUsersMap.values()).find(function(u) {
+                        return (u.email && u.email.toLowerCase().trim() === key) ||
+                               (u.name && u.name.toLowerCase().trim() === key) ||
+                               (u.avatar && u.avatar.toLowerCase().trim() === key);
+                    });
+                }
+            }
+            if (!user && typeof knownUserByEmail === "function") {
+                user = knownUserByEmail(key);
+            }
+            if (!user && typeof USERS !== "undefined" && Array.isArray(USERS)) {
+                user = USERS.find(function(u) {
+                    return (u.email && u.email.toLowerCase().trim() === key) ||
+                           (u.name && u.name.toLowerCase().trim() === key) ||
+                           (u.avatar && u.avatar.toLowerCase().trim() === key);
+                });
+            }
+            if (user && user.profilePicture) return user.profilePicture;
+            var finalName = (user && (user.name || user.avatar)) || userOrEmail.split('@')[0] || userOrEmail;
+            return getInitialsAvatar(finalName);
+        }
+        return getInitialsAvatar('User');
     }
     window.getUserAvatarSrc = getUserAvatarSrc;
     window.getInitialsAvatar = getInitialsAvatar;

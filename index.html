@@ -99,19 +99,48 @@
         window.handleAvatarError = window.handleAvatarError || function(img, nameOrEmail) {
             if (!img) return;
             img.onerror = null;
-            img.src = window.getInitialsAvatar(nameOrEmail || '?');
+            img.src = window.getInitialsAvatar ? window.getInitialsAvatar(nameOrEmail || '?') : 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1 1\'%3E%3C/svg%3E';
         };
 
-        window.getUserAvatarSrc = window.getUserAvatarSrc || function(userOrEmail) {
-            if (!userOrEmail) return window.getInitialsAvatar('?');
-            if (typeof userOrEmail === 'string') {
-                var email = userOrEmail.toLowerCase().trim();
-                var user = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) ? allUsersMap.get(email) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(email) : null);
-                if (user && user.profilePicture) return user.profilePicture;
-                return (user && user.profilePicture) || window.getInitialsAvatar((user && user.name) || email);
+        window.getUserAvatarSrc = function(userOrEmail) {
+            if (!userOrEmail) return window.getInitialsAvatar ? window.getInitialsAvatar('User') : '';
+            if (typeof userOrEmail === 'object') {
+                if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+                var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
+                if (userOrEmail.email && typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get) {
+                    var fullU = allUsersMap.get(userOrEmail.email.toLowerCase().trim());
+                    if (fullU && fullU.profilePicture) return fullU.profilePicture;
+                }
+                return window.getInitialsAvatar ? window.getInitialsAvatar(displayName) : '';
             }
-            if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
-            return window.getInitialsAvatar(userOrEmail.name || userOrEmail.email || '?');
+            if (typeof userOrEmail === 'string') {
+                var key = userOrEmail.toLowerCase().trim();
+                var user = null;
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap.get) user = allUsersMap.get(key);
+                    if (!user && allUsersMap.values) {
+                        user = Array.from(allUsersMap.values()).find(function(u) {
+                            return (u.email && u.email.toLowerCase().trim() === key) ||
+                                   (u.name && u.name.toLowerCase().trim() === key) ||
+                                   (u.avatar && u.avatar.toLowerCase().trim() === key);
+                        });
+                    }
+                }
+                if (!user && typeof knownUserByEmail === 'function') {
+                    user = knownUserByEmail(key);
+                }
+                if (!user && typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                    user = USERS.find(function(u) {
+                        return (u.email && u.email.toLowerCase().trim() === key) ||
+                               (u.name && u.name.toLowerCase().trim() === key) ||
+                               (u.avatar && u.avatar.toLowerCase().trim() === key);
+                    });
+                }
+                if (user && user.profilePicture) return user.profilePicture;
+                var finalName = (user && (user.name || user.avatar)) || userOrEmail.split('@')[0] || userOrEmail;
+                return window.getInitialsAvatar ? window.getInitialsAvatar(finalName) : '';
+            }
+            return window.getInitialsAvatar ? window.getInitialsAvatar('User') : '';
         };
     </script>
     <style>
@@ -13039,20 +13068,22 @@
 
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
-                projectKey: 'AUG',
-                projectKeys: ['AUG'],
+                projectKey: 'SEP',
+                projectKeys: ['SEP', 'AUG'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
             };
 
             function getJiraProjectKeyForDate(dateStr) {
-                if (!dateStr) return JIRA.projectKey || 'AUG';
+                if (!dateStr) return JIRA.projectKey || 'SEP';
                 const month = String(dateStr).split('-')[1];
-                // July key removed
+                if (month === '09') return 'SEP';
+                if (month === '08') return 'AUG';
+                if (month === '07') return 'JULY';
                 if (month === '06') return 'JUN';
                 if (month === '05') return 'MAY';
-                return JIRA.projectKey || 'AUG';
+                return JIRA.projectKey || 'SEP';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
@@ -13171,6 +13202,10 @@
             let currentClientFilter = 'all';
             let currentDueDateFilter = 'all';
             let currentDueDateFromRange = null;
+            let allUsersMap = new Map(); // Global map for all users
+            if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                USERS.forEach(u => allUsersMap.set(u.email.toLowerCase(), { ...u }));
+            }
             let currentDueDateToRange = null;
             let currentSearchTerm = '';
             let currentInternalStatusFilter = 'all';
@@ -13229,7 +13264,6 @@
             let currentWorkUnsub = null;
             let currentWorkRefreshRef = null;
             let currentWorkFilterKey = '';
-            let allUsersMap = new Map(); // Global map for all users
             let todayTimeLogs = [];
             let todayReportUnsub = null;
             let announcementsUnsub = null;
@@ -18897,7 +18931,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         const lowerTaskId = String(task.id).toLowerCase().trim();
                         if (strategyJiraIds.has(lowerTaskId)) return;
-                        if (!task.id.toUpperCase().startsWith('AUG-')) return;
+                        if (!task.id.toUpperCase().startsWith('SEP-') && !task.id.toUpperCase().startsWith('AUG-')) return;
 
                         const cat = getStrategyStatusCategory(task.status);
                         if (cat === 'posted') countPosted++;
@@ -23053,7 +23087,7 @@ function isStrategyTask(t) {
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
                 }
                 try {
-                    const projectKeys = JIRA.projectKeys || ['AUG'];
+                    const projectKeys = JIRA.projectKeys || ['SEP', 'AUG'];
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
@@ -28389,8 +28423,9 @@ function isStrategyTask(t) {
                     chatPanel.classList.add('active-chat');
                 }
                 document.getElementById('chat-conv-name').textContent = name;
-                document.getElementById('chat-conv-avatar').textContent = name.charAt(0);
-                if (avatar) document.getElementById('chat-conv-avatar').innerHTML = `<img src="${avatar}" class="w-full h-full rounded-xl object-cover">`;
+                const displayAvatar = avatar || getUserAvatarSrc(name);
+                const safeConvEscaped = (name || '').replace(/'/g, "\\'");
+                document.getElementById('chat-conv-avatar').innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-xl object-cover">`;
 
                 activeGroupMembers = [];
                 let convCreator = null;
@@ -28828,10 +28863,19 @@ function isStrategyTask(t) {
                     <iconify-icon icon="solar:reply-linear" width="14"></iconify-icon>
                 </button>` : '';
 
+                const senderUser = msg.senderEmail ? (allUsersMap.get(msg.senderEmail.toLowerCase()) || (typeof knownUserByEmail === 'function' && knownUserByEmail(msg.senderEmail))) : null;
+                const senderAvatar = (senderUser && senderUser.profilePicture) || getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName);
+                const safeSenderName = (msg.senderName || msg.senderEmail || '?').replace(/'/g, "\\'");
+
                 const div = document.createElement('div');
-                div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in`;
+                div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in items-end gap-2`;
                 div.dataset.msgId = id;
                 div.innerHTML = `
+                ${!isMe ? `
+                    <div class="w-7 h-7 rounded-lg overflow-hidden shrink-0 mb-1">
+                        <img src="${senderAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200" title="${escapeHtml(msg.senderName || '')}">
+                    </div>
+                ` : ''}
                 <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
                     ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} min-w-0 w-full">
@@ -52069,7 +52113,7 @@ function isStrategyTask(t) {
             var imgBorder = isDark ? '#253347' : '#e2e8f0';
             var imgBg = isDark ? '#131929' : '#f1f5f9';
             var dotBorder = isDark ? '#1a2236' : 'white';
-            return '<button onclick="fcpOpenConv(\'' + cid + '\',\'' + safeName + '\',\'dm\',\'\')" '
+            return '<button onclick="fcpOpenConv(\'' + cid + '\',\'' + safeName + '\',\'dm\',\'' + (avatarSrc || '').replace(/'/g, "\\'") + '\')" '
                 + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;background:transparent;border:none;cursor:pointer;text-align:left;" '
                 + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'transparent\'">'
                 + '<div style="position:relative;flex-shrink:0;">'
@@ -52129,7 +52173,7 @@ function isStrategyTask(t) {
                     var conv = _fcpCC()[cid] || {};
                     var lastMsg = conv.lastMessage ? conv.lastMessage.slice(0, 30) + (conv.lastMessage.length > 30 ? '…' : '') : '';
                     var unread = _fcpUC()[cid] || 0;
-                    var avatarSrc = u.profilePicture || (window.getUserAvatarSrc ? window.getUserAvatarSrc(u) : window.getInitialsAvatar(u.name || u.email));
+                    var avatarSrc = u.profilePicture || (window.getUserAvatarSrc ? window.getUserAvatarSrc(u) : (window.getInitialsAvatar ? window.getInitialsAvatar(u.name || u.email) : ''));
                     return fcpUserRow(u.email, u.name, u.role, avatarSrc, cid, lastMsg, unread);
                 }).join('');
 
