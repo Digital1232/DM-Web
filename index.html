@@ -42657,10 +42657,10 @@ function isStrategyTask(t) {
 
                     selectedList.forEach(item => {
                         const uKey = eKey((item.userEmail || '').toLowerCase());
-                        updates[`worksync/daily_plans/${uKey}/${item.taskId}`] = null;
-                        if (dailyPlans[uKey]) {
-                            delete dailyPlans[uKey][item.taskId];
-                        }
+                        const removalPayload = { removed: true, removedAt: Date.now(), removedBy: currentUser?.email || 'Admin' };
+                        updates[`worksync/daily_plans/${uKey}/${item.taskId}`] = removalPayload;
+                        if (!dailyPlans[uKey]) dailyPlans[uKey] = {};
+                        dailyPlans[uKey][item.taskId] = removalPayload;
                     });
 
                     await update(ref(db), updates);
