@@ -2530,24 +2530,115 @@
             padding: 0 2rem 2rem 2rem;
         }
 
-        /* ── SPECIAL HANDLING FOR CHAT PANEL (Flex Layout) ── */
-        #view-chat-panel {
-            padding: 1.5rem 2rem 2rem 2rem;
+        /* ── CHAT PANEL CONTAINER & RESPONSIVE SCROLLING (Desktop, Tablet, Mobile, App) ── */
+        body:has(#view-chat-panel:not(.hidden)) #content-area,
+        #content-area.chat-view-active {
+            padding: 0 !important;
+            overflow: hidden !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 0 !important;
             display: flex !important;
-            flex-direction: row;
-            height: calc(100vh - 120px) !important;
-            gap: 1.5rem;
+            flex-direction: column !important;
+        }
+
+        #view-chat-panel {
+            padding: 1.25rem 1.75rem 1.5rem 1.75rem !important;
+            display: flex !important;
+            flex-direction: row !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 0 !important;
+            flex: 1 1 0% !important;
+            gap: 1.25rem !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+        }
+
+        .chat-sidebar-view {
+            width: 20rem !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            flex-shrink: 0 !important;
+            overflow: hidden !important;
+        }
+
+        #chat-conversations-scroll {
+            flex: 1 1 0% !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+        }
+
+        #chat-window-wrapper {
+            flex: 1 1 0% !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            position: relative !important;
+        }
+
+        #messages-area,
+        #chat-files-area,
+        #chat-pinned-area,
+        #chat-tasks-area,
+        #chat-members-area {
+            flex: 1 1 0% !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+        }
+
+        #chat-input-area {
+            flex-shrink: 0 !important;
+            position: relative !important;
+            z-index: 20 !important;
         }
 
         @media (max-width: 767px) {
             #view-chat-panel {
-                padding: 1rem !important;
+                padding: 0.5rem !important;
                 flex-direction: column !important;
-                height: auto !important;
-                gap: 1rem !important;
+                height: 100% !important;
+                max-height: 100% !important;
+                gap: 0 !important;
+            }
+
+            #view-chat-panel.no-active-chat #chat-window-wrapper {
+                display: none !important;
+            }
+
+            #view-chat-panel.no-active-chat .chat-sidebar-view {
+                display: flex !important;
+                width: 100% !important;
+                height: 100% !important;
+                border-radius: 1.25rem !important;
+            }
+
+            #view-chat-panel.active-chat #chat-window-wrapper {
+                display: flex !important;
+                width: 100% !important;
+                height: 100% !important;
+                border-radius: 1.25rem !important;
+            }
+
+            #view-chat-panel.active-chat .chat-sidebar-view {
+                display: none !important;
+            }
+
+            #chat-input-area {
+                padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px)) 0.75rem !important;
             }
         }
-
         /* ── CLIENT DELIVERY DASHBOARD: Fix Overlap with Navigation ── */
         #report-panel-client-delivery {
             position: relative;
@@ -6644,10 +6735,10 @@
             </div>
 
             <!-- ════ CHAT VIEW ════ -->
-            <div id="view-chat-panel" class="hidden h-full flex flex-col md:flex-row gap-5 fade-in no-active-chat">
+            <div id="view-chat-panel" class="hidden h-full min-h-0 flex-1 flex flex-col md:flex-row gap-5 fade-in no-active-chat">
 
                 <!-- Sidebar: Conversations -->
-                <div class="w-full md:w-80 flex flex-col shrink-0 chat-sidebar-view bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden h-[calc(100vh-100px)]">
+                <div class="w-full md:w-80 flex flex-col shrink-0 chat-sidebar-view bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden h-full min-h-0">
                     <!-- Chats Header -->
                     <div class="p-5 pb-3 flex items-center justify-between">
                         <h2 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">Chats</h2>
@@ -6733,7 +6824,7 @@
 
                 <!-- Chat Window -->
                 <div id="chat-window-wrapper"
-                    class="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative h-[calc(100vh-100px)]"
+                    class="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative h-full min-h-0"
                     ondragover="handleChatDragOver(event)" ondragenter="handleChatDragEnter(event)"
                     ondragleave="handleChatDragLeave(event)" ondrop="handleChatDrop(event)">
 
@@ -49928,11 +50019,21 @@ function isStrategyTask(t) {
             window.openApproveModal = openApproveModal; window.closeApproveModal = closeApproveModal; window.submitApproval = submitApproval;
             window.openEditLeaveModal = openEditLeaveModal; window.saveEditedLeave = saveEditedLeave; window.deleteLeave = deleteLeave;
             window.exportDailyReport = exportDailyReport; window.generateAndDisplayDailyReport = generateAndDisplayDailyReport;
-            function scrollChatToBottom() {
+            function scrollChatToBottom(smooth = false) {
                 const area = document.getElementById('messages-area');
-                if (area) {
-                    setTimeout(() => { area.scrollTop = area.scrollHeight; }, 100);
-                }
+                if (!area) return;
+                const doScroll = () => {
+                    if (smooth) {
+                        area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+                    } else {
+                        area.scrollTop = area.scrollHeight;
+                    }
+                };
+                doScroll();
+                requestAnimationFrame(doScroll);
+                setTimeout(doScroll, 60);
+                setTimeout(doScroll, 180);
+            }
             }
             // ── CLIENT DELIVERY FILTER STATE & LOGIC ──
             let cdSelectedClients = null; // null means all selected
@@ -54633,11 +54734,8 @@ function isStrategyTask(t) {
             }
 
             function isCompletedTaskStatus(status) {
-                // Use the same logic as isCompletedTask for consistency
                 return isCompletedTask(status);
             }
-
-        }
     </script>
     <!-- 5:30 Daily Completed Tasks Popup Modal -->
     <dialog id="fiveThirtyPopup"
@@ -55394,7 +55492,6 @@ function isStrategyTask(t) {
             }
         })();
 
-        window.toggleFloatChat = toggleFloatChat;
         window.switchFloatTab = switchFloatTab;
         window.fcpOpenConv = fcpOpenConv;
         window.fcpSendMessage = fcpSendMessage;
