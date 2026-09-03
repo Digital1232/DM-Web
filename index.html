@@ -6785,43 +6785,28 @@
 
                     <!-- Unified List with Collapsible Sections -->
                     <!-- Unified List with Collapsible Sections -->
-                    <div class="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60 custom-scrollbar" id="chat-conversations-scroll">
-                        <!-- Personal Chats Section -->
-                        <div id="section-personal-chats">
-                            <div onclick="toggleChatSection('personal')"
-                                class="flex items-center justify-between px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer select-none">
-                                <span class="flex items-center gap-1.5">
-                                    <span>Personal Chats</span>
-                                    <span id="personal-chats-count" class="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">0</span>
-                                </span>
-                                <iconify-icon id="icon-collapse-personal" icon="solar:alt-arrow-down-linear" width="14" class="transition-transform duration-200"></iconify-icon>
-                            </div>
-                            <div class="overflow-hidden transition-all duration-200" id="dm-list-container">
-                                <div id="dm-list" class="space-y-0.5">
-                                    <!-- Users -->
-                                </div>
+                    <!-- Conversations Scroll Area -->
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2" id="chat-conversations-scroll">
+                        <!-- 1. Unified Merged Feed (Shown for "All" filter) -->
+                        <div id="unified-chat-list" class="space-y-0.5">
+                            <!-- Dynamically rendered merged DMs & Groups sorted by latest message -->
+                        </div>
+
+                        <!-- 2. Personal Chats Section (Shown for "Personal" filter) -->
+                        <div id="section-personal-chats" class="hidden space-y-0.5">
+                            <div id="dm-list" class="space-y-0.5">
+                                <!-- Users -->
                             </div>
                         </div>
 
-                        <!-- Group Chats Section -->
-                        <div id="section-group-chats">
-                            <div onclick="toggleChatSection('groups')"
-                                class="flex items-center justify-between px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer select-none">
-                                <span class="flex items-center gap-1.5">
-                                    <span>Group Chats</span>
-                                    <span id="group-chats-count" class="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">0</span>
-                                </span>
-                                <iconify-icon id="icon-collapse-groups" icon="solar:alt-arrow-down-linear" width="14" class="transition-transform duration-200"></iconify-icon>
-                            </div>
-                            <div class="overflow-hidden transition-all duration-200" id="group-list-container">
-                                <div id="group-list" class="space-y-0.5">
-                                    <!-- Groups -->
-                                </div>
+                        <!-- 3. Group Chats Section (Shown for "Groups" filter) -->
+                        <div id="section-group-chats" class="hidden space-y-0.5">
+                            <div id="group-list" class="space-y-0.5">
+                                <!-- Groups -->
                             </div>
                         </div>
                     </div>
                 </div>
-
                 <!-- Chat Window -->
                 <div id="chat-window-wrapper"
                     class="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative h-full min-h-0"
@@ -28999,29 +28984,22 @@ function isStrategyTask(t) {
                         btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-xl text-center transition-all text-slate-500 hover:text-slate-900 dark:hover:text-white';
                     }
                 });
-                
+
+                const unifiedListEl = document.getElementById('unified-chat-list');
                 const secPersonal = document.getElementById('section-personal-chats');
                 const secGroups = document.getElementById('section-group-chats');
-                if (secPersonal) secPersonal.style.display = (tab === 'groups') ? 'none' : 'block';
-                if (secGroups) secGroups.style.display = (tab === 'personal') ? 'none' : 'block';
 
-                renderDmList();
-                if (currentUser) {
-                    const myKey = eKey(currentUser.email);
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
-                    renderGroupList(groups);
-                }
+                if (unifiedListEl) unifiedListEl.classList.toggle('hidden', tab !== 'all');
+                if (secPersonal) secPersonal.classList.toggle('hidden', tab !== 'personal');
+                if (secGroups) secGroups.classList.toggle('hidden', tab !== 'groups');
+
+                renderChatSidebar();
             }
             window.setChatFilter = setChatFilter;
 
             function handleChatSearchInput(query) {
                 chatSearchQuery = (query || '').toLowerCase().trim();
-                renderDmList();
-                if (currentUser) {
-                    const myKey = eKey(currentUser.email);
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
-                    renderGroupList(groups);
-                }
+                renderChatSidebar();
             }
             window.handleChatSearchInput = handleChatSearchInput;
 
@@ -29035,263 +29013,37 @@ function isStrategyTask(t) {
                         btn.className = 'p-2 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shrink-0';
                     }
                 }
-                renderDmList();
-                if (currentUser) {
-                    const myKey = eKey(currentUser.email);
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
-                    renderGroupList(groups);
-                }
+                renderChatSidebar();
             }
             window.toggleUnreadChatFilter = toggleUnreadChatFilter;
 
-            function toggleChatSection(section) {
-                collapsedChatSections[section] = !collapsedChatSections[section];
-                const container = document.getElementById(`${section === 'personal' ? 'dm' : 'group'}-list-container`);
-                const icon = document.getElementById(`icon-collapse-${section}`);
-                if (container) {
-                    if (collapsedChatSections[section]) {
-                        container.style.display = 'none';
-                        if (icon) icon.style.transform = 'rotate(-90deg)';
-                    } else {
-                        container.style.display = 'block';
-                        if (icon) icon.style.transform = 'rotate(0deg)';
-                    }
-                }
-            }
-            window.toggleChatSection = toggleChatSection;
+            function renderConversationCard(item) {
+                const isGroup = item.type === 'group';
+                const convId = item.convId;
+                const isPinned = item.isPinned;
+                const isMuted = item.isMuted;
+                const unread = item.unread || 0;
+                const isSelected = activeConvId === convId;
+                const name = item.name || (isGroup ? 'Unnamed Group' : 'User');
+                const safeNameHtml = escapeHtml(name);
+                const safeNameJs = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const safeConvIdJs = convId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const activeClass = isSelected 
+                    ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-l-4 border-indigo-600 shadow-xs' 
+                    : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
 
-            function switchChatSubTab(tab) {
-                activeChatSubTab = tab;
-                const tabs = ['messages', 'files', 'pinned', 'tasks', 'members'];
-                tabs.forEach(t => {
-                    const btn = document.getElementById(`chat-subtab-${t}`);
-                    const area = document.getElementById(t === 'messages' ? 'messages-area' : `chat-${t}-area`);
-                    if (btn) {
-                        if (t === tab) {
-                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 whitespace-nowrap transition-all flex items-center gap-1.5';
-                        } else {
-                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5';
-                        }
-                    }
-                    if (area) {
-                        if (t === tab) {
-                            area.classList.remove('hidden');
-                        } else {
-                            area.classList.add('hidden');
-                        }
-                    }
-                });
+                const avatarHtml = item.avatarHtml;
+                const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (isGroup ? 'Team Group' : 'Direct message');
+                const typeParam = isGroup ? `'group', '${item.group?.profilePicture || ''}'` : `'dm', ''`;
 
-                if (tab === 'files') renderChatFilesList();
-                else if (tab === 'pinned') renderChatPinnedList();
-                else if (tab === 'tasks') renderChatTasksList();
-                else if (tab === 'members') renderChatMembersList();
-                else if (tab === 'messages') {
-                    scrollChatToBottom();
-                }
-            }
-            window.switchChatSubTab = switchChatSubTab;
-
-            let chatConversationsUnsub = null;
-            function initChat() {
-                if (!db || !currentUser || !currentUser.email) return;
-                if (chatConversationsUnsub) {
-                    try { chatConversationsUnsub(); } catch (e) {}
-                    chatConversationsUnsub = null;
-                }
-                chatConversationsUnsub = onValue(ref(db, 'worksync/conversations'), snap => {
-                    if (!currentUser || !currentUser.email) return;
-                    chatConversations = snap.val() || {};
-                    const myKey = eKey(currentUser.email);
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
-                    renderGroupList(groups);
-                    watchConversationNotifications(Object.entries(chatConversations).filter(([, c]) => c.members && c.members[myKey]));
-                    if (activeView === 'chat') {
-                        renderDmList();
-                    }
-                });
-            }
-
-            function watchConversationNotifications(conversations) {
-                const activeIds = new Set(conversations.map(([id]) => id));
-                Object.entries(convListeners).forEach(([id, unsubscribe]) => {
-                    if (!activeIds.has(id)) {
-                        unsubscribe();
-                        delete convListeners[id];
-                    }
-                });
-                conversations.forEach(([id, conv]) => {
-                    if (convListeners[id]) return;
-                    // 10 second buffer to account for device clock drift
-                    const listenerStartedAt = Date.now() - 10000;
-                    const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
-                    convListeners[id] = onChildAdded(q, snap => {
-                        const msg = snap.val();
-                        if (!msg || !currentUser || !currentUser.email || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
-                        notifyIncomingMessage(msg, conv, id);
-                        if (id !== activeConvId) {
-                            unreadCounts[id] = (unreadCounts[id] || 0) + 1;
-                            renderChatBadge();
-                            // Immediately update sidebar DM/Group list badge element in DOM
-                            const unreadBadge = document.getElementById(`unread-badge-${id}`);
-                            if (unreadBadge) {
-                                unreadBadge.textContent = unreadCounts[id];
-                                unreadBadge.classList.remove('hidden');
-                            }
-                        }
-                    });
-                });
-            }
-
-            function renderChatBadge() {
-                const total = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
-                const badge = document.getElementById('chat-badge');
-                if (!badge) return;
-                badge.textContent = total;
-                badge.classList.toggle('hidden', total === 0);
-            }
-
-            function notifyIncomingMessage(msg, conv, convId) {
-                if (chatNotificationsMuted) return;
-                if (currentUser && currentUser.email && convId) {
-                    const myKey = eKey(currentUser.email);
-                    const mutedList = JSON.parse(localStorage.getItem('worksync_muted_chats_' + myKey) || '[]');
-                    if (mutedList.includes(convId)) return;
-                }
-                const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
-                toast(`New message from ${title}`, 'info');
-
-                // Play notification sound via Web Audio API
-                if (typeof playNotificationSound === 'function') {
-                    playNotificationSound();
-                }
-
-                if ('Notification' in window) {
-                    if (Notification.permission === 'granted') {
-                        const notification = new Notification(title, {
-                            body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
-                            icon: 'img/Fav-Icon.png'
-                        });
-                        notification.onclick = async () => {
-                            window.focus();
-                            try { notification.close(); } catch(e){}
-                            switchView('chat');
-                            if (conv?.type === 'dm') {
-                                openDm(msg.senderEmail);
-                            } else { // group chat
-                                openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
-                            }
-                        };
-                        setTimeout(() => {
-                            try { notification.close(); } catch(e){}
-                        }, 4000);
-                    } else if (Notification.permission === 'default') {
-                        try { Notification.requestPermission(); } catch(e){}
-                    }
-                }
-            }
-
-            async function renderDmList() {
-                const container = document.getElementById('dm-list');
-                const countBadge = document.getElementById('personal-chats-count');
-                if (!container || !currentUser) return;
-                if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
-                    allUsersMap = await getAllUsers();
-                    window.allUsersMap = allUsersMap;
-                }
-
-                const myKey = eKey(currentUser.email);
-                const pinnedKey = 'worksync_pinned_chats_' + myKey;
-                const mutedKey = 'worksync_muted_chats_' + myKey;
-                const manualUnreadKey = 'worksync_manual_unread_' + myKey;
-
-                const pinnedList = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
-                const mutedList = JSON.parse(localStorage.getItem(mutedKey) || '[]');
-                const manualUnreadList = JSON.parse(localStorage.getItem(manualUnreadKey) || '[]');
-
-                // Sync manual unreads into unreadCounts if not already set
-                manualUnreadList.forEach(id => {
-                    if (!unreadCounts[id] && id !== activeConvId) {
-                        unreadCounts[id] = 1;
-                    }
-                });
-
-                let others = Array.from(allUsersMap.values()).filter(u => u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase());
-
-                let mappedOthers = others.map(u => {
-                    const convId = dmId(currentUser.email, u.email);
-                    const conv = chatConversations[convId];
-                    const isPinned = pinnedList.includes(convId);
-                    const isMuted = mutedList.includes(convId);
-                    const lastTimestamp = (conv && conv.lastTimestamp) || 0;
-                    const lastMessage = (conv && conv.lastMessage) || '';
-                    return { user: u, convId, conv, isPinned, isMuted, lastTimestamp, lastMessage };
-                });
-
-                // Apply Search filter
-                if (chatSearchQuery) {
-                    mappedOthers = mappedOthers.filter(item => 
-                        (item.user.name || '').toLowerCase().includes(chatSearchQuery) ||
-                        (item.user.email || '').toLowerCase().includes(chatSearchQuery) ||
-                        (item.lastMessage || '').toLowerCase().includes(chatSearchQuery)
-                    );
-                }
-
-                // Apply Unread filter
-                if (chatOnlyUnread) {
-                    mappedOthers = mappedOthers.filter(item => (unreadCounts[item.convId] || 0) > 0);
-                }
-
-                if (countBadge) countBadge.textContent = mappedOthers.length;
-
-                if (!mappedOthers.length) {
-                    container.innerHTML = '<p class="p-4 text-center text-xs text-slate-400 italic">No direct chats found.</p>';
-                    return;
-                }
-
-                mappedOthers.sort((a, b) => {
-                    if (a.isPinned && !b.isPinned) return -1;
-                    if (!a.isPinned && b.isPinned) return 1;
-                    if (a.lastTimestamp !== b.lastTimestamp) {
-                        return b.lastTimestamp - a.lastTimestamp;
-                    }
-                    return (a.user.name || a.user.email || '').localeCompare(b.user.name || b.user.email || '');
-                });
-
-                container.innerHTML = mappedOthers.map(item => {
-                    const u = item.user;
-                    const convId = item.convId;
-                    const isPinned = item.isPinned;
-                    const isMuted = item.isMuted;
-                    const key = eKey(u.email);
-                    const unread = unreadCounts[convId] || 0;
-                    const isSelected = activeConvId === convId;
-                    const activeClass = isSelected 
-                        ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-l-4 border-indigo-600 shadow-xs' 
-                        : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
-
-                    const avatarSrc = u.profilePicture || getUserAvatarSrc(u);
-                    const safeNameHtml = escapeHtml(u.name || u.email.split('@')[0]);
-                    const safeEmailJs = u.email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    const safeConvIdJs = convId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-                    const avatarHtml = `
-                    <div class="relative shrink-0">
-                        <img src="${avatarSrc}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeEmailJs}')" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <span id="online-${key}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span>
-                    </div>`;
-
-                    const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (u.designation || 'Team Member');
-
-                    return `
+                return `
                 <div class="relative group flex items-center pr-2 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 rounded-2xl transition-all">
-                    <button id="dm-btn-${convId}" onclick="openDm('${safeEmailJs}')" class="flex-1 min-w-0 flex items-center gap-3 px-3.5 py-2.5 text-left ${activeClass} rounded-2xl transition-all">
+                    <button id="dm-btn-${convId}" onclick="openConversation('${safeConvIdJs}','${safeNameJs}',${typeParam})" class="flex-1 min-w-0 flex items-center gap-3 px-3.5 py-2.5 text-left ${activeClass} rounded-2xl transition-all">
                         ${avatarHtml}
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1.5 min-w-0">
                                     <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
-                                    
                                     ${isMuted ? `<span class="text-slate-400 shrink-0 flex items-center" title="Muted"><iconify-icon icon="solar:bell-off-bold" width="12"></iconify-icon></span>` : ''}
                                 </div>
                                 ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-black text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
@@ -29331,8 +29083,73 @@ function isStrategyTask(t) {
                         </div>
                     </div>
                 </div>`;
-                }).join('');
+            }
 
+            function getChatPreferences() {
+                if (!currentUser || !currentUser.email) return { pinnedList: [], mutedList: [], manualUnreadList: [] };
+                const myKey = eKey(currentUser.email);
+                const pinnedKey = 'worksync_pinned_chats_' + myKey;
+                const mutedKey = 'worksync_muted_chats_' + myKey;
+                const manualUnreadKey = 'worksync_manual_unread_' + myKey;
+
+                return {
+                    pinnedList: JSON.parse(localStorage.getItem(pinnedKey) || '[]'),
+                    mutedList: JSON.parse(localStorage.getItem(mutedKey) || '[]'),
+                    manualUnreadList: JSON.parse(localStorage.getItem(manualUnreadKey) || '[]')
+                };
+            }
+
+            function renderChatSidebar() {
+                if (!currentUser || !currentUser.email) return;
+                const myKey = eKey(currentUser.email);
+                const { pinnedList, mutedList, manualUnreadList } = getChatPreferences();
+
+                manualUnreadList.forEach(id => {
+                    if (!unreadCounts[id] && id !== activeConvId) {
+                        unreadCounts[id] = 1;
+                    }
+                });
+
+                // 1. Gather Personal (DM) Items
+                const usersList = (typeof allUsersMap !== 'undefined' && allUsersMap && Object.keys(allUsersMap).length) 
+                    ? Object.values(allUsersMap) 
+                    : (typeof users !== 'undefined' ? users : []);
+                const others = usersList.filter(u => u && u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase());
+
+                const dmItems = others.map(u => {
+                    const otherKey = eKey(u.email);
+                    const convId = [myKey, otherKey].sort().join('_');
+                    const conv = (typeof chatConversations !== 'undefined' && chatConversations[convId]) ? chatConversations[convId] : {};
+                    const isPinned = pinnedList.includes(convId);
+                    const isMuted = mutedList.includes(convId);
+                    const lastTimestamp = conv.lastTimestamp || 0;
+                    const lastMessage = conv.lastMessage || '';
+                    const unread = unreadCounts[convId] || 0;
+                    const name = u.name || u.email || 'User';
+
+                    let avatarHtml = '';
+                    if (u.photoURL) {
+                        avatarHtml = `<div class="relative shrink-0"><img src="${escapeHtml(u.photoURL)}" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
+                    } else {
+                        const initials = (u.name || u.email || 'U').charAt(0).toUpperCase();
+                        avatarHtml = `<div class="relative shrink-0"><div class="w-10 h-10 bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-xs shadow-2xs">${escapeHtml(initials)}</div><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
+                    }
+
+                    return {
+                        type: 'dm',
+                        convId,
+                        user: u,
+                        name,
+                        avatarHtml,
+                        isPinned,
+                        isMuted,
+                        lastTimestamp,
+                        lastMessage,
+                        unread
+                    };
+                });
+
+                // Attach online listeners
                 others.forEach(u => {
                     const key = eKey(u.email);
                     if (!userOnlineListeners[key]) {
@@ -29342,137 +29159,107 @@ function isStrategyTask(t) {
                         });
                     }
                 });
-            }
 
-            function renderGroupList(groups) {
-                const el = document.getElementById('group-list');
-                const countBadge = document.getElementById('group-chats-count');
-                if (!el || !currentUser) return;
-
-                const myKey = eKey(currentUser.email);
-                const pinnedKey = 'worksync_pinned_chats_' + myKey;
-                const mutedKey = 'worksync_muted_chats_' + myKey;
-                const manualUnreadKey = 'worksync_manual_unread_' + myKey;
-
-                const pinnedList = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
-                const mutedList = JSON.parse(localStorage.getItem(mutedKey) || '[]');
-                const manualUnreadList = JSON.parse(localStorage.getItem(manualUnreadKey) || '[]');
-
-                manualUnreadList.forEach(id => {
-                    if (!unreadCounts[id] && id !== activeConvId) {
-                        unreadCounts[id] = 1;
-                    }
-                });
-
-                let mappedGroups = groups.map(([id, g]) => {
+                // 2. Gather Group Items
+                const groupEntries = (typeof chatConversations !== 'undefined')
+                    ? Object.entries(chatConversations).filter(([, c]) => c && c.type === 'group' && c.members && c.members[myKey])
+                    : [];
+                const groupItems = groupEntries.map(([id, g]) => {
                     const isPinned = pinnedList.includes(id);
                     const isMuted = mutedList.includes(id);
                     const lastTimestamp = g.lastTimestamp || 0;
                     const lastMessage = g.lastMessage || '';
-                    return { id, group: g, isPinned, isMuted, lastTimestamp, lastMessage };
-                });
-
-                // Apply Search filter
-                if (chatSearchQuery) {
-                    mappedGroups = mappedGroups.filter(item => 
-                        (item.group.name || '').toLowerCase().includes(chatSearchQuery) ||
-                        (item.lastMessage || '').toLowerCase().includes(chatSearchQuery)
-                    );
-                }
-
-                // Apply Unread filter
-                if (chatOnlyUnread) {
-                    mappedGroups = mappedGroups.filter(item => (unreadCounts[item.id] || 0) > 0);
-                }
-
-                if (countBadge) countBadge.textContent = mappedGroups.length;
-
-                if (!mappedGroups.length) {
-                    el.innerHTML = '<p class="p-4 text-center text-xs text-slate-400 italic">No group chats found.</p>';
-                    return;
-                }
-
-                mappedGroups.sort((a, b) => {
-                    if (a.isPinned && !b.isPinned) return -1;
-                    if (!a.isPinned && b.isPinned) return 1;
-                    if (a.lastTimestamp !== b.lastTimestamp) {
-                        return b.lastTimestamp - a.lastTimestamp;
-                    }
-                    return (a.group.name || '').localeCompare(b.group.name || '');
-                });
-
-                el.innerHTML = mappedGroups.map(item => {
-                    const id = item.id;
-                    const g = item.group;
-                    const isPinned = item.isPinned;
-                    const isMuted = item.isMuted;
-                    const name = g.name || 'Unnamed Group';
-                    const safeNameHtml = escapeHtml(name);
-                    const safeNameJs = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const safeConvIdJs = id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                     const unread = unreadCounts[id] || 0;
-                    const isSelected = activeConvId === id;
-                    const activeClass = isSelected 
-                        ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-l-4 border-indigo-600 shadow-xs' 
-                        : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
+                    const name = g.name || 'Unnamed Group';
 
                     const avatarHtml = g.profilePicture
-                        ? `<img src="${g.profilePicture}" class="w-10 h-10 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">`
-                        : `<div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-2xs">${escapeHtml(name.charAt(0))}</div>`;
+                        ? `<img src="${escapeHtml(g.profilePicture)}" class="w-10 h-10 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">`
+                        : `<div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-2xs">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
 
-                    const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : 'Team Group';
+                    return {
+                        type: 'group',
+                        convId: id,
+                        group: g,
+                        name,
+                        avatarHtml,
+                        isPinned,
+                        isMuted,
+                        lastTimestamp,
+                        lastMessage,
+                        unread
+                    };
+                });
 
-                    return `
-                <div class="relative group flex items-center pr-2 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 rounded-2xl transition-all">
-                    <button id="dm-btn-${id}" onclick="openConversation('${safeConvIdJs}','${safeNameJs}','group', '${g.profilePicture || ''}')" class="flex-1 min-w-0 flex items-center gap-3 px-3.5 py-2.5 text-left ${activeClass} rounded-2xl transition-all">
-                        ${avatarHtml}
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="flex items-center gap-1.5 min-w-0">
-                                    <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
-                                    
-                                    ${isMuted ? `<span class="text-slate-400 shrink-0 flex items-center" title="Muted"><iconify-icon icon="solar:bell-off-bold" width="12"></iconify-icon></span>` : ''}
-                                </div>
-                                ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-black text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
-                            </div>
-                            <div class="flex items-center justify-between mt-1 gap-2">
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[150px]">${previewText}</p>
-                                <span id="unread-badge-${id}" class="${unread > 0 ? '' : 'hidden'} bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0 min-w-[1.25rem] text-center shadow-xs">${unread}</span>
-                            </div>
-                        </div>
-                    </button>
-                    <!-- 3-Dots Menu Trigger -->
-                    <div class="relative shrink-0">
-                        <button type="button" onclick="toggleChatActionsDropdown('${safeConvIdJs}', event)" class="w-7 h-7 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700/80 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100" title="Chat Options">
-                            <iconify-icon icon="solar:menu-dots-vertical-bold" width="15"></iconify-icon>
-                        </button>
-                        <!-- Popup Menu -->
-                        <div id="chat-item-menu-${id}" class="chat-item-dropdown hidden absolute right-0 top-8 z-50 w-52 bg-slate-900 dark:bg-slate-950 text-white border border-slate-700/80 rounded-2xl shadow-2xl p-1.5 text-xs font-medium divide-y divide-slate-800 backdrop-blur-md">
-                            <div class="py-1 space-y-0.5">
-                                <button type="button" onclick="markChatUnreadToggle('${safeConvIdJs}', event)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-800 text-left transition-all text-slate-200 hover:text-white">
-                                    <iconify-icon icon="${unread > 0 ? 'solar:chat-round-check-linear' : 'solar:chat-round-unread-linear'}" width="16" class="text-indigo-400 shrink-0"></iconify-icon>
-                                    <span class="font-semibold">${unread > 0 ? 'Mark as read' : 'Mark as unread'}</span>
-                                </button>
-                                <button type="button" onclick="togglePinChat('${safeConvIdJs}', event)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-800 text-left transition-all text-slate-200 hover:text-white">
-                                    <iconify-icon icon="solar:pin-bold" width="16" class="${isPinned ? 'text-amber-400' : 'text-slate-400'} shrink-0"></iconify-icon>
-                                    <span class="font-semibold">${isPinned ? 'Unpin' : 'Pin'}</span>
-                                </button>
-                            </div>
-                            <div class="pt-1">
-                                <button type="button" onclick="toggleMuteChat('${safeConvIdJs}', event)" class="w-full flex items-start gap-3 px-3 py-2 rounded-xl hover:bg-slate-800 text-left transition-all text-slate-200 hover:text-white">
-                                    <iconify-icon icon="${isMuted ? 'solar:bell-bold' : 'solar:bell-off-bold'}" width="16" class="${isMuted ? 'text-emerald-400' : 'text-slate-400'} shrink-0 mt-0.5"></iconify-icon>
-                                    <div class="flex flex-col">
-                                        <span class="font-semibold">${isMuted ? 'Unmute' : 'Mute'}</span>
-                                        <span class="text-[10px] text-slate-400 leading-tight">${isMuted ? 'Resume notifications' : 'Pause notifications'}</span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-                }).join('');
+                // Helper filter & sort: Pinned first, then latest message timestamp
+                const filterAndSort = (items) => {
+                    let res = items;
+                    if (chatSearchQuery) {
+                        res = res.filter(item => 
+                            (item.name || '').toLowerCase().includes(chatSearchQuery) ||
+                            (item.lastMessage || '').toLowerCase().includes(chatSearchQuery)
+                        );
+                    }
+                    if (chatOnlyUnread) {
+                        res = res.filter(item => (item.unread || 0) > 0);
+                    }
+                    res.sort((a, b) => {
+                        if (a.isPinned && !b.isPinned) return -1;
+                        if (!a.isPinned && b.isPinned) return 1;
+                        const timeA = a.lastTimestamp || 0;
+                        const timeB = b.lastTimestamp || 0;
+                        if (timeA !== timeB) {
+                            return timeB - timeA; // Latest message first
+                        }
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+                    return res;
+                };
+
+                // 3. Render into DOM according to active filter
+                const unifiedEl = document.getElementById('unified-chat-list');
+                const dmEl = document.getElementById('dm-list');
+                const groupEl = document.getElementById('group-list');
+
+                if (chatFilterTab === 'all') {
+                    if (unifiedEl) {
+                        const mergedList = filterAndSort([...dmItems, ...groupItems]);
+                        if (!mergedList.length) {
+                            unifiedEl.innerHTML = '<p class="p-6 text-center text-xs text-slate-400 italic">No conversations found.</p>';
+                        } else {
+                            unifiedEl.innerHTML = mergedList.map(item => renderConversationCard(item)).join('');
+                        }
+                    }
+                } else if (chatFilterTab === 'personal') {
+                    if (dmEl) {
+                        const filteredDms = filterAndSort(dmItems);
+                        if (!filteredDms.length) {
+                            dmEl.innerHTML = '<p class="p-6 text-center text-xs text-slate-400 italic">No personal chats found.</p>';
+                        } else {
+                            dmEl.innerHTML = filteredDms.map(item => renderConversationCard(item)).join('');
+                        }
+                    }
+                } else if (chatFilterTab === 'groups') {
+                    if (groupEl) {
+                        const filteredGroups = filterAndSort(groupItems);
+                        if (!filteredGroups.length) {
+                            groupEl.innerHTML = '<p class="p-6 text-center text-xs text-slate-400 italic">No group chats found.</p>';
+                        } else {
+                            groupEl.innerHTML = filteredGroups.map(item => renderConversationCard(item)).join('');
+                        }
+                    }
+                }
             }
+            window.renderChatSidebar = renderChatSidebar;
 
+            async function renderDmList() {
+                renderChatSidebar();
+            }
+            window.renderDmList = renderDmList;
+
+            function renderGroupList() {
+                renderChatSidebar();
+            }
+            window.renderGroupList = renderGroupList;
             function toggleChatActionsDropdown(convId, event) {
                 if (event) {
                     event.stopPropagation();
