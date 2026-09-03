@@ -6794,12 +6794,7 @@
                                     <iconify-icon icon="solar:magnifer-linear" width="18"></iconify-icon>
                                 </button>
 
-                                <!-- Audio Sync / Call Prompt -->
-                                <button type="button" onclick="startChatVoicePrompt()"
-                                    class="p-2 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all"
-                                    title="Quick Voice Sync">
-                                    <iconify-icon icon="solar:phone-bold" width="18"></iconify-icon>
-                                </button>
+                                
 
                                 <!-- Instant Google Meet Link Generator -->
                                 <button type="button" onclick="generateInstantGoogleMeet()"
@@ -30170,27 +30165,43 @@ function isStrategyTask(t) {
                 }
 
                 if (list.length > 0) {
-                    return list.filter(a => a && (a.url || a.link || a.fileUrl || a.data)).map(a => ({
+                    const mapped = list.filter(a => a && (a.url || a.link || a.fileUrl || a.data)).map(a => ({
                         url: a.url || a.link || a.fileUrl || a.data || '',
-                        type: a.type || a.mimeType || a.fileType || '',
+                        type: a.type || a.mimeType || a.fileType || (a.url && a.url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? 'image/jpeg' : (a.url && a.url.match(/\.pdf$/i) ? 'application/pdf' : 'application/octet-stream')),
                         name: a.name || a.fileName || a.title || 'Document',
                         size: a.size || a.fileSize || 0,
                         isLink: !!a.isLink,
-                        isGoogleDriveFile: !!a.isGoogleDriveFile
+                        isGoogleDriveFile: !!a.isGoogleDriveFile || (a.url && (a.url.includes('drive.google.com') || a.url.includes('docs.google.com')))
                     }));
+                    if (mapped.length > 0) return mapped;
                 }
 
                 if (msg.attachmentUrl || msg.fileUrl || msg.url) {
                     return [{
                         url: msg.attachmentUrl || msg.fileUrl || msg.url,
-                        type: msg.attachmentType || msg.fileType || '',
+                        type: msg.attachmentType || msg.fileType || (msg.attachmentUrl && msg.attachmentUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) ? 'image/jpeg' : (msg.attachmentUrl && msg.attachmentUrl.match(/\.pdf$/i) ? 'application/pdf' : 'application/octet-stream')),
                         name: msg.attachmentName || msg.fileName || 'Document',
-                        size: msg.attachmentSize || msg.fileSize || 0
+                        size: msg.attachmentSize || msg.fileSize || 0,
+                        isGoogleDriveFile: !!(msg.attachmentUrl && (msg.attachmentUrl.includes('drive.google.com') || msg.attachmentUrl.includes('docs.google.com')))
                     }];
                 }
+
+                // If message text contains Google Drive link
+                if (msg.text && (msg.text.includes('drive.google.com') || msg.text.includes('docs.google.com'))) {
+                    const urls = msg.text.match(/https?:\/\/(?:drive|docs)\.google\.com\/[^\s]+/gi) || [];
+                    if (urls.length > 0) {
+                        return urls.map(u => ({
+                            url: u,
+                            type: 'application/google-drive',
+                            name: 'Google Drive Document',
+                            size: 0,
+                            isGoogleDriveFile: true
+                        }));
+                    }
+                }
+
                 return [];
             }
-
             function getMessageImageAttachments(msg) {
                 return normalizeMessageAttachments(msg).filter(a => a.url && (a.type || '').startsWith('image/'));
             }
@@ -30327,28 +30338,22 @@ function isStrategyTask(t) {
                 const area = document.getElementById('messages-area');
                 if (!area) return;
                 const rows = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+                
+                const loadMoreHtml = activeConvHasMore ? `
+                    <div class="flex justify-center py-3">
+                        <button type="button" onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
+                            class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all">
+                            <iconify-icon icon="solar:round-arrow-up-bold" width="13" class="text-indigo-600 dark:text-indigo-400"></iconify-icon>
+                            ${activeConvLoadingMore ? 'Loading older messages...' : 'Load older messages'}
+                        </button>
+                    </div>` : '';
+
                 if (!rows.length) {
-                    area.innerHTML = `
-                        ${activeConvHasMore ? `
-                            <div class="sticky top-0 z-10 flex justify-center py-2 bg-gradient-to-b from-slate-50/95 via-slate-50/80 to-transparent">
-                                <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
-                                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
-                                    <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
-                                    ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Messages'}
-                                </button>
-                            </div>` : ''}
-                        <p class="text-center text-xs text-slate-400 italic py-6">No messages yet.</p>`;
+                    area.innerHTML = `${loadMoreHtml}<p class="text-center text-xs text-slate-400 italic py-8">No messages yet.</p>`;
                     return;
                 }
                 
-                area.innerHTML = activeConvHasMore ? `
-                    <div class="sticky top-0 z-10 flex justify-center py-2 bg-gradient-to-b from-slate-50/95 via-slate-50/80 to-transparent">
-                        <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
-                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
-                            <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
-                            ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Messages'}
-                        </button>
-                    </div>` : '';
+                area.innerHTML = loadMoreHtml;
 
                 const frag = document.createDocumentFragment();
                 let lastDateHeader = '';
@@ -30357,15 +30362,14 @@ function isStrategyTask(t) {
                     if (dateHeader && dateHeader !== lastDateHeader) {
                         lastDateHeader = dateHeader;
                         const dateDiv = document.createElement('div');
-                        dateDiv.className = 'flex justify-center my-3 sticky top-2 z-10 pointer-events-none';
-                        dateDiv.innerHTML = `<span class="px-3 py-1 rounded-full text-[10px] font-black bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 shadow-2xs pointer-events-auto">${dateHeader}</span>`;
+                        dateDiv.className = 'flex justify-center my-4 relative z-0';
+                        dateDiv.innerHTML = `<span class="px-3.5 py-1 rounded-full text-[10px] font-black bg-slate-100/90 dark:bg-slate-800/90 backdrop-blur-sm text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 shadow-2xs">${dateHeader}</span>`;
                         frag.appendChild(dateDiv);
                     }
                     appendMessage(id, msg, frag);
                 });
                 area.appendChild(frag);
             }
-
             function mergeChatMessages(nextMessages) {
                 if (!nextMessages) return;
                 currentConvMessages = { ...(currentConvMessages || {}), ...nextMessages };
