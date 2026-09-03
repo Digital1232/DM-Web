@@ -28469,6 +28469,8 @@ function isStrategyTask(t) {
             }
 
             let chatConversations = {};
+            let chatMessageCache = {};
+            let userOnlineListeners = {};
 
             function togglePinChat(convId, event) {
                 if (event) event.stopPropagation();
@@ -28570,9 +28572,9 @@ function isStrategyTask(t) {
                             try { notification.close(); } catch(e){}
                             switchView('chat');
                             if (conv?.type === 'dm') {
-                                await openDm(msg.senderEmail);
+                                openDm(msg.senderEmail);
                             } else { // group chat
-                                await openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                                openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
                             }
                         };
                         setTimeout(() => {
@@ -28651,10 +28653,13 @@ function isStrategyTask(t) {
                 }).join('');
 
                 others.forEach(u => {
-                    onValue(ref(db, `worksync/users/${eKey(u.email)}/online`), sn => {
-                        const el = document.getElementById(`online-${eKey(u.email)}`);
-                        if (el) el.className = `absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
-                    });
+                    const key = eKey(u.email);
+                    if (!userOnlineListeners[key]) {
+                        userOnlineListeners[key] = onValue(ref(db, `worksync/users/${key}/online`), sn => {
+                            const el = document.getElementById(`online-${key}`);
+                            if (el) el.className = `absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
+                        });
+                    }
                 });
             }
 
@@ -28756,57 +28761,113 @@ function isStrategyTask(t) {
             async function openChatFromMention(email) {
                 if (!email) return;
                 switchView('chat');
-                await openDm(email);
+                openDm(email);
             }
             window.openChatFromMention = openChatFromMention;
 
-            async function openDm(otherEmail) {
+            function openDm(otherEmail) {
+                if (!currentUser || !currentUser.email || !otherEmail) return;
                 const id = dmId(currentUser.email, otherEmail);
-                const userSnap = await get(ref(db, `worksync/users/${eKey(otherEmail)}`));
-                const other = userSnap.val() || knownUserByEmail(otherEmail) || { name: otherEmail.split('@')[0] };
-                const snap = await get(ref(db, `worksync/conversations/${id}`));
-                if (!snap.exists()) {
-                    await set(ref(db, `worksync/conversations/${id}`), { type: 'dm', members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true }, lastTimestamp: Date.now() });
+                const other = (allUsersMap && allUsersMap.get(otherEmail.toLowerCase())) || 
+                              (typeof knownUserByEmail === 'function' && knownUserByEmail(otherEmail)) || 
+                              { name: otherEmail.split('@')[0], email: otherEmail };
+                
+                // Immediately open conversation without blocking network roundtrips
+                openConversation(id, other.name || otherEmail.split('@')[0], 'dm', other.profilePicture || getUserAvatarSrc(other));
+
+                // Asynchronously verify/initialize the conversation node in background if not present
+                if (!chatConversations[id]) {
+                    get(ref(db, `worksync/conversations/${id}`)).then(snap => {
+                        if (!snap.exists()) {
+                            set(ref(db, `worksync/conversations/${id}`), {
+                                type: 'dm',
+                                members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true },
+                                lastTimestamp: Date.now()
+                            }).catch(e => console.warn('Failed to initialize DM:', e));
+                        }
+                    }).catch(e => console.warn('DM check failed:', e));
                 }
-                openConversation(id, other.name, 'dm', other.profilePicture || getUserAvatarSrc(other));
             }
 
-            async function openConversation(convId, name, type, avatar) {
+            function renderChatLoadingSkeleton() {
+                const area = document.getElementById('messages-area');
+                if (!area) return;
+                area.innerHTML = `
+                    <div class="space-y-4 py-4 px-2 animate-pulse">
+                        <div class="flex items-end gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-slate-200 shrink-0"></div>
+                            <div class="space-y-1.5 max-w-[65%] w-48">
+                                <div class="h-2.5 w-16 bg-slate-200 rounded"></div>
+                                <div class="h-9 bg-slate-100 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
+                                    <div class="h-3 w-3/4 bg-slate-200 rounded"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-end justify-end gap-2">
+                            <div class="space-y-1.5 max-w-[65%] w-56 flex flex-col items-end">
+                                <div class="h-12 w-full bg-indigo-100/70 rounded-2xl rounded-tr-none p-2.5">
+                                    <div class="h-3 w-4/5 bg-indigo-200 rounded mb-1"></div>
+                                    <div class="h-2.5 w-2/5 bg-indigo-200 rounded"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-slate-200 shrink-0"></div>
+                            <div class="space-y-1.5 max-w-[65%] w-60">
+                                <div class="h-2.5 w-20 bg-slate-200 rounded"></div>
+                                <div class="h-10 bg-slate-100 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
+                                    <div class="h-3 w-full bg-slate-200 rounded"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function openConversation(convId, name, type, avatar) {
+                if (!convId) return;
                 activeConvId = convId;
                 unreadCounts[convId] = 0;
                 renderChatBadge();
-                document.getElementById('chat-welcome').classList.add('hidden');
-                document.getElementById('chat-active-header').classList.remove('hidden');
-                document.getElementById('chat-input-area').classList.remove('hidden');
+
+                const welcomeEl = document.getElementById('chat-welcome');
+                const headerEl = document.getElementById('chat-active-header');
+                const inputEl = document.getElementById('chat-input-area');
+                if (welcomeEl) welcomeEl.classList.add('hidden');
+                if (headerEl) headerEl.classList.remove('hidden');
+                if (inputEl) inputEl.classList.remove('hidden');
 
                 const chatPanel = document.getElementById('view-chat-panel');
                 if (chatPanel) {
                     chatPanel.classList.remove('no-active-chat');
                     chatPanel.classList.add('active-chat');
                 }
-                document.getElementById('chat-conv-name').textContent = name;
+
+                const nameEl = document.getElementById('chat-conv-name');
+                if (nameEl) nameEl.textContent = name;
+
                 const displayAvatar = avatar || getUserAvatarSrc(name);
                 const safeConvEscaped = (name || '').replace(/'/g, "\\'");
-                document.getElementById('chat-conv-avatar').innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-xl object-cover">`;
+                const avatarContainer = document.getElementById('chat-conv-avatar');
+                if (avatarContainer) {
+                    avatarContainer.innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-xl object-cover">`;
+                }
 
+                // Synchronously resolve group metadata from memory cache
                 activeGroupMembers = [];
                 let convCreator = null;
+                const cachedConv = chatConversations[convId] || {};
                 if (type === 'group') {
-                    try {
-                        const [convSnap, usersSnap] = await Promise.all([
-                            get(ref(db, `worksync/conversations/${convId}`)),
-                            Promise.resolve(allUsersMap) // Use the already loaded allUsersMap
-                        ]);
-                        const conv = convSnap.val() || {};
-                        convCreator = conv.createdBy;
-                        const allUsers = Array.from(usersSnap.values()); // Get values from the map
-                        activeGroupMembers = allUsers.filter(u => conv.members && conv.members[eKey(u.email)]);
-                    } catch (e) { console.error('Failed to load group members', e); }
+                    convCreator = cachedConv.createdBy;
+                    if (allUsersMap && allUsersMap.size) {
+                        const allUsers = Array.from(allUsersMap.values());
+                        activeGroupMembers = allUsers.filter(u => cachedConv.members && cachedConv.members[eKey(u.email)]);
+                    }
                 }
 
                 const actions = document.getElementById('chat-conv-actions');
                 if (actions) {
-                    const isCreator = convCreator === currentUser.email;
+                    const isCreator = convCreator === (currentUser && currentUser.email);
                     if (type === 'group' && (isAdmin() || isCreator)) {
                         actions.innerHTML = `
                         <button onclick="openEditGroupModal('${convId}')" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Group"><iconify-icon icon="solar:pen-bold" width="18"></iconify-icon></button>
@@ -28817,21 +28878,58 @@ function isStrategyTask(t) {
                     }
                 }
 
-                if (msgListener) msgListener();
-                if (readReceiptsListener) { readReceiptsListener(); readReceiptsListener = null; }
+                // If group details need fresh update, fetch in background without delaying message rendering
+                if (type === 'group' && !convCreator) {
+                    get(ref(db, `worksync/conversations/${convId}`)).then(convSnap => {
+                        if (convSnap.exists() && activeConvId === convId) {
+                            const conv = convSnap.val() || {};
+                            convCreator = conv.createdBy;
+                            if (allUsersMap && allUsersMap.size) {
+                                const allUsers = Array.from(allUsersMap.values());
+                                activeGroupMembers = allUsers.filter(u => conv.members && conv.members[eKey(u.email)]);
+                            }
+                            if (actions && (isAdmin() || convCreator === (currentUser && currentUser.email))) {
+                                actions.innerHTML = `
+                                <button onclick="openEditGroupModal('${convId}')" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Group"><iconify-icon icon="solar:pen-bold" width="18"></iconify-icon></button>
+                                <button onclick="deleteGroup('${convId}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete Group"><iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon></button>
+                            `;
+                            }
+                        }
+                    }).catch(e => console.warn('Failed background group fetch:', e));
+                }
+
+                if (msgListener) {
+                    try { msgListener(); } catch (e) { }
+                    msgListener = null;
+                }
+                if (readReceiptsListener) {
+                    try { readReceiptsListener(); } catch (e) { }
+                    readReceiptsListener = null;
+                }
                 activeConvReadReceipts = {};
-                currentConvMessages = {};
                 activeConvOldestTimestamp = null;
                 activeConvOldestMessageKey = null;
                 activeConvHasMore = false;
                 activeConvLoadingMore = false;
                 activeConvHistoryDepleted = false;
 
-                const area = document.getElementById('messages-area');
-                area.innerHTML = '';
+                // Check in-memory message cache for INSTANT render
+                const cachedMessages = chatMessageCache[convId];
+                if (cachedMessages && Object.keys(cachedMessages).length > 0) {
+                    currentConvMessages = { ...cachedMessages };
+                    refreshChatOldestTimestamp();
+                    renderMessages(currentConvMessages);
+                    scrollChatToBottom();
+                } else {
+                    currentConvMessages = {};
+                    renderChatLoadingSkeleton();
+                }
+
+                // Query last messages from Firebase with optimal index
                 const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(activeConvMessageLimit));
                 msgListener = onValue(q, snap => {
                     const incoming = snap.val() || {};
+                    chatMessageCache[convId] = incoming;
                     mergeChatMessages(incoming);
                     refreshChatOldestTimestamp();
                     if (!activeConvHistoryDepleted) {
@@ -28842,16 +28940,17 @@ function isStrategyTask(t) {
                 });
 
                 // Write this user's read receipt (marks conversation as "seen")
-                set(ref(db, `worksync/read_receipts/${convId}/${eKey(currentUser.email)}`), {
-                    email: currentUser.email,
-                    name: currentUser.name || currentUser.email,
-                    seenAt: Date.now()
-                }).catch(e => console.warn('Failed to write read receipt:', e));
+                if (currentUser && currentUser.email) {
+                    set(ref(db, `worksync/read_receipts/${convId}/${eKey(currentUser.email)}`), {
+                        email: currentUser.email,
+                        name: currentUser.name || currentUser.email,
+                        seenAt: Date.now()
+                    }).catch(e => console.warn('Failed to write read receipt:', e));
+                }
 
-                // Listen to read receipts for this conversation so Seen By stays live
+                // Listen to read receipts for this conversation
                 readReceiptsListener = onValue(ref(db, `worksync/read_receipts/${convId}`), snap => {
                     activeConvReadReceipts = snap.val() || {};
-                    // Re-render messages to update Seen By indicators without scrolling
                     const msgs = currentConvMessages;
                     if (msgs && Object.keys(msgs).length > 0) {
                         renderMessages(msgs);
@@ -30485,6 +30584,7 @@ function isStrategyTask(t) {
                 try {
                     await remove(ref(db, `worksync/conversations/${convId}`));
                     await remove(ref(db, `worksync/messages/${convId}`));
+                    delete chatMessageCache[convId];
                     toast('Group deleted successfully', 'success');
                     if (activeConvId === convId) {
                         closeChat();
@@ -52953,12 +53053,23 @@ function isStrategyTask(t) {
         function fcpLoadMessages(convId) {
             if (fcpMsgListener) { try { fcpMsgListener(); } catch (e) { } fcpMsgListener = null; }
             var msgArea = document.getElementById('fcp-messages');
-            msgArea.innerHTML = '<p style="text-align:center;font-size:10px;color:#94a3b8;padding:16px;font-style:italic;">Loading…</p>';
+            if (msgArea) {
+                var cached = chatMessageCache[convId];
+                if (cached && Object.keys(cached).length) {
+                    var initialMsgs = Object.entries(cached).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
+                        .sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+                    fcpRenderMessages(initialMsgs);
+                } else {
+                    msgArea.innerHTML = '<p style="text-align:center;font-size:10px;color:#94a3b8;padding:16px;font-style:italic;">Loading…</p>';
+                }
+            }
 
             var q = _query(_ref('worksync/messages/' + convId), _llast(40));
             fcpMsgListener = _onVal(q, function (snap) {
-                var msgs = snap.val()
-                    ? Object.entries(snap.val()).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
+                var val = snap.val() || {};
+                chatMessageCache[convId] = val;
+                var msgs = val
+                    ? Object.entries(val).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
                         .sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); })
                     : [];
                 fcpRenderMessages(msgs);
