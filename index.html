@@ -29177,12 +29177,15 @@ function isStrategyTask(t) {
                     : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
 
                 const avatarHtml = item.avatarHtml;
-                const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (isGroup ? 'Team Group' : 'Direct message');
-                const typeParam = isGroup ? `'group', '${item.group?.profilePicture || ''}'` : `'dm', ''`;
+                const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (isGroup ? 'Team Group' : (item.user?.designation || 'Team Member'));
+                
+                const clickAction = isGroup
+                    ? `openConversation('${safeConvIdJs}','${safeNameJs}','group','${item.group?.profilePicture || ''}')`
+                    : `openDm('${(item.user?.email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
 
                 return `
                 <div class="relative group flex items-center pr-2 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 rounded-2xl transition-all">
-                    <button id="dm-btn-${convId}" onclick="openConversation('${safeConvIdJs}','${safeNameJs}',${typeParam})" class="flex-1 min-w-0 flex items-center gap-3 px-3.5 py-2.5 text-left ${activeClass} rounded-2xl transition-all">
+                    <button id="dm-btn-${convId}" onclick="${clickAction}" class="flex-1 min-w-0 flex items-center gap-3 px-3.5 py-2.5 text-left ${activeClass} rounded-2xl transition-all">
                         ${avatarHtml}
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between gap-1">
@@ -29254,8 +29257,8 @@ function isStrategyTask(t) {
                     }
                 });
 
-                // Ensure allUsersMap is populated
-                if (typeof allUsersMap === 'undefined' || !allUsersMap || (allUsersMap instanceof Map && allUsersMap.size <= 1)) {
+                // Ensure allUsersMap is fully populated with profile pictures
+                if (!allUsersMap || (allUsersMap instanceof Map && (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)))) {
                     if (typeof getAllUsers === 'function') {
                         try {
                             allUsersMap = await getAllUsers();
@@ -29266,7 +29269,7 @@ function isStrategyTask(t) {
                     }
                 }
 
-                // 1. Gather Personal (DM) Items from allUsersMap, users, or USERS
+                // 1. Gather Personal (DM) Items
                 let usersList = [];
                 if (typeof allUsersMap !== 'undefined' && allUsersMap) {
                     if (allUsersMap instanceof Map && allUsersMap.size > 0) {
@@ -29287,24 +29290,23 @@ function isStrategyTask(t) {
                 const others = usersList.filter(u => u && u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase());
 
                 const dmItems = others.map(u => {
-                    const otherKey = eKey(u.email);
-                    const convId = [myKey, otherKey].sort().join('_');
+                    const convId = dmId(currentUser.email, u.email);
                     const conv = (typeof chatConversations !== 'undefined' && chatConversations[convId]) ? chatConversations[convId] : {};
                     const isPinned = pinnedList.includes(convId);
                     const isMuted = mutedList.includes(convId);
-                    const lastTimestamp = conv.lastTimestamp || 0;
-                    const lastMessage = conv.lastMessage || '';
+                    const lastTimestamp = (conv && conv.lastTimestamp) || 0;
+                    const lastMessage = (conv && conv.lastMessage) || '';
                     const unread = unreadCounts[convId] || 0;
-                    const name = u.name || u.email || 'User';
+                    const name = u.name || u.email.split('@')[0];
+                    const key = eKey(u.email);
+                    const avatarSrc = u.profilePicture || getUserAvatarSrc(u);
+                    const safeEmailJs = u.email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-                    let avatarHtml = '';
-                    if (u.photoURL || u.profilePicture) {
-                        const pic = u.photoURL || u.profilePicture;
-                        avatarHtml = `<div class="relative shrink-0"><img src="${escapeHtml(pic)}" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
-                    } else {
-                        const initials = (u.name || u.email || 'U').charAt(0).toUpperCase();
-                        avatarHtml = `<div class="relative shrink-0"><div class="w-10 h-10 bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-xs shadow-2xs">${escapeHtml(initials)}</div><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
-                    }
+                    const avatarHtml = `
+                    <div class="relative shrink-0">
+                        <img src="${avatarSrc}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeEmailJs}')" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <span id="online-${key}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span>
+                    </div>`;
 
                     return {
                         type: 'dm',
@@ -29338,8 +29340,8 @@ function isStrategyTask(t) {
                 const groupItems = groupEntries.map(([id, g]) => {
                     const isPinned = pinnedList.includes(id);
                     const isMuted = mutedList.includes(id);
-                    const lastTimestamp = g.lastTimestamp || 0;
-                    const lastMessage = g.lastMessage || '';
+                    const lastTimestamp = (g && g.lastTimestamp) || 0;
+                    const lastMessage = (g && g.lastMessage) || '';
                     const unread = unreadCounts[id] || 0;
                     const name = g.name || 'Unnamed Group';
 
@@ -29361,7 +29363,7 @@ function isStrategyTask(t) {
                     };
                 });
 
-                // Helper filter & sort: Pinned first, then latest message timestamp
+                // Helper filter & sort: Pinned first, then latest message timestamp descending
                 const filterAndSort = (items) => {
                     let res = items;
                     if (chatSearchQuery) {
@@ -29379,7 +29381,7 @@ function isStrategyTask(t) {
                         const timeA = a.lastTimestamp || 0;
                         const timeB = b.lastTimestamp || 0;
                         if (timeA !== timeB) {
-                            return timeB - timeA; // Latest message first
+                            return timeB - timeA; // Descending: latest message on top!
                         }
                         return (a.name || '').localeCompare(b.name || '');
                     });
