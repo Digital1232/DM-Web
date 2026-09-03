@@ -13094,15 +13094,34 @@
 
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
-                projectKey: 'SEP',
-                projectKeys: ['SEP'],
+                projectKey: 'AUG',
+                projectKeys: ['AUG', 'SEP'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
             };
 
             function getJiraProjectKeyForDate(dateStr) {
-                return 'SEP';
+                if (dateStr) {
+                    let mNum = null;
+                    if (typeof dateStr === 'string' && dateStr.includes('-')) {
+                        mNum = parseInt(dateStr.split('-')[1], 10);
+                    } else {
+                        const d = new Date(dateStr);
+                        if (!isNaN(d.getTime())) mNum = d.getMonth() + 1;
+                    }
+                    const monthMap = {
+                        1: 'JAN', 2: 'FEB', 3: 'MAR', 4: 'APR', 5: 'MAY', 6: 'JUN',
+                        7: 'JULY', 8: 'AUG', 9: 'SEP', 10: 'OCT', 11: 'NOV', 12: 'DEC'
+                    };
+                    if (monthMap[mNum]) return monthMap[mNum];
+                }
+                const currentMonth = new Date().getMonth() + 1;
+                const monthMap = {
+                    1: 'JAN', 2: 'FEB', 3: 'MAR', 4: 'APR', 5: 'MAY', 6: 'JUN',
+                    7: 'JULY', 8: 'AUG', 9: 'SEP', 10: 'OCT', 11: 'NOV', 12: 'DEC'
+                };
+                return monthMap[currentMonth] || JIRA.projectKey || 'AUG';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
@@ -23320,7 +23339,7 @@ function isStrategyTask(t) {
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
                 }
                 try {
-                    const projectKeys = JIRA.projectKeys || ['SEP'];
+                    const projectKeys = JIRA.projectKeys || ['AUG', 'SEP'];
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
