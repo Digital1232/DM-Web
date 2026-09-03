@@ -8433,28 +8433,75 @@
 
                         <!-- ── PANEL: Attendance / Timing ── -->
                         <div id="report-panel-timing"
-                            class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
-                            <div class="px-8 pt-7 pb-4 border-b border-slate-50 flex items-start justify-between gap-4">
-                                <div>
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <div class="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                            <iconify-icon icon="solar:clock-circle-bold" class="text-indigo-600"
-                                                width="18"></iconify-icon>
-                                        </div>
-                                        <h3 class="text-base font-black text-slate-900 tracking-tight">
-                                            Attendance
-                                            Calendar</h3>
+                            class="hidden bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                            <!-- Header & Period Controls -->
+                            <div class="px-8 pt-7 pb-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-gradient-to-r from-slate-50/50 via-white to-indigo-50/20 dark:from-slate-800/40 dark:via-slate-900 dark:to-indigo-950/20">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-sm">
+                                        <iconify-icon icon="solar:calendar-bold" width="22"></iconify-icon>
                                     </div>
-                                    <p class="text-[11px] text-slate-400 ml-10">Heatmap of
-                                        work hours logged per
-                                        day. Click a day for details.</p>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-base font-black text-slate-900 dark:text-white tracking-tight">Attendance Calendar & Work Timeline</h3>
+                                            <span id="timing-member-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">My Attendance</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-400 font-medium">Monthly heatmap of check-in, check-out, active hours, break duration, and attendance regularizations.</p>
+                                    </div>
                                 </div>
-                                <span
-                                    class="report-panel-period text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 uppercase tracking-widest shrink-0 mt-1"></span>
+
+                                <!-- Month Navigator & Quick Actions -->
+                                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                                    <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+                                        <button type="button" onclick="navigateAttendanceMonth(-1)" class="p-1.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 transition-all" title="Previous Month">
+                                            <iconify-icon icon="solar:alt-arrow-left-bold" width="16"></iconify-icon>
+                                        </button>
+                                        <span id="timing-current-month-label" class="px-3 text-xs font-black text-slate-800 dark:text-slate-100 select-none">--</span>
+                                        <button type="button" onclick="navigateAttendanceMonth(1)" class="p-1.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 transition-all" title="Next Month">
+                                            <iconify-icon icon="solar:alt-arrow-right-bold" width="16"></iconify-icon>
+                                        </button>
+                                    </div>
+                                    <button type="button" onclick="setAttendanceCurrentMonth()" class="px-3 py-2 text-[11px] font-bold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700 transition-all shadow-sm">
+                                        Current Month
+                                    </button>
+                                    <button type="button" onclick="openAttendanceCorrectionModal()" class="flex items-center gap-1.5 px-3.5 py-2 text-[11px] font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md shadow-indigo-200 dark:shadow-none">
+                                        <iconify-icon icon="solar:calendar-add-bold" width="15"></iconify-icon>
+                                        Adjust / Log Attendance
+                                    </button>
+                                </div>
                             </div>
-                            <div class="p-8">
-                                <div id="timing-heatmap-container" class="overflow-x-auto pb-4"></div>
-                                <div id="timing-report-list" class="mt-6 pt-6 border-t border-slate-100"></div>
+
+                            <!-- Panel Body -->
+                            <div class="p-6 md:p-8 space-y-6">
+                                <!-- KPI Summary Cards Strip -->
+                                <div id="timing-kpi-strip" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                    <!-- KPI cards dynamically filled by renderTimingKPIs -->
+                                </div>
+
+                                <!-- Calendar Grid & Day Details (2-Column Grid on lg screens) -->
+                                <div class="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
+                                    <!-- Calendar Grid Card -->
+                                    <div class="bg-slate-50/60 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+                                        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-200/50 dark:border-slate-700/50">
+                                            <div class="flex items-center gap-2">
+                                                <iconify-icon icon="solar:calendar-mark-bold" class="text-indigo-600 dark:text-indigo-400" width="16"></iconify-icon>
+                                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Monthly Attendance Grid</h4>
+                                            </div>
+                                            <!-- Legend -->
+                                            <div class="flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Present (&ge;7h)</span>
+                                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Half Day (&lt;7h)</span>
+                                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span> Off/Leave</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="timing-heatmap-container" class="overflow-x-auto"></div>
+                                    </div>
+
+                                    <!-- Selected Day Breakdown Card -->
+                                    <div class="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 sticky top-4">
+                                        <div id="timing-report-list"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -32088,6 +32135,8 @@ function isStrategyTask(t) {
                     populateClientPerfFilter();
                 } else if (tab === 'client-delivery') {
                     renderClientDeliveryDashboard();
+                } else if (tab === 'timing') {
+                    renderTimingReport();
                 }
 
                 handleReportFilterChange();
@@ -33174,161 +33223,689 @@ function isStrategyTask(t) {
                 toast('Weekly performance report exported', 'success');
             }
 
+            window.currentAttendanceMonth = window.currentAttendanceMonth || new Date();
+
+            function navigateAttendanceMonth(delta) {
+                const cur = window.currentAttendanceMonth || new Date();
+                cur.setMonth(cur.getMonth() + delta);
+                window.currentAttendanceMonth = new Date(cur);
+                renderTimingReport();
+            }
+
+            function setAttendanceCurrentMonth() {
+                window.currentAttendanceMonth = new Date();
+                renderTimingReport();
+            }
+
             function renderTimingReport() {
                 const heatmapContainer = document.getElementById('timing-heatmap-container');
                 const listContainer = document.getElementById('timing-report-list');
+                const kpiStrip = document.getElementById('timing-kpi-strip');
+                const monthLabel = document.getElementById('timing-current-month-label');
+                const memberBadge = document.getElementById('timing-member-badge');
+
                 if (!heatmapContainer || !listContainer) return;
 
-                listContainer.innerHTML = '';
-                if (!reportDateFrom || !reportDateTo) {
-                    heatmapContainer.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">Please select a date range.</p>`;
-                    return;
+                const activeMonth = window.currentAttendanceMonth || new Date();
+                const year = activeMonth.getFullYear();
+                const month = activeMonth.getMonth(); // 0-indexed
+
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                if (monthLabel) monthLabel.textContent = `${monthNames[month]} ${year}`;
+
+                // Update active member badge
+                let activeUserObj = null;
+                if (typeof userList !== 'undefined' && Array.isArray(userList)) {
+                    activeUserObj = userList.find(u => (u.email || '').toLowerCase() === (reportSelectedUser || '').toLowerCase());
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo);
-                toTs.setDate(toTs.getDate() + 1);
-                const toTimestamp = toTs.getTime();
-
-                let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTimestamp);
-
-                if (reportSelectedUser !== 'all') {
-                    periodEvents = periodEvents.filter(e => e.userId === reportSelectedUser);
+                if (memberBadge) {
+                    if (reportSelectedUser === 'all') {
+                        memberBadge.textContent = 'All Team Members';
+                    } else {
+                        memberBadge.textContent = activeUserObj?.name || reportSelectedUser || (currentUser?.name || currentUser?.email || 'My Attendance');
+                    }
                 }
 
-                if (!periodEvents.length) {
-                    heatmapContainer.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">No attendance events for this date range</p>`;
-                    return;
+                // Month boundary timestamps
+                const firstDayOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+                const lastDayOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                const daysInMonth = lastDayOfMonth.getDate();
+
+                const fromTs = firstDayOfMonth.getTime();
+                const toTs = lastDayOfMonth.getTime();
+
+                // Ensure attendance events array exists
+                if (typeof window.attendanceEvents === 'undefined' || !Array.isArray(window.attendanceEvents)) {
+                    try {
+                        window.attendanceEvents = JSON.parse(localStorage.getItem('attendanceEvents') || '[]');
+                    } catch (e) {
+                        window.attendanceEvents = [];
+                    }
                 }
 
-                const workTimeByDate = {};
-                periodEvents.forEach(evt => {
-                    const date = evt.date;
-                    if (!workTimeByDate[date]) workTimeByDate[date] = { work: 0, events: [] };
-                    workTimeByDate[date].events.push(evt);
-                    if (evt.type === 'check_out' && evt.duration) workTimeByDate[date].work += evt.duration;
+                // Gather attendance events & time logs
+                const logsSource = (typeof allTimeLogs !== 'undefined' && Array.isArray(allTimeLogs)) ? allTimeLogs : ((typeof timeLogs !== 'undefined' && Array.isArray(timeLogs)) ? timeLogs : []);
+                
+                // Filter events by selected user
+                let periodEvents = (window.attendanceEvents || []).filter(e => e.timestamp >= fromTs && e.timestamp <= toTs);
+                let periodLogs = logsSource.filter(l => {
+                    const lTs = typeof getLogTime === 'function' ? getLogTime(l) : (l.timestamp || l.createdAt || 0);
+                    return lTs >= fromTs && lTs <= toTs;
                 });
 
-                renderTimingHeatmap(workTimeByDate, heatmapContainer, listContainer);
-
-                const lastDate = Object.keys(workTimeByDate).sort().pop();
-                if (lastDate) {
-                    renderTimingDetailForDate(lastDate, workTimeByDate[lastDate].events, listContainer);
+                if (reportSelectedUser !== 'all') {
+                    const sel = (reportSelectedUser || '').toLowerCase();
+                    periodEvents = periodEvents.filter(e => (e.userId || e.email || '').toLowerCase() === sel);
+                    periodLogs = periodLogs.filter(l => (l.userId || l.email || '').toLowerCase() === sel);
                 }
+
+                // Map data by day string (YYYY-MM-DD)
+                const monthDataByDate = {};
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dObj = new Date(year, month, day);
+                    const dStr = dObj.toISOString().slice(0, 10);
+                    monthDataByDate[dStr] = {
+                        dateStr: dStr,
+                        dateObj: dObj,
+                        dayNum: day,
+                        dayOfWeek: dObj.getDay(), // 0=Sun, 6=Sat
+                        workMs: 0,
+                        breakMs: 0,
+                        checkInTs: null,
+                        checkOutTs: null,
+                        events: [],
+                        isAdjusted: false,
+                        status: (dObj.getDay() === 0) ? 'Weekend' : 'Absent' // default
+                    };
+                }
+
+                // Process explicit attendance events
+                periodEvents.forEach(evt => {
+                    const dStr = evt.date || (evt.timestamp ? new Date(evt.timestamp).toISOString().slice(0, 10) : null);
+                    if (dStr && monthDataByDate[dStr]) {
+                        const dayRec = monthDataByDate[dStr];
+                        dayRec.events.push(evt);
+                        if (evt.type === 'check_in') {
+                            if (!dayRec.checkInTs || evt.timestamp < dayRec.checkInTs) dayRec.checkInTs = evt.timestamp;
+                        }
+                        if (evt.type === 'check_out') {
+                            if (!dayRec.checkOutTs || evt.timestamp > dayRec.checkOutTs) dayRec.checkOutTs = evt.timestamp;
+                            if (evt.duration) dayRec.workMs += evt.duration;
+                        }
+                        if (evt.type === 'break_end' && evt.duration) {
+                            dayRec.breakMs += evt.duration;
+                        }
+                        if (evt.adjusted) dayRec.isAdjusted = true;
+                    }
+                });
+
+                // Process time logs to complement check-in / check-out if attendanceEvents are empty
+                periodLogs.forEach(log => {
+                    const lTs = typeof getLogTime === 'function' ? getLogTime(log) : (log.timestamp || log.createdAt || 0);
+                    if (!lTs) return;
+                    const dStr = new Date(lTs).toISOString().slice(0, 10);
+                    if (monthDataByDate[dStr]) {
+                        const dayRec = monthDataByDate[dStr];
+                        const durMs = (log.durationSeconds || (log.hours ? log.hours * 3600 : 0)) * 1000;
+                        if (!dayRec.events.some(e => e.type === 'check_out')) {
+                            dayRec.workMs += durMs;
+                        }
+                        if (!dayRec.checkInTs || lTs < dayRec.checkInTs) dayRec.checkInTs = lTs;
+                        const logEnd = lTs + durMs;
+                        if (!dayRec.checkOutTs || logEnd > dayRec.checkOutTs) dayRec.checkOutTs = logEnd;
+                    }
+                });
+
+                // Calculate status and synthetic events if only time logs were present
+                Object.values(monthDataByDate).forEach(dayRec => {
+                    const hours = dayRec.workMs / 3600000;
+                    if (hours >= 7) {
+                        dayRec.status = 'Present';
+                    } else if (hours > 0) {
+                        dayRec.status = 'Half Day';
+                    } else if (dayRec.dayOfWeek === 0) {
+                        dayRec.status = 'Weekend';
+                    } else if (dayRec.dateObj > new Date()) {
+                        dayRec.status = 'Upcoming';
+                    } else {
+                        dayRec.status = 'Absent';
+                    }
+
+                    // Create friendly mock timeline items if none exist but work hours exist
+                    if (!dayRec.events.length && dayRec.workMs > 0) {
+                        if (dayRec.checkInTs) {
+                            dayRec.events.push({
+                                type: 'check_in',
+                                timestamp: dayRec.checkInTs,
+                                date: dayRec.dateStr,
+                                label: 'Checked In'
+                            });
+                        }
+                        if (dayRec.breakMs > 0) {
+                            dayRec.events.push({
+                                type: 'break_end',
+                                timestamp: dayRec.checkInTs + (dayRec.workMs / 2),
+                                duration: dayRec.breakMs,
+                                date: dayRec.dateStr,
+                                label: 'Lunch Break'
+                            });
+                        }
+                        if (dayRec.checkOutTs) {
+                            dayRec.events.push({
+                                type: 'check_out',
+                                timestamp: dayRec.checkOutTs,
+                                duration: dayRec.workMs,
+                                date: dayRec.dateStr,
+                                label: 'Checked Out'
+                            });
+                        }
+                    }
+                });
+
+                // Compute KPI aggregates
+                let totalWorkMs = 0;
+                let totalBreakMs = 0;
+                let presentDaysCount = 0;
+                let halfDaysCount = 0;
+                let workingDaysCount = 0;
+                let onTimeCount = 0;
+
+                const todayStr = new Date().toISOString().slice(0, 10);
+
+                Object.values(monthDataByDate).forEach(d => {
+                    if (d.dayOfWeek !== 0 && d.dateStr <= todayStr) workingDaysCount++;
+                    if (d.status === 'Present') {
+                        presentDaysCount++;
+                        totalWorkMs += d.workMs;
+                    } else if (d.status === 'Half Day') {
+                        halfDaysCount++;
+                        totalWorkMs += d.workMs;
+                    }
+                    totalBreakMs += d.breakMs;
+
+                    if (d.checkInTs) {
+                        const inDate = new Date(d.checkInTs);
+                        // On-time if checked in before 9:45 AM
+                        if (inDate.getHours() < 9 || (inDate.getHours() === 9 && inDate.getMinutes() <= 45)) {
+                            onTimeCount++;
+                        }
+                    }
+                });
+
+                const totalWorkHours = (totalWorkMs / 3600000).toFixed(1);
+                const totalActiveDays = presentDaysCount + (halfDaysCount * 0.5);
+                const avgDailyHours = totalActiveDays > 0 ? (totalWorkMs / 3600000 / totalActiveDays).toFixed(1) : '0.0';
+                const totalBreakHours = (totalBreakMs / 3600000).toFixed(1);
+                const onTimeRate = (presentDaysCount + halfDaysCount) > 0 ? Math.round((onTimeCount / (presentDaysCount + halfDaysCount)) * 100) : 100;
+
+                // Render KPI Strip
+                if (kpiStrip) {
+                    kpiStrip.innerHTML = `
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3.5 shadow-sm">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                <iconify-icon icon="solar:calendar-check-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Present Days</p>
+                                <p class="text-base font-black text-slate-800 dark:text-white">${presentDaysCount} <span class="text-xs font-semibold text-slate-400">/ ${workingDaysCount} Days</span></p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3.5 shadow-sm">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                <iconify-icon icon="solar:clock-circle-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Work Logged</p>
+                                <p class="text-base font-black text-slate-800 dark:text-white">${totalWorkHours}h <span class="text-xs font-semibold text-emerald-500">Active</span></p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3.5 shadow-sm">
+                            <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                <iconify-icon icon="solar:chart-square-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Avg Daily Hours</p>
+                                <p class="text-base font-black text-slate-800 dark:text-white">${avgDailyHours}h <span class="text-xs font-semibold text-slate-400">/ day</span></p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3.5 shadow-sm">
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                <iconify-icon icon="solar:cup-hot-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Break Time</p>
+                                <p class="text-base font-black text-slate-800 dark:text-white">${totalBreakHours}h <span class="text-xs font-semibold text-amber-600 dark:text-amber-400">Logged</span></p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3.5 shadow-sm col-span-2 sm:col-span-1">
+                            <div class="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                                <iconify-icon icon="solar:shield-check-bold" width="20"></iconify-icon>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">On-Time Rate</p>
+                                <p class="text-base font-black text-slate-800 dark:text-white">${onTimeRate}% <span class="text-xs font-semibold text-teal-600">&le;9:45 AM</span></p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Render Heatmap Calendar Grid
+                window.currentMonthDataByDate = monthDataByDate;
+                renderTimingHeatmap(monthDataByDate, heatmapContainer, listContainer, firstDayOfMonth);
+
+                // Auto-select latest day or today in this month
+                const allDates = Object.keys(monthDataByDate).sort();
+                let defaultDate = todayStr;
+                if (!monthDataByDate[defaultDate]) {
+                    // Pick the last day of the month or last day with data
+                    defaultDate = allDates[allDates.length - 1];
+                }
+                renderTimingDetailForDate(defaultDate, monthDataByDate[defaultDate], listContainer);
             }
 
-            function renderTimingHeatmap(data, container, listContainer) {
-                const from = new Date(reportDateFrom);
-                const to = new Date(reportDateTo);
-                const days = [];
-                for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-                    days.push(new Date(d));
+            function renderTimingHeatmap(data, container, listContainer, firstDayOfMonth) {
+                const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const leadingBlanks = firstDayOfMonth.getDay();
+                const todayStr = new Date().toISOString().slice(0, 10);
+
+                let cellsHtml = '';
+
+                // Header row
+                const headerHtml = `
+                    <div class="grid grid-cols-7 gap-2 mb-2">
+                        ${daysOfWeek.map(d => `<div class="text-center text-[11px] font-bold uppercase tracking-wider text-slate-400 py-1 select-none">${d}</div>`).join('')}
+                    </div>
+                `;
+
+                // Leading empty days
+                for (let i = 0; i < leadingBlanks; i++) {
+                    cellsHtml += `<div class="min-h-[78px] rounded-2xl bg-slate-100/40 dark:bg-slate-800/20 border border-transparent select-none opacity-40"></div>`;
                 }
 
-                const maxHours = Math.max(...Object.values(data).map(d => d.work / 3600000), 1);
+                // Days of month
+                Object.values(data).forEach(d => {
+                    const isToday = d.dateStr === todayStr;
+                    const hours = (d.workMs / 3600000);
+                    const formattedHours = hours > 0 ? hours.toFixed(1) + 'h' : '';
+                    
+                    let bgClasses = 'bg-white dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500';
+                    let badgeColor = 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+                    let statusLabel = 'Off';
+
+                    if (d.status === 'Present') {
+                        bgClasses = 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400 shadow-sm';
+                        badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300';
+                        statusLabel = formattedHours;
+                    } else if (d.status === 'Half Day') {
+                        bgClasses = 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 hover:border-amber-400 shadow-sm';
+                        badgeColor = 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300';
+                        statusLabel = formattedHours;
+                    } else if (d.status === 'Weekend') {
+                        bgClasses = 'bg-slate-100/60 dark:bg-slate-800/30 border-slate-200/50 dark:border-slate-800/50 text-slate-400';
+                        badgeColor = 'bg-slate-200/70 text-slate-500 dark:bg-slate-700 dark:text-slate-400';
+                        statusLabel = 'Sun';
+                    } else if (d.status === 'Upcoming') {
+                        bgClasses = 'bg-slate-50/30 dark:bg-slate-900/20 border-dashed border-slate-200 dark:border-slate-800 opacity-60';
+                        badgeColor = 'bg-transparent text-slate-400';
+                        statusLabel = '—';
+                    } else {
+                        // Absent
+                        bgClasses = 'bg-rose-50/30 dark:bg-rose-950/10 border-rose-100 dark:border-rose-900/30 hover:border-rose-300';
+                        badgeColor = 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300';
+                        statusLabel = 'Absent';
+                    }
+
+                    // Mini In/Out formatting
+                    let inTimeStr = '';
+                    let outTimeStr = '';
+                    if (d.checkInTs) {
+                        inTimeStr = new Date(d.checkInTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                    if (d.checkOutTs) {
+                        outTimeStr = new Date(d.checkOutTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+
+                    cellsHtml += `
+                        <div onclick="selectAttendanceDay('${d.dateStr}')" 
+                             id="att-day-cell-${d.dateStr}"
+                             class="att-day-cell min-h-[82px] p-2.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group ${bgClasses} ${isToday ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900' : ''}">
+                            <!-- Top row: day number & badge -->
+                            <div class="flex items-center justify-between gap-1">
+                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">
+                                    ${d.dayNum}
+                                    ${isToday ? '<span class="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-indigo-600"></span>' : ''}
+                                </span>
+                                <span class="text-[9px] font-black px-1.5 py-0.5 rounded-md ${badgeColor} shrink-0">${statusLabel}</span>
+                            </div>
+
+                            <!-- Bottom details: in/out times -->
+                            <div class="mt-1 space-y-0.5 text-[9px] font-medium leading-none">
+                                ${inTimeStr ? `<div class="text-emerald-600 dark:text-emerald-400 font-semibold truncate flex items-center gap-0.5"><iconify-icon icon="solar:arrow-right-bold" width="9"></iconify-icon> ${inTimeStr}</div>` : ''}
+                                ${outTimeStr && outTimeStr !== inTimeStr ? `<div class="text-slate-500 dark:text-slate-400 truncate flex items-center gap-0.5"><iconify-icon icon="solar:arrow-left-bold" width="9"></iconify-icon> ${outTimeStr}</div>` : ''}
+                                ${d.breakMs > 0 ? `<div class="text-amber-600 dark:text-amber-400 font-bold truncate">☕ ${Math.round(d.breakMs/60000)}m</div>` : ''}
+                                ${d.isAdjusted ? `<div class="text-[8px] font-black uppercase text-indigo-600 dark:text-indigo-400">Adj</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
 
                 container.innerHTML = `
-                <div class="grid grid-cols-7 gap-1">
-                    ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="text-center text-[10px] font-bold text-slate-400">${d}</div>`).join('')}
-                </div>
-                <div class="grid grid-cols-7 gap-1 mt-1">
-                    ${Array(from.getDay()).fill(0).map(() => '<div></div>').join('')}
-                    ${days.map(day => {
-                    const dateStr = day.toISOString().slice(0, 10);
-                    const dayData = data[dateStr];
-                    const hours = dayData ? dayData.work / 3600000 : 0;
-                    const opacity = hours > 0 ? Math.min(0.3 + (hours / maxHours) * 0.7, 1) : 0.05;
-                    const color = `rgba(79, 70, 229, ${opacity})`;
-                    return `<button onclick="renderTimingDetailForDate('${dateStr}', data['${dateStr}']?.events || [], document.getElementById('timing-report-list'))" class="h-10 rounded-lg transition-all" style="background-color: ${color}" title="${dateStr}: ${hours.toFixed(1)}h"></button>`;
-                }).join('')}
-                </div>
-            `;
+                    ${headerHtml}
+                    <div class="grid grid-cols-7 gap-2">
+                        ${cellsHtml}
+                    </div>
+                `;
             }
 
-            function renderTimingDetailForDate(date, events, container) {
+            function selectAttendanceDay(dateStr) {
+                // Remove active ring from all cells
+                document.querySelectorAll('.att-day-cell').forEach(c => c.classList.remove('ring-2', 'ring-indigo-600', 'border-indigo-600'));
+                const cell = document.getElementById(`att-day-cell-${dateStr}`);
+                if (cell) {
+                    cell.classList.add('ring-2', 'ring-indigo-600');
+                }
+
+                const dayData = window.currentMonthDataByDate?.[dateStr];
+                const listContainer = document.getElementById('timing-report-list');
+                if (dayData && listContainer) {
+                    renderTimingDetailForDate(dateStr, dayData, listContainer);
+                }
+            }
+
+            function renderTimingDetailForDate(dateStr, dayData, container) {
                 if (!container) return;
-                if (!events || !events.length) {
-                    container.innerHTML = `
-                    <div class="text-center py-8">
-                        <p class="text-slate-400 text-sm mb-3">No events for ${date}.</p>
-                        <button type="button" onclick="openBreakAdjustmentModal('${date}', 0)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-all shadow-sm">
-                            <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
-                            Log / Edit Break Time
-                        </button>
-                    </div>`;
-                    return;
+                
+                if (!dayData) {
+                    dayData = {
+                        dateStr: dateStr,
+                        events: [],
+                        workMs: 0,
+                        breakMs: 0,
+                        status: 'No Data'
+                    };
                 }
-                const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
-                const totalBreakMs = sortedEvents.filter(e => e.type === 'break_end' && e.duration).reduce((sum, e) => sum + e.duration, 0);
-                const totalWorkMs = sortedEvents.filter(e => e.type === 'check_out' && e.duration).reduce((sum, e) => sum + e.duration, 0);
-                const hasAdjustedBreak = sortedEvents.some(e => e.type === 'break_end' && e.adjusted);
 
-                const breakMins = Math.round(totalBreakMs / 60000);
-                const breakFormatted = formatTime(Math.floor(totalBreakMs / 1000));
-                const workFormatted = totalWorkMs > 0 ? formatTime(Math.floor(totalWorkMs / 1000)) : '—';
-                const userEmail = (sortedEvents[0]?.userId || (reportSelectedUser !== 'all' ? reportSelectedUser : currentUser?.email || '')).toLowerCase();
-                const canEdit = !!currentUser;
+                const dObj = new Date(dateStr + 'T12:00:00');
+                const fullDateTitle = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                const workHoursFormatted = (dayData.workMs / 3600000).toFixed(2);
+                const breakMins = Math.round((dayData.breakMs || 0) / 60000);
+                const userEmail = (reportSelectedUser !== 'all' ? reportSelectedUser : currentUser?.email || '').toLowerCase();
+
+                let statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">${dayData.status || 'Regular'}</span>`;
+                if (dayData.status === 'Present') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">Present</span>`;
+                } else if (dayData.status === 'Half Day') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">Half Day</span>`;
+                } else if (dayData.status === 'Absent') {
+                    statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">Absent / Leave</span>`;
+                }
+
+                const sortedEvents = [...(dayData.events || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+                let timelineContent = '';
+                if (!sortedEvents.length && dayData.workMs === 0) {
+                    timelineContent = `
+                        <div class="text-center py-10 px-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/60">
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 mx-auto flex items-center justify-center mb-3">
+                                <iconify-icon icon="solar:calendar-minimalistic-bold" width="24"></iconify-icon>
+                            </div>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No attendance records for this date</p>
+                            <p class="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">Missed a check-in or need to regularize working hours? Submit an adjustment below.</p>
+                            <button type="button" onclick="openAttendanceCorrectionModal('${dateStr}', '${userEmail}')" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-200 dark:shadow-none">
+                                <iconify-icon icon="solar:pen-bold" width="14"></iconify-icon>
+                                Regularize / Log Attendance
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    timelineContent = `
+                        <div class="relative pl-6 border-l-2 border-indigo-100 dark:border-slate-700 space-y-4">
+                            ${sortedEvents.map(evt => {
+                                const timeStr = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                                let icon = 'solar:clock-circle-bold';
+                                let label = evt.label || evt.type;
+                                let iconColor = 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60';
+                                let durationStr = '';
+
+                                if (evt.type === 'check_in') {
+                                    icon = 'solar:login-bold';
+                                    label = 'Check-In';
+                                    iconColor = 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60';
+                                } else if (evt.type === 'check_out') {
+                                    icon = 'solar:logout-bold';
+                                    label = 'Check-Out';
+                                    iconColor = 'text-slate-600 bg-slate-100 dark:bg-slate-800';
+                                    if (evt.duration) durationStr = formatTime(Math.floor(evt.duration / 1000));
+                                } else if (evt.type === 'break_start') {
+                                    icon = 'solar:pause-bold';
+                                    label = 'Break Started';
+                                    iconColor = 'text-amber-600 bg-amber-50 dark:bg-amber-950/60';
+                                } else if (evt.type === 'break_end') {
+                                    icon = 'solar:play-bold';
+                                    label = evt.adjusted ? 'Break Resumed (Adjusted)' : 'Break Resumed';
+                                    iconColor = 'text-blue-600 bg-blue-50 dark:bg-blue-950/60';
+                                    if (evt.duration) durationStr = formatTime(Math.floor(evt.duration / 1000));
+                                }
+
+                                return `
+                                    <div class="relative flex items-start justify-between gap-3 group">
+                                        <div class="absolute -left-[31px] w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center ${iconColor} shadow-sm">
+                                            <iconify-icon icon="${icon}" width="12"></iconify-icon>
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200">${label}</p>
+                                                ${evt.adjusted ? '<span class="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">Regularized</span>' : ''}
+                                            </div>
+                                            <p class="text-[11px] text-slate-400 font-medium">${timeStr}</p>
+                                        </div>
+                                        ${durationStr ? `<span class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-lg">${durationStr}</span>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
 
                 container.innerHTML = `
-                <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <div>
-                        <h4 class="text-sm font-black text-slate-900 dark:text-white">Timeline for ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
-                        <div class="flex flex-wrap items-center gap-2 mt-1">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">Work: ${workFormatted}</span>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Break: ${breakMins}m (${breakFormatted})</span>
-                            ${hasAdjustedBreak ? `<span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Adjusted</span>` : ''}
+                    <div class="space-y-5">
+                        <!-- Top header -->
+                        <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-700/60">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-sm font-black text-slate-900 dark:text-white">${fullDateTitle}</h4>
+                                    ${statusBadge}
+                                </div>
+                                <p class="text-[11px] text-slate-400 font-medium mt-0.5">Detailed daily timeline and logged attendance milestones.</p>
+                            </div>
+                            <button type="button" onclick="openAttendanceCorrectionModal('${dateStr}', '${userEmail}')" class="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition-all shadow-sm shrink-0">
+                                <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
+                                Regularize
+                            </button>
+                        </div>
+
+                        <!-- 3 Stat Metrics -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Work</p>
+                                <p class="text-xs font-black text-slate-800 dark:text-white mt-0.5">${workHoursFormatted}h</p>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Break Taken</p>
+                                <p class="text-xs font-black text-amber-600 dark:text-amber-400 mt-0.5">${breakMins}m</p>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Adjusted</p>
+                                <p class="text-xs font-black ${dayData.isAdjusted ? 'text-indigo-600' : 'text-slate-400'} mt-0.5">${dayData.isAdjusted ? 'Yes' : 'No'}</p>
+                            </div>
+                        </div>
+
+                        <!-- Timeline Log Sequence -->
+                        <div>
+                            <h5 class="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3">Timeline Events</h5>
+                            ${timelineContent}
                         </div>
                     </div>
-                    ${canEdit ? `
-                        <button type="button" onclick="openBreakAdjustmentModal('${date}', ${totalBreakMs}, '${userEmail}')" 
-                            class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shrink-0">
-                            <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
-                            Edit Break Time
-                        </button>
-                    ` : ''}
-                </div>
-                <div class="relative pl-8 border-l-2 border-slate-100 dark:border-slate-800">
-                    ${sortedEvents.map(evt => {
-                    const time = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    let icon, label, color, duration = '';
-                    switch (evt.type) {
-                        case 'check_in': icon = 'solar:login-bold'; label = 'Checked In'; color = 'text-emerald-500'; break;
-                        case 'break_start': icon = 'solar:pause-bold'; label = 'Break Started'; color = 'text-amber-500'; break;
-                        case 'break_end': 
-                            icon = 'solar:play-bold'; 
-                            label = evt.adjusted ? 'Break Ended (Adjusted)' : 'Break Ended'; 
-                            color = 'text-blue-500'; 
-                            if (evt.duration) duration = formatTime(Math.floor(evt.duration / 1000)); 
-                            break;
-                        case 'check_out': icon = 'solar:logout-bold'; label = 'Checked Out'; color = 'text-slate-500'; if (evt.duration) duration = formatTime(Math.floor(evt.duration / 1000)); break;
-                        default: icon = 'solar:question-circle-bold'; label = evt.type; color = 'text-slate-400';
+                `;
+            }
+
+            // Attendance Regularization & Adjustment Modal Handlers
+            function openAttendanceCorrectionModal(date, email) {
+                const modal = document.getElementById('attendanceCorrectionModal');
+                if (!modal) return;
+
+                const userSelect = document.getElementById('adjust-attendance-user');
+                const dateInput = document.getElementById('adjust-attendance-date');
+                const inInput = document.getElementById('adjust-attendance-in');
+                const outInput = document.getElementById('adjust-attendance-out');
+                const breakInput = document.getElementById('adjust-break-mins');
+                const statusSelect = document.getElementById('adjust-attendance-status');
+
+                // Populate user dropdown
+                if (userSelect && typeof userList !== 'undefined' && Array.isArray(userList)) {
+                    userSelect.innerHTML = userList.map(u => `
+                        <option value="${u.email}" ${(u.email || '').toLowerCase() === (email || reportSelectedUser || currentUser?.email || '').toLowerCase() ? 'selected' : ''}>
+                            ${u.name || u.email} (${u.role || 'Member'})
+                        </option>
+                    `).join('');
+                }
+
+                // Fill target date
+                if (dateInput) {
+                    dateInput.value = date || new Date().toISOString().slice(0, 10);
+                }
+
+                // Prepopulate current day values if available
+                const existingData = window.currentMonthDataByDate?.[dateInput?.value];
+                if (existingData) {
+                    if (inInput && existingData.checkInTs) {
+                        const inD = new Date(existingData.checkInTs);
+                        inInput.value = `${String(inD.getHours()).padStart(2,'0')}:${String(inD.getMinutes()).padStart(2,'0')}`;
+                    } else if (inInput) {
+                        inInput.value = '09:30';
                     }
-                    const isBreakItem = evt.type === 'break_end';
-                    return `
-                        <div class="flex items-start gap-4 mb-4">
-                            <div class="absolute -left-[11px] w-5 h-5 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center ${color}">
-                                <iconify-icon icon="${icon}" width="12"></iconify-icon>
-                            </div>
-                            <div class="flex-1 flex items-center justify-between">
-                                <div>
-                                    <div class="flex items-center gap-1.5">
-                                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200">${label}</p>
-                                        ${evt.adjusted ? `<span class="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Manager Approved</span>` : ''}
-                                    </div>
-                                    <p class="text-[10px] text-slate-400 font-medium">${time}</p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <p class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">${duration}</p>
-                                    ${isBreakItem && canEdit ? `
-                                        <button onclick="openBreakAdjustmentModal('${date}', ${totalBreakMs}, '${userEmail}')" class="text-slate-400 hover:text-amber-600 p-1 rounded transition-colors" title="Edit Break Time">
-                                            <iconify-icon icon="solar:pen-bold" width="12"></iconify-icon>
-                                        </button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        </div>`;
-                }).join('')}
-                </div>
-            `;
+
+                    if (outInput && existingData.checkOutTs) {
+                        const outD = new Date(existingData.checkOutTs);
+                        outInput.value = `${String(outD.getHours()).padStart(2,'0')}:${String(outD.getMinutes()).padStart(2,'0')}`;
+                    } else if (outInput) {
+                        outInput.value = '18:30';
+                    }
+
+                    if (breakInput) {
+                        breakInput.value = Math.round((existingData.breakMs || 0) / 60000) || 45;
+                    }
+                    if (statusSelect && existingData.status) {
+                        statusSelect.value = existingData.status;
+                    }
+                } else {
+                    if (inInput) inInput.value = '09:30';
+                    if (outInput) outInput.value = '18:30';
+                    if (breakInput) breakInput.value = 45;
+                }
+
+                modal.showModal();
+            }
+
+            function closeAttendanceCorrectionModal() {
+                const modal = document.getElementById('attendanceCorrectionModal');
+                if (modal) modal.close();
+            }
+
+            function submitAttendanceCorrection(event) {
+                if (event) event.preventDefault();
+
+                const userEmail = document.getElementById('adjust-attendance-user')?.value || currentUser?.email || 'user';
+                const dateStr = document.getElementById('adjust-attendance-date')?.value || new Date().toISOString().slice(0, 10);
+                const checkInTime = document.getElementById('adjust-attendance-in')?.value || '09:30';
+                const checkOutTime = document.getElementById('adjust-attendance-out')?.value || '18:30';
+                const breakMins = parseInt(document.getElementById('adjust-break-mins')?.value || '45', 10);
+                const status = document.getElementById('adjust-attendance-status')?.value || 'Present';
+                const reason = document.getElementById('adjust-attendance-reason')?.value || 'Regularization by User/Admin';
+
+                // Calculate timestamps
+                const checkInTs = new Date(`${dateStr}T${checkInTime}:00`).getTime();
+                const checkOutTs = new Date(`${dateStr}T${checkOutTime}:00`).getTime();
+                const breakDurMs = breakMins * 60 * 1000;
+                const totalWorkMs = Math.max(0, (checkOutTs - checkInTs) - breakDurMs);
+
+                if (checkOutTs <= checkInTs && status === 'Present') {
+                    toast('Check-out time must be later than Check-in time', 'error');
+                    return;
+                }
+
+                if (!window.attendanceEvents) window.attendanceEvents = [];
+
+                // Remove existing events for this user and date
+                window.attendanceEvents = window.attendanceEvents.filter(e => {
+                    const eUser = (e.userId || e.email || '').toLowerCase();
+                    const eDate = e.date || (e.timestamp ? new Date(e.timestamp).toISOString().slice(0, 10) : '');
+                    return !(eUser === userEmail.toLowerCase() && eDate === dateStr);
+                });
+
+                if (status === 'Present' || status === 'Half Day') {
+                    // Check-in event
+                    window.attendanceEvents.push({
+                        type: 'check_in',
+                        userId: userEmail,
+                        email: userEmail,
+                        date: dateStr,
+                        timestamp: checkInTs,
+                        adjusted: true,
+                        reason: reason
+                    });
+
+                    // Break events if any
+                    if (breakMins > 0) {
+                        const breakStartTs = checkInTs + Math.floor((checkOutTs - checkInTs) / 2) - Math.floor(breakDurMs / 2);
+                        const breakEndTs = breakStartTs + breakDurMs;
+                        window.attendanceEvents.push({
+                            type: 'break_start',
+                            userId: userEmail,
+                            email: userEmail,
+                            date: dateStr,
+                            timestamp: breakStartTs,
+                            adjusted: true
+                        });
+                        window.attendanceEvents.push({
+                            type: 'break_end',
+                            userId: userEmail,
+                            email: userEmail,
+                            date: dateStr,
+                            timestamp: breakEndTs,
+                            duration: breakDurMs,
+                            adjusted: true,
+                            reason: reason
+                        });
+                    }
+
+                    // Check-out event
+                    window.attendanceEvents.push({
+                        type: 'check_out',
+                        userId: userEmail,
+                        email: userEmail,
+                        date: dateStr,
+                        timestamp: checkOutTs,
+                        duration: totalWorkMs,
+                        adjusted: true,
+                        reason: reason
+                    });
+                }
+
+                // Save to localStorage
+                try {
+                    localStorage.setItem('attendanceEvents', JSON.stringify(window.attendanceEvents));
+                } catch(e) {
+                    console.error('Error storing attendance events:', e);
+                }
+
+                toast(`Attendance for ${dateStr} updated successfully!`, 'success');
+                closeAttendanceCorrectionModal();
+                renderTimingReport();
             }
 
             function showReportTasks(email, type, userName) {
