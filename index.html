@@ -40855,11 +40855,20 @@ function isStrategyTask(t) {
                 const reasonInput = document.getElementById('ba-reason');
                 if (reasonInput) reasonInput.value = '';
 
-                const chain = LEAVE_APPROVAL_CHAINS[userEmail] || [];
+                const chain = typeof getLeaveApprovalChainForRequester === 'function'
+                    ? getLeaveApprovalChainForRequester(userEmail)
+                    : (LEAVE_APPROVAL_CHAINS[userEmail] || ['nanjil@vilpower.com']);
                 let approverName = 'Palanirajan R & Nanjil Manohar';
-                if (chain.length > 0) {
-                    approverName = chain.map(c => c.name.split(' ')[0]).join(' → ');
-                } else if (isAdmin()) {
+                if (Array.isArray(chain) && chain.length > 0) {
+                    approverName = chain.map(email => {
+                        if (typeof email === 'object' && email !== null) {
+                            return (email.name || email.approverName || email.email || 'Approver').split(' ')[0];
+                        }
+                        const u = typeof knownUserByEmail === 'function' ? knownUserByEmail(email) : null;
+                        const name = u?.name || email || 'Approver';
+                        return name.split(' ')[0];
+                    }).join(' → ');
+                } else if (typeof isAdmin === 'function' && isAdmin()) {
                     approverName = 'Direct Admin Approval';
                 }
                 const approverEl = document.getElementById('ba-approver-name');
