@@ -29017,6 +29017,150 @@ function isStrategyTask(t) {
             }
             window.toggleUnreadChatFilter = toggleUnreadChatFilter;
 
+            function toggleChatSection(section) {
+                collapsedChatSections[section] = !collapsedChatSections[section];
+                const container = document.getElementById(`${section === 'personal' ? 'dm' : 'group'}-list-container`);
+                const icon = document.getElementById(`icon-collapse-${section}`);
+                if (container) {
+                    if (collapsedChatSections[section]) {
+                        container.style.display = 'none';
+                        if (icon) icon.style.transform = 'rotate(-90deg)';
+                    } else {
+                        container.style.display = 'block';
+                        if (icon) icon.style.transform = 'rotate(0deg)';
+                    }
+                }
+            }
+            window.toggleChatSection = toggleChatSection;
+
+            function switchChatSubTab(tab) {
+                activeChatSubTab = tab;
+                const tabs = ['messages', 'files', 'pinned', 'tasks', 'members'];
+                tabs.forEach(t => {
+                    const btn = document.getElementById(`chat-subtab-${t}`);
+                    const area = document.getElementById(t === 'messages' ? 'messages-area' : `chat-${t}-area`);
+                    if (btn) {
+                        if (t === tab) {
+                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 whitespace-nowrap transition-all flex items-center gap-1.5';
+                        } else {
+                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5';
+                        }
+                    }
+                    if (area) {
+                        if (t === tab) {
+                            area.classList.remove('hidden');
+                        } else {
+                            area.classList.add('hidden');
+                        }
+                    }
+                });
+
+                if (tab === 'files') { if (typeof renderChatFilesList === 'function') renderChatFilesList(); }
+                else if (tab === 'pinned') { if (typeof renderChatPinnedList === 'function') renderChatPinnedList(); }
+                else if (tab === 'tasks') { if (typeof renderChatTasksList === 'function') renderChatTasksList(); }
+                else if (tab === 'members') { if (typeof renderChatMembersList === 'function') renderChatMembersList(); }
+                else if (tab === 'messages') {
+                    if (typeof scrollChatToBottom === 'function') scrollChatToBottom();
+                }
+            }
+            window.switchChatSubTab = switchChatSubTab;
+
+            let chatConversationsUnsub = null;
+            function initChat() {
+                if (!db || !currentUser || !currentUser.email) return;
+                if (chatConversationsUnsub) {
+                    try { chatConversationsUnsub(); } catch (e) {}
+                    chatConversationsUnsub = null;
+                }
+                chatConversationsUnsub = onValue(ref(db, 'worksync/conversations'), snap => {
+                    if (!currentUser || !currentUser.email) return;
+                    chatConversations = snap.val() || {};
+                    const myKey = eKey(currentUser.email);
+                    renderChatSidebar();
+                    watchConversationNotifications(Object.entries(chatConversations).filter(([, c]) => c && c.members && c.members[myKey]));
+                });
+            }
+            window.initChat = initChat;
+
+            function watchConversationNotifications(conversations) {
+                const activeIds = new Set(conversations.map(([id]) => id));
+                Object.entries(convListeners).forEach(([id, unsubscribe]) => {
+                    if (!activeIds.has(id)) {
+                        try { unsubscribe(); } catch(e){}
+                        delete convListeners[id];
+                    }
+                });
+                conversations.forEach(([id, conv]) => {
+                    if (convListeners[id]) return;
+                    const listenerStartedAt = Date.now() - 10000;
+                    const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
+                    convListeners[id] = onChildAdded(q, snap => {
+                        const msg = snap.val();
+                        if (!msg || !currentUser || !currentUser.email || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
+                        notifyIncomingMessage(msg, conv, id);
+                        if (id !== activeConvId) {
+                            unreadCounts[id] = (unreadCounts[id] || 0) + 1;
+                            renderChatBadge();
+                            const unreadBadge = document.getElementById(`unread-badge-${id}`);
+                            if (unreadBadge) {
+                                unreadBadge.textContent = unreadCounts[id];
+                                unreadBadge.classList.remove('hidden');
+                            }
+                        }
+                    });
+                });
+            }
+            window.watchConversationNotifications = watchConversationNotifications;
+
+            function renderChatBadge() {
+                const total = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+                const badge = document.getElementById('chat-badge');
+                if (!badge) return;
+                badge.textContent = total;
+                badge.classList.toggle('hidden', total === 0);
+            }
+            window.renderChatBadge = renderChatBadge;
+
+            function notifyIncomingMessage(msg, conv, convId) {
+                if (chatNotificationsMuted) return;
+                if (currentUser && currentUser.email && convId) {
+                    const myKey = eKey(currentUser.email);
+                    const mutedList = JSON.parse(localStorage.getItem('worksync_muted_chats_' + myKey) || '[]');
+                    if (mutedList.includes(convId)) return;
+                }
+                const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
+                toast(`New message from ${title}`, 'info');
+
+                if (typeof playNotificationSound === 'function') {
+                    playNotificationSound();
+                }
+
+                if ('Notification' in window) {
+                    if (Notification.permission === 'granted') {
+                        const notification = new Notification(title, {
+                            body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
+                            icon: 'img/Fav-Icon.png'
+                        });
+                        notification.onclick = async () => {
+                            window.focus();
+                            try { notification.close(); } catch(e){}
+                            switchView('chat');
+                            if (conv?.type === 'dm') {
+                                openDm(msg.senderEmail);
+                            } else {
+                                openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                            }
+                        };
+                        setTimeout(() => {
+                            try { notification.close(); } catch(e){}
+                        }, 4000);
+                    } else if (Notification.permission === 'default') {
+                        try { Notification.requestPermission(); } catch(e){}
+                    }
+                }
+            }
+            window.notifyIncomingMessage = notifyIncomingMessage;
+
             function renderConversationCard(item) {
                 const isGroup = item.type === 'group';
                 const convId = item.convId;
@@ -29260,6 +29404,79 @@ function isStrategyTask(t) {
                 renderChatSidebar();
             }
             window.renderGroupList = renderGroupList;
+
+            function openDm(targetUser, targetName = '', targetPhoto = '') {
+                if (!currentUser || !currentUser.email) return;
+                let otherEmail = '';
+                let name = '';
+                let photo = '';
+
+                if (typeof targetUser === 'string') {
+                    otherEmail = targetUser;
+                    name = targetName;
+                    photo = targetPhoto;
+                } else if (targetUser && typeof targetUser === 'object') {
+                    otherEmail = targetUser.email || '';
+                    name = targetName || targetUser.name || otherEmail.split('@')[0];
+                    photo = targetPhoto || targetUser.photoURL || targetUser.profilePicture || '';
+                }
+
+                if (!otherEmail) return;
+
+                const myKey = eKey(currentUser.email);
+                const otherKey = eKey(otherEmail);
+                const id = [myKey, otherKey].sort().join('_');
+
+                let other = null;
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap instanceof Map) {
+                        other = allUsersMap.get(otherEmail.toLowerCase());
+                    } else if (typeof allUsersMap === 'object') {
+                        other = allUsersMap[otherEmail.toLowerCase()] || allUsersMap[otherEmail];
+                    }
+                }
+                if (!other && typeof users !== 'undefined' && Array.isArray(users)) {
+                    other = users.find(u => u && u.email && u.email.toLowerCase() === otherEmail.toLowerCase());
+                }
+                if (!other && typeof knownUserByEmail === 'function') {
+                    other = knownUserByEmail(otherEmail);
+                }
+                if (!other) {
+                    other = { name: name || otherEmail.split('@')[0], email: otherEmail, photoURL: photo };
+                }
+
+                const displayName = name || other.name || otherEmail.split('@')[0];
+                const displayPhoto = photo || other.photoURL || other.profilePicture || '';
+
+                // Switch view to chat first if not currently in chat view
+                if (typeof activeView !== 'undefined' && activeView !== 'chat') {
+                    if (typeof switchView === 'function') switchView('chat');
+                }
+
+                // Open conversation immediately
+                if (typeof openConversation === 'function') {
+                    openConversation(id, displayName, 'dm', displayPhoto);
+                }
+
+                // Initialize conversation in Firebase if not present
+                if (typeof db !== 'undefined' && db && typeof chatConversations !== 'undefined' && !chatConversations[id]) {
+                    try {
+                        get(ref(db, 'worksync/conversations/' + id)).then(snap => {
+                            if (!snap.exists()) {
+                                set(ref(db, 'worksync/conversations/' + id), {
+                                    type: 'dm',
+                                    members: { [myKey]: true, [otherKey]: true },
+                                    lastTimestamp: Date.now()
+                                }).catch(e => console.warn('Failed to initialize DM:', e));
+                            }
+                        }).catch(e => console.warn('DM check failed:', e));
+                    } catch (e) {
+                        console.warn('Firebase DM init error:', e);
+                    }
+                }
+            }
+            window.openDm = openDm;
+
             function toggleChatActionsDropdown(convId, event) {
                 if (event) {
                     event.stopPropagation();
@@ -29431,78 +29648,6 @@ function isStrategyTask(t) {
                 openDm(email);
             }
             window.openChatFromMention = openChatFromMention;
-
-            function openDm(targetUser, targetName = '', targetPhoto = '') {
-                if (!currentUser || !currentUser.email) return;
-                let otherEmail = '';
-                let name = '';
-                let photo = '';
-
-                if (typeof targetUser === 'string') {
-                    otherEmail = targetUser;
-                    name = targetName;
-                    photo = targetPhoto;
-                } else if (targetUser && typeof targetUser === 'object') {
-                    otherEmail = targetUser.email || '';
-                    name = targetName || targetUser.name || otherEmail.split('@')[0];
-                    photo = targetPhoto || targetUser.photoURL || targetUser.profilePicture || '';
-                }
-
-                if (!otherEmail) return;
-
-                const myKey = eKey(currentUser.email);
-                const otherKey = eKey(otherEmail);
-                const id = [myKey, otherKey].sort().join('_');
-
-                let other = null;
-                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
-                    if (allUsersMap instanceof Map) {
-                        other = allUsersMap.get(otherEmail.toLowerCase());
-                    } else if (typeof allUsersMap === 'object') {
-                        other = allUsersMap[otherEmail.toLowerCase()] || allUsersMap[otherEmail];
-                    }
-                }
-                if (!other && typeof users !== 'undefined' && Array.isArray(users)) {
-                    other = users.find(u => u && u.email && u.email.toLowerCase() === otherEmail.toLowerCase());
-                }
-                if (!other && typeof knownUserByEmail === 'function') {
-                    other = knownUserByEmail(otherEmail);
-                }
-                if (!other) {
-                    other = { name: name || otherEmail.split('@')[0], email: otherEmail, photoURL: photo };
-                }
-
-                const displayName = name || other.name || otherEmail.split('@')[0];
-                const displayPhoto = photo || other.photoURL || other.profilePicture || '';
-
-                // Switch view to chat first if not currently in chat view
-                if (typeof activeView !== 'undefined' && activeView !== 'chat') {
-                    if (typeof switchView === 'function') switchView('chat');
-                }
-
-                // Open conversation immediately
-                if (typeof openConversation === 'function') {
-                    openConversation(id, displayName, 'dm', displayPhoto);
-                }
-
-                // Initialize conversation in Firebase if not present
-                if (typeof db !== 'undefined' && db && typeof chatConversations !== 'undefined' && !chatConversations[id]) {
-                    try {
-                        get(ref(db, 'worksync/conversations/' + id)).then(snap => {
-                            if (!snap.exists()) {
-                                set(ref(db, 'worksync/conversations/' + id), {
-                                    type: 'dm',
-                                    members: { [myKey]: true, [otherKey]: true },
-                                    lastTimestamp: Date.now()
-                                }).catch(e => console.warn('Failed to initialize DM:', e));
-                            }
-                        }).catch(e => console.warn('DM check failed:', e));
-                    } catch (e) {
-                        console.warn('Firebase DM init error:', e);
-                    }
-                }
-            }
-            window.openDm = openDm;
 
             function renderChatLoadingSkeleton() {
                 const area = document.getElementById('messages-area');
