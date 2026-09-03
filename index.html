@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="0.0.1">
+    <meta name="app-version" content="0.0.2">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -1124,6 +1124,64 @@
         html.dark #mention-dropdown {
             background: #1a2236 !important;
             border-color: #253347 !important;
+        }
+
+        /* ── AUTOMATICALLY HIDE FLOATING CHAT BUBBLE ON CHAT PAGE ── */
+        body:has(#view-chat-panel:not(.hidden)) #float-chat-btn,
+        body:has(#view-chat-panel:not(.hidden)) #float-chat-panel,
+        html.chat-page-active #float-chat-btn,
+        html.chat-page-active #float-chat-panel {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        /* ── CHAT SEND BUTTON: High Contrast in Light & Dark Mode ── */
+        #send-msg-btn,
+        button#send-msg-btn {
+            background-color: #4f46e5 !important;
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        #send-msg-btn:hover,
+        button#send-msg-btn:hover {
+            background-color: #4338ca !important;
+            background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%) !important;
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.5) !important;
+            transform: translateY(-1px);
+        }
+        #send-msg-btn:active,
+        button#send-msg-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3) !important;
+        }
+        #send-msg-btn iconify-icon,
+        button#send-msg-btn iconify-icon {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+            display: inline-block !important;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+        }
+        html.dark #send-msg-btn,
+        html.dark button#send-msg-btn {
+            background-color: #6366f1 !important;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.45) !important;
+            color: #ffffff !important;
+        }
+        html.dark #send-msg-btn:hover,
+        html.dark button#send-msg-btn:hover {
+            background-color: #4f46e5 !important;
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
         }
 
         /* ── DARK MODE: Main Chat Message Bubbles ── */
@@ -7072,8 +7130,9 @@
 
                             <!-- Send Button -->
                             <button id="send-msg-btn" onclick="sendMessage()" aria-label="Send message"
-                                class="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-500/25 active:scale-95 transition-all shrink-0 ml-1">
-                                <iconify-icon icon="mdi:send" width="18"></iconify-icon>
+                                class="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition-all shrink-0 ml-1 text-white shadow-md shadow-indigo-500/30 cursor-pointer"
+                                style="background-color: #4f46e5 !important; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important; color: #ffffff !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 40px !important; height: 40px !important; min-width: 40px !important; min-height: 40px !important; border-radius: 12px !important; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important; border: none !important;">
+                                <iconify-icon icon="solar:plane-2-bold" width="18" style="color: #ffffff !important; fill: #ffffff !important; display: inline-block !important;"></iconify-icon>
                             </button>
                         </div>
                     </div>
@@ -13819,6 +13878,7 @@
             let unreadCounts = {};
             let convListeners = {};
             let msgListener = null;
+            let altMsgListener = null;
             let readReceiptsListener = null;
             let activeConvReadReceipts = {};
             let chatNotificationsMuted = localStorage.getItem('worksync_chat_muted') === 'true';
@@ -18577,6 +18637,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'plan-tracking' && !canViewPlanTracking()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
 
+                const prevView = activeView;
                 activeView = view;
                 localStorage.setItem('worksync_activeView', view);
 
@@ -18585,8 +18646,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     try { history.replaceState(null, '', '#' + view); } catch (e) { }
                 }
 
+                // ════ Floating Chat Bubble Visibility ════
+                const floatChatBtn = document.getElementById('float-chat-btn');
+                const floatChatPanel = document.getElementById('float-chat-panel');
+                if (view === 'chat' || panelId === 'chat') {
+                    document.documentElement.classList.add('chat-page-active');
+                    if (floatChatBtn) floatChatBtn.style.setProperty('display', 'none', 'important');
+                    if (floatChatPanel) floatChatPanel.style.setProperty('display', 'none', 'important');
+                    if (typeof fcpOpen !== 'undefined') fcpOpen = false;
+                } else {
+                    document.documentElement.classList.remove('chat-page-active');
+                    if (floatChatBtn && currentUser) {
+                        floatChatBtn.style.display = 'flex';
+                    }
+                }
+
                 // ════ CLEANUP: If leaving chat, stop all listeners and clean up UI ════
-                if (activeView === 'chat' && view !== 'chat') {
+                if (prevView === 'chat' && view !== 'chat') {
                     // Stop all conversation listeners
                     Object.values(convListeners).forEach(unsubscribe => {
                         if (unsubscribe && typeof unsubscribe === 'function') {
@@ -18599,6 +18675,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (msgListener && typeof msgListener === 'function') {
                         try { msgListener(); } catch (e) { }
                         msgListener = null;
+                    }
+                    if (altMsgListener && typeof altMsgListener === 'function') {
+                        try { altMsgListener(); } catch (e) { }
+                        altMsgListener = null;
                     }
                     if (readReceiptsListener && typeof readReceiptsListener === 'function') {
                         try { readReceiptsListener(); } catch (e) { }
@@ -29012,6 +29092,12 @@ function isStrategyTask(t) {
             // CHAT
             function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
             function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
+            function getAltDmId(id) {
+                if (!id || typeof id !== 'string') return null;
+                if (id.startsWith('dm_')) return id.slice(3);
+                if (id.includes('_') && !id.startsWith('group_')) return 'dm_' + id;
+                return null;
+            }
 
             function registerOnline() {
                 if (!db || !currentUser) return;
@@ -29185,13 +29271,15 @@ function isStrategyTask(t) {
                     convListeners[id] = onChildAdded(q, snap => {
                         const msg = snap.val();
                         if (!msg || !currentUser || !currentUser.email || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
-                        notifyIncomingMessage(msg, conv, id);
-                        if (id !== activeConvId) {
+                        const isCurrentActive = (id === activeConvId) || (activeConvId && id === getAltDmId(activeConvId));
+                        if (!isCurrentActive) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
                             renderChatBadge();
-                            const unreadBadge = document.getElementById(`unread-badge-${id}`);
+                            const unreadBadge = document.getElementById(`unread-badge-${id}`) || (getAltDmId(id) ? document.getElementById(`unread-badge-${getAltDmId(id)}`) : null);
                             if (unreadBadge) {
-                                unreadBadge.textContent = unreadCounts[id];
+                                const altId = getAltDmId(id);
+                                const totalUnread = (unreadCounts[id] || 0) + (altId ? (unreadCounts[altId] || 0) : 0);
+                                unreadBadge.textContent = totalUnread;
                                 unreadBadge.classList.remove('hidden');
                             }
                         }
@@ -29379,14 +29467,20 @@ function isStrategyTask(t) {
 
                 const dmItems = others.map(u => {
                     const convId = dmId(currentUser.email, u.email);
-                    const conv = (typeof chatConversations !== 'undefined' && chatConversations[convId]) ? chatConversations[convId] : {};
-                    const isPinned = pinnedList.includes(convId);
-                    const isMuted = mutedList.includes(convId);
+                    const otherKey = eKey(u.email);
+                    const altConvId = [myKey, otherKey].sort().join('_');
+                    const convMain = (typeof chatConversations !== 'undefined' && chatConversations[convId]) ? chatConversations[convId] : null;
+                    const convAlt = (typeof chatConversations !== 'undefined' && chatConversations[altConvId]) ? chatConversations[altConvId] : null;
+                    const conv = (convMain && convAlt)
+                        ? (((convMain.lastTimestamp || 0) >= (convAlt.lastTimestamp || 0)) ? convMain : convAlt)
+                        : (convMain || convAlt || {});
+                    const isPinned = pinnedList.includes(convId) || pinnedList.includes(altConvId);
+                    const isMuted = mutedList.includes(convId) || mutedList.includes(altConvId);
                     const lastTimestamp = (conv && conv.lastTimestamp) || 0;
                     const lastMessage = (conv && conv.lastMessage) || '';
-                    const unread = unreadCounts[convId] || 0;
+                    const unread = (unreadCounts[convId] || 0) + (unreadCounts[altConvId] || 0);
                     const name = u.name || u.email.split('@')[0];
-                    const key = eKey(u.email);
+                    const key = otherKey;
                     const avatarSrc = u.profilePicture || getUserAvatarSrc(u);
                     const safeEmailJs = u.email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -29542,7 +29636,7 @@ function isStrategyTask(t) {
 
                 const myKey = eKey(currentUser.email);
                 const otherKey = eKey(otherEmail);
-                const id = [myKey, otherKey].sort().join('_');
+                const id = dmId(currentUser.email, otherEmail);
 
                 let other = null;
                 if (typeof allUsersMap !== 'undefined' && allUsersMap) {
@@ -29804,13 +29898,15 @@ function isStrategyTask(t) {
             function openConversation(convId, name, type, avatar) {
                 if (!convId) return;
                 activeConvId = convId;
+                const altConvId = getAltDmId(convId);
                 unreadCounts[convId] = 0;
+                if (altConvId) unreadCounts[altConvId] = 0;
                 if (currentUser && currentUser.email) {
                     const myKey = eKey(currentUser.email);
                     const manualUnreadKey = 'worksync_manual_unread_' + myKey;
                     let manualUnreadList = JSON.parse(localStorage.getItem(manualUnreadKey) || '[]');
-                    if (manualUnreadList.includes(convId)) {
-                        manualUnreadList = manualUnreadList.filter(id => id !== convId);
+                    if (manualUnreadList.includes(convId) || (altConvId && manualUnreadList.includes(altConvId))) {
+                        manualUnreadList = manualUnreadList.filter(id => id !== convId && id !== altConvId);
                         localStorage.setItem(manualUnreadKey, JSON.stringify(manualUnreadList));
                     }
                 }
@@ -29848,7 +29944,7 @@ function isStrategyTask(t) {
                 // Synchronously resolve group metadata from memory cache
                 activeGroupMembers = [];
                 let convCreator = null;
-                const cachedConv = chatConversations[convId] || {};
+                const cachedConv = chatConversations[convId] || (altConvId ? chatConversations[altConvId] : null) || {};
                 if (type === 'group') {
                     convCreator = cachedConv.createdBy;
                     if (allUsersMap && allUsersMap.size) {
@@ -29918,6 +30014,10 @@ function isStrategyTask(t) {
                     try { msgListener(); } catch (e) { }
                     msgListener = null;
                 }
+                if (altMsgListener) {
+                    try { altMsgListener(); } catch (e) { }
+                    altMsgListener = null;
+                }
                 if (readReceiptsListener) {
                     try { readReceiptsListener(); } catch (e) { }
                     readReceiptsListener = null;
@@ -29936,7 +30036,7 @@ function isStrategyTask(t) {
                 renderGroupList(groups);
 
                 // Check in-memory message cache for INSTANT render
-                const cachedMessages = chatMessageCache[convId];
+                const cachedMessages = { ...(altConvId ? (chatMessageCache[altConvId] || {}) : {}), ...(chatMessageCache[convId] || {}) };
                 if (cachedMessages && Object.keys(cachedMessages).length > 0) {
                     currentConvMessages = { ...cachedMessages };
                     refreshChatOldestTimestamp();
@@ -29961,6 +30061,18 @@ function isStrategyTask(t) {
                     scrollChatToBottom();
                 });
 
+                if (altConvId) {
+                    const altQ = query(ref(db, `worksync/messages/${altConvId}`), limitToLast(activeConvMessageLimit));
+                    altMsgListener = onValue(altQ, snap => {
+                        const incoming = snap.val() || {};
+                        chatMessageCache[altConvId] = incoming;
+                        mergeChatMessages(incoming);
+                        refreshChatOldestTimestamp();
+                        renderMessages(currentConvMessages);
+                        scrollChatToBottom();
+                    });
+                }
+
                 // Write this user's read receipt (marks conversation as "seen")
                 if (currentUser && currentUser.email) {
                     set(ref(db, `worksync/read_receipts/${convId}/${eKey(currentUser.email)}`), {
@@ -29968,6 +30080,13 @@ function isStrategyTask(t) {
                         name: currentUser.name || currentUser.email,
                         seenAt: Date.now()
                     }).catch(e => console.warn('Failed to write read receipt:', e));
+                    if (altConvId) {
+                        set(ref(db, `worksync/read_receipts/${altConvId}/${eKey(currentUser.email)}`), {
+                            email: currentUser.email,
+                            name: currentUser.name || currentUser.email,
+                            seenAt: Date.now()
+                        }).catch(e => console.warn('Failed to write alt read receipt:', e));
+                    }
                 }
 
                 // Listen to read receipts for this conversation
@@ -31816,10 +31935,17 @@ function isStrategyTask(t) {
                     }
 
                     // Parallel Firebase push & conversation update
-                    await Promise.all([
+                    const updates = [
                         push(ref(db, `worksync/messages/${targetConvId}`), payload),
                         update(ref(db, `worksync/conversations/${targetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() })
-                    ]);
+                    ];
+                    const altTargetConvId = getAltDmId(targetConvId);
+                    if (altTargetConvId) {
+                        updates.push(
+                            update(ref(db, `worksync/conversations/${altTargetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() }).catch(() => {})
+                        );
+                    }
+                    await Promise.all(updates);
                 } catch (err) {
                     console.error('Failed to send message:', err);
                     toast('Failed to send message: ' + err.message, 'error');
@@ -31833,7 +31959,7 @@ function isStrategyTask(t) {
                     isSendingChatMsg = false;
                     if (sendBtn) {
                         sendBtn.disabled = false;
-                        sendBtn.innerHTML = `<iconify-icon icon="mdi:send" width="21"></iconify-icon>`;
+                        sendBtn.innerHTML = `<iconify-icon icon="solar:plane-2-bold" width="18" style="color: #ffffff !important;"></iconify-icon>`;
                     }
                     input.focus();
                 }
@@ -55101,15 +55227,38 @@ function isStrategyTask(t) {
         function _upload(f) { return window._fcpUpload ? window._fcpUpload(f) : (typeof uploadToCloudinary !== 'undefined' ? uploadToCloudinary(f) : Promise.reject('no upload')); }
         function _f2b64(f) { return window._fcpFileToBase64 ? window._fcpFileToBase64(f) : (typeof fileToBase64 !== 'undefined' ? fileToBase64(f) : Promise.reject('no f2b')); }
         function showFloatBtn() {
+            var isChatView = (typeof activeView !== 'undefined' && activeView === 'chat');
+            var chatPanel = document.getElementById('view-chat-panel');
+            if (!isChatView && chatPanel) {
+                var isVisible = !chatPanel.classList.contains('hidden') && chatPanel.style.display !== 'none';
+                if (isVisible) isChatView = true;
+            }
+            if (isChatView) {
+                hideFloatBtn();
+                return;
+            }
             var btn = document.getElementById('float-chat-btn');
-            if (btn) btn.style.display = 'flex';
+            if (btn && _fcpCU()) btn.style.display = 'flex';
         }
         function hideFloatBtn() {
             var btn = document.getElementById('float-chat-btn');
-            if (btn) btn.style.display = 'none';
+            if (btn) btn.style.setProperty('display', 'none', 'important');
+            var panel = document.getElementById('float-chat-panel');
+            if (panel) panel.style.setProperty('display', 'none', 'important');
+            fcpOpen = false;
         }
 
         function toggleFloatChat() {
+            var isChatView = (typeof activeView !== 'undefined' && activeView === 'chat');
+            var chatPanel = document.getElementById('view-chat-panel');
+            if (!isChatView && chatPanel) {
+                var isVisible = !chatPanel.classList.contains('hidden') && chatPanel.style.display !== 'none';
+                if (isVisible) isChatView = true;
+            }
+            if (isChatView) {
+                hideFloatBtn();
+                return;
+            }
             fcpOpen = !fcpOpen;
             var panel = document.getElementById('float-chat-panel');
             if (fcpOpen) {
@@ -55581,28 +55730,53 @@ function isStrategyTask(t) {
             }
         })();
 
-        // Patch switchView to hide bubble on chat page
+        // Patch switchView and observe chat panel to automatically hide bubble on chat page
         (function patchSV() {
+            function updateFloatChatVisibility(view) {
+                var btn = document.getElementById('float-chat-btn');
+                var panel = document.getElementById('float-chat-panel');
+                var cp = document.getElementById('view-chat-panel');
+                var isChat = (view === 'chat') || (cp && !cp.classList.contains('hidden') && cp.style.display !== 'none');
+                if (isChat) {
+                    document.documentElement.classList.add('chat-page-active');
+                    if (btn) btn.style.setProperty('display', 'none', 'important');
+                    if (panel) panel.style.setProperty('display', 'none', 'important');
+                    fcpOpen = false;
+                } else {
+                    document.documentElement.classList.remove('chat-page-active');
+                    if (btn && _fcpCU()) {
+                        btn.style.display = 'flex';
+                    }
+                }
+            }
+
             if (typeof window.switchView === 'function') {
                 var _orig = window.switchView;
                 window.switchView = function (view) {
                     _orig(view);
-                    var btn = document.getElementById('float-chat-btn');
-                    if (!btn) return;
-                    if (!_fcpCU()) {
-                        btn.style.display = 'none';
-                        return;
-                    }
-                    if (view === 'chat') {
-                        btn.style.display = 'none';
-                        if (fcpOpen) toggleFloatChat();
-                    } else {
-                        btn.style.display = 'flex';
-                    }
+                    updateFloatChatVisibility(view);
                 };
             } else {
                 setTimeout(patchSV, 300);
             }
+
+            // MutationObserver on view-chat-panel to handle all transitions automatically
+            try {
+                var cpEl = document.getElementById('view-chat-panel');
+                if (cpEl && window.MutationObserver) {
+                    var obs = new MutationObserver(function () {
+                        var isVisible = !cpEl.classList.contains('hidden') && cpEl.style.display !== 'none';
+                        updateFloatChatVisibility(isVisible ? 'chat' : (window.activeView || 'dashboard'));
+                    });
+                    obs.observe(cpEl, { attributes: true, attributeFilter: ['class', 'style'] });
+                }
+            } catch (e) { }
+
+            // Initial check in case user loaded directly onto #chat
+            setTimeout(function () {
+                var hash = (window.location.hash || '').replace('#', '');
+                updateFloatChatVisibility(window.activeView || hash || 'dashboard');
+            }, 150);
         })();
 
         window.switchFloatTab = switchFloatTab;

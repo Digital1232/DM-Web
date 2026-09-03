@@ -29303,6 +29303,7 @@ function isStrategyTask(t) {
                         activeConvHasMore = true;
                     }
 
+                    // Ensure UI reflects updated messages and pagination state
                     renderMessages(currentConvMessages);
 
                     requestAnimationFrame(() => {
