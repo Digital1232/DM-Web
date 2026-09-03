@@ -29243,7 +29243,7 @@ function isStrategyTask(t) {
                 };
             }
 
-            function renderChatSidebar() {
+            async function renderChatSidebar() {
                 if (!currentUser || !currentUser.email) return;
                 const myKey = eKey(currentUser.email);
                 const { pinnedList, mutedList, manualUnreadList } = getChatPreferences();
@@ -29254,10 +29254,36 @@ function isStrategyTask(t) {
                     }
                 });
 
-                // 1. Gather Personal (DM) Items
-                const usersList = (typeof allUsersMap !== 'undefined' && allUsersMap && Object.keys(allUsersMap).length) 
-                    ? Object.values(allUsersMap) 
-                    : (typeof users !== 'undefined' ? users : []);
+                // Ensure allUsersMap is populated
+                if (typeof allUsersMap === 'undefined' || !allUsersMap || (allUsersMap instanceof Map && allUsersMap.size <= 1)) {
+                    if (typeof getAllUsers === 'function') {
+                        try {
+                            allUsersMap = await getAllUsers();
+                            window.allUsersMap = allUsersMap;
+                        } catch (e) {
+                            console.warn('Failed to load allUsersMap in renderChatSidebar:', e);
+                        }
+                    }
+                }
+
+                // 1. Gather Personal (DM) Items from allUsersMap, users, or USERS
+                let usersList = [];
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap instanceof Map && allUsersMap.size > 0) {
+                        usersList = Array.from(allUsersMap.values());
+                    } else if (Array.isArray(allUsersMap) && allUsersMap.length > 0) {
+                        usersList = allUsersMap;
+                    } else if (typeof allUsersMap === 'object' && Object.keys(allUsersMap).length > 0) {
+                        usersList = Object.values(allUsersMap);
+                    }
+                }
+                if (!usersList.length && typeof users !== 'undefined' && Array.isArray(users) && users.length > 0) {
+                    usersList = users;
+                }
+                if (!usersList.length && typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                    usersList = USERS;
+                }
+
                 const others = usersList.filter(u => u && u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase());
 
                 const dmItems = others.map(u => {
@@ -29272,8 +29298,9 @@ function isStrategyTask(t) {
                     const name = u.name || u.email || 'User';
 
                     let avatarHtml = '';
-                    if (u.photoURL) {
-                        avatarHtml = `<div class="relative shrink-0"><img src="${escapeHtml(u.photoURL)}" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
+                    if (u.photoURL || u.profilePicture) {
+                        const pic = u.photoURL || u.profilePicture;
+                        avatarHtml = `<div class="relative shrink-0"><img src="${escapeHtml(pic)}" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
                     } else {
                         const initials = (u.name || u.email || 'U').charAt(0).toUpperCase();
                         avatarHtml = `<div class="relative shrink-0"><div class="w-10 h-10 bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-xs shadow-2xs">${escapeHtml(initials)}</div><span id="online-${otherKey}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span></div>`;
@@ -29862,6 +29889,7 @@ function isStrategyTask(t) {
                     }
                 });
             }
+            window.openConversation = openConversation;
 
             function generateInstantGoogleMeet() {
                 const chars = 'abcdefghijklmnopqrstuvwxyz';
@@ -50110,7 +50138,22 @@ function isStrategyTask(t) {
                 }
             });
 
-            window.openDm = openDm; window.openConversation = openConversation; window.toggleChatActionsDropdown = toggleChatActionsDropdown; window.togglePinChat = togglePinChat; window.toggleMuteChat = toggleMuteChat; window.markChatUnreadToggle = markChatUnreadToggle; window.loadMoreChatMessages = loadMoreChatMessages; window.sendMessage = sendMessage; window.uploadChatAttachment = uploadChatAttachment; window.clearStagedAttachment = clearStagedAttachment; window.handleMsgInput = handleMsgInput; window.handleMsgKeyDown = handleMsgKeyDown; window.selectMention = selectMention; window.handleMsgPaste = handleMsgPaste; window.openGoogleDriveLinkModal = openGoogleDriveLinkModal; window.addGoogleDriveLink = addGoogleDriveLink;
+            if (typeof openDm !== 'undefined') window.openDm = openDm;
+            if (typeof openConversation !== 'undefined') window.openConversation = openConversation;
+            if (typeof toggleChatActionsDropdown !== 'undefined') window.toggleChatActionsDropdown = toggleChatActionsDropdown;
+            if (typeof togglePinChat !== 'undefined') window.togglePinChat = togglePinChat;
+            if (typeof toggleMuteChat !== 'undefined') window.toggleMuteChat = toggleMuteChat;
+            if (typeof markChatUnreadToggle !== 'undefined') window.markChatUnreadToggle = markChatUnreadToggle;
+            if (typeof loadMoreChatMessages !== 'undefined') window.loadMoreChatMessages = loadMoreChatMessages;
+            if (typeof sendMessage !== 'undefined') window.sendMessage = sendMessage;
+            if (typeof uploadChatAttachment !== 'undefined') window.uploadChatAttachment = uploadChatAttachment;
+            if (typeof clearStagedAttachment !== 'undefined') window.clearStagedAttachment = clearStagedAttachment;
+            if (typeof handleMsgInput !== 'undefined') window.handleMsgInput = handleMsgInput;
+            if (typeof handleMsgKeyDown !== 'undefined') window.handleMsgKeyDown = handleMsgKeyDown;
+            if (typeof selectMention !== 'undefined') window.selectMention = selectMention;
+            if (typeof handleMsgPaste !== 'undefined') window.handleMsgPaste = handleMsgPaste;
+            if (typeof openGoogleDriveLinkModal !== 'undefined') window.openGoogleDriveLinkModal = openGoogleDriveLinkModal;
+            if (typeof addGoogleDriveLink !== 'undefined') window.addGoogleDriveLink = addGoogleDriveLink;
             window.toggleNotificationDropdown = toggleNotificationDropdown; window.clickNotificationItem = clickNotificationItem; window.markAllNotificationsAsRead = markAllNotificationsAsRead; window.scrollChatToBottom = scrollChatToBottom; window.scrollChatMessages = scrollChatMessages;
             window.handleChatDragOver = handleChatDragOver; window.handleChatDragEnter = handleChatDragEnter; window.handleChatDragLeave = handleChatDragLeave; window.handleChatDrop = handleChatDrop;
             window.dragTaskEnd = dragTaskEnd; window.dragTaskEnter = dragTaskEnter; window.dragTaskLeave = dragTaskLeave; window.dragTask = dragTask; window.dropTask = dropTask;
