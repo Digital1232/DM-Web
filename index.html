@@ -29432,29 +29432,77 @@ function isStrategyTask(t) {
             }
             window.openChatFromMention = openChatFromMention;
 
-            function openDm(otherEmail) {
-                if (!currentUser || !currentUser.email || !otherEmail) return;
-                const id = dmId(currentUser.email, otherEmail);
-                const other = (allUsersMap && allUsersMap.get(otherEmail.toLowerCase())) || 
-                              (typeof knownUserByEmail === 'function' && knownUserByEmail(otherEmail)) || 
-                              { name: otherEmail.split('@')[0], email: otherEmail };
-                
-                // Immediately open conversation without blocking network roundtrips
-                openConversation(id, other.name || otherEmail.split('@')[0], 'dm', other.profilePicture || getUserAvatarSrc(other));
+            function openDm(targetUser, targetName = '', targetPhoto = '') {
+                if (!currentUser || !currentUser.email) return;
+                let otherEmail = '';
+                let name = '';
+                let photo = '';
 
-                // Asynchronously verify/initialize the conversation node in background if not present
-                if (!chatConversations[id]) {
-                    get(ref(db, 'worksync/conversations/' + id)).then(snap => {
-                        if (!snap.exists()) {
-                            set(ref(db, 'worksync/conversations/' + id), {
-                                type: 'dm',
-                                members: { [eKey(currentUser.email)]: true, [eKey(otherEmail)]: true },
-                                lastTimestamp: Date.now()
-                            }).catch(e => console.warn('Failed to initialize DM:', e));
-                        }
-                    }).catch(e => console.warn('DM check failed:', e));
+                if (typeof targetUser === 'string') {
+                    otherEmail = targetUser;
+                    name = targetName;
+                    photo = targetPhoto;
+                } else if (targetUser && typeof targetUser === 'object') {
+                    otherEmail = targetUser.email || '';
+                    name = targetName || targetUser.name || otherEmail.split('@')[0];
+                    photo = targetPhoto || targetUser.photoURL || targetUser.profilePicture || '';
+                }
+
+                if (!otherEmail) return;
+
+                const myKey = eKey(currentUser.email);
+                const otherKey = eKey(otherEmail);
+                const id = [myKey, otherKey].sort().join('_');
+
+                let other = null;
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap instanceof Map) {
+                        other = allUsersMap.get(otherEmail.toLowerCase());
+                    } else if (typeof allUsersMap === 'object') {
+                        other = allUsersMap[otherEmail.toLowerCase()] || allUsersMap[otherEmail];
+                    }
+                }
+                if (!other && typeof users !== 'undefined' && Array.isArray(users)) {
+                    other = users.find(u => u && u.email && u.email.toLowerCase() === otherEmail.toLowerCase());
+                }
+                if (!other && typeof knownUserByEmail === 'function') {
+                    other = knownUserByEmail(otherEmail);
+                }
+                if (!other) {
+                    other = { name: name || otherEmail.split('@')[0], email: otherEmail, photoURL: photo };
+                }
+
+                const displayName = name || other.name || otherEmail.split('@')[0];
+                const displayPhoto = photo || other.photoURL || other.profilePicture || '';
+
+                // Switch view to chat first if not currently in chat view
+                if (typeof activeView !== 'undefined' && activeView !== 'chat') {
+                    if (typeof switchView === 'function') switchView('chat');
+                }
+
+                // Open conversation immediately
+                if (typeof openConversation === 'function') {
+                    openConversation(id, displayName, 'dm', displayPhoto);
+                }
+
+                // Initialize conversation in Firebase if not present
+                if (typeof db !== 'undefined' && db && typeof chatConversations !== 'undefined' && !chatConversations[id]) {
+                    try {
+                        get(ref(db, 'worksync/conversations/' + id)).then(snap => {
+                            if (!snap.exists()) {
+                                set(ref(db, 'worksync/conversations/' + id), {
+                                    type: 'dm',
+                                    members: { [myKey]: true, [otherKey]: true },
+                                    lastTimestamp: Date.now()
+                                }).catch(e => console.warn('Failed to initialize DM:', e));
+                            }
+                        }).catch(e => console.warn('DM check failed:', e));
+                    } catch (e) {
+                        console.warn('Firebase DM init error:', e);
+                    }
                 }
             }
+            window.openDm = openDm;
 
             function renderChatLoadingSkeleton() {
                 const area = document.getElementById('messages-area');
