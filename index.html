@@ -1001,57 +1001,68 @@
 
         /* DM list & Group list button rows */
         html.dark #dm-list button,
-        html.dark #group-list button {
+        html.dark #group-list button,
+        html.dark #chat-unified-list button {
             background: transparent !important;
             color: #f1f5f9 !important;
         }
 
         html.dark #dm-list button:hover,
-        html.dark #group-list button:hover {
+        html.dark #group-list button:hover,
+        html.dark #chat-unified-list button:hover {
             background: #253347 !important;
         }
 
         html.dark #dm-list button p,
-        html.dark #group-list button p {
+        html.dark #group-list button p,
+        html.dark #chat-unified-list button p {
             color: #64748b !important;
         }
 
         html.dark #dm-list button .text-slate-900,
         html.dark #group-list button .text-slate-900,
+        html.dark #chat-unified-list button .text-slate-900,
         html.dark #dm-list button .text-slate-700,
-        html.dark #group-list button .text-slate-700 {
+        html.dark #group-list button .text-slate-700,
+        html.dark #chat-unified-list button .text-slate-700 {
             color: #f1f5f9 !important;
         }
 
         html.dark #dm-list button .text-slate-400,
-        html.dark #group-list button .text-slate-400 {
+        html.dark #group-list button .text-slate-400,
+        html.dark #chat-unified-list button .text-slate-400 {
             color: #94a3b8 !important;
         }
 
         html.dark #dm-list .border-l-2,
-        html.dark #group-list .border-l-2 {
+        html.dark #group-list .border-l-2,
+        html.dark #chat-unified-list .border-l-4 {
             background: rgba(79, 70, 229, .12) !important;
         }
 
         html.dark #dm-list img,
-        html.dark #group-list img {
+        html.dark #group-list img,
+        html.dark #chat-unified-list img {
             border-color: #334155 !important;
             background: #131929 !important;
         }
 
         html.dark #dm-list .w-10.h-10.bg-indigo-50,
-        html.dark #group-list .w-10.h-10.bg-indigo-50 {
+        html.dark #group-list .w-10.h-10.bg-indigo-50,
+        html.dark #chat-unified-list .w-10.h-10.bg-indigo-50 {
             background: #1e2a4a !important;
         }
 
         /* Online dot border in sidebar */
-        html.dark #dm-list .border-white {
+        html.dark #dm-list .border-white,
+        html.dark #chat-unified-list .border-white {
             border-color: #1a2236 !important;
         }
 
         /* Empty state */
         html.dark #dm-list p,
-        html.dark #group-list p {
+        html.dark #group-list p,
+        html.dark #chat-unified-list p {
             color: #64748b !important;
         }
 
@@ -6633,132 +6644,353 @@
             </div>
 
             <!-- ════ CHAT VIEW ════ -->
-            <div id="view-chat-panel" class="hidden h-full flex gap-8 fade-in no-active-chat">
+            <div id="view-chat-panel" class="hidden h-full flex flex-col md:flex-row gap-5 fade-in no-active-chat">
 
                 <!-- Sidebar: Conversations -->
-                <div class="w-full md:w-72 flex flex-col shrink-0 gap-2 chat-sidebar-view">
-                    <div class="bg-white rounded-3xl shadow-xl border border-slate-100 flex flex-col h-[400px]">
-                        <div class="p-5 border-b border-slate-50 flex items-center justify-between">
-                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest">
-                                Messages</h3>
-                            <button id="group-create-btn" onclick="openNewGroupModal()"
-                                class="p-1.5 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
-                                <iconify-icon icon="solar:users-group-two-rounded-bold" width="16"></iconify-icon>
+                <div class="w-full md:w-80 flex flex-col shrink-0 chat-sidebar-view bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden h-[calc(100vh-100px)]">
+                    <!-- Chats Header -->
+                    <div class="p-5 pb-3 flex items-center justify-between">
+                        <h2 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">Chats</h2>
+                        <button id="group-create-btn" onclick="openNewGroupModal()"
+                            class="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors"
+                            title="New Group / Chat">
+                            <iconify-icon icon="solar:pen-new-square-bold" width="18"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <!-- Filter Tabs (All / Personal / Groups) -->
+                    <div class="px-5 py-1.5">
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl gap-1 border border-slate-200/50 dark:border-slate-700/50">
+                            <button type="button" id="chat-filter-all" onclick="setChatFilter('all')"
+                                class="flex-1 py-1.5 text-xs font-black rounded-xl text-center transition-all bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm">
+                                All
                             </button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto" id="dm-list">
-                            <!-- Users -->
+                            <button type="button" id="chat-filter-personal" onclick="setChatFilter('personal')"
+                                class="flex-1 py-1.5 text-xs font-bold rounded-xl text-center transition-all text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                                Personal
+                            </button>
+                            <button type="button" id="chat-filter-groups" onclick="setChatFilter('groups')"
+                                class="flex-1 py-1.5 text-xs font-bold rounded-xl text-center transition-all text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                                Groups
+                            </button>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-3xl shadow-xl border border-slate-100 flex flex-col flex-1 min-h-0">
-                        <div class="p-5 border-b border-slate-50">
-                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-widest">
-                                Groups</h3>
+                    <!-- Search and Filter Bar -->
+                    <div class="px-5 py-2 flex items-center gap-2">
+                        <div class="relative flex-1 flex items-center">
+                            <iconify-icon icon="solar:magnifer-linear" width="16"
+                                class="absolute left-3 text-slate-400 pointer-events-none"></iconify-icon>
+                            <input id="chat-search-conversations" type="text" oninput="handleChatSearchInput(this.value)"
+                                placeholder="Search conversations..."
+                                class="w-full h-9 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-xl pl-9 pr-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400 box-border">
                         </div>
-                        <div class="flex-1 overflow-y-auto" id="group-list">
-                            <!-- Groups -->
+                        <button type="button" onclick="toggleUnreadChatFilter()" id="chat-unread-filter-btn"
+                            class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shrink-0 box-border"
+                            title="Filter Unread Only">
+                            <iconify-icon icon="solar:tuning-2-bold" width="16"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <!-- Unified List with Collapsible Sections -->
+                    <!-- Unified List with Collapsible Sections -->
+                    <div class="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60 custom-scrollbar" id="chat-conversations-scroll">
+                        <!-- Personal Chats Section -->
+                        <div id="section-personal-chats">
+                            <div onclick="toggleChatSection('personal')"
+                                class="flex items-center justify-between px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer select-none">
+                                <span class="flex items-center gap-1.5">
+                                    <span>Personal Chats</span>
+                                    <span id="personal-chats-count" class="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">0</span>
+                                </span>
+                                <iconify-icon id="icon-collapse-personal" icon="solar:alt-arrow-down-linear" width="14" class="transition-transform duration-200"></iconify-icon>
+                            </div>
+                            <div class="overflow-hidden transition-all duration-200" id="dm-list-container">
+                                <div id="dm-list" class="space-y-0.5">
+                                    <!-- Users -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group Chats Section -->
+                        <div id="section-group-chats">
+                            <div onclick="toggleChatSection('groups')"
+                                class="flex items-center justify-between px-5 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer select-none">
+                                <span class="flex items-center gap-1.5">
+                                    <span>Group Chats</span>
+                                    <span id="group-chats-count" class="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">0</span>
+                                </span>
+                                <iconify-icon id="icon-collapse-groups" icon="solar:alt-arrow-down-linear" width="14" class="transition-transform duration-200"></iconify-icon>
+                            </div>
+                            <div class="overflow-hidden transition-all duration-200" id="group-list-container">
+                                <div id="group-list" class="space-y-0.5">
+                                    <!-- Groups -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Chat Window -->
                 <div id="chat-window-wrapper"
-                    class="flex-1 flex flex-col bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden relative"
+                    class="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden relative h-[calc(100vh-100px)]"
                     ondragover="handleChatDragOver(event)" ondragenter="handleChatDragEnter(event)"
                     ondragleave="handleChatDragLeave(event)" ondrop="handleChatDrop(event)">
 
                     <!-- Drag Overlay -->
                     <div id="chat-drag-overlay"
                         class="hidden absolute inset-0 z-50 bg-indigo-600/90 backdrop-blur-sm flex flex-col items-center justify-center text-white border-4 border-indigo-400 border-dashed m-2 rounded-2xl pointer-events-none">
-                        <iconify-icon icon="solar:upload-square-bold" width="64"
-                            class="mb-4 animate-bounce"></iconify-icon>
-                        <h3 class="text-2xl font-black tracking-tight mb-2">Drop to Upload
-                        </h3>
-                        <p class="text-sm font-medium text-indigo-100">Release your file to
-                            attach it to the chat
-                        </p>
+                        <iconify-icon icon="solar:upload-square-bold" width="64" class="mb-4 animate-bounce"></iconify-icon>
+                        <h3 class="text-2xl font-black tracking-tight mb-2">Drop to Upload</h3>
+                        <p class="text-sm font-medium text-indigo-100">Release your file to attach it to the chat</p>
                     </div>
 
+                    <!-- Welcome / Empty State -->
                     <div id="chat-welcome"
-                        class="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center p-10 text-center">
-                        <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
-                            <iconify-icon icon="solar:chat-round-dots-bold" width="40"
-                                class="text-indigo-600"></iconify-icon>
+                        class="absolute inset-0 z-10 bg-white dark:bg-slate-900 flex flex-col items-center justify-center p-10 text-center">
+                        <div class="w-20 h-20 bg-indigo-50 dark:bg-indigo-950/60 rounded-3xl flex items-center justify-center mb-6 shadow-sm">
+                            <iconify-icon icon="solar:chat-round-dots-bold" width="40" class="text-indigo-600 dark:text-indigo-400"></iconify-icon>
                         </div>
-                        <h3 class="text-xl font-black text-slate-900 mb-2">Team
-                            Communication</h3>
-                        <p class="text-sm text-slate-400 max-w-xs">Select a user or group to
-                            start communicating
-                            with the VilPower team.</p>
+                        <h3 class="text-xl font-black text-slate-900 dark:text-white mb-2">Team Communication</h3>
+                        <p class="text-sm text-slate-400 max-w-xs">Select a user or group from the left panel to start messaging with the VilPower team.</p>
                     </div>
 
-                    <div id="chat-active-header"
-                        class="hidden p-5 border-b border-slate-100 flex items-center justify-between glass-header shrink-0">
-                        <div class="flex items-center gap-3">
-                            <!-- Mobile Back Button -->
-                            <button onclick="closeChat()"
-                                class="p-2 -ml-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors md:hidden"
-                                title="Back to Chat List">
-                                <iconify-icon icon="solar:alt-arrow-left-linear" width="24"></iconify-icon>
-                            </button>
-                            <div id="chat-conv-avatar"
-                                class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-indigo-600 font-black">
-                                ?</div>
-                            <div>
-                                <p id="chat-conv-name" class="text-sm font-bold text-slate-900">Select
-                                    Conversation
-                                </p>
-                                <p id="chat-conv-status"
-                                    class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">
-                                    Active
-                                </p>
+                    <!-- Active Conversation Header -->
+                    <div id="chat-active-header" class="hidden flex flex-col border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shrink-0 z-10">
+                        <!-- Top Header Row -->
+                        <div class="px-6 py-4 flex items-center justify-between">
+                            <div class="flex items-center gap-3.5 min-w-0">
+                                <!-- Mobile Back Button -->
+                                <button onclick="closeChat()"
+                                    class="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 transition-colors md:hidden"
+                                    title="Back to Chat List">
+                                    <iconify-icon icon="solar:alt-arrow-left-linear" width="22"></iconify-icon>
+                                </button>
+                                
+                                <div class="relative shrink-0">
+                                    <div id="chat-conv-avatar"
+                                        class="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black overflow-hidden shadow-sm">
+                                        ?
+                                    </div>
+                                    <div id="chat-conv-online-indicator" class="hidden absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+                                </div>
+                                
+                                <div class="min-w-0">
+                                    <p id="chat-conv-name" class="text-base font-black text-slate-900 dark:text-white truncate">
+                                        Select Conversation
+                                    </p>
+                                    <p id="chat-conv-status" class="text-[11px] text-slate-400 font-semibold truncate">
+                                        Active now
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Header Actions -->
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <!-- Search in Chat Button -->
+                                <button type="button" onclick="toggleChatThreadSearch()"
+                                    class="p-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                    title="Search in conversation">
+                                    <iconify-icon icon="solar:magnifer-linear" width="18"></iconify-icon>
+                                </button>
+
+                                <!-- Audio Sync / Call Prompt -->
+                                <button type="button" onclick="startChatVoicePrompt()"
+                                    class="p-2 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all"
+                                    title="Quick Voice Sync">
+                                    <iconify-icon icon="solar:phone-bold" width="18"></iconify-icon>
+                                </button>
+
+                                <!-- Instant Google Meet Link Generator -->
+                                <button type="button" onclick="generateInstantGoogleMeet()"
+                                    class="p-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all"
+                                    title="Start Instant Google Meet">
+                                    <iconify-icon icon="solar:videocamera-record-bold" width="18"></iconify-icon>
+                                </button>
+
+                                <!-- More Options Dropdown Container -->
+                                <div class="relative">
+                                    <button type="button" onclick="toggleChatOptionsMenu()" id="chat-options-btn"
+                                        class="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                        title="Options">
+                                        <iconify-icon icon="solar:menu-dots-bold" width="18"></iconify-icon>
+                                    </button>
+                                    <!-- Dropdown Menu -->
+                                    <div id="chat-options-menu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 py-1.5 z-50 text-xs font-bold text-slate-700 dark:text-slate-200">
+                                        <div id="chat-conv-actions"></div>
+                                        <button onclick="copyCurrentChatLink(); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
+                                            <iconify-icon icon="solar:link-minimalistic-2-bold" width="15" class="text-indigo-500"></iconify-icon>
+                                            <span>Copy Chat Link</span>
+                                        </button>
+                                        <button onclick="toggleChatMute(); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left" id="chat-mute-menu-btn">
+                                            <iconify-icon icon="solar:bell-off-bold" width="15" class="text-slate-400"></iconify-icon>
+                                            <span id="chat-mute-label">Mute Notifications</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div id="chat-conv-actions" class="flex items-center gap-2"></div>
-                    </div>
 
-                    <div id="messages-area" class="flex-1 overflow-y-auto p-6 space-y-2 bg-slate-50/30">
-                        <!-- Messages -->
-                    </div>
-
-                    <div id="chat-input-area"
-                        class="hidden p-5 border-t border-slate-100 bg-white shrink-0 flex-col gap-3 relative">
-                        <div id="reply-box" class="hidden flex flex-wrap items-center gap-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl relative w-full max-w-full">
+                        <!-- Sub-Tabs Navigation Bar (Messages, Files, Pinned, Tasks, Members) -->
+                        <div class="px-6 flex items-center gap-6 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+                            <button type="button" onclick="switchChatSubTab('messages')" id="chat-subtab-messages"
+                                class="chat-subtab-btn pt-2.5 pb-3 text-xs font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 whitespace-nowrap transition-all flex items-center gap-1.5">
+                                <iconify-icon icon="solar:chat-round-line-bold" width="15"></iconify-icon>
+                                <span>Messages</span>
+                            </button>
+                            <button type="button" onclick="switchChatSubTab('files')" id="chat-subtab-files"
+                                class="chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5">
+                                <iconify-icon icon="solar:folder-with-files-bold" width="15"></iconify-icon>
+                                <span>Files</span>
+                            </button>
+                            <button type="button" onclick="switchChatSubTab('pinned')" id="chat-subtab-pinned"
+                                class="chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5">
+                                <iconify-icon icon="solar:pin-bold" width="15"></iconify-icon>
+                                <span>Pinned</span>
+                            </button>
+                            <button type="button" onclick="switchChatSubTab('tasks')" id="chat-subtab-tasks"
+                                class="chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5">
+                                <iconify-icon icon="solar:checklist-minimalistic-bold" width="15"></iconify-icon>
+                                <span>Tasks</span>
+                            </button>
+                            <button type="button" onclick="switchChatSubTab('members')" id="chat-subtab-members"
+                                class="chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5">
+                                <iconify-icon icon="solar:users-group-rounded-bold" width="15"></iconify-icon>
+                                <span>Members</span>
+                            </button>
                         </div>
-                        <div id="chat-staged-attachment"
-                            class="hidden flex flex-wrap items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl relative w-full max-w-full pr-10">
-                            <div id="staged-attachments-list" class="flex flex-wrap gap-2 flex-1 min-w-0"></div>
-                            <button onclick="clearStagedAttachment()"
-                                class="absolute right-2 top-2 p-1 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
-                                title="Remove all">
+
+                        <!-- In-Thread Search Input Box -->
+                        <div id="chat-thread-search-box" class="hidden px-6 py-2.5 bg-slate-50 dark:bg-slate-800/90 border-t border-slate-100 dark:border-slate-700 flex items-center gap-3">
+                            <iconify-icon icon="solar:magnifer-linear" width="16" class="text-indigo-500 shrink-0"></iconify-icon>
+                            <input type="text" id="chat-thread-search-input" oninput="searchInActiveChat(this.value)"
+                                placeholder="Search messages in this chat..."
+                                class="flex-1 bg-transparent text-xs font-semibold outline-none text-slate-800 dark:text-slate-200">
+                            <span id="chat-search-match-count" class="text-[10px] font-bold text-slate-400"></span>
+                            <button type="button" onclick="closeChatThreadSearch()" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                                 <iconify-icon icon="solar:close-circle-bold" width="16"></iconify-icon>
                             </button>
                         </div>
-                        <div class="flex items-center gap-3 w-full relative">
-                            <div id="mention-dropdown"
-                                class="hidden absolute bottom-full left-12 mb-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden z-50 max-h-48 overflow-y-auto">
+                    </div>
+
+                    <!-- 1. Live Messages Area -->
+                    <div id="messages-area" class="flex-1 overflow-y-auto p-6 space-y-3 bg-slate-50/40 dark:bg-slate-950/40 custom-scrollbar">
+                        <!-- Messages Injected here -->
+                    </div>
+
+                    <!-- 2. Files Sub-Tab View -->
+                    <div id="chat-files-area" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/40 dark:bg-slate-950/40 custom-scrollbar">
+                        <div class="max-w-4xl mx-auto space-y-4">
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-slate-800">
+                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Shared Documents & Media</h4>
+                                <span id="chat-files-count" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0 items</span>
                             </div>
-                            <button onclick="document.getElementById('chat-file-upload').click()"
-                                class="p-2 text-slate-400 hover:text-indigo-600 transition-colors rounded-xl hover:bg-indigo-50 shrink-0"
-                                title="Attach File">
-                                <iconify-icon icon="solar:paperclip-linear" width="24"></iconify-icon>
+                            <div id="chat-files-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Pinned Messages Sub-Tab View -->
+                    <div id="chat-pinned-area" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/40 dark:bg-slate-950/40 custom-scrollbar">
+                        <div class="max-w-3xl mx-auto space-y-4">
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-slate-800">
+                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Pinned Messages</h4>
+                                <span id="chat-pinned-count" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300">0 pinned</span>
+                            </div>
+                            <div id="chat-pinned-list" class="space-y-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Channel Tasks Sub-Tab View -->
+                    <div id="chat-tasks-area" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/40 dark:bg-slate-950/40 custom-scrollbar">
+                        <div class="max-w-3xl mx-auto space-y-4">
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-slate-800">
+                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Channel Quick Tasks</h4>
+                                <button onclick="openChatQuickTaskModal()" class="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                    <iconify-icon icon="solar:add-circle-bold" width="14"></iconify-icon> Add Task
+                                </button>
+                            </div>
+                            <div id="chat-tasks-list" class="space-y-2.5"></div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Members Sub-Tab View -->
+                    <div id="chat-members-area" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/40 dark:bg-slate-950/40 custom-scrollbar">
+                        <div class="max-w-3xl mx-auto space-y-4">
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-slate-800">
+                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Conversation Participants</h4>
+                                <span id="chat-members-tab-count" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0 members</span>
+                            </div>
+                            <div id="chat-members-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Floating Bottom Input Bar -->
+                    <div id="chat-input-area" class="hidden p-4 md:p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex-col gap-2 relative">
+                        <!-- Reply Target Box -->
+                        <div id="reply-box" class="hidden flex items-center justify-between p-2.5 bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-900/60 rounded-2xl relative w-full max-w-full mb-1">
+                        </div>
+
+                        <!-- Staged Attachments Chips -->
+                        <div id="chat-staged-attachment"
+                            class="hidden flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl relative w-full max-w-full pr-10 mb-1">
+                            <div id="staged-attachments-list" class="flex flex-wrap gap-2 flex-1 min-w-0"></div>
+                            <button onclick="clearStagedAttachment()"
+                                class="absolute right-2.5 top-2.5 p-1 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                                title="Remove all">
+                                <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
                             </button>
-                            <button onclick="openGoogleDriveLinkModal()"
-                                class="p-2 text-slate-400 hover:text-indigo-600 transition-colors rounded-xl hover:bg-indigo-50 shrink-0"
+                        </div>
+
+                        <!-- Input Capsule -->
+                        <div class="flex items-center gap-2 w-full relative bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/40 transition-all shadow-sm">
+                            
+                            <!-- @ Mentions Dropdown -->
+                            <div id="mention-dropdown"
+                                class="hidden absolute bottom-full left-4 mb-3 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50 max-h-48 overflow-y-auto custom-scrollbar">
+                            </div>
+
+                            <!-- File Attachment (Paperclip) -->
+                            <button type="button" onclick="document.getElementById('chat-file-upload').click()"
+                                class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-xl hover:bg-white dark:hover:bg-slate-700 shrink-0"
+                                title="Attach File / Photos">
+                                <iconify-icon icon="solar:paperclip-linear" width="20"></iconify-icon>
+                            </button>
+
+                            <!-- Google Drive Link Button -->
+                            <button type="button" onclick="openGoogleDriveLinkModal()"
+                                class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-xl hover:bg-white dark:hover:bg-slate-700 shrink-0"
                                 title="Add Google Drive Link">
-                                <iconify-icon icon="logos:google-drive" width="24"></iconify-icon>
+                                <iconify-icon icon="logos:google-drive" width="18"></iconify-icon>
                             </button>
+
                             <input type="file" id="chat-file-upload" class="hidden" multiple
                                 onchange="uploadChatAttachment(event)">
+
+                            <!-- Message Textarea -->
                             <textarea id="msg-input" placeholder="Type a message..." rows="1"
                                 oninput="handleMsgInput(event)" onkeydown="handleMsgKeyDown(event)"
                                 onpaste="handleMsgPaste(event)"
-                                class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none max-h-32 overflow-y-auto"
-                                style="height: 46px;"></textarea>
+                                class="flex-1 bg-transparent border-0 text-xs md:text-sm font-semibold text-slate-800 dark:text-slate-100 outline-none resize-none max-h-32 overflow-y-auto px-2 py-2 placeholder:text-slate-400 custom-scrollbar"
+                                style="height: 38px;"></textarea>
+
+                            <!-- Emoji Trigger -->
+                            <button type="button" onclick="toggleChatEmojiPicker()" id="chat-emoji-trigger-btn"
+                                class="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-xl hover:bg-white dark:hover:bg-slate-700 shrink-0"
+                                title="Insert Emoji">
+                                <iconify-icon icon="solar:smile-circle-linear" width="20"></iconify-icon>
+                            </button>
+
+                            <!-- Quick Mention Trigger -->
+                            <button type="button" onclick="triggerMentionInInput()"
+                                class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-xl hover:bg-white dark:hover:bg-slate-700 shrink-0"
+                                title="Mention a team member">
+                                <iconify-icon icon="solar:mention-circle-linear" width="20"></iconify-icon>
+                            </button>
+
+                            <!-- Send Button -->
                             <button id="send-msg-btn" onclick="sendMessage()" aria-label="Send message"
-                                class="w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100 transition-all shrink-0">
-                                <iconify-icon icon="mdi:send" width="21"></iconify-icon>
+                                class="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-500/25 active:scale-95 transition-all shrink-0 ml-1">
+                                <iconify-icon icon="mdi:send" width="18"></iconify-icon>
                             </button>
                         </div>
                     </div>
@@ -17093,6 +17325,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 chatNotificationsMuted = !chatNotificationsMuted;
                 localStorage.setItem('worksync_chat_muted', String(chatNotificationsMuted));
                 renderChatMuteToggle();
+                const lbl = document.getElementById('chat-mute-label');
+                if (lbl) lbl.textContent = chatNotificationsMuted ? 'Unmute Notifications' : 'Mute Notifications';
                 if (!chatNotificationsMuted && 'Notification' in window && Notification.permission === 'default') {
                     try { await Notification.requestPermission(); } catch { }
                 }
@@ -28630,9 +28864,135 @@ function isStrategyTask(t) {
                 return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
             }
 
+            function getChatDateHeader(ts) {
+                if (!ts) return '';
+                const msgDate = new Date(ts);
+                const today = new Date();
+                const yesterday = new Date();
+                yesterday.setDate(today.getDate() - 1);
+
+                if (msgDate.toDateString() === today.toDateString()) {
+                    return 'Today';
+                } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                    return 'Yesterday';
+                } else {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[msgDate.getMonth()]} ${msgDate.getDate()}, ${msgDate.getFullYear()}`;
+                }
+            }
+
             let chatConversations = {};
             let chatMessageCache = {};
             let userOnlineListeners = {};
+            let chatFilterTab = 'all'; // 'all' | 'personal' | 'groups'
+            let chatSearchQuery = '';
+            let chatOnlyUnread = false;
+            let activeChatSubTab = 'messages'; // 'messages' | 'files' | 'pinned' | 'tasks' | 'members'
+            let collapsedChatSections = { personal: false, groups: false };
+
+            function setChatFilter(tab) {
+                chatFilterTab = tab;
+                ['all', 'personal', 'groups'].forEach(t => {
+                    const btn = document.getElementById(`chat-filter-${t}`);
+                    if (!btn) return;
+                    if (t === tab) {
+                        btn.className = 'flex-1 py-1.5 text-xs font-black rounded-xl text-center transition-all bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm';
+                    } else {
+                        btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-xl text-center transition-all text-slate-500 hover:text-slate-900 dark:hover:text-white';
+                    }
+                });
+                
+                const secPersonal = document.getElementById('section-personal-chats');
+                const secGroups = document.getElementById('section-group-chats');
+                if (secPersonal) secPersonal.style.display = (tab === 'groups') ? 'none' : 'block';
+                if (secGroups) secGroups.style.display = (tab === 'personal') ? 'none' : 'block';
+
+                renderDmList();
+                if (currentUser) {
+                    const myKey = eKey(currentUser.email);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    renderGroupList(groups);
+                }
+            }
+            window.setChatFilter = setChatFilter;
+
+            function handleChatSearchInput(query) {
+                chatSearchQuery = (query || '').toLowerCase().trim();
+                renderDmList();
+                if (currentUser) {
+                    const myKey = eKey(currentUser.email);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    renderGroupList(groups);
+                }
+            }
+            window.handleChatSearchInput = handleChatSearchInput;
+
+            function toggleUnreadChatFilter() {
+                chatOnlyUnread = !chatOnlyUnread;
+                const btn = document.getElementById('chat-unread-filter-btn');
+                if (btn) {
+                    if (chatOnlyUnread) {
+                        btn.className = 'p-2 rounded-2xl border border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 transition-all shrink-0';
+                    } else {
+                        btn.className = 'p-2 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shrink-0';
+                    }
+                }
+                renderDmList();
+                if (currentUser) {
+                    const myKey = eKey(currentUser.email);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    renderGroupList(groups);
+                }
+            }
+            window.toggleUnreadChatFilter = toggleUnreadChatFilter;
+
+            function toggleChatSection(section) {
+                collapsedChatSections[section] = !collapsedChatSections[section];
+                const container = document.getElementById(`${section === 'personal' ? 'dm' : 'group'}-list-container`);
+                const icon = document.getElementById(`icon-collapse-${section}`);
+                if (container) {
+                    if (collapsedChatSections[section]) {
+                        container.style.display = 'none';
+                        if (icon) icon.style.transform = 'rotate(-90deg)';
+                    } else {
+                        container.style.display = 'block';
+                        if (icon) icon.style.transform = 'rotate(0deg)';
+                    }
+                }
+            }
+            window.toggleChatSection = toggleChatSection;
+
+            function switchChatSubTab(tab) {
+                activeChatSubTab = tab;
+                const tabs = ['messages', 'files', 'pinned', 'tasks', 'members'];
+                tabs.forEach(t => {
+                    const btn = document.getElementById(`chat-subtab-${t}`);
+                    const area = document.getElementById(t === 'messages' ? 'messages-area' : `chat-${t}-area`);
+                    if (btn) {
+                        if (t === tab) {
+                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 whitespace-nowrap transition-all flex items-center gap-1.5';
+                        } else {
+                            btn.className = 'chat-subtab-btn pt-2.5 pb-3 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-b-2 border-transparent whitespace-nowrap transition-all flex items-center gap-1.5';
+                        }
+                    }
+                    if (area) {
+                        if (t === tab) {
+                            area.classList.remove('hidden');
+                        } else {
+                            area.classList.add('hidden');
+                        }
+                    }
+                });
+
+                if (tab === 'files') renderChatFilesList();
+                else if (tab === 'pinned') renderChatPinnedList();
+                else if (tab === 'tasks') renderChatTasksList();
+                else if (tab === 'members') renderChatMembersList();
+                else if (tab === 'messages') {
+                    scrollChatToBottom();
+                }
+            }
+            window.switchChatSubTab = switchChatSubTab;
 
             function togglePinChat(convId, event) {
                 if (event) event.stopPropagation();
@@ -28750,6 +29110,7 @@ function isStrategyTask(t) {
 
             async function renderDmList() {
                 const container = document.getElementById('dm-list');
+                const countBadge = document.getElementById('personal-chats-count');
                 if (!container || !currentUser) return;
                 if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
                     allUsersMap = await getAllUsers();
@@ -28762,13 +29123,30 @@ function isStrategyTask(t) {
                 const others = Array.from(allUsersMap.values())
                     .filter(u => u.email && u.email !== currentUser.email);
 
-                const mappedOthers = others.map(u => {
+                let mappedOthers = others.map(u => {
                     const convId = dmId(currentUser.email, u.email);
                     const conv = chatConversations[convId] || {};
                     const isPinned = pinnedList.includes(convId);
                     const lastTimestamp = conv.lastTimestamp || 0;
-                    return { user: u, convId, isPinned, lastTimestamp };
+                    const lastMessage = conv.lastMessage || '';
+                    return { user: u, convId, isPinned, lastTimestamp, lastMessage };
                 });
+
+                // Apply Search filter
+                if (chatSearchQuery) {
+                    mappedOthers = mappedOthers.filter(item => 
+                        (item.user.name || '').toLowerCase().includes(chatSearchQuery) ||
+                        (item.user.email || '').toLowerCase().includes(chatSearchQuery) ||
+                        (item.lastMessage || '').toLowerCase().includes(chatSearchQuery)
+                    );
+                }
+
+                // Apply Unread filter
+                if (chatOnlyUnread) {
+                    mappedOthers = mappedOthers.filter(item => (unreadCounts[item.convId] || 0) > 0);
+                }
+
+                if (countBadge) countBadge.textContent = mappedOthers.length;
 
                 mappedOthers.sort((a, b) => {
                     if (a.isPinned && !b.isPinned) return -1;
@@ -28780,7 +29158,7 @@ function isStrategyTask(t) {
                 });
 
                 if (!mappedOthers.length) {
-                    container.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No users found.</p>`;
+                    container.innerHTML = `<p class="p-4 text-center text-xs text-slate-400 italic">No personal chats found.</p>`;
                     return;
                 }
 
@@ -28789,26 +29167,30 @@ function isStrategyTask(t) {
                     const convId = item.convId;
                     const isPinned = item.isPinned;
                     const unread = unreadCounts[convId] || 0;
-                    const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
+                    const isSelected = activeConvId === convId;
+                    const activeClass = isSelected 
+                        ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-l-4 border-indigo-600' 
+                        : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
+                    
+                    const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (u.role || 'Team Member');
+
                     return `
-                <button id="dm-btn-${convId}" onclick="openDm('${u.email}')" class="group w-full flex items-center gap-3 px-5 py-1.5 hover:bg-slate-50 transition-all text-left ${activeClass}">
+                <button id="dm-btn-${convId}" onclick="openDm('${u.email}')" class="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left ${activeClass} rounded-2xl">
                     <div class="relative shrink-0">
-                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${(u.name || u.email || '').replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 object-cover">
-                        <div id="online-${eKey(u.email)}" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-slate-300 border-2 border-white rounded-full"></div>
+                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${(u.name || u.email || '').replace(/'/g, "\\'")}')" class="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 object-cover shadow-2xs">
+                        <div id="online-${eKey(u.email)}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-slate-300 border-2 border-white dark:border-slate-900 rounded-full"></div>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between gap-1">
-                            <div class="flex items-center gap-1 min-w-0">
-                                <p class="text-xs ${unread > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'} truncate">${u.name}</p>
-                                <span onclick="togglePinChat('${convId}', event); event.stopPropagation();" class="p-0.5 hover:text-indigo-600 rounded-md transition-colors ${isPinned ? 'text-indigo-600' : 'text-slate-300 opacity-0 group-hover:opacity-100'}" title="${isPinned ? 'Unpin chat' : 'Pin chat'}">
-                                    <iconify-icon icon="solar:pin-bold" width="12"></iconify-icon>
-                                </span>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${u.name}</p>
+                                ${isPinned ? `<span class="text-amber-500 shrink-0"><iconify-icon icon="solar:pin-bold" width="12"></iconify-icon></span>` : ''}
                             </div>
-                            ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-bold text-indigo-600' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
+                            ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-black text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
                         </div>
-                        <div class="flex items-center justify-between mt-0.5">
-                            <p class="text-[10px] ${unread > 0 ? 'text-slate-600 font-bold' : 'text-slate-400'} uppercase truncate">${u.role || 'Member'}</p>
-                            <span id="unread-badge-${convId}" class="${unread > 0 ? '' : 'hidden'} bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 min-w-[1.25rem] text-center">${unread}</span>
+                        <div class="flex items-center justify-between mt-1">
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[170px]">${previewText}</p>
+                            <span id="unread-badge-${convId}" class="${unread > 0 ? '' : 'hidden'} bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0 min-w-[1.25rem] text-center shadow-xs">${unread}</span>
                         </div>
                     </div>
                 </button>`;
@@ -28819,7 +29201,7 @@ function isStrategyTask(t) {
                     if (!userOnlineListeners[key]) {
                         userOnlineListeners[key] = onValue(ref(db, `worksync/users/${key}/online`), sn => {
                             const el = document.getElementById(`online-${key}`);
-                            if (el) el.className = `absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
+                            if (el) el.className = `absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full ${sn.val() ? 'bg-emerald-500' : 'bg-slate-300'}`;
                         });
                     }
                 });
@@ -28827,16 +29209,38 @@ function isStrategyTask(t) {
 
             function renderGroupList(groups) {
                 const el = document.getElementById('group-list');
-                if (!groups.length) { el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No groups.</p>`; return; }
+                const countBadge = document.getElementById('group-chats-count');
+                if (!el) return;
 
                 const pinnedKey = `worksync_pinned_chats_${eKey(currentUser.email)}`;
                 const pinnedList = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
 
-                const mappedGroups = groups.map(([id, g]) => {
+                let mappedGroups = groups.map(([id, g]) => {
                     const isPinned = pinnedList.includes(id);
                     const lastTimestamp = g.lastTimestamp || 0;
-                    return { id, group: g, isPinned, lastTimestamp };
+                    const lastMessage = g.lastMessage || '';
+                    return { id, group: g, isPinned, lastTimestamp, lastMessage };
                 });
+
+                // Apply Search filter
+                if (chatSearchQuery) {
+                    mappedGroups = mappedGroups.filter(item => 
+                        (item.group.name || '').toLowerCase().includes(chatSearchQuery) ||
+                        (item.lastMessage || '').toLowerCase().includes(chatSearchQuery)
+                    );
+                }
+
+                // Apply Unread filter
+                if (chatOnlyUnread) {
+                    mappedGroups = mappedGroups.filter(item => (unreadCounts[item.id] || 0) > 0);
+                }
+
+                if (countBadge) countBadge.textContent = mappedGroups.length;
+
+                if (!mappedGroups.length) {
+                    el.innerHTML = `<p class="p-4 text-center text-xs text-slate-400 italic">No group chats found.</p>`;
+                    return;
+                }
 
                 mappedGroups.sort((a, b) => {
                     if (a.isPinned && !b.isPinned) return -1;
@@ -28855,28 +29259,31 @@ function isStrategyTask(t) {
                     const safeNameHtml = escapeHtml(name);
                     const safeNameJs = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const unread = unreadCounts[id] || 0;
-                    const activeClass = unread > 0 ? 'bg-indigo-50/50 border-l-2 border-indigo-600' : '';
+                    const isSelected = activeConvId === id;
+                    const activeClass = isSelected 
+                        ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-l-4 border-indigo-600' 
+                        : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
 
                     const avatarHtml = g.profilePicture
-                        ? `<img src="${g.profilePicture}" class="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200">`
-                        : `<div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black shrink-0">${escapeHtml(name.charAt(0))}</div>`;
+                        ? `<img src="${g.profilePicture}" class="w-10 h-10 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">`
+                        : `<div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-2xs">${escapeHtml(name.charAt(0))}</div>`;
+
+                    const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : 'Team Group';
 
                     return `
-                <button id="dm-btn-${id}" onclick="openConversation('${id}','${safeNameJs}','group', '${g.profilePicture || ''}')" class="group w-full flex items-center gap-3 px-5 py-1.5 hover:bg-slate-50 transition-all text-left ${activeClass}">
+                <button id="dm-btn-${id}" onclick="openConversation('${id}','${safeNameJs}','group', '${g.profilePicture || ''}')" class="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left ${activeClass} rounded-2xl">
                     ${avatarHtml}
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between gap-1">
-                            <div class="flex items-center gap-1 min-w-0">
-                                <p class="text-xs ${unread > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-700'} truncate">${safeNameHtml}</p>
-                                <span onclick="togglePinChat('${id}', event); event.stopPropagation();" class="p-0.5 hover:text-indigo-600 rounded-md transition-colors ${isPinned ? 'text-indigo-600' : 'text-slate-300 opacity-0 group-hover:opacity-100'}" title="${isPinned ? 'Unpin chat' : 'Pin chat'}">
-                                    <iconify-icon icon="solar:pin-bold" width="12"></iconify-icon>
-                                </span>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
+                                ${isPinned ? `<span class="text-amber-500 shrink-0"><iconify-icon icon="solar:pin-bold" width="12"></iconify-icon></span>` : ''}
                             </div>
-                            ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-bold text-indigo-600' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
+                            ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-black text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
                         </div>
-                        <div class="flex items-center justify-between mt-0.5">
-                            <p class="text-[10px] ${unread > 0 ? 'text-slate-600 font-bold' : 'text-slate-400'} uppercase truncate">Team Group</p>
-                            <span id="unread-badge-${id}" class="${unread > 0 ? '' : 'hidden'} bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 min-w-[1.25rem] text-center">${unread}</span>
+                        <div class="flex items-center justify-between mt-1">
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[170px]">${previewText}</p>
+                            <span id="unread-badge-${id}" class="${unread > 0 ? '' : 'hidden'} bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0 min-w-[1.25rem] text-center shadow-xs">${unread}</span>
                         </div>
                     </div>
                 </button>`;
@@ -28957,28 +29364,28 @@ function isStrategyTask(t) {
                 area.innerHTML = `
                     <div class="space-y-4 py-4 px-2 animate-pulse">
                         <div class="flex items-end gap-2">
-                            <div class="w-7 h-7 rounded-lg bg-slate-200 shrink-0"></div>
+                            <div class="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-800 shrink-0"></div>
                             <div class="space-y-1.5 max-w-[65%] w-48">
-                                <div class="h-2.5 w-16 bg-slate-200 rounded"></div>
-                                <div class="h-9 bg-slate-100 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
-                                    <div class="h-3 w-3/4 bg-slate-200 rounded"></div>
+                                <div class="h-2.5 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                <div class="h-9 bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
+                                    <div class="h-3 w-3/4 bg-slate-200 dark:bg-slate-700 rounded"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="flex items-end justify-end gap-2">
                             <div class="space-y-1.5 max-w-[65%] w-56 flex flex-col items-end">
-                                <div class="h-12 w-full bg-indigo-100/70 rounded-2xl rounded-tr-none p-2.5">
-                                    <div class="h-3 w-4/5 bg-indigo-200 rounded mb-1"></div>
-                                    <div class="h-2.5 w-2/5 bg-indigo-200 rounded"></div>
+                                <div class="h-12 w-full bg-indigo-100/70 dark:bg-indigo-950/60 rounded-2xl rounded-tr-none p-2.5">
+                                    <div class="h-3 w-4/5 bg-indigo-200 dark:bg-indigo-800 rounded mb-1"></div>
+                                    <div class="h-2.5 w-2/5 bg-indigo-200 dark:bg-indigo-800 rounded"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="flex items-end gap-2">
-                            <div class="w-7 h-7 rounded-lg bg-slate-200 shrink-0"></div>
+                            <div class="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-800 shrink-0"></div>
                             <div class="space-y-1.5 max-w-[65%] w-60">
-                                <div class="h-2.5 w-20 bg-slate-200 rounded"></div>
-                                <div class="h-10 bg-slate-100 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
-                                    <div class="h-3 w-full bg-slate-200 rounded"></div>
+                                <div class="h-2.5 w-20 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                                <div class="h-10 bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-none border border-slate-200/60 p-2.5">
+                                    <div class="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded"></div>
                                 </div>
                             </div>
                         </div>
@@ -29008,12 +29415,18 @@ function isStrategyTask(t) {
                 const nameEl = document.getElementById('chat-conv-name');
                 if (nameEl) nameEl.textContent = name;
 
+                const statusEl = document.getElementById('chat-conv-status');
+                const onlineDot = document.getElementById('chat-conv-online-indicator');
+
                 const displayAvatar = avatar || getUserAvatarSrc(name);
                 const safeConvEscaped = (name || '').replace(/'/g, "\\'");
                 const avatarContainer = document.getElementById('chat-conv-avatar');
                 if (avatarContainer) {
-                    avatarContainer.innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-xl object-cover">`;
+                    avatarContainer.innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-2xl object-cover">`;
                 }
+
+                // Reset to Messages subtab
+                switchChatSubTab('messages');
 
                 // Synchronously resolve group metadata from memory cache
                 activeGroupMembers = [];
@@ -29025,6 +29438,17 @@ function isStrategyTask(t) {
                         const allUsers = Array.from(allUsersMap.values());
                         activeGroupMembers = allUsers.filter(u => cachedConv.members && cachedConv.members[eKey(u.email)]);
                     }
+                    if (statusEl) statusEl.textContent = `${activeGroupMembers.length || Object.keys(cachedConv.members || {}).length || 1} members`;
+                    if (onlineDot) onlineDot.classList.add('hidden');
+                } else {
+                    // DM status
+                    const otherEmail = convId.replace('dm_', '').replace(eKey(currentUser.email), '').replace(/^_|_$/g, '');
+                    const otherUser = Array.from(allUsersMap?.values() || []).find(u => eKey(u.email) === otherEmail);
+                    if (statusEl) statusEl.textContent = otherUser?.role || 'Team Member';
+                    if (onlineDot) {
+                        onlineDot.classList.remove('hidden');
+                        onlineDot.className = `absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 border-white dark:border-slate-900 rounded-full ${otherUser?.online ? 'bg-emerald-500' : 'bg-slate-400'}`;
+                    }
                 }
 
                 const actions = document.getElementById('chat-conv-actions');
@@ -29032,8 +29456,14 @@ function isStrategyTask(t) {
                     const isCreator = convCreator === (currentUser && currentUser.email);
                     if (type === 'group' && (isAdmin() || isCreator)) {
                         actions.innerHTML = `
-                        <button onclick="openEditGroupModal('${convId}')" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Group"><iconify-icon icon="solar:pen-bold" width="18"></iconify-icon></button>
-                        <button onclick="deleteGroup('${convId}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete Group"><iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon></button>
+                        <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
+                            <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
+                            <span>Edit Group</span>
+                        </button>
+                        <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
+                            <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
+                            <span>Delete Group</span>
+                        </button>
                     `;
                     } else {
                         actions.innerHTML = '';
@@ -29050,10 +29480,17 @@ function isStrategyTask(t) {
                                 const allUsers = Array.from(allUsersMap.values());
                                 activeGroupMembers = allUsers.filter(u => conv.members && conv.members[eKey(u.email)]);
                             }
+                            if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
                             if (actions && (isAdmin() || convCreator === (currentUser && currentUser.email))) {
                                 actions.innerHTML = `
-                                <button onclick="openEditGroupModal('${convId}')" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Group"><iconify-icon icon="solar:pen-bold" width="18"></iconify-icon></button>
-                                <button onclick="deleteGroup('${convId}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete Group"><iconify-icon icon="solar:trash-bin-trash-bold" width="18"></iconify-icon></button>
+                                <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
+                                    <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
+                                    <span>Edit Group</span>
+                                </button>
+                                <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
+                                    <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
+                                    <span>Delete Group</span>
+                                </button>
                             `;
                             }
                         }
@@ -29074,6 +29511,12 @@ function isStrategyTask(t) {
                 activeConvHasMore = false;
                 activeConvLoadingMore = false;
                 activeConvHistoryDepleted = false;
+
+                // Re-render sidebar highlights
+                renderDmList();
+                const myKey = eKey(currentUser.email);
+                const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                renderGroupList(groups);
 
                 // Check in-memory message cache for INSTANT render
                 const cachedMessages = chatMessageCache[convId];
@@ -29119,6 +29562,311 @@ function isStrategyTask(t) {
                     }
                 });
             }
+
+            function generateInstantGoogleMeet() {
+                const chars = 'abcdefghijklmnopqrstuvwxyz';
+                const rPart = (len) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+                const meetCode = `${rPart(3)}-${rPart(4)}-${rPart(3)}`;
+                const meetUrl = `https://meet.google.com/${meetCode}`;
+                
+                const input = document.getElementById('msg-input');
+                if (input) {
+                    const text = `📹 Instant Google Meet: ${meetUrl}\nTeam, please join the video call when ready!`;
+                    input.value = (input.value ? input.value + '\n' : '') + text;
+                    input.focus();
+                    input.style.height = '60px';
+                    toast('Google Meet link added to message', 'info');
+                }
+            }
+            window.generateInstantGoogleMeet = generateInstantGoogleMeet;
+
+            function startChatVoicePrompt() {
+                const name = document.getElementById('chat-conv-name')?.textContent || 'team';
+                const meetUrl = `https://meet.google.com/new`;
+                if (confirm(`Start a voice/video sync with ${name}? Click OK to open Google Meet in a new tab.`)) {
+                    window.open(meetUrl, '_blank', 'noopener,noreferrer');
+                }
+            }
+            window.startChatVoicePrompt = startChatVoicePrompt;
+
+            function toggleChatOptionsMenu() {
+                const menu = document.getElementById('chat-options-menu');
+                if (menu) menu.classList.toggle('hidden');
+            }
+            window.toggleChatOptionsMenu = toggleChatOptionsMenu;
+
+            function copyCurrentChatLink() {
+                if (!activeConvId) return;
+                const url = window.location.origin + window.location.pathname + '#chat=' + activeConvId;
+                navigator.clipboard.writeText(url).then(() => {
+                    toast('Chat link copied to clipboard', 'success');
+                }).catch(() => toast('Link: ' + url, 'info'));
+            }
+            window.copyCurrentChatLink = copyCurrentChatLink;
+
+            function toggleChatThreadSearch() {
+                const box = document.getElementById('chat-thread-search-box');
+                if (box) {
+                    box.classList.toggle('hidden');
+                    if (!box.classList.contains('hidden')) {
+                        const input = document.getElementById('chat-thread-search-input');
+                        if (input) { input.focus(); }
+                    } else {
+                        searchInActiveChat('');
+                    }
+                }
+            }
+            window.toggleChatThreadSearch = toggleChatThreadSearch;
+
+            function closeChatThreadSearch() {
+                const box = document.getElementById('chat-thread-search-box');
+                const input = document.getElementById('chat-thread-search-input');
+                if (box) box.classList.add('hidden');
+                if (input) input.value = '';
+                searchInActiveChat('');
+            }
+            window.closeChatThreadSearch = closeChatThreadSearch;
+
+            function searchInActiveChat(query) {
+                const q = (query || '').toLowerCase().trim();
+                const messagesArea = document.getElementById('messages-area');
+                const countBadge = document.getElementById('chat-search-match-count');
+                if (!messagesArea) return;
+                const messageElements = messagesArea.querySelectorAll('[data-msg-id]');
+                let matchCount = 0;
+                messageElements.forEach(el => {
+                    const msgId = el.dataset.msgId;
+                    const msg = currentConvMessages[msgId];
+                    if (!q) {
+                        el.style.display = '';
+                        el.classList.remove('ring-2', 'ring-indigo-500/40', 'rounded-2xl');
+                        return;
+                    }
+                    const text = (msg?.text || '').toLowerCase();
+                    const sender = (msg?.senderName || '').toLowerCase();
+                    const match = text.includes(q) || sender.includes(q);
+                    if (match) {
+                        el.style.display = '';
+                        el.classList.add('ring-2', 'ring-indigo-500/40', 'rounded-2xl');
+                        matchCount++;
+                    } else {
+                        el.style.display = 'none';
+                        el.classList.remove('ring-2', 'ring-indigo-500/40', 'rounded-2xl');
+                    }
+                });
+                if (countBadge) {
+                    countBadge.textContent = q ? `${matchCount} found` : '';
+                }
+            }
+            window.searchInActiveChat = searchInActiveChat;
+
+            function toggleChatEmojiPicker() {
+                let palette = document.getElementById('chat-quick-emoji-palette');
+                if (!palette) {
+                    palette = document.createElement('div');
+                    palette.id = 'chat-quick-emoji-palette';
+                    palette.className = 'absolute bottom-full right-10 mb-3 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 p-3 z-50 grid grid-cols-6 gap-2 w-64';
+                    const popularEmojis = ['😀','😂','😍','🎉','👍','🔥','❤️','🙌','🚀','✨','💡','💯','👏','🤝','😎','🤔','⚡','✅'];
+                    palette.innerHTML = popularEmojis.map(em => `
+                        <button type="button" onclick="insertEmojiIntoChat('${em}')" class="text-xl p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-center transition-all hover:scale-125">${em}</button>
+                    `).join('');
+                    document.getElementById('chat-input-area')?.appendChild(palette);
+                } else {
+                    palette.classList.toggle('hidden');
+                }
+            }
+            window.toggleChatEmojiPicker = toggleChatEmojiPicker;
+
+            function insertEmojiIntoChat(emoji) {
+                const input = document.getElementById('msg-input');
+                if (input) {
+                    const start = input.selectionStart || 0;
+                    const end = input.selectionEnd || 0;
+                    const val = input.value;
+                    input.value = val.substring(0, start) + emoji + val.substring(end);
+                    input.selectionStart = input.selectionEnd = start + emoji.length;
+                    input.focus();
+                }
+                const palette = document.getElementById('chat-quick-emoji-palette');
+                if (palette) palette.classList.add('hidden');
+            }
+            window.insertEmojiIntoChat = insertEmojiIntoChat;
+
+            function triggerMentionInInput() {
+                const input = document.getElementById('msg-input');
+                if (input) {
+                    input.value = (input.value ? input.value + ' ' : '') + '@';
+                    input.focus();
+                    handleMsgInput({ target: input });
+                }
+            }
+            window.triggerMentionInInput = triggerMentionInInput;
+
+            function renderChatFilesList() {
+                const grid = document.getElementById('chat-files-grid');
+                const countBadge = document.getElementById('chat-files-count');
+                if (!grid) return;
+                
+                const allFiles = [];
+                Object.entries(currentConvMessages || {}).forEach(([id, msg]) => {
+                    if (msg.unsent) return;
+                    const atts = normalizeMessageAttachments(msg);
+                    atts.forEach(a => {
+                        allFiles.push({
+                            ...a,
+                            msgId: id,
+                            senderName: msg.senderName,
+                            timestamp: msg.timestamp
+                        });
+                    });
+                });
+
+                if (countBadge) countBadge.textContent = `${allFiles.length} item${allFiles.length === 1 ? '' : 's'}`;
+
+                if (!allFiles.length) {
+                    grid.innerHTML = `<div class="col-span-full py-12 text-center text-xs text-slate-400 italic">No files or documents shared in this conversation yet.</div>`;
+                    return;
+                }
+
+                allFiles.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                grid.innerHTML = allFiles.map(file => {
+                    const isImg = (file.type || '').startsWith('image/');
+                    const meta = docFileIcon(file.type, file.name);
+                    const safeUrl = getSafePdfUrl(file.url, file.name);
+                    const safeName = escapeHtml(file.name || 'Document');
+                    const time = formatChatTime(file.timestamp);
+
+                    if (isImg) {
+                        return `
+                        <div class="group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden shadow-2xs hover:shadow-md transition-all">
+                            <img src="${file.url}" class="w-full h-32 object-cover cursor-pointer hover:scale-105 transition-transform" onclick="window.open('${file.url}', '_blank')">
+                            <div class="p-2.5">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${safeName}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(file.senderName || '')} · ${time}</p>
+                            </div>
+                        </div>`;
+                    }
+
+                    return `
+                    <div class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs hover:shadow-md transition-all">
+                        <div class="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                            <iconify-icon icon="${meta.icon}" style="color:${meta.color}" width="22"></iconify-icon>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate" title="${safeName}">${safeName}</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(file.senderName || '')} · ${time}</p>
+                        </div>
+                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-all shrink-0" title="Open File">
+                            <iconify-icon icon="solar:square-arrow-right-up-bold" width="16"></iconify-icon>
+                        </a>
+                    </div>`;
+                }).join('');
+            }
+
+            function renderChatPinnedList() {
+                const list = document.getElementById('chat-pinned-list');
+                const countBadge = document.getElementById('chat-pinned-count');
+                if (!list) return;
+
+                const pinnedMessages = Object.entries(currentConvMessages || {}).filter(([id, msg]) => {
+                    if (msg.unsent) return false;
+                    const reactions = msg.reactions || {};
+                    return Object.keys(reactions).length > 0 || (msg.text && msg.text.toLowerCase().includes('important'));
+                });
+
+                if (countBadge) countBadge.textContent = `${pinnedMessages.length} pinned`;
+
+                if (!pinnedMessages.length) {
+                    list.innerHTML = `<div class="py-12 text-center text-xs text-slate-400 italic">No pinned messages in this chat yet. Messages with reactions or labeled important appear here.</div>`;
+                    return;
+                }
+
+                list.innerHTML = pinnedMessages.map(([id, msg]) => {
+                    const time = formatChatTime(msg.timestamp);
+                    return `
+                    <div class="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <span class="text-xs font-black text-slate-800 dark:text-slate-200">${escapeHtml(msg.senderName || '')}</span>
+                            <span class="text-[10px] text-slate-400">${time}</span>
+                        </div>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${escapeHtml(msg.text || '')}</p>
+                    </div>`;
+                }).join('');
+            }
+
+            function renderChatMembersList() {
+                const grid = document.getElementById('chat-members-grid');
+                const countBadge = document.getElementById('chat-members-tab-count');
+                if (!grid) return;
+
+                let members = [];
+                if (activeGroupMembers && activeGroupMembers.length > 0) {
+                    members = activeGroupMembers;
+                } else if (activeConvId && activeConvId.startsWith('dm_')) {
+                    const users = Array.from(allUsersMap?.values() || []);
+                    const myKey = eKey(currentUser.email);
+                    const parts = activeConvId.replace('dm_', '').split('_');
+                    members = users.filter(u => eKey(u.email) === myKey || parts.includes(eKey(u.email)));
+                }
+
+                if (countBadge) countBadge.textContent = `${members.length} members`;
+
+                if (!members.length) {
+                    grid.innerHTML = `<div class="col-span-full py-12 text-center text-xs text-slate-400 italic">No members found.</div>`;
+                    return;
+                }
+
+                grid.innerHTML = members.map(u => {
+                    const isOnline = !!(u.online || (userOnlineListeners[eKey(u.email)]));
+                    return `
+                    <div class="flex items-center gap-3 p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+                        <div class="relative shrink-0">
+                            <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-10 h-10 rounded-2xl object-cover bg-slate-100 border border-slate-200 dark:border-slate-700">
+                            <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-800 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}"></div>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-black text-slate-900 dark:text-white truncate">${escapeHtml(u.name || u.email)}</p>
+                            <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')} · ${escapeHtml(u.email || '')}</p>
+                        </div>
+                        ${u.email !== currentUser.email ? `
+                        <button onclick="openDm('${u.email}')" class="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-xl transition-colors shrink-0" title="Direct Message">
+                            <iconify-icon icon="solar:chat-round-line-bold" width="16"></iconify-icon>
+                        </button>` : ''}
+                    </div>`;
+                }).join('');
+            }
+
+            function renderChatTasksList() {
+                const list = document.getElementById('chat-tasks-list');
+                if (!list) return;
+
+                const convTasks = (tasks || []).slice(0, 8);
+                if (!convTasks.length) {
+                    list.innerHTML = `<div class="py-12 text-center text-xs text-slate-400 italic">No quick tasks linked to this channel.</div>`;
+                    return;
+                }
+
+                list.innerHTML = convTasks.map(t => {
+                    return `
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+                        <div class="min-w-0 flex-1 pr-3">
+                            <span class="text-[10px] font-mono font-bold text-indigo-600">${t.id}</span>
+                            <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(t.desc || t.title || '')}</p>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)} shrink-0">${t.status}</span>
+                    </div>`;
+                }).join('');
+            }
+
+            function openChatQuickTaskModal() {
+                if (typeof openNewTaskModal === 'function') {
+                    openNewTaskModal();
+                } else {
+                    toast('Please use the Tasks section to create a new task.', 'info');
+                }
+            }
+            window.openChatQuickTaskModal = openChatQuickTaskModal;
 
             function normalizeMessageAttachments(msg) {
                 if (!msg || msg.unsent) return [];
@@ -29205,7 +29953,6 @@ function isStrategyTask(t) {
                 const modal = document.getElementById('chatImageGalleryModal');
                 if (modal) {
                     modal.showModal();
-                    // Add keyboard event listener for zoom controls
                     modal.addEventListener('keydown', handleChatGalleryKeydown);
                 }
             }
@@ -29294,6 +30041,7 @@ function isStrategyTask(t) {
             function renderMessages(messages) {
                 currentConvMessages = messages || {};
                 const area = document.getElementById('messages-area');
+                if (!area) return;
                 const rows = Object.entries(messages).sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
                 if (!rows.length) {
                     area.innerHTML = `
@@ -29302,22 +30050,35 @@ function isStrategyTask(t) {
                                 <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
                                     class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
                                     <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
-                                    ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Message'}
+                                    ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Messages'}
                                 </button>
                             </div>` : ''}
                         <p class="text-center text-xs text-slate-400 italic py-6">No messages yet.</p>`;
                     return;
                 }
+                
                 area.innerHTML = activeConvHasMore ? `
                     <div class="sticky top-0 z-10 flex justify-center py-2 bg-gradient-to-b from-slate-50/95 via-slate-50/80 to-transparent">
                         <button onclick="loadMoreChatMessages()" ${activeConvLoadingMore ? 'disabled' : ''}
                             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed">
                             <iconify-icon icon="solar:round-arrow-up-bold" width="12"></iconify-icon>
-                            ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Message'}
+                            ${activeConvLoadingMore ? 'Loading messages...' : 'Load More Messages'}
                         </button>
                     </div>` : '';
+
                 const frag = document.createDocumentFragment();
-                rows.forEach(([id, msg]) => appendMessage(id, msg, frag));
+                let lastDateHeader = '';
+                rows.forEach(([id, msg]) => {
+                    const dateHeader = getChatDateHeader(msg.timestamp);
+                    if (dateHeader && dateHeader !== lastDateHeader) {
+                        lastDateHeader = dateHeader;
+                        const dateDiv = document.createElement('div');
+                        dateDiv.className = 'flex justify-center my-3 sticky top-2 z-10 pointer-events-none';
+                        dateDiv.innerHTML = `<span class="px-3 py-1 rounded-full text-[10px] font-black bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 shadow-2xs pointer-events-auto">${dateHeader}</span>`;
+                        frag.appendChild(dateDiv);
+                    }
+                    appendMessage(id, msg, frag);
+                });
                 area.appendChild(frag);
             }
 
@@ -29396,10 +30157,35 @@ function isStrategyTask(t) {
                     const replyText = repliedMsg.unsent ? 'This message was unsent' : escapeHtml((repliedMsg.text || 'Image/File').substring(0, 100));
                     const replySenderName = escapeHtml(repliedMsg.senderName || 'Unknown');
                     replyToHtml = `
-                    <div class="mb-2 p-2 rounded-lg ${isMe ? 'bg-white/70 border-l-2 border-indigo-500' : 'bg-slate-100 border-l-2 border-indigo-400'} text-xs">
-                        <p class="font-semibold ${isMe ? 'text-slate-700' : 'text-slate-600'}">${replySenderName}</p>
-                        <p class="${isMe ? 'text-slate-500' : 'text-slate-500'} truncate">${replyText}</p>
+                    <div class="mb-2 p-2 rounded-xl ${isMe ? 'bg-white/70 dark:bg-slate-900/60 border-l-3 border-indigo-500' : 'bg-slate-100 dark:bg-slate-700/60 border-l-3 border-indigo-500'} text-xs">
+                        <p class="font-bold ${isMe ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-600 dark:text-indigo-400'}">${replySenderName}</p>
+                        <p class="${isMe ? 'text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'} truncate mt-0.5">${replyText}</p>
                     </div>`;
+                }
+
+                // Check for Google Meet link
+                let meetCardHtml = '';
+                if (!msg.unsent && msg.text) {
+                    const meetMatch = msg.text.match(/https:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
+                    if (meetMatch) {
+                        const meetUrl = meetMatch[0];
+                        meetCardHtml = `
+                        <div class="mt-2 mb-1 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-indigo-950/50 rounded-2xl border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                    <iconify-icon icon="solar:videocamera-record-bold" width="18"></iconify-icon>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-black text-slate-800 dark:text-slate-100 truncate">Google Meet Video Call</p>
+                                    <p class="text-[10px] text-slate-400 font-mono truncate">${meetUrl.replace('https://', '')}</p>
+                                </div>
+                            </div>
+                            <a href="${meetUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black rounded-xl transition-all shrink-0 shadow-sm flex items-center gap-1">
+                                <span>Join</span>
+                                <iconify-icon icon="solar:arrow-right-up-linear" width="12"></iconify-icon>
+                            </a>
+                        </div>`;
+                    }
                 }
 
                 let attachmentHtml = '';
@@ -29415,7 +30201,7 @@ function isStrategyTask(t) {
                         attachmentHtml += `<div class="${text ? 'mb-2' : ''} ${gridClass}">` +
                             imageAttachments.map((a, i) => `
                             <img src="${a.url}" onclick="openChatImageGallery('${id}', ${i})"
-                                class="w-full rounded-xl cursor-pointer hover:opacity-90 transition-opacity object-cover ${imageAttachments.length > 1 ? 'max-h-32' : 'max-h-60'}"
+                                class="w-full rounded-2xl cursor-pointer hover:opacity-90 transition-opacity object-cover shadow-2xs ${imageAttachments.length > 1 ? 'max-h-32' : 'max-h-60'}"
                                 alt="${escapeHtml(a.name || 'Attached image')}" role="button" tabindex="0">`
                             ).join('') + `</div>`;
                     }
@@ -29424,17 +30210,17 @@ function isStrategyTask(t) {
                         const safeUrl = getSafePdfUrl(a.url, a.name);
                         const meta = docFileIcon(a.type, a.name);
                         const bgClass = isMe
-                            ? 'bg-white hover:bg-slate-50 border-slate-200'
-                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200';
-                        const textClass = isMe ? 'text-slate-800' : 'text-slate-800';
-                        const subClass = isMe ? 'text-slate-400' : 'text-slate-400';
+                            ? 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border-indigo-200 dark:border-indigo-900/60'
+                            : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700';
+                        const textClass = 'text-slate-800 dark:text-slate-100';
+                        const subClass = 'text-slate-400';
                         const sizeTxt = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
                         const safeName = escapeHtml(a.name || 'Document');
                         const isLink = a.isLink || a.isGoogleDriveFile;
 
                         attachmentHtml += `
                         <div class="${text ? 'mb-2' : ''} mt-1 group/attachment">
-                            <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-xl border transition-all shadow-sm"
+                            <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-2xl border transition-all shadow-2xs"
                                style="text-decoration:none">
                                 <iconify-icon icon="${meta.icon}" width="24" style="color:${meta.color};flex-shrink:0"></iconify-icon>
                                 <div class="min-w-0 pr-1 cursor-pointer" onclick="window.open('${safeUrl}', '_blank', 'noopener,noreferrer')">
@@ -29443,13 +30229,13 @@ function isStrategyTask(t) {
                                 </div>
                                 <div class="flex items-center gap-1 flex-shrink-0 ml-1">
                                     <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
-                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100/80 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
+                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 dark:text-slate-300 transition-all"
                                        title="Open in new tab">
                                         <iconify-icon icon="solar:square-arrow-right-up-bold" width="14"></iconify-icon>
                                     </a>
                                     ${!isLink ? `
                                     <a href="${safeUrl}" download="${safeName}"
-                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100/80 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
+                                       class="flex items-center justify-center h-6 w-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 dark:text-slate-300 transition-all"
                                        title="Download file"
                                        onclick="event.stopPropagation()">
                                         <iconify-icon icon="solar:download-square-bold" width="14"></iconify-icon>
@@ -29461,7 +30247,7 @@ function isStrategyTask(t) {
                 }
 
                 // Guard against rendering completely empty bubbles
-                const hasBodyContent = !!(replyToHtml || attachmentHtml || (text && text.trim()));
+                const hasBodyContent = !!(replyToHtml || attachmentHtml || meetCardHtml || (text && text.trim()));
                 if (!hasBodyContent && !msg.unsent) {
                     return;
                 }
@@ -29473,19 +30259,19 @@ function isStrategyTask(t) {
                         const count = Object.keys(users).length;
                         const active = !!users[eKey(currentUser.email)];
                         if (count > 0) {
-                            existingReactions.push(`<button onclick="toggleReaction('${id}','${emoji}')" class="h-6 px-1.5 rounded-full text-[10px] border transition-all ${active ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}">${emoji}${count > 1 ? ` ${count}` : ''}</button>`);
+                            existingReactions.push(`<button onclick="toggleReaction('${id}','${emoji}')" class="h-6 px-2 rounded-full text-[10px] border transition-all ${active ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-200 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-500 hover:bg-slate-50'}">${emoji}${count > 1 ? ` ${count}` : ''}</button>`);
                         }
                     });
                 }
 
                 const reactionPickerHtml = msg.unsent ? '' : `
                 <div class="relative inline-block">
-                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-50 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100" title="React">
+                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100" title="React">
                         <iconify-icon icon="solar:smile-circle-linear" width="14"></iconify-icon>
                     </button>
-                    <div class="chat-dropdown absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} hidden flex w-max bg-white shadow-lg border border-slate-100 rounded-xl p-1 gap-1 z-20 flex-row">
+                    <div class="chat-dropdown absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} hidden flex w-max bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 rounded-2xl p-1 gap-1 z-20 flex-row">
                         ${['👍', '❤️', '😂', '🎉', '👀'].map(emoji => `
-                            <button onclick="toggleReaction('${id}','${emoji}'); this.parentElement.classList.add('hidden');" class="w-8 h-8 rounded-lg hover:bg-slate-50 flex items-center justify-center text-base transition-colors">${emoji}</button>
+                            <button onclick="toggleReaction('${id}','${emoji}'); this.parentElement.classList.add('hidden');" class="w-8 h-8 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center text-base transition-colors">${emoji}</button>
                         `).join('')}
                     </div>
                 </div>
@@ -29497,22 +30283,22 @@ function isStrategyTask(t) {
                 const showDropdown = !msg.unsent && (isMe || isAdmin());
                 const ownActions = showDropdown ? `
                 <div class="own-actions relative inline-block opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-50 hover:text-indigo-600 flex items-center justify-center transition-all">
+                    <button onclick="document.querySelectorAll('.chat-dropdown').forEach(el => { if(el !== this.nextElementSibling) el.classList.add('hidden') }); this.nextElementSibling.classList.toggle('hidden')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 flex items-center justify-center transition-all">
                         <iconify-icon icon="solar:menu-dots-bold" width="14"></iconify-icon>
                     </button>
-                    <div class="chat-dropdown absolute bottom-full mb-1 right-0 hidden flex flex-col bg-white shadow-lg border border-slate-100 rounded-xl p-1 z-20 w-28">
-                        <button onclick="replyToMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg w-full text-left">
+                    <div class="chat-dropdown absolute bottom-full mb-1 right-0 hidden flex flex-col bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 rounded-2xl p-1 z-20 w-28">
+                        <button onclick="replyToMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 rounded-xl w-full text-left font-bold">
                             <iconify-icon icon="solar:reply-linear" width="14"></iconify-icon> Reply
                         </button>
                         ${isMe ? `
-                        <button onclick="editMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg w-full text-left">
+                        <button onclick="editMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 rounded-xl w-full text-left font-bold">
                             <iconify-icon icon="solar:pen-linear" width="14"></iconify-icon> Edit
                         </button>
-                        <button onclick="unsendMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-amber-600 hover:bg-amber-50 rounded-lg w-full text-left">
+                        <button onclick="unsendMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-700 rounded-xl w-full text-left font-bold">
                             <iconify-icon icon="solar:undo-left-linear" width="14"></iconify-icon> Unsend
                         </button>
                         ` : ''}
-                        <button onclick="deleteMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 rounded-lg w-full text-left">
+                        <button onclick="deleteMessage('${safeId}'); this.parentElement.classList.add('hidden');" class="flex items-center gap-2 px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-700 rounded-xl w-full text-left font-bold">
                             <iconify-icon icon="solar:trash-bin-trash-linear" width="14"></iconify-icon> Delete
                         </button>
                     </div>
@@ -29520,7 +30306,7 @@ function isStrategyTask(t) {
 
                 // Add reply action for all messages (not just own)
                 const replyAction = !msg.unsent ? `
-                <button onclick="replyToMessage('${safeId}')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-50 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100" title="Reply">
+                <button onclick="replyToMessage('${safeId}')" class="h-6 w-6 rounded-full text-[12px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100" title="Reply">
                     <iconify-icon icon="solar:reply-linear" width="14"></iconify-icon>
                 </button>` : '';
 
@@ -29529,21 +30315,22 @@ function isStrategyTask(t) {
                 const safeSenderName = (msg.senderName || msg.senderEmail || '?').replace(/'/g, "\\'");
 
                 const div = document.createElement('div');
-                div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in items-end gap-2`;
+                div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in items-end gap-2.5`;
                 div.dataset.msgId = id;
                 div.innerHTML = `
                 ${!isMe ? `
-                    <div class="w-7 h-7 rounded-lg overflow-hidden shrink-0 mb-1">
-                        <img src="${senderAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200" title="${escapeHtml(msg.senderName || '')}">
+                    <div class="w-8 h-8 rounded-xl overflow-hidden shrink-0 mb-1 shadow-2xs">
+                        <img src="${senderAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200 dark:border-slate-700" title="${escapeHtml(msg.senderName || '')}">
                     </div>
                 ` : ''}
-                <div class="max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
-                    ${!isMe ? `<p class="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase tracking-tighter">${msg.senderName}</p>` : ''}
+                <div class="max-w-[82%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
+                    ${!isMe ? `<p class="text-[11px] font-bold text-slate-400 mb-1 ml-1 tracking-tight">${escapeHtml(msg.senderName || '')}</p>` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} min-w-0 w-full">
-                        <div class="message-bubble px-4 py-2.5 rounded-2xl text-sm shadow-sm min-w-0 ${msg.unsent ? 'bg-slate-100 text-slate-400 italic border border-slate-200' : (isMe ? 'self-message rounded-tr-none' : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none')}">
+                        <div class="message-bubble px-4 py-3 rounded-2xl text-xs md:text-sm shadow-xs min-w-0 leading-relaxed ${msg.unsent ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 italic border border-slate-200 dark:border-slate-700' : (isMe ? 'bg-indigo-50/80 dark:bg-indigo-950/60 text-slate-900 dark:text-white border border-indigo-100 dark:border-indigo-900/60 rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-100 dark:border-slate-700/80 rounded-tl-none')}">
                             ${replyToHtml}
                             ${attachmentHtml}
-                            ${text ? `<div class="message-text whitespace-pre-wrap break-all">${text}</div>` : ''}
+                            ${meetCardHtml}
+                            ${text ? `<div class="message-text whitespace-pre-wrap break-words font-medium">${text}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             ${replyAction}
@@ -29552,7 +30339,10 @@ function isStrategyTask(t) {
                         </div>
                     </div>
                     ${reactionHtml}
-                    <p class="text-[8px] text-slate-400 mt-1 font-bold ${isMe ? 'text-right mr-1' : 'ml-1'}">${time}${edited}</p>
+                    <div class="flex items-center gap-1.5 mt-1 ${isMe ? 'justify-end mr-1' : 'ml-1'}">
+                        <p class="text-[9px] text-slate-400 font-bold">${time}${edited}</p>
+                        ${isMe && !msg.unsent ? `<span class="text-indigo-600 dark:text-indigo-400 flex items-center" title="Sent"><iconify-icon icon="solar:check-read-linear" width="12"></iconify-icon></span>` : ''}
+                    </div>
                     ${isMe && !msg.unsent ? (() => {
                         // Build seen-by list: users who opened the conv AFTER this message was sent
                         const seenByUsers = Object.values(activeConvReadReceipts).filter(r =>
@@ -29565,16 +30355,17 @@ function isStrategyTask(t) {
                         const avatarHtml = shown.map(r => {
                             const u = allUsersMap.get(r.email.toLowerCase()) || {};
                             const src = u.profilePicture || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}`;
-                            return `<img src="${src}" title="${escapeHtml(r.name || r.email)}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}'">`;
+                            return `<img src="${src}" class="w-4 h-4 rounded-full border border-white dark:border-slate-800 -ml-1 first:ml-0 inline-block object-cover" title="${escapeHtml(r.name || r.email)}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}'">`;
                         }).join('');
                         const label = seenByUsers.length === 1
                             ? `Seen by ${escapeHtml(seenByUsers[0].name || seenByUsers[0].email.split('@')[0])}`
                             : `Seen by ${seenByUsers.length}`;
-                        return `<div class="msg-seen-by justify-end mr-1">${avatarHtml}${extra > 0 ? `<span>+${extra}</span>` : ''}<span>${label}</span></div>`;
+                        return `<div class="msg-seen-by flex items-center gap-1 text-[9px] text-slate-400 font-bold mt-0.5 justify-end mr-1">${avatarHtml}${extra > 0 ? `<span>+${extra}</span>` : ''}<span>${label}</span></div>`;
                     })() : ''}
                 </div>`;
                 area.appendChild(div);
             }
+
 
             function escapeHtml(value) {
                 return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
