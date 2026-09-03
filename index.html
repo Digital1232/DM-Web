@@ -13047,20 +13047,108 @@
         let getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged;
         let getStorage, sRef, uploadBytes, getDownloadURL;
 
+        // Helper: import with timeout to prevent indefinite hanging on slow/blocked CDN
+        function importWithTimeout(url, timeoutMs = 12000) {
+            return Promise.race([
+                import(url),
+                new Promise((_, reject) => setTimeout(() => reject(new Error(`Import timed out after ${timeoutMs}ms: ${url}`)), timeoutMs))
+            ]);
+        }
+
+        // Try primary CDN (gstatic), then fallback to jsDelivr
+        const FIREBASE_VERSION = '9.23.0';
+        const CDN_PRIMARY = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+        const CDN_FALLBACK = `https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}/+esm`;
+        const FIREBASE_MODULES = ['firebase-app', 'firebase-database', 'firebase-auth', 'firebase-storage'];
+
+        async function loadFirebaseFromCDN(baseUrl, isEsm = false) {
+            if (isEsm) {
+                // jsDelivr +esm uses a single entry point pattern
+                const fb = await importWithTimeout(`https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}/app/+esm`);
+                const fbDb = await importWithTimeout(`https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}/database/+esm`);
+                const fbAuth = await importWithTimeout(`https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}/auth/+esm`);
+                const fbStorage = await importWithTimeout(`https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_VERSION}/storage/+esm`);
+                return { app: fb, database: fbDb, auth: fbAuth, storage: fbStorage };
+            }
+            const app = await importWithTimeout(`${baseUrl}/firebase-app.js`);
+            const database = await importWithTimeout(`${baseUrl}/firebase-database.js`);
+            const auth = await importWithTimeout(`${baseUrl}/firebase-auth.js`);
+            const storage = await importWithTimeout(`${baseUrl}/firebase-storage.js`);
+            return { app, database, auth, storage };
+        }
+
+        let _firebaseLoadError = null;
         try {
-            ({ initializeApp } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"));
-            ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"));
-            ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"));
-            ({ getStorage, ref: sRef, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js"));
+            let fb;
+            try {
+                console.log('[Module] Trying primary CDN (gstatic)...');
+                fb = await loadFirebaseFromCDN(CDN_PRIMARY);
+                console.log('[Module] Firebase loaded from primary CDN');
+            } catch (primaryErr) {
+                console.warn('[Module] Primary CDN failed, trying jsDelivr fallback...', primaryErr.message);
+                try {
+                    fb = await loadFirebaseFromCDN(CDN_FALLBACK, true);
+                    console.log('[Module] Firebase loaded from jsDelivr fallback');
+                } catch (fallbackErr) {
+                    console.error('[Module] Both CDNs failed:', fallbackErr.message);
+                    throw primaryErr; // Throw original error for the outer catch
+                }
+            }
+            ({ initializeApp } = fb.app);
+            ({ getDatabase, ref, onValue, onChildAdded, off, set, push, update, remove, onDisconnect, query, orderByChild, orderByKey, equalTo, limitToLast, endAt, endBefore, get } = fb.database);
+            ({ getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = fb.auth);
+            ({ getStorage, ref: sRef, uploadBytes, getDownloadURL } = fb.storage);
             console.log('[Module] Firebase imports complete');
         } catch (err) {
+            _firebaseLoadError = err;
             console.error('[Module] Firebase import failed:', err);
+
+            // Try to preserve existing session from localStorage to prevent auto-logout
+            const cachedUser = localStorage.getItem('worksync_user');
+            if (cachedUser) {
+                try {
+                    const parsed = JSON.parse(cachedUser);
+                    if (parsed && parsed.email) {
+                        console.log('[Module] Preserving cached session for:', parsed.email);
+                        // Keep the user visually logged in; the app won't be functional
+                        // but they won't be jarred by sudden logout
+                        document.documentElement.classList.add('has-user');
+                    }
+                } catch (e) { /* ignore parse errors */ }
+            }
+
             if (typeof hideInitialLoading === 'function') hideInitialLoading();
             document.documentElement.classList.remove('auth-pending');
             document.getElementById('loading-view')?.classList.add('hidden');
             document.getElementById('login-view')?.classList.remove('hidden');
-            alert('Unable to load app modules. Please use a modern browser and ensure network access to Firebase CDN.\n' + err.message);
+            const errorMsg = 'Unable to connect to server. Please check your internet connection and try refreshing the page.';
+            // Show a toast-style notification instead of blocking alert
+            const errBanner = document.createElement('div');
+            errBanner.id = 'firebase-load-error-banner';
+            errBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:12px 20px;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;font-size:13px;font-weight:600;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+            errBanner.innerHTML = `⚠️ ${errorMsg} <button onclick="location.reload()" style="margin-left:12px;padding:4px 16px;background:white;color:#dc2626;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;">Retry</button>`;
+            document.body.prepend(errBanner);
             console.error('Failed to load Firebase modules:', err);
+        }
+
+        // CRITICAL: Always define handleLogin on window, even if Firebase failed.
+        // This prevents "handleLogin is not defined" when users click Sign In.
+        if (!initializeApp) {
+            window.handleLogin = function() {
+                const errEl = document.getElementById('login-error');
+                const errorTextEl = document.getElementById('error-text');
+                if (errEl && errorTextEl) {
+                    errorTextEl.textContent = 'Cannot connect to server. Please check your internet and refresh the page.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert('Cannot connect to server. Please check your internet connection and refresh the page.');
+                }
+            };
+            window.logout = function() {
+                localStorage.removeItem('worksync_user');
+                document.getElementById('login-view')?.classList.remove('hidden');
+                document.getElementById('dashboard-view')?.classList.add('hidden');
+            };
         }
 
         if (initializeApp) {
