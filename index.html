@@ -10277,6 +10277,105 @@
         </div>
     </dialog>
 
+    <!-- Modal: Request Break Adjustment -->
+    <dialog id="breakAdjustmentModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden bg-white dark:bg-slate-900 text-slate-900 dark:text-white backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm">
+        <div class="p-8">
+            <div class="flex justify-between items-start gap-3 mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                        <iconify-icon icon="solar:clock-circle-bold" width="22"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Edit Break Time</h3>
+                        <p class="text-[11px] text-slate-400 font-medium">Request manager approval to adjust break duration</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeBreakAdjustmentModal()"
+                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors shrink-0" aria-label="Close">
+                    <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Date & Current Status Card -->
+            <div class="grid grid-cols-2 gap-3 mb-5">
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Target Date</p>
+                    <p id="ba-modal-date" class="text-xs font-bold text-slate-800 dark:text-slate-100">--</p>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Current Break</p>
+                    <p id="ba-modal-current-break" class="text-xs font-bold text-amber-600 dark:text-amber-400">0 mins</p>
+                </div>
+            </div>
+
+            <!-- New Break Duration Input -->
+            <div class="mb-5">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Adjusted Break Duration</label>
+                <div class="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">Hours</label>
+                        <input type="number" id="ba-hours" min="0" max="12" value="0" oninput="calculateBreakAdjustmentPreview()"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">Minutes</label>
+                        <input type="number" id="ba-minutes" min="0" max="59" value="0" oninput="calculateBreakAdjustmentPreview()"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                    </div>
+                </div>
+
+                <!-- Quick Presets -->
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                    <button type="button" onclick="setBreakAdjustmentPreset(15)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 transition-colors">15m</button>
+                    <button type="button" onclick="setBreakAdjustmentPreset(30)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 transition-colors">30m</button>
+                    <button type="button" onclick="setBreakAdjustmentPreset(45)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 transition-colors">45m</button>
+                    <button type="button" onclick="setBreakAdjustmentPreset(60)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 transition-colors">1 Hour</button>
+                    <button type="button" onclick="setBreakAdjustmentPreset(90)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 transition-colors">1.5 Hours</button>
+                    <button type="button" onclick="setBreakAdjustmentPreset(0)" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/40 transition-colors">0m (No Break)</button>
+                </div>
+
+                <!-- Difference indicator -->
+                <div id="ba-diff-preview" class="mt-2.5 px-3 py-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold flex items-center gap-1.5">
+                    <iconify-icon icon="solar:info-circle-bold" width="14"></iconify-icon>
+                    <span>New Total Break: <strong>0 mins</strong></span>
+                </div>
+            </div>
+
+            <!-- Reason Input -->
+            <div class="mb-5">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Reason for Adjustment <span class="text-rose-500">*</span></label>
+                <textarea id="ba-reason" rows="2"
+                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs text-slate-800 dark:text-white outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none"
+                    placeholder="e.g., Forgot to click Resume Work after lunch, timer was accidentally paused..."></textarea>
+            </div>
+
+            <!-- Approval Manager Card -->
+            <div class="mb-6 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-xs">
+                        <iconify-icon icon="solar:user-check-bold" width="14"></iconify-icon>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Approving Manager</p>
+                        <p id="ba-approver-name" class="text-xs font-bold text-slate-800 dark:text-slate-200">Management</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">Approval Required</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="closeBreakAdjustmentModal()"
+                    class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 text-xs font-bold transition-all">Cancel</button>
+                <button type="button" onclick="submitBreakAdjustmentRequest()"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2">
+                    <iconify-icon icon="solar:plain-bold" width="16"></iconify-icon>
+                    Send for Approval
+                </button>
+            </div>
+        </div>
+    </dialog>
+
     <!-- Modal: New Group -->
     <dialog id="newGroupModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
         <div class="p-8">
@@ -12834,7 +12933,7 @@
             }
 
             function getNextPendingApproval(r) {
-                if (r.type !== 'leave' && r.type !== 'saturday' && r.type !== 'permission') return null;
+                if (r.type !== 'leave' && r.type !== 'saturday' && r.type !== 'permission' && r.type !== 'break_adjustment') return null;
                 const approvals = buildApprovalsFromChain(resolveLeaveRequesterEmail(r), r.approvals);
                 if (approvals.some(a => a.status === 'rejected')) return null;
                 const approvedCount = approvals.filter(a => a.status === 'approved').length;
@@ -12849,7 +12948,7 @@
                     const next = getNextPendingApproval(r);
                     return !!(next && next.approverEmail?.toLowerCase() === me);
                 }
-                if (r.type === 'saturday' || r.type === 'permission') {
+                if (r.type === 'saturday' || r.type === 'permission' || r.type === 'break_adjustment') {
                     // Use the approval chain if the requester has one defined (same Palanirajan → Nanjil flow)
                     const requesterEmail = resolveLeaveRequesterEmail(r);
                     const chain = LEAVE_APPROVAL_CHAINS[requesterEmail];
@@ -33130,35 +33229,85 @@ function isStrategyTask(t) {
             }
 
             function renderTimingDetailForDate(date, events, container) {
+                if (!container) return;
                 if (!events || !events.length) {
-                    container.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">No events for ${date}.</p>`;
+                    container.innerHTML = `
+                    <div class="text-center py-8">
+                        <p class="text-slate-400 text-sm mb-3">No events for ${date}.</p>
+                        <button type="button" onclick="openBreakAdjustmentModal('${date}', 0)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-all shadow-sm">
+                            <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
+                            Log / Edit Break Time
+                        </button>
+                    </div>`;
                     return;
                 }
-                const sortedEvents = events.sort((a, b) => a.timestamp - b.timestamp);
+                const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+                const totalBreakMs = sortedEvents.filter(e => e.type === 'break_end' && e.duration).reduce((sum, e) => sum + e.duration, 0);
+                const totalWorkMs = sortedEvents.filter(e => e.type === 'check_out' && e.duration).reduce((sum, e) => sum + e.duration, 0);
+                const hasAdjustedBreak = sortedEvents.some(e => e.type === 'break_end' && e.adjusted);
+
+                const breakMins = Math.round(totalBreakMs / 60000);
+                const breakFormatted = formatTime(Math.floor(totalBreakMs / 1000));
+                const workFormatted = totalWorkMs > 0 ? formatTime(Math.floor(totalWorkMs / 1000)) : '—';
+                const userEmail = (sortedEvents[0]?.userId || (reportSelectedUser !== 'all' ? reportSelectedUser : currentUser?.email || '')).toLowerCase();
+                const canEdit = !!currentUser;
+
                 container.innerHTML = `
-                <h4 class="text-sm font-black text-slate-900 mb-4">Timeline for ${new Date(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
-                <div class="relative pl-8 border-l-2 border-slate-100">
+                <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                        <h4 class="text-sm font-black text-slate-900 dark:text-white">Timeline for ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
+                        <div class="flex flex-wrap items-center gap-2 mt-1">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">Work: ${workFormatted}</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Break: ${breakMins}m (${breakFormatted})</span>
+                            ${hasAdjustedBreak ? `<span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Adjusted</span>` : ''}
+                        </div>
+                    </div>
+                    ${canEdit ? `
+                        <button type="button" onclick="openBreakAdjustmentModal('${date}', ${totalBreakMs}, '${userEmail}')" 
+                            class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shrink-0">
+                            <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon>
+                            Edit Break Time
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="relative pl-8 border-l-2 border-slate-100 dark:border-slate-800">
                     ${sortedEvents.map(evt => {
                     const time = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     let icon, label, color, duration = '';
                     switch (evt.type) {
                         case 'check_in': icon = 'solar:login-bold'; label = 'Checked In'; color = 'text-emerald-500'; break;
                         case 'break_start': icon = 'solar:pause-bold'; label = 'Break Started'; color = 'text-amber-500'; break;
-                        case 'break_end': icon = 'solar:play-bold'; label = 'Break Ended'; color = 'text-blue-500'; if (evt.duration) duration = formatTime(Math.floor(evt.duration / 1000)); break;
+                        case 'break_end': 
+                            icon = 'solar:play-bold'; 
+                            label = evt.adjusted ? 'Break Ended (Adjusted)' : 'Break Ended'; 
+                            color = 'text-blue-500'; 
+                            if (evt.duration) duration = formatTime(Math.floor(evt.duration / 1000)); 
+                            break;
                         case 'check_out': icon = 'solar:logout-bold'; label = 'Checked Out'; color = 'text-slate-500'; if (evt.duration) duration = formatTime(Math.floor(evt.duration / 1000)); break;
                         default: icon = 'solar:question-circle-bold'; label = evt.type; color = 'text-slate-400';
                     }
+                    const isBreakItem = evt.type === 'break_end';
                     return `
                         <div class="flex items-start gap-4 mb-4">
-                            <div class="absolute -left-[11px] w-5 h-5 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center ${color}">
+                            <div class="absolute -left-[11px] w-5 h-5 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center ${color}">
                                 <iconify-icon icon="${icon}" width="12"></iconify-icon>
                             </div>
                             <div class="flex-1 flex items-center justify-between">
                                 <div>
-                                    <p class="text-xs font-bold text-slate-800">${label}</p>
+                                    <div class="flex items-center gap-1.5">
+                                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200">${label}</p>
+                                        ${evt.adjusted ? `<span class="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Manager Approved</span>` : ''}
+                                    </div>
                                     <p class="text-[10px] text-slate-400 font-medium">${time}</p>
                                 </div>
-                                <p class="text-xs font-mono font-semibold text-slate-500">${duration}</p>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">${duration}</p>
+                                    ${isBreakItem && canEdit ? `
+                                        <button onclick="openBreakAdjustmentModal('${date}', ${totalBreakMs}, '${userEmail}')" class="text-slate-400 hover:text-amber-600 p-1 rounded transition-colors" title="Edit Break Time">
+                                            <iconify-icon icon="solar:pen-bold" width="12"></iconify-icon>
+                                        </button>
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>`;
                 }).join('')}
@@ -40418,10 +40567,30 @@ function isStrategyTask(t) {
                     `;
                     }
 
-                    const periodLabel = r.type === 'permission' ? 'Date & time' : (r.type === 'leave' ? 'Leave period' : 'Date');
+                    const periodLabel = r.type === 'permission' ? 'Date & time' : (r.type === 'leave' ? 'Leave period' : (r.type === 'break_adjustment' ? 'Adjusted Break' : 'Date'));
+                    
+                    let breakDetailExtra = '';
+                    if (r.type === 'break_adjustment') {
+                        const origMins = Math.round((r.originalBreakDurationMs || 0) / 60000);
+                        const newMins = r.requestedBreakMinutes || 0;
+                        const diff = newMins - origMins;
+                        breakDetailExtra = `
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <div class="bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-700/50 px-4 py-3">
+                                <p class="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">Original Break</p>
+                                <p class="text-sm font-bold text-amber-900 dark:text-amber-200">${origMins} mins (${(origMins / 60).toFixed(1)}h)</p>
+                            </div>
+                            <div class="bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-200 dark:border-indigo-700/50 px-4 py-3">
+                                <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Requested Break</p>
+                                <p class="text-sm font-bold text-indigo-900 dark:text-indigo-200">${newMins} mins (${(newMins / 60).toFixed(1)}h) <span class="text-xs font-semibold ${diff >= 0 ? 'text-amber-600' : 'text-emerald-600'}">(${diff >= 0 ? '+' : ''}${diff}m)</span></p>
+                            </div>
+                        </div>`;
+                    }
+
                     document.getElementById('approve-modal-detail').innerHTML = `
                     <p class="mb-3 font-black text-slate-900">User: ${escapeHtml(r.userName)} <span class="text-slate-500 font-bold">(${escapeHtml(r.userRole || '')})</span></p>
                     <p class="mb-3 text-slate-700"><span class="font-black text-slate-500">Request:</span> ${escapeHtml(reqLabel(r))}</p>
+                    ${breakDetailExtra}
                     <div class="grid grid-cols-1 gap-2 mb-3">
                         <div class="bg-white rounded-xl border border-slate-200 px-4 py-3">
                             <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Submitted</p>
@@ -40483,6 +40652,63 @@ function isStrategyTask(t) {
                 }
 
                 await update(ref(db, `worksync/requests/${req.id}`), updateData);
+
+                // If approved and it's a break adjustment, automatically update attendance_events
+                if (updateData.status === 'approved' && req.type === 'break_adjustment') {
+                    const reqDate = req.date;
+                    const reqUserId = (req.userId || '').toLowerCase();
+                    const targetDurationMs = (req.requestedBreakMinutes || 0) * 60 * 1000;
+                    try {
+                        const attSnap = await get(ref(db, 'worksync/attendance_events'));
+                        if (attSnap.exists()) {
+                            const allEvents = attSnap.val();
+                            const matchingKeys = Object.keys(allEvents).filter(k => {
+                                const ev = allEvents[k];
+                                return (ev.userId || '').toLowerCase() === reqUserId && ev.date === reqDate && ev.type === 'break_end';
+                            });
+                            if (matchingKeys.length > 0) {
+                                const lastKey = matchingKeys[matchingKeys.length - 1];
+                                await update(ref(db, `worksync/attendance_events/${lastKey}`), {
+                                    duration: targetDurationMs,
+                                    adjusted: true,
+                                    adjustedBy: currentUser.email,
+                                    adjustedAt: Date.now(),
+                                    requestId: req.id
+                                });
+                            } else {
+                                await push(ref(db, 'worksync/attendance_events'), {
+                                    userId: req.userId,
+                                    userName: req.userName,
+                                    type: 'break_end',
+                                    timestamp: new Date(`${reqDate}T13:30:00`).getTime() || Date.now(),
+                                    date: reqDate,
+                                    duration: targetDurationMs,
+                                    adjusted: true,
+                                    adjustedBy: currentUser.email,
+                                    adjustedAt: Date.now(),
+                                    requestId: req.id
+                                });
+                            }
+                        } else {
+                            await push(ref(db, 'worksync/attendance_events'), {
+                                userId: req.userId,
+                                userName: req.userName,
+                                type: 'break_end',
+                                timestamp: new Date(`${reqDate}T13:30:00`).getTime() || Date.now(),
+                                date: reqDate,
+                                duration: targetDurationMs,
+                                adjusted: true,
+                                adjustedBy: currentUser.email,
+                                adjustedAt: Date.now(),
+                                requestId: req.id
+                            });
+                        }
+                        if (typeof loadAttendanceEvents === 'function') loadAttendanceEvents();
+                    } catch (err) {
+                        console.error('Failed to sync adjusted break time to attendance_events:', err);
+                    }
+                }
+
                 document.getElementById('approveModal').close();
                 toast(`Request ${decision === 'approved' ? 'approved' : 'rejected'}`, 'success');
 
@@ -40523,7 +40749,12 @@ function isStrategyTask(t) {
                 });
             }
 
-            function reqLabel(r) { return r.type === 'leave' ? `${r.leaveType}${r.leaveDurationLabel && r.leaveDurationLabel !== 'Full Day' ? ' - ' + r.leaveDurationLabel : ''}` : (r.type === 'permission' ? 'Permission' : 'Saturday'); }
+            function reqLabel(r) { 
+                if (r.type === 'leave') return `${r.leaveType}${r.leaveDurationLabel && r.leaveDurationLabel !== 'Full Day' ? ' - ' + r.leaveDurationLabel : ''}`;
+                if (r.type === 'permission') return 'Permission';
+                if (r.type === 'break_adjustment') return 'Break Adjustment';
+                return 'Saturday';
+            }
 
             function formatHrDateTime(ts) {
                 if (!ts) return '—';
@@ -40567,12 +40798,183 @@ function isStrategyTask(t) {
                     const to = formatHrTimeOnly(r.toTime);
                     return `${formatHrDateOnly(r.date)} · ${from} – ${to}`;
                 }
+                if (r.type === 'break_adjustment') {
+                    const origMins = Math.round((r.originalBreakDurationMs || 0) / 60000);
+                    return `${formatHrDateOnly(r.date)} · ${r.requestedBreakMinutes || 0}m (was ${origMins}m)`;
+                }
                 return formatHrDateOnly(r.date);
             }
 
             function reqDetail(r) {
                 return formatHrRequestPeriod(r);
             }
+
+            // --- BREAK ADJUSTMENT MODAL & LOGIC ---
+            let currentBreakAdjustmentData = {
+                date: '',
+                originalBreakMs: 0,
+                targetUserEmail: '',
+                targetUserName: ''
+            };
+
+            function openBreakAdjustmentModal(date, currentBreakMs = 0, targetUserEmail = null) {
+                if (!currentUser) return toast('Please sign in to request break adjustments', 'error');
+
+                const userEmail = (targetUserEmail || (reportSelectedUser !== 'all' ? reportSelectedUser : currentUser.email) || currentUser.email).toLowerCase();
+                const knownUser = knownUserByEmail(userEmail) || (currentUser.email.toLowerCase() === userEmail ? currentUser : { name: userEmail, email: userEmail });
+
+                if (typeof currentBreakMs !== 'number' || isNaN(currentBreakMs) || currentBreakMs === 0) {
+                    currentBreakMs = (attendanceEvents || [])
+                        .filter(e => (e.userId || '').toLowerCase() === userEmail && e.date === date && e.type === 'break_end' && e.duration)
+                        .reduce((sum, e) => sum + e.duration, 0);
+                }
+
+                currentBreakAdjustmentData = {
+                    date: date,
+                    originalBreakMs: currentBreakMs,
+                    targetUserEmail: userEmail,
+                    targetUserName: knownUser.name || userEmail
+                };
+
+                const dateFormatted = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                const currentMins = Math.round(currentBreakMs / 60000);
+
+                const dateEl = document.getElementById('ba-modal-date');
+                if (dateEl) dateEl.textContent = `${dateFormatted} (${currentBreakAdjustmentData.targetUserName})`;
+
+                const currEl = document.getElementById('ba-modal-current-break');
+                if (currEl) currEl.textContent = `${currentMins} mins (${(currentMins / 60).toFixed(1)} hrs)`;
+
+                const hours = Math.floor(currentMins / 60);
+                const mins = currentMins % 60;
+                const hoursInput = document.getElementById('ba-hours');
+                const minsInput = document.getElementById('ba-minutes');
+                if (hoursInput) hoursInput.value = hours;
+                if (minsInput) minsInput.value = mins;
+
+                const reasonInput = document.getElementById('ba-reason');
+                if (reasonInput) reasonInput.value = '';
+
+                const chain = LEAVE_APPROVAL_CHAINS[userEmail] || [];
+                let approverName = 'Palanirajan R & Nanjil Manohar';
+                if (chain.length > 0) {
+                    approverName = chain.map(c => c.name.split(' ')[0]).join(' → ');
+                } else if (isAdmin()) {
+                    approverName = 'Direct Admin Approval';
+                }
+                const approverEl = document.getElementById('ba-approver-name');
+                if (approverEl) approverEl.textContent = approverName;
+
+                calculateBreakAdjustmentPreview();
+
+                const modal = document.getElementById('breakAdjustmentModal');
+                if (modal) modal.showModal();
+            }
+
+            function closeBreakAdjustmentModal() {
+                const modal = document.getElementById('breakAdjustmentModal');
+                if (modal) modal.close();
+            }
+
+            function setBreakAdjustmentPreset(totalMins) {
+                const hoursInput = document.getElementById('ba-hours');
+                const minsInput = document.getElementById('ba-minutes');
+                if (hoursInput && minsInput) {
+                    hoursInput.value = Math.floor(totalMins / 60);
+                    minsInput.value = totalMins % 60;
+                    calculateBreakAdjustmentPreview();
+                }
+            }
+
+            function calculateBreakAdjustmentPreview() {
+                const hours = parseInt(document.getElementById('ba-hours')?.value || '0', 10) || 0;
+                const mins = parseInt(document.getElementById('ba-minutes')?.value || '0', 10) || 0;
+                const totalNewMins = (hours * 60) + mins;
+                const oldMins = Math.round(currentBreakAdjustmentData.originalBreakMs / 60000);
+                const diff = totalNewMins - oldMins;
+
+                const previewEl = document.getElementById('ba-diff-preview');
+                if (previewEl) {
+                    let diffText = '';
+                    if (diff > 0) {
+                        diffText = `<span class="text-amber-600 font-bold ml-1.5">(+${diff} mins from original)</span>`;
+                    } else if (diff < 0) {
+                        diffText = `<span class="text-emerald-600 font-bold ml-1.5">(${diff} mins from original)</span>`;
+                    } else {
+                        diffText = `<span class="text-slate-500 font-medium ml-1.5">(No change)</span>`;
+                    }
+                    previewEl.innerHTML = `<iconify-icon icon="solar:info-circle-bold" width="14"></iconify-icon><span>New Total Break: <strong>${totalNewMins} mins</strong> (${(totalNewMins / 60).toFixed(1)} hrs)${diffText}</span>`;
+                }
+            }
+
+            async function submitBreakAdjustmentRequest() {
+                if (!currentUser || !db) return toast('User not authenticated', 'error');
+
+                const hours = parseInt(document.getElementById('ba-hours')?.value || '0', 10) || 0;
+                const mins = parseInt(document.getElementById('ba-minutes')?.value || '0', 10) || 0;
+                const totalNewMins = (hours * 60) + mins;
+                const reason = (document.getElementById('ba-reason')?.value || '').trim();
+
+                if (!reason) {
+                    return toast('Please enter a reason for the break time adjustment', 'error');
+                }
+
+                const targetEmail = (currentBreakAdjustmentData.targetUserEmail || currentUser.email).toLowerCase();
+                const targetName = currentBreakAdjustmentData.targetUserName || currentUser.name || targetEmail;
+                const targetDate = currentBreakAdjustmentData.date;
+                const originalBreakMs = currentBreakAdjustmentData.originalBreakMs || 0;
+                const requestedBreakDurationMs = totalNewMins * 60 * 1000;
+
+                const requesterEmail = targetEmail;
+                const approvalChain = getLeaveApprovalChainForRequester(requesterEmail);
+                const approvals = buildApprovalsFromChain(requesterEmail, []);
+
+                const requestData = {
+                    type: 'break_adjustment',
+                    userId: requesterEmail,
+                    userName: targetName,
+                    date: targetDate,
+                    originalBreakDurationMs: originalBreakMs,
+                    requestedBreakMinutes: totalNewMins,
+                    requestedBreakDurationMs: requestedBreakDurationMs,
+                    reason: reason,
+                    submittedAt: Date.now(),
+                    submittedBy: currentUser.email,
+                    status: 'pending',
+                    currentApprovalStep: 1,
+                    approvalChain: approvalChain,
+                    approvals: approvals
+                };
+
+                try {
+                    const newRef = push(ref(db, 'worksync/requests'));
+                    await set(newRef, requestData);
+                    closeBreakAdjustmentModal();
+                    toast('Break adjustment request submitted for manager approval', 'success');
+
+                    const nextApprover = getNextPendingApproval(requestData);
+                    if (nextApprover && nextApprover.approverEmail) {
+                        await push(ref(db, 'worksync/task_notifications'), {
+                            title: 'Break Adjustment Request',
+                            body: `${targetName} requested break adjustment for ${targetDate} (${totalNewMins} mins). Reason: ${reason}`,
+                            timestamp: Date.now(),
+                            readBy: {},
+                            notifyEmails: [nextApprover.approverEmail]
+                        });
+                    }
+
+                    if (typeof renderTimingReport === 'function') renderTimingReport();
+                } catch (err) {
+                    console.error('Error submitting break adjustment request:', err);
+                    toast('Failed to submit request: ' + err.message, 'error');
+                }
+            }
+
+            window.openBreakAdjustmentModal = openBreakAdjustmentModal;
+            window.closeBreakAdjustmentModal = closeBreakAdjustmentModal;
+            window.setBreakAdjustmentPreset = setBreakAdjustmentPreset;
+            window.calculateBreakAdjustmentPreview = calculateBreakAdjustmentPreview;
+            window.submitBreakAdjustmentRequest = submitBreakAdjustmentRequest;
 
             // Edit/Delete Leave Functions
             let editingLeaveId = null;
