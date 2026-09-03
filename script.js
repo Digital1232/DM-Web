@@ -17100,23 +17100,34 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 openBreakPopup();
             }
             async function doResume() {
-                if (breakStartTime) {
-                    const breakDuration = Date.now() - breakStartTime;
+                const effectiveBreakStart = breakStartTime || parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
+                if (effectiveBreakStart) {
+                    const breakDuration = Math.max(0, Date.now() - effectiveBreakStart);
                     totalBreakDuration += breakDuration;
                     localStorage.setItem('worksync_totalBreakDuration', String(totalBreakDuration));
                     localStorage.removeItem('worksync_breakStartTime');
                     logAttendanceEvent('break_end', breakDuration);
                     breakStartTime = null;
+                } else {
+                    localStorage.removeItem('worksync_breakStartTime');
+                    breakStartTime = null;
                 }
+
+                if (timerRef) clearInterval(timerRef);
                 timerRef = setInterval(tickTimer, 1000);
                 localStorage.setItem('worksync_timerState', 'running');
                 setTimerState('running');
+                syncActiveSessionToFirebase('running');
                 toast('Work session resumed', 'success');
 
-                // Close break popup and floating reminder
+                // Close break popup, exceeded popup, and floating reminder
                 const modal = document.getElementById('breakStatusModal');
                 if (modal && modal.open) {
                     modal.close();
+                }
+                const exceededModal = document.getElementById('breakExceededModal');
+                if (exceededModal) {
+                    try { exceededModal.close(); exceededModal.remove(); } catch(e){}
                 }
                 const floating = document.getElementById('breakFloatingReminder');
                 if (floating) {
@@ -17125,7 +17136,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 stopBreakTimer();
 
                 try {
-                    if (currentUser) {
+                    if (currentUser && typeof get === 'function' && typeof ref === 'function' && db) {
                         const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
                         const currentTaskData = snap.val();
                         if (currentTaskData && currentTaskData.taskId) {
@@ -17133,20 +17144,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             taskSeconds = currentTaskData.currentSeconds || 0;
                             taskOnHold = false;
                             taskStartTime = Date.now() - (taskSeconds * 1000);
-                            startTaskTimer();
-                            await saveCurrentTaskState('working');
-                            renderTasks();
-                            if (isInternalTabActive()) renderInternalTasks();
-                            renderActiveTaskCard();
-                            renderDailyPlan();
+                            if (typeof startTaskTimer === 'function') startTaskTimer();
+                            if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
+                            if (typeof renderTasks === 'function') renderTasks();
+                            if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
+                            if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
+                            if (typeof renderDailyPlan === 'function') renderDailyPlan();
                             toast('Paused task auto-resumed', 'success');
                         }
-                    } else if (activeTaskId && taskOnHold) {
+                    } else if (activeTaskId && taskOnHold && typeof resumeTaskTimer === 'function') {
                         resumeTaskTimer();
                     }
                 } catch (err) {
                     console.error('Failed to auto-resume task:', err);
-                    if (activeTaskId && taskOnHold) {
+                    if (activeTaskId && taskOnHold && typeof resumeTaskTimer === 'function') {
                         resumeTaskTimer();
                     }
                 }
@@ -17175,6 +17186,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     checkInTime = null;
                 }
                 setTimerState('idle');
+                syncActiveSessionToFirebase('idle');
                 localStorage.removeItem('worksync_timerState');
                 localStorage.removeItem('worksync_checkInTime');
                 localStorage.removeItem('worksync_totalBreakDuration');
@@ -17187,6 +17199,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const modal = document.getElementById('breakStatusModal');
                 if (modal && modal.open) {
                     modal.close();
+                }
+                const exceededModal = document.getElementById('breakExceededModal');
+                if (exceededModal) {
+                    try { exceededModal.close(); exceededModal.remove(); } catch(e){}
                 }
                 const floating = document.getElementById('breakFloatingReminder');
                 if (floating) {
