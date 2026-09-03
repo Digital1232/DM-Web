@@ -17822,6 +17822,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // VIEW NAVIGATION
             function switchTasksTab(tab) {
                 try {
+                    // Ensure the main tasks panel is shown if we're currently on a different view
+                    const tasksPanel = document.getElementById('view-tasks-panel');
+                    if (tasksPanel && (tasksPanel.classList.contains('hidden') || tasksPanel.style.display === 'none')) {
+                        if (typeof switchView === 'function') {
+                            switchView('tasks');
+                        }
+                    }
+
                     const jiraTab = document.getElementById('tasks-tab-jira');
                     const intTab = document.getElementById('tasks-tab-internal');
                     const dpTab = document.getElementById('tasks-tab-dailyplan');
@@ -17832,23 +17840,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const btnCompleted = document.getElementById('tab-btn-completed');
 
                     console.log(`[switchTasksTab START] Switching to: ${tab}`);
-                    console.log(`[switchTasksTab] completedTab exists?`, !!completedTab);
-                    if (completedTab) {
-                        console.log(`[switchTasksTab] completedTab has hidden BEFORE:`, completedTab.classList.contains('hidden'));
-                    }
 
                     if (!jiraTab || !intTab) {
                         console.error('[switchTasksTab] Missing jiraTab or intTab');
                         return;
                     }
 
-                    // Hide ALL tabs - ensure they all have hidden class
+                    // Hide ALL tabs
                     jiraTab.classList.add('hidden');
                     intTab.classList.add('hidden');
                     if (dpTab) dpTab.classList.add('hidden');
                     if (completedTab) completedTab.classList.add('hidden');
-
-                    console.log(`[switchTasksTab] All tabs hidden - completedTab now has hidden?`, completedTab ? completedTab.classList.contains('hidden') : 'N/A');
 
                     // Reset all button styles
                     if (btnJira) btnJira.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0';
@@ -17868,6 +17870,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (btnInt) btnInt.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
                         try { populateInternalClientFilter(); populateInternalAssigneeFilter(); } catch (e) { console.error('Internal filter err:', e); }
                         renderInternalTasks();
+                        if (typeof ensureAllRecurringTasks === 'function') ensureAllRecurringTasks();
                     } else if (tab === 'dailyplan') {
                         activeTasksTab = 'dailyplan';
                         if (dpTab) {
@@ -17875,20 +17878,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                         if (btnDp) btnDp.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
                         renderDailyPlan();
+                        if (typeof ensureAllRecurringTasks === 'function') ensureAllRecurringTasks();
                     } else if (tab === 'completed') {
                         console.log(`[switchTasksTab COMPLETED] Starting completed tab switch`);
                         activeTasksTab = 'completed';
                         
                         if (completedTab) {
-                            console.log(`[switchTasksTab COMPLETED] Before remove - has hidden?`, completedTab.classList.contains('hidden'));
                             completedTab.classList.remove('hidden');
-                            console.log(`[switchTasksTab COMPLETED] After remove - has hidden?`, completedTab.classList.contains('hidden'));
                         }
                         
                         if (btnCompleted) btnCompleted.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
                         initCompletedTasksTab();
-                        
-                        console.log(`[switchTasksTab COMPLETED] After init - has hidden?`, completedTab ? completedTab.classList.contains('hidden') : 'N/A');
                     }
                     
                     console.log(`[switchTasksTab END] Switched to: ${tab}, activeTasksTab: ${activeTasksTab}`);
@@ -17896,6 +17896,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.error('switchTasksTab failed:', e);
                 }
             }
+            window.switchTasksTab = switchTasksTab;
 
             // Helper: is the internal tasks tab currently visible?
             function isInternalTabActive() {
@@ -24529,10 +24530,11 @@ function isStrategyTask(t) {
             let murugeshTasksEnsureStarted = false;
 
             async function ensureMurugeshDailyTasks() {
+                if (!db || !currentUser) return;
                 const targetEmail = 'murugeshvilpower@gmail.com';
                 const userEmail = (currentUser?.email || '').toLowerCase().trim();
                 const userName = (currentUser?.name || '').toLowerCase().trim();
-                const isMurugesh = currentUser && (
+                const isMurugesh = (
                     userEmail === targetEmail ||
                     userEmail === 'murugesh@vilpower.com' ||
                     userEmail === 'murugeshkumar@vilpower.com' ||
@@ -24541,7 +24543,6 @@ function isStrategyTask(t) {
                 );
                 if (!isMurugesh && !isAdmin() && !isManager()) return;
 
-                // Reset the flag each new day (same pattern as morning learning setup)
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('murugeshTasks_lastRun');
                 if (lastRunDay !== todayKey) {
@@ -24549,13 +24550,35 @@ function isStrategyTask(t) {
                     sessionStorage.removeItem('murugeshTasks_lastRun');
                 }
 
-                const hasAllMurugeshTasksInMemory = MURUGESH_TASKS_CONFIG.every((cfg, i) => {
-                    const baseIdStr = cfg.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
-                    const taskId = `M-${baseIdStr}-${i}`;
-                    return tasks.some(t => t && t.id === taskId);
-                });
+                // Check leave status for Murugesh
+                try {
+                    const requestsSnap = await get(ref(db, 'worksync/requests'));
+                    if (requestsSnap.exists()) {
+                        const allRequests = Object.values(requestsSnap.val());
+                        const checkEmail = targetEmail;
+                        const isOnLeaveToday = allRequests.some(r => {
+                            if ((r.userId || r.userEmail || '').toLowerCase().trim() !== checkEmail) return false;
+                            if (r.type !== 'leave') return false;
+                            const statusLower = (r.status || '').toLowerCase().trim();
+                            const fullyApproved = statusLower === 'approved' ||
+                                (Array.isArray(r.approvals) && r.approvals.length > 0 &&
+                                    r.approvals.every(a => (a.status || '').toLowerCase().trim() === 'approved'));
+                            if (!fullyApproved) return false;
+                            const from = r.fromDate || r.date || '';
+                            const to = r.toDate || r.date || from;
+                            return from <= todayKey && todayKey <= to;
+                        });
+                        if (isOnLeaveToday) {
+                            murugeshTasksEnsureStarted = true;
+                            sessionStorage.setItem('murugeshTasks_lastRun', todayKey);
+                            console.log('Murugesh is on approved leave today — skipping recurring task creation.');
+                            return;
+                        }
+                    }
+                } catch (leaveCheckErr) {
+                    console.warn('Leave check failed for Murugesh tasks:', leaveCheckErr);
+                }
 
-                if (murugeshTasksEnsureStarted && hasAllMurugeshTasksInMemory) return;
                 murugeshTasksEnsureStarted = true;
                 sessionStorage.setItem('murugeshTasks_lastRun', todayKey);
 
@@ -24565,9 +24588,8 @@ function isStrategyTask(t) {
                     const ownerKey = eKey(email);
                     const today = todayKey;
 
-                    // ── Remove old "Report to MD" / "Reports to MD" tasks ─────────────
+                    // ── Clean up legacy single "Report to MD" tasks (without exact time suffix) ─────────────
                     const oldMdTitles = ['report to md', 'reports to md'];
-                    const oldMdIds = ['M-REPORTTO-7', 'M-REPORTTO-8', 'M-REPORTST-8'];
                     try {
                         const allMTasksSnap = await get(ref(db, `worksync/manual_tasks/${ownerKey}`));
                         if (allMTasksSnap.exists()) {
@@ -24575,10 +24597,10 @@ function isStrategyTask(t) {
                             for (const taskId in allMTasks) {
                                 const t = allMTasks[taskId];
                                 const descLower = (t?.desc || '').toLowerCase().trim();
-                                if (oldMdIds.includes(taskId) || (t?.murugeshTask && (descLower === 'report to md' || descLower === 'reports to md'))) {
+                                if (t?.murugeshTask && oldMdTitles.includes(descLower)) {
                                     await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
                                     tasks = tasks.filter(tk => tk.id !== taskId);
-                                    console.log(`[MurugeshTasks] Removed old task: ${taskId} (${t.desc})`);
+                                    console.log(`[MurugeshTasks] Removed old task: ${taskId} (${t?.desc})`);
                                 }
                             }
                         }
@@ -24617,30 +24639,39 @@ function isStrategyTask(t) {
                         } else {
                             const existing = snap.val();
                             const completedToday = existing.lastCompletedDate === today;
-
-                            // Need reset if:
-                            // a) completed on a previous day (lastCompletedDate set and < today), OR
-                            // b) status is Completed/done but lastCompletedDate is missing (old data without the field)
-                            //    and duedate is from a previous day
-                            const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status);
+                            const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
                             const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                            const stuckCompleted = isTerminal && !existing.lastCompletedDate && existing.duedate && existing.duedate < today;
-                            const needsDailyReset = !completedToday && (completedPreviousDay || stuckCompleted) && isTerminal;
+                            const isPastDueDate = !existing.duedate || existing.duedate < today || existing.duedate !== today;
+                            const needsDailyReset = !completedToday && (completedPreviousDay || (isTerminal && isPastDueDate));
 
                             let updates = {};
-                            if (needsDailyReset) {
+                            if (needsDailyReset && isTerminal) {
                                 updates.status = 'To do';
                                 updates.duedate = today;
-                            } else if (!existing.duedate || existing.duedate < today) {
-                                // Not yet completed — just refresh the duedate to today
+                                updates.lastCompletedDate = null;
+                            } else if (existing.duedate !== today) {
                                 updates.duedate = today;
+                                if (isTerminal && !completedToday) {
+                                    updates.status = 'To do';
+                                    updates.lastCompletedDate = null;
+                                }
                             }
 
-                            if (existing.client === 'Internal' || existing.client === 'Recurring Tasks') {
+                            if (existing.status === 'To Do') {
+                                updates.status = 'To do';
+                            }
+
+                            if (existing.client === 'Internal' || existing.client === 'Recurring Tasks' || !existing.client) {
                                 updates.client = taskConfig.client || 'Others';
                             }
                             if (!existing.murugeshTask) updates.murugeshTask = true;
                             if (existing.needsClient !== taskConfig.needsClient) updates.needsClient = taskConfig.needsClient;
+                            if (!existing.assignee || existing.assignee !== assigneeName) updates.assignee = assigneeName;
+                            if (!existing.assigneeEmail || existing.assigneeEmail !== email) updates.assigneeEmail = email;
+                            if (!existing.userId || existing.userId !== email) updates.userId = email;
+                            if (existing.manual !== true) updates.manual = true;
+                            if (existing.taskType !== 'internal') updates.taskType = 'internal';
+                            if (existing.desc !== taskConfig.title) updates.desc = taskConfig.title;
 
                             if (Object.keys(updates).length) {
                                 await update(ref(db, path), updates);
@@ -24672,52 +24703,57 @@ function isStrategyTask(t) {
             }
 
             const AJITH_TASKS_CONFIG = [
-                { title: "Social Media Analysis and Updates", needsClient: true },
-                { title: "Daily Followers Updates", needsClient: true },
+                { title: "Social Media Analysis and Updates", needsClient: true, client: null },
+                { title: "Daily Followers Updates", needsClient: true, client: null },
                 { title: "Ads Campaign Updates", needsClient: false, client: "Client" },
-                { title: "GMB Analysis and Updates", needsClient: true },
-                { title: "Competitor Analysis", needsClient: true },
-                { title: "Weekly Report Updates", needsClient: true },
-                { title: "Client's Monthly Report Updates", needsClient: true },
-                { title: "Overall Post Analysis and Updates", needsClient: true }
+                { title: "GMB Analysis and Updates", needsClient: true, client: null },
+                { title: "Competitor Analysis", needsClient: true, client: null },
+                { title: "Weekly Report Updates", needsClient: true, client: null },
+                { title: "Client's Monthly Report Updates", needsClient: true, client: null },
+                { title: "Overall Post Analysis and Updates", needsClient: true, client: null }
             ];
 
             let ajithTasksEnsureStarted = false;
 
             async function ensureAjithDailyTasks() {
-                const isAjith = currentUser && currentUser.email.toLowerCase() === 'ajithvilpower@gmail.com';
+                if (!db || !currentUser) return;
+                const targetEmail = 'ajithvilpower@gmail.com';
+                const userEmail = (currentUser?.email || '').toLowerCase().trim();
+                const userName = (currentUser?.name || '').toLowerCase().trim();
+                const isAjith = (
+                    userEmail === targetEmail ||
+                    userEmail === 'ajith@vilpower.com' ||
+                    userEmail.includes('ajith') ||
+                    userName.includes('ajith')
+                );
                 if (!isAjith && !isAdmin() && !isManager()) return;
 
-                // Reset the flag each new day (same pattern as morning learning / Murugesh setup)
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('ajithTasks_lastRun');
                 if (lastRunDay !== todayKey) {
                     ajithTasksEnsureStarted = false;
                     sessionStorage.removeItem('ajithTasks_lastRun');
                 }
-                if (ajithTasksEnsureStarted && !isAdmin() && !isManager()) return;
 
                 // ── Leave check: skip recurring tasks if Ajith is on approved leave today ──
                 try {
                     const requestsSnap = await get(ref(db, 'worksync/requests'));
                     if (requestsSnap.exists()) {
                         const allRequests = Object.values(requestsSnap.val());
-                        const ajithEmail = currentUser.email.toLowerCase();
+                        const ajithEmail = targetEmail;
                         const isOnLeaveToday = allRequests.some(r => {
-                            if ((r.userId || r.userEmail || '').toLowerCase() !== ajithEmail) return false;
+                            if ((r.userId || r.userEmail || '').toLowerCase().trim() !== ajithEmail) return false;
                             if (r.type !== 'leave') return false;
-                            // Must be fully approved
-                            const fullyApproved = r.status === 'approved' ||
+                            const statusLower = (r.status || '').toLowerCase().trim();
+                            const fullyApproved = statusLower === 'approved' ||
                                 (Array.isArray(r.approvals) && r.approvals.length > 0 &&
-                                    r.approvals.every(a => a.status === 'approved'));
+                                    r.approvals.every(a => (a.status || '').toLowerCase().trim() === 'approved'));
                             if (!fullyApproved) return false;
-                            // Check date range covers today
                             const from = r.fromDate || r.date || '';
                             const to = r.toDate || r.date || from;
                             return from <= todayKey && todayKey <= to;
                         });
                         if (isOnLeaveToday) {
-                            // Mark as run so we don't re-check all session
                             ajithTasksEnsureStarted = true;
                             sessionStorage.setItem('ajithTasks_lastRun', todayKey);
                             console.log('Ajith is on approved leave today — skipping recurring task creation.');
@@ -24726,14 +24762,13 @@ function isStrategyTask(t) {
                     }
                 } catch (leaveCheckErr) {
                     console.warn('Leave check failed for Ajith tasks:', leaveCheckErr);
-                    // Proceed with task creation even if leave check fails
                 }
 
                 ajithTasksEnsureStarted = true;
                 sessionStorage.setItem('ajithTasks_lastRun', todayKey);
 
                 try {
-                    const email = 'ajithvilpower@gmail.com';
+                    const email = targetEmail;
                     const ownerKey = eKey(email);
                     const today = todayKey;
                     const assigneeName = 'Ajith';
@@ -24754,7 +24789,7 @@ function isStrategyTask(t) {
                             ];
                             for (const taskId in ajithTasksData) {
                                 const t = ajithTasksData[taskId];
-                                if (t && t.desc && oldTitles.includes(t.desc.toLowerCase())) {
+                                if (t && t.desc && oldTitles.includes(t.desc.toLowerCase().trim())) {
                                     await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
                                     tasks = tasks.filter(tk => tk.id !== taskId);
                                     console.log(`Removed old Ajith task from Firebase: ${taskId} (${t.desc})`);
@@ -24796,18 +24831,22 @@ function isStrategyTask(t) {
                         } else {
                             const existing = snap.val();
                             const completedToday = existing.lastCompletedDate === today;
-
                             const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
                             const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                            const stuckCompleted = isTerminal && !existing.lastCompletedDate && existing.duedate && existing.duedate < today;
-                            const needsDailyReset = !completedToday && (completedPreviousDay || stuckCompleted) && isTerminal;
+                            const isPastDueDate = !existing.duedate || existing.duedate < today || existing.duedate !== today;
+                            const needsDailyReset = !completedToday && (completedPreviousDay || (isTerminal && isPastDueDate));
 
                             let updates = {};
-                            if (needsDailyReset && !completedToday) {
+                            if (needsDailyReset && isTerminal) {
                                 updates.status = 'To do';
                                 updates.duedate = today;
-                            } else if (!existing.duedate || existing.duedate < today) {
+                                updates.lastCompletedDate = null;
+                            } else if (existing.duedate !== today) {
                                 updates.duedate = today;
+                                if (isTerminal && !completedToday) {
+                                    updates.status = 'To do';
+                                    updates.lastCompletedDate = null;
+                                }
                             }
 
                             if (existing.status === 'To Do') {
@@ -24815,20 +24854,24 @@ function isStrategyTask(t) {
                             }
 
                             if (!existing.ajithTask) updates.ajithTask = true;
+                            if (!existing.assignee || existing.assignee !== assigneeName) updates.assignee = assigneeName;
+                            if (!existing.assigneeEmail || existing.assigneeEmail !== email) updates.assigneeEmail = email;
+                            if (!existing.userId || existing.userId !== email) updates.userId = email;
+                            if (existing.manual !== true) updates.manual = true;
+                            if (existing.taskType !== 'internal') updates.taskType = 'internal';
+                            if (existing.desc !== taskConfig.title) updates.desc = taskConfig.title;
 
                             const targetClient = taskConfig.client || 'Internal';
-                            if (existing.client !== targetClient) {
+                            if (existing.client !== targetClient && !taskConfig.needsClient) {
                                 updates.client = targetClient;
-                                if (!taskConfig.needsClient) {
-                                    updates.description = 'Daily Recurring Task';
-                                }
+                                updates.description = 'Daily Recurring Task';
                             }
                             if (existing.needsClient !== taskConfig.needsClient) {
                                 updates.needsClient = taskConfig.needsClient;
                                 if (taskConfig.needsClient) {
                                     updates.description = 'Requires Client Selection';
                                     if (existing.client === targetClient) {
-                                        updates.client = 'Internal'; // reset if it was hardcoded and now needs selection
+                                        updates.client = 'Internal';
                                     }
                                 } else {
                                     updates.description = 'Daily Recurring Task';
@@ -24840,6 +24883,17 @@ function isStrategyTask(t) {
                                 const idx = tasks.findIndex(t => t.id === taskId);
                                 if (idx >= 0) Object.assign(tasks[idx], updates);
                             }
+
+                            const mergedTask = {
+                                ...existing,
+                                ...updates,
+                                id: taskId,
+                                manual: true,
+                                taskType: 'internal',
+                                ajithTask: true,
+                                duedate: updates.duedate || existing.duedate || today
+                            };
+                            tasks = mergeTasksById([mergedTask, ...tasks]);
                         }
                     }
 
@@ -24860,7 +24914,16 @@ function isStrategyTask(t) {
             let palaniTasksEnsureStarted = false;
 
             async function ensurePalaniDailyTasks() {
-                if (!currentUser || currentUser.email.toLowerCase() !== 'digitalmarketing@vilpower.com') return;
+                if (!db || !currentUser) return;
+                const palaniEmail = 'digitalmarketing@vilpower.com';
+                const userEmail = (currentUser?.email || '').toLowerCase().trim();
+                const userName = (currentUser?.name || '').toLowerCase().trim();
+                const isPalani = (
+                    userEmail === palaniEmail ||
+                    userEmail.includes('palani') ||
+                    userName.includes('palani')
+                );
+                if (!isPalani && !isAdmin() && !isManager()) return;
 
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('palaniTasks_lastRun');
@@ -24868,19 +24931,19 @@ function isStrategyTask(t) {
                     palaniTasksEnsureStarted = false;
                     sessionStorage.removeItem('palaniTasks_lastRun');
                 }
-                if (palaniTasksEnsureStarted) return;
 
                 try {
                     const requestsSnap = await get(ref(db, 'worksync/requests'));
                     if (requestsSnap.exists()) {
                         const allRequests = Object.values(requestsSnap.val());
-                        const palaniEmail = currentUser.email.toLowerCase();
+                        const checkEmail = palaniEmail;
                         const isOnLeaveToday = allRequests.some(r => {
-                            if ((r.userId || r.userEmail || '').toLowerCase() !== palaniEmail) return false;
+                            if ((r.userId || r.userEmail || '').toLowerCase().trim() !== checkEmail) return false;
                             if (r.type !== 'leave') return false;
-                            const fullyApproved = r.status === 'approved' ||
+                            const statusLower = (r.status || '').toLowerCase().trim();
+                            const fullyApproved = statusLower === 'approved' ||
                                 (Array.isArray(r.approvals) && r.approvals.length > 0 &&
-                                    r.approvals.every(a => a.status === 'approved'));
+                                    r.approvals.every(a => (a.status || '').toLowerCase().trim() === 'approved'));
                             if (!fullyApproved) return false;
                             const from = r.fromDate || r.date || '';
                             const to = r.toDate || r.date || from;
@@ -24901,9 +24964,10 @@ function isStrategyTask(t) {
                 sessionStorage.setItem('palaniTasks_lastRun', todayKey);
 
                 try {
-                    const email = currentUser.email;
+                    const email = palaniEmail;
                     const ownerKey = eKey(email);
                     const today = todayKey;
+                    const assigneeName = 'Digital Marketing';
 
                     for (let i = 0; i < PALANI_TASKS_CONFIG.length; i++) {
                         const taskConfig = PALANI_TASKS_CONFIG[i];
@@ -24921,7 +24985,7 @@ function isStrategyTask(t) {
                                 client: taskConfig.client || 'Others',
                                 status: 'To do',
                                 priority: 'Medium',
-                                assignee: currentUser.name,
+                                assignee: currentUser.name || assigneeName,
                                 assigneeEmail: email,
                                 manual: true,
                                 taskType: 'internal',
@@ -24936,35 +25000,56 @@ function isStrategyTask(t) {
                         } else {
                             const existing = snap.val();
                             const completedToday = existing.lastCompletedDate === today;
-
                             const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
                             const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                            const stuckCompleted = isTerminal && !existing.lastCompletedDate && existing.duedate && existing.duedate < today;
-                            const needsDailyReset = !completedToday && (completedPreviousDay || stuckCompleted) && isTerminal;
+                            const isPastDueDate = !existing.duedate || existing.duedate < today || existing.duedate !== today;
+                            const needsDailyReset = !completedToday && (completedPreviousDay || (isTerminal && isPastDueDate));
 
                             let updates = {};
-                            if (needsDailyReset && !completedToday) {
+                            if (needsDailyReset && isTerminal) {
                                 updates.status = 'To do';
                                 updates.duedate = today;
-                            } else if (!existing.duedate || existing.duedate < today) {
+                                updates.lastCompletedDate = null;
+                            } else if (existing.duedate !== today) {
                                 updates.duedate = today;
+                                if (isTerminal && !completedToday) {
+                                    updates.status = 'To do';
+                                    updates.lastCompletedDate = null;
+                                }
                             }
 
                             if (existing.status === 'To Do') {
                                 updates.status = 'To do';
                             }
 
-                            if (existing.client === 'Internal' || existing.client === 'Recurring Tasks') {
+                            if (existing.client === 'Internal' || existing.client === 'Recurring Tasks' || !existing.client) {
                                 updates.client = taskConfig.client || 'Others';
                             }
                             if (!existing.palaniTask) updates.palaniTask = true;
                             if (existing.needsClient !== taskConfig.needsClient) updates.needsClient = taskConfig.needsClient;
+                            if (!existing.assignee) updates.assignee = currentUser.name || assigneeName;
+                            if (!existing.assigneeEmail) updates.assigneeEmail = email;
+                            if (!existing.userId) updates.userId = email;
+                            if (existing.manual !== true) updates.manual = true;
+                            if (existing.taskType !== 'internal') updates.taskType = 'internal';
+                            if (existing.desc !== taskConfig.title) updates.desc = taskConfig.title;
 
                             if (Object.keys(updates).length) {
                                 await update(ref(db, path), updates);
                                 const idx = tasks.findIndex(t => t.id === taskId);
                                 if (idx >= 0) Object.assign(tasks[idx], updates);
                             }
+
+                            const mergedTask = {
+                                ...existing,
+                                ...updates,
+                                id: taskId,
+                                manual: true,
+                                taskType: 'internal',
+                                palaniTask: true,
+                                duedate: updates.duedate || existing.duedate || today
+                            };
+                            tasks = mergeTasksById([mergedTask, ...tasks]);
                         }
                     }
 
@@ -24977,6 +25062,19 @@ function isStrategyTask(t) {
                     sessionStorage.removeItem('palaniTasks_lastRun');
                 }
             }
+
+            async function ensureAllRecurringTasks() {
+                try {
+                    await Promise.allSettled([
+                        ensureMurugeshDailyTasks(),
+                        ensureAjithDailyTasks(),
+                        ensurePalaniDailyTasks()
+                    ]);
+                } catch (e) {
+                    console.warn('ensureAllRecurringTasks warning:', e);
+                }
+            }
+            window.ensureAllRecurringTasks = ensureAllRecurringTasks;
 
 
             async function runMorningLearningSetup() {
@@ -27543,8 +27641,18 @@ function isStrategyTask(t) {
                 }
 
                 // Optimistically update UI
+                const isDoneState = newStatus === 'Completed' || isInternalDone(newStatus) || isDone(newStatus);
+                const isRecurring = !!(task.murugeshTask || task.ajithTask || task.palaniTask || isMorningLearningTask(task));
+                
                 task.status = newStatus;
                 task.updatedAt = Date.now();
+                if (isDoneState) {
+                    task.lastCompletedDate = todayIso();
+                    task.completedAt = Date.now();
+                } else if (isRecurring) {
+                    task.lastCompletedDate = null;
+                }
+
                 renderInternalTasks();
                 updateStats();
 
@@ -27552,10 +27660,17 @@ function isStrategyTask(t) {
                     if (task.manual || isInternalTask(task)) {
                         // Save to Firebase for manual/internal tasks
                         const ownerKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
-                        await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), {
+                        const updates = {
                             status: newStatus,
                             updatedAt: Date.now()
-                        });
+                        };
+                        if (isDoneState) {
+                            updates.lastCompletedDate = todayIso();
+                            updates.completedAt = Date.now();
+                        } else if (isRecurring) {
+                            updates.lastCompletedDate = null;
+                        }
+                        await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
