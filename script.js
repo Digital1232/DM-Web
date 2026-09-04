@@ -2943,9 +2943,10 @@
         let currentSelectedId = selectedIdEl ? selectedIdEl.value : '';
         if ((!currentSelectedId || !clientTasks.some(t => String(t.id) === String(currentSelectedId))) && clientTasks.length > 0) {
             currentSelectedId = clientTasks[0].id;
-            selectWeeklyTaskCard(currentSelectedId, false);
-        } else if (currentSelectedId) {
-            selectWeeklyTaskCard(currentSelectedId, false);
+        }
+
+        if (currentSelectedId) {
+            selectWeeklyTaskCard(currentSelectedId, true);
         } else {
             renderWeeklyModalCards(clientTasks, '');
         }
@@ -3032,25 +3033,25 @@
             }
 
             const cardBorderClass = isSelected
-                ? 'border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-1 ring-indigo-400/40 shadow-sm'
+                ? 'border-2 border-indigo-500 bg-[#F5F7FF] dark:bg-indigo-950/30 ring-1 ring-indigo-400/20 shadow-sm'
                 : 'border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
 
             return `
-                <div class="weekly-task-card p-3.5 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-center justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
-                        <span class="w-3 h-3 rounded-full shrink-0 ${dotColor}"></span>
+                <div class="weekly-task-card p-4 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-start justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
+                    <div class="flex items-start gap-3 min-w-0 flex-1">
+                        <span class="w-3 h-3 rounded-full shrink-0 mt-1 ${dotColor}"></span>
                         <div class="min-w-0 flex-1">
-                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
-                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
-                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-                                <iconify-icon icon="${formatIcon}" width="14" class="text-slate-400 shrink-0"></iconify-icon>
+                            <h4 class="text-[13px] font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
+                            <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                                <iconify-icon icon="${formatIcon}" width="15" class="text-slate-400 shrink-0"></iconify-icon>
                                 <span>Format: ${safeEsc(fmt)}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="shrink-0">
+                    <div class="shrink-0 mt-0.5">
                         ${isSelected ? `
-                        <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                        <div class="w-6 h-6 rounded-full bg-[#2B2679] text-white flex items-center justify-center shadow-sm">
                             <svg class="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="3">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                             </svg>
@@ -20825,9 +20826,10 @@ function isStrategyTask(t) {
         let currentSelectedId = selectedIdEl ? selectedIdEl.value : '';
         if ((!currentSelectedId || !clientTasks.some(t => String(t.id) === String(currentSelectedId))) && clientTasks.length > 0) {
             currentSelectedId = clientTasks[0].id;
-            selectWeeklyTaskCard(currentSelectedId, false);
-        } else if (currentSelectedId) {
-            selectWeeklyTaskCard(currentSelectedId, false);
+        }
+
+        if (currentSelectedId) {
+            selectWeeklyTaskCard(currentSelectedId, true);
         } else {
             renderWeeklyModalCards(clientTasks, '');
         }
@@ -20914,25 +20916,25 @@ function isStrategyTask(t) {
             }
 
             const cardBorderClass = isSelected
-                ? 'border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-1 ring-indigo-400/40 shadow-sm'
+                ? 'border-2 border-indigo-500 bg-[#F5F7FF] dark:bg-indigo-950/30 ring-1 ring-indigo-400/20 shadow-sm'
                 : 'border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
 
             return `
-                <div class="weekly-task-card p-3.5 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-center justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
-                        <span class="w-3 h-3 rounded-full shrink-0 ${dotColor}"></span>
+                <div class="weekly-task-card p-4 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-start justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
+                    <div class="flex items-start gap-3 min-w-0 flex-1">
+                        <span class="w-3 h-3 rounded-full shrink-0 mt-1 ${dotColor}"></span>
                         <div class="min-w-0 flex-1">
-                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
-                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
-                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-                                <iconify-icon icon="${formatIcon}" width="14" class="text-slate-400 shrink-0"></iconify-icon>
+                            <h4 class="text-[13px] font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
+                            <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                                <iconify-icon icon="${formatIcon}" width="15" class="text-slate-400 shrink-0"></iconify-icon>
                                 <span>Format: ${safeEsc(fmt)}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="shrink-0">
+                    <div class="shrink-0 mt-0.5">
                         ${isSelected ? `
-                        <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                        <div class="w-6 h-6 rounded-full bg-[#2B2679] text-white flex items-center justify-center shadow-sm">
                             <svg class="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="3">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                             </svg>
@@ -56359,41 +56361,41 @@ function isStrategyTask(t) {
     <!-- ════ WEEKLY TASK ASSIGNEE MODAL (Weekly Team Planning - Redesigned UI) ════ -->
     <dialog id="weeklyTaskAssigneeModal" class="p-0 rounded-3xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm shadow-2xl border border-slate-100 dark:border-slate-800 max-w-3xl w-full overflow-hidden bg-white dark:bg-slate-900">
         <form method="dialog" class="p-0 flex flex-col max-h-[90vh]" onsubmit="event.preventDefault();">
-            <!-- 1. TOP HEADER (Rich purple/indigo gradient) -->
-            <div class="bg-gradient-to-r from-[#212064] via-[#2a2578] to-[#392b8c] p-5 text-white flex items-center justify-between flex-shrink-0">
+            <!-- 1. TOP HEADER (Solid deep royal purple/indigo matching design) -->
+            <div class="bg-[#2B2679] p-5 sm:p-6 text-white flex items-center justify-between flex-shrink-0">
                 <div class="flex items-center gap-3.5">
-                    <div class="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/15 shadow-inner">
-                        <iconify-icon icon="solar:shield-user-bold" width="22"></iconify-icon>
+                    <div class="w-12 h-12 rounded-2xl bg-[#433D9E] flex items-center justify-center text-white shrink-0 shadow-inner">
+                        <iconify-icon icon="solar:shield-user-bold" width="24"></iconify-icon>
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-white tracking-tight">Weekly Team Task Assignment</h3>
-                        <p class="text-xs text-white/70 font-medium">Assign strategy tasks to team members for weekly plan</p>
+                        <h3 class="text-xl font-bold text-white tracking-tight">Weekly Team Task Assignment</h3>
+                        <p class="text-xs text-indigo-200/90 font-medium mt-0.5">Assign strategy tasks to team members for weekly plan</p>
                     </div>
                 </div>
-                <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all cursor-pointer">
+                <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="w-8 h-8 rounded-full bg-white hover:bg-slate-100 flex items-center justify-center text-[#2B2679] shadow-sm transition-all cursor-pointer" aria-label="Close modal">
                     <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
                 </button>
             </div>
 
             <!-- 2. TOOLBAR / SUB-HEADER (Tasks on [Date] + Count Badge + Change Date + Today) -->
-            <div class="px-7 pt-5 pb-3 flex items-center justify-between flex-wrap gap-3 flex-shrink-0 bg-white dark:bg-slate-900">
+            <div class="px-6 pt-5 pb-3 flex items-center justify-between flex-wrap gap-3 flex-shrink-0 bg-white dark:bg-slate-900">
                 <div class="flex items-center gap-3">
-                    <h4 class="text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                    <h4 class="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
                         Tasks on <span id="weekly-modal-date-display">2 September 2026</span>
                     </h4>
-                    <span id="weekly-modal-count-badge" class="bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-xs font-black px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">
+                    <span id="weekly-modal-count-badge" class="bg-[#EEF2FF] dark:bg-indigo-950/70 text-[#4F46E5] dark:text-indigo-300 text-xs font-semibold px-3 py-1 rounded-full border border-indigo-100/60 dark:border-indigo-900/50">
                         0 Tasks
                     </span>
                 </div>
                 <div class="flex items-center gap-2">
                     <!-- Native date input hidden, invoked via triggerWeeklyTaskDatePicker -->
                     <input id="weekly-assign-date" type="date" onchange="handleWeeklyTaskModalDateChange()" class="sr-only">
-                    <button type="button" onclick="triggerWeeklyTaskDatePicker()" class="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer">
-                        <iconify-icon icon="solar:calendar-linear" width="15" class="text-slate-500"></iconify-icon>
+                    <button type="button" onclick="triggerWeeklyTaskDatePicker()" class="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center gap-2 transition-all shadow-sm cursor-pointer">
+                        <iconify-icon icon="solar:calendar-linear" width="16" class="text-slate-500"></iconify-icon>
                         <span>Change Date</span>
                     </button>
-                    <button type="button" onclick="setWeeklyTaskModalDateToToday()" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-900/40 cursor-pointer">
-                        <iconify-icon icon="solar:calendar-date-bold" width="15"></iconify-icon>
+                    <button type="button" onclick="setWeeklyTaskModalDateToToday()" class="px-3.5 py-1.5 rounded-xl bg-[#EEF2FF] dark:bg-indigo-950/60 text-[#4F46E5] dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100 transition-all flex items-center gap-2 border border-indigo-100/60 dark:border-indigo-900/40 cursor-pointer">
+                        <iconify-icon icon="solar:calendar-date-bold" width="16"></iconify-icon>
                         <span>Today</span>
                     </button>
                 </div>
@@ -56408,22 +56410,22 @@ function isStrategyTask(t) {
             <select id="weekly-assign-task-select" class="sr-only"></select>
 
             <!-- 3. TASK CARDS GRID (Scrollable) -->
-            <div class="px-7 py-3 overflow-y-auto flex-grow max-h-[58vh]">
+            <div class="px-6 py-3 overflow-y-auto flex-grow max-h-[58vh]">
                 <div id="weekly-modal-cards-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     <!-- Populated dynamically by renderWeeklyModalCards() -->
                 </div>
             </div>
 
             <!-- 4. FOOTER BAR -->
-            <div class="px-7 py-4 bg-slate-50/90 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
+            <div class="px-6 py-4 bg-slate-50/70 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
                 <p id="weekly-modal-footer-hint" class="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     Select a task to assign to weekly plan
                 </p>
                 <div class="flex items-center gap-3">
-                    <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="px-5 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer">
+                    <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="px-5 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-all cursor-pointer">
                         Cancel
                     </button>
-                    <button type="button" onclick="saveWeeklyTaskAssignment()" id="weekly-assign-submit-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-indigo-200 dark:shadow-none flex items-center gap-2 transition-all cursor-pointer">
+                    <button type="button" onclick="saveWeeklyTaskAssignment()" id="weekly-assign-submit-btn" class="bg-[#3B38D8] hover:bg-[#2F2BB8] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-indigo-200/50 dark:shadow-none flex items-center gap-2 transition-all cursor-pointer">
                         <iconify-icon icon="solar:check-square-bold" width="16"></iconify-icon>
                         <span>Assign Task to Weekly Plan</span>
                     </button>
