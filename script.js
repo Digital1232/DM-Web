@@ -2670,17 +2670,125 @@
     <!-- Early Weekly Task Assignment Modal Script (runs synchronously in head) -->
     <script>
         (function() {
-            function populateWeeklyTaskDropdownForClient(clientName) {
+            function populateWeeklyTaskDropdownForClient(clientName, specificDateStr) {
                 const selectEl = document.getElementById('weekly-assign-task-select');
                 if (!selectEl) return;
+
+                const dateEl = document.getElementById('weekly-assign-date');
+                const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toISOString().split('T')[0];
+
+                let targetYear, targetMonth;
+                if (dateVal && /^\d{4}-\d{2}/.test(dateVal)) {
+                    const parts = dateVal.split('-');
+                    targetYear = parseInt(parts[0], 10);
+                    targetMonth = parseInt(parts[1], 10); // 1-indexed (1..12)
+                } else if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
+                    targetYear = strategyCurrentDate.getFullYear();
+                    targetMonth = strategyCurrentDate.getMonth() + 1;
+                } else {
+                    const now = new Date();
+                    targetYear = now.getFullYear();
+                    targetMonth = now.getMonth() + 1;
+                }
+
+                const monthNames = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                const monthPrefixes = [
+                    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+                    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+                ];
+                const targetMonthName = monthNames[targetMonth - 1] || 'Current Month';
+                const targetPrefix = monthPrefixes[targetMonth - 1] || '';
 
                 const safeEsc = function(s) {
                     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 };
 
+                // Rigorous Subtask check - Main Tasks Only!
+                const isSubtask = function(t) {
+                    if (!t) return false;
+                    if (t.parentId || t.parent || t.parentKey || t.parent_id || t.parent_task_id) return true;
+                    if (t.isSubtask === true || t.isSubtask === 'true' || t.is_subtask === true) return true;
+                    if (t.fields && t.fields.issuetype && t.fields.issuetype.subtask === true) return true;
+                    const typeStr = String(t.format || t.issueType || t.type || t.contentType || t.taskType || '').trim().toLowerCase();
+                    if (typeStr.includes('subtask') || typeStr.includes('sub-task') || typeStr.includes('sub task')) return true;
+                    const titleStr = String(t.title || t.desc || t.summary || '').trim().toLowerCase();
+                    if (titleStr.startsWith('subtask:') || titleStr.startsWith('sub-task:') || titleStr.startsWith('[subtask]')) return true;
+                    return false;
+                };
+
+                // Helper to verify task/event belongs strictly to the target month plan
+                const isItemInTargetMonth = function(item) {
+                    if (!item) return false;
+
+                    // 1. Direct date fields check
+                    const dStr = item.date || item.postDate || item.duedate || item.dueDate || item.targetDate;
+                    if (dStr && typeof dStr === 'string') {
+                        const m = dStr.trim().match(/^(\d{4})-(\d{1,2})/);
+                        if (m) {
+                            const y = parseInt(m[1], 10);
+                            const mo = parseInt(m[2], 10);
+                            if (y === targetYear && mo === targetMonth) return true;
+                            return false; // Explicit date belongs to another month
+                        }
+                    }
+
+                    // 2. Calculated postDate for Jira tasks (4 days after due date)
+                    if (item.duedate && typeof calculatePostDate4DaysAfter === 'function') {
+                        const calcPost = calculatePostDate4DaysAfter(item.duedate);
+                        if (calcPost && typeof calcPost === 'string') {
+                            const m = calcPost.trim().match(/^(\d{4})-(\d{1,2})/);
+                            if (m) {
+                                const y = parseInt(m[1], 10);
+                                const mo = parseInt(m[2], 10);
+                                if (y === targetYear && mo === targetMonth) return true;
+                                return false;
+                            }
+                        }
+                    }
+
+                    // 3. Jira key prefix check (e.g., SEP- for September)
+                    const itemId = String(item.id || item.jiraId || item.jiraTaskId || '').trim().toUpperCase();
+                    if (targetPrefix && (itemId.startsWith(targetPrefix + '-') || (targetPrefix === 'JUL' && itemId.startsWith('JULY-')))) {
+                        return true;
+                    }
+
+                    // If ID starts with another month's Jira prefix (e.g. AUG-, JUN-, JULY-, MAY-), it's definitely another month
+                    const hasOtherMonthPrefix = monthPrefixes.some(p => itemId.startsWith(p + '-') || (p === 'JUL' && itemId.startsWith('JULY-')));
+                    if (hasOtherMonthPrefix) {
+                        return false;
+                    }
+
+                    // 4. Check title mentions of other months (e.g. "June 2026", "June updates", "August 2026", "July 2026")
+                    const titleLower = String(item.title || item.desc || item.summary || '').toLowerCase();
+                    for (let idx = 0; idx < monthNames.length; idx++) {
+                        if (idx !== (targetMonth - 1)) {
+                            const otherMName = monthNames[idx].toLowerCase();
+                            if (titleLower.includes(otherMName + ' 20') || titleLower.includes(otherMName + ' updates') || titleLower.includes(otherMName + ' plan')) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    // 5. Fallback to createdAt if no other date was present
+                    if (item.createdAt && typeof item.createdAt === 'string') {
+                        const m = item.createdAt.trim().match(/^(\d{4})-(\d{1,2})/);
+                        if (m) {
+                            const y = parseInt(m[1], 10);
+                            const mo = parseInt(m[2], 10);
+                            if (y === targetYear && mo === targetMonth) return true;
+                        }
+                    }
+
+                    return false;
+                };
+
                 const EXCLUDED_STATUSES = new Set([
                     'done',
                     'completed',
+                    'posted',
                     'published',
                     'closed',
                     'archived',
@@ -2694,15 +2802,85 @@
                     return !EXCLUDED_STATUSES.has(norm);
                 };
 
+                // Comprehensive check to ensure task strictly belongs to chosen client (and not solar/other clients)
+                const targetClient = String(clientName || '').trim();
+                const targetClientNorm = targetClient.toLowerCase();
+
+                const isStrictChosenClient = function(item) {
+                    if (!item) return false;
+                    if (!targetClientNorm || targetClientNorm === 'all') return true;
+
+                    const titleLower = String(item.title || item.desc || item.summary || '').toLowerCase();
+                    const itemClientStr = String(item.client || '').trim();
+                    const itemClientNorm = itemClientStr.toLowerCase();
+
+                    // Specific topic disassociations:
+                    // Solar, Surya Ghar, EB vs, etc. belong exclusively to VilPower
+                    const isSolarContent = titleLower.includes('solar') || titleLower.includes('surya ghar') || 
+                                           titleLower.includes('pm surya') || titleLower.includes('eb vs') || 
+                                           titleLower.includes('current bill') || titleLower.includes('vilpower');
+
+                    if (targetClientNorm === 'genesys') {
+                        if (isSolarContent) return false; // Strictly Vilpower!
+                    } else if (targetClientNorm === 'vilpower' || targetClientNorm === 'vil power') {
+                        if (titleLower.includes('genesys')) return false;
+                    }
+
+                    // Disqualify if title mentions another known client
+                    const knownOtherClients = [
+                        { key: 'vilpower', kw: ['vilpower', 'vil power', 'surya ghar', 'pm surya', 'solar panels', 'solar vs', 'eb vs solar'] },
+                        { key: 'einstein', kw: ['einstein'] },
+                        { key: 'ntt', kw: ['ntt '] },
+                        { key: 'muva herbals', kw: ['muva'] },
+                        { key: 'mr.millet', kw: ['mr.millet', 'millet'] },
+                        { key: 'hanith citroen', kw: ['citroen', 'hanith'] },
+                        { key: 'iniya', kw: ['iniya'] },
+                        { key: '3jo toys', kw: ['3jo'] },
+                        { key: 'ashmithashree', kw: ['ashmitha'] },
+                        { key: 'dreamdaa', kw: ['dreamdaa'] },
+                        { key: 'pg constructions', kw: ['pg construction', 'rg construction'] },
+                        { key: 'quade', kw: ['quade'] },
+                        { key: 'salesnaany', kw: ['salesnaany'] },
+                        { key: 'skm', kw: ['skm'] }
+                    ];
+
+                    for (const oc of knownOtherClients) {
+                        if (oc.key !== targetClientNorm && !targetClientNorm.includes(oc.key)) {
+                            if (oc.kw.some(w => titleLower.includes(w))) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    // Now check explicit client field
+                    if (itemClientStr) {
+                        if (typeof isMatchingStrategyClient === 'function' && isMatchingStrategyClient(itemClientStr, targetClient)) {
+                            return true;
+                        }
+                        if (itemClientNorm === targetClientNorm) return true;
+                        if (itemClientNorm.includes(targetClientNorm) || targetClientNorm.includes(itemClientNorm)) return true;
+                        return false;
+                    }
+
+                    // If client field is completely missing/empty, only accept if title contains the chosen client name
+                    if (titleLower.includes(targetClientNorm)) {
+                        return true;
+                    }
+
+                    return false;
+                };
+
                 const clientTasks = [];
-                const otherTasks = [];
                 const seenTitles = new Set();
 
-                const targetClientNorm = String(clientName || '').trim().toLowerCase();
-
+                // 1. Process strategyEvents strictly for target month, chosen client, and main tasks
                 const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
                 Object.entries(sEvents).forEach(([id, ev]) => {
                     if (!ev || !ev.title) return;
+                    if (isSubtask(ev)) return; // MAIN TASKS ONLY
+                    if (!isItemInTargetMonth(ev)) return; // CURRENT MONTH ONLY
+                    if (!isStrictChosenClient(ev)) return; // CHOSEN CLIENT ONLY
+
                     const status = ev.status || 'To Do';
                     if (!isAllowedStatus(status)) return;
 
@@ -2710,26 +2888,25 @@
                     if (seenTitles.has(titleTrim.toLowerCase())) return;
                     seenTitles.add(titleTrim.toLowerCase());
 
-                    const evClientNorm = String(ev.client || '').trim().toLowerCase();
-                    const taskObj = {
+                    clientTasks.push({
                         id,
                         title: titleTrim,
                         format: ev.format || 'Poster',
                         owner: ev.owner || ev.assignee || '',
-                        client: ev.client || '',
+                        client: ev.client || targetClient,
                         status: status
-                    };
-
-                    if (targetClientNorm && evClientNorm && (evClientNorm.includes(targetClientNorm) || targetClientNorm.includes(evClientNorm))) {
-                        clientTasks.push(taskObj);
-                    } else {
-                        otherTasks.push(taskObj);
-                    }
+                    });
                 });
 
+                // 2. Process tasks (Jira tasks) strictly for target month, chosen client, and main tasks
                 const allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : (window.tasks || []);
                 allTasks.forEach(t => {
                     if (!t) return;
+                    if (t.manual || (typeof isInternalTask === 'function' && isInternalTask(t))) return;
+                    if (isSubtask(t)) return; // MAIN TASKS ONLY
+                    if (!isItemInTargetMonth(t)) return; // CURRENT MONTH ONLY
+                    if (!isStrictChosenClient(t)) return; // CHOSEN CLIENT ONLY
+
                     const status = t.status || 'To Do';
                     if (!isAllowedStatus(status)) return;
 
@@ -2737,223 +2914,416 @@
                     if (!titleTrim || seenTitles.has(titleTrim.toLowerCase())) return;
                     seenTitles.add(titleTrim.toLowerCase());
 
-                    const tClientNorm = String(t.client || '').trim().toLowerCase();
-                    const taskObj = {
+                    clientTasks.push({
                         id: t.id,
                         title: titleTrim,
                         format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
                         owner: t.assignee || '',
-                        client: t.client || '',
+                        client: t.client || targetClient,
                         status: status
-                    };
-
-                    if (targetClientNorm && tClientNorm && (tClientNorm.includes(targetClientNorm) || targetClientNorm.includes(tClientNorm))) {
-                        clientTasks.push(taskObj);
-                    } else {
-                        otherTasks.push(taskObj);
-                    }
+                    });
                 });
 
-                let optionsHtml = '<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>';
+        window._currentWeeklyModalTasks = clientTasks;
 
-                if (clientTasks.length > 0) {
-                    optionsHtml += `<optgroup label="Tasks for ${safeEsc(clientName || 'Selected Client')}">`;
-                    clientTasks.forEach(t => {
-                        const icon = t.format === 'Video' ? '🎥' : '📷';
-                        const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
-                        const statusTxt = t.status ? (' [' + t.status + ']') : '';
-                        optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${statusTxt}${ownerTxt}</option>`;
-                    });
-                    optionsHtml += '</optgroup>';
-                }
+        // Update the date header display e.g. "Tasks on 2 September 2026"
+        const dateDisplayEl = document.getElementById('weekly-modal-date-display');
+        if (dateDisplayEl) {
+            dateDisplayEl.textContent = formatWeeklyModalDate(dateVal);
+        }
 
-                if (otherTasks.length > 0) {
-                    optionsHtml += `<optgroup label="Other Available Strategy & Project Tasks">`;
-                    otherTasks.forEach(t => {
-                        const icon = t.format === 'Video' ? '🎥' : '📷';
-                        const clientTxt = t.client ? (' [' + t.client + ']') : '';
-                        const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
-                        const statusTxt = t.status ? (' - ' + t.status) : '';
-                        optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${statusTxt}${ownerTxt}</option>`;
-                    });
-                    optionsHtml += '</optgroup>';
-                }
+        // Update the count badge e.g. "12 Tasks"
+        const countBadgeEl = document.getElementById('weekly-modal-count-badge');
+        if (countBadgeEl) {
+            countBadgeEl.textContent = `${clientTasks.length} Task${clientTasks.length === 1 ? '' : 's'}`;
+        }
 
-                optionsHtml += '<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>';
-                selectEl.innerHTML = optionsHtml;
+        // Check if an existing task was selected, otherwise preselect the first task
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        let currentSelectedId = selectedIdEl ? selectedIdEl.value : '';
+        if ((!currentSelectedId || !clientTasks.some(t => String(t.id) === String(currentSelectedId))) && clientTasks.length > 0) {
+            currentSelectedId = clientTasks[0].id;
+            selectWeeklyTaskCard(currentSelectedId, false);
+        } else if (currentSelectedId) {
+            selectWeeklyTaskCard(currentSelectedId, false);
+        } else {
+            renderWeeklyModalCards(clientTasks, '');
+        }
+
+        let optionsHtml = `<option value="">📋 Select Pre-Created Task (${safeEsc(targetMonthName)} ${targetYear})...</option>`;
+
+        if (clientTasks.length > 0) {
+            optionsHtml += `<optgroup label="${safeEsc(targetMonthName)} Tasks for ${safeEsc(targetClient || 'Selected Client')} (${clientTasks.length})">`;
+            clientTasks.forEach(t => {
+                const icon = t.format === 'Video' ? '🎥' : '📷';
+                const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
+                const statusTxt = t.status ? (' [' + t.status + ']') : '';
+                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${statusTxt}${ownerTxt}</option>`;
+            });
+            optionsHtml += '</optgroup>';
+        } else {
+            optionsHtml += `<optgroup label="No ${safeEsc(targetMonthName)} Tasks for ${safeEsc(targetClient || 'Selected Client')}">`;
+            optionsHtml += `<option value="" disabled>No pre-created main tasks found for ${safeEsc(targetClient || 'this client')} in ${safeEsc(targetMonthName)}</option>`;
+            optionsHtml += '</optgroup>';
+        }
+
+        optionsHtml += '<option value="__NEW_CUSTOM__">✍️ + Create New Custom Task...</option>';
+        selectEl.innerHTML = optionsHtml;
+    }
+
+    function formatWeeklyModalDate(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length < 3) return dateStr;
+        const day = parseInt(parts[2], 10);
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const month = monthNames[parseInt(parts[1], 10) - 1] || '';
+        const year = parts[0];
+        return `${day} ${month} ${year}`;
+    }
+
+    function renderWeeklyModalCards(clientTasks, selectedId) {
+        const grid = document.getElementById('weekly-modal-cards-grid');
+        if (!grid) return;
+
+        if (!clientTasks || clientTasks.length === 0) {
+            grid.innerHTML = `
+                <div class="col-span-full py-12 flex flex-col items-center justify-center text-center">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center mb-3">
+                        <iconify-icon icon="solar:notes-bold" width="28"></iconify-icon>
+                    </div>
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">No strategy tasks found</h4>
+                    <p class="text-xs text-slate-400 mt-1 max-w-sm">No pre-created strategy tasks found for this client in the selected month plan.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const safeEsc = function(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
+        grid.innerHTML = clientTasks.map(t => {
+            const isSelected = selectedId && String(t.id) === String(selectedId);
+
+            // Format icon & text
+            const fmt = String(t.format || 'Video').trim();
+            let formatIcon = 'solar:videocamera-record-bold';
+            if (fmt.toLowerCase().includes('poster') || fmt.toLowerCase().includes('thumbnail') || fmt.toLowerCase().includes('image')) {
+                formatIcon = 'solar:gallery-wide-bold';
+            } else if (fmt.toLowerCase().includes('doc') || fmt.toLowerCase().includes('content') || fmt.toLowerCase().includes('blog')) {
+                formatIcon = 'solar:document-text-bold';
             }
 
-            function handleWeeklyTaskModalClientChange() {
-                const clientEl = document.getElementById('weekly-assign-client');
-                if (!clientEl) return;
-                const selectedClient = clientEl.value;
-                populateWeeklyTaskDropdownForClient(selectedClient);
+            // Dot color matching screenshot exactly (blue, green, red)
+            let dotColor = 'bg-blue-600';
+            const titleLower = String(t.title || '').toLowerCase();
+            const fmtLower = fmt.toLowerCase();
+
+            if (fmtLower.includes('poster') || titleLower.includes('thumbnail') || titleLower.includes('benefits') || titleLower.includes('need') || titleLower.includes('govt scheme')) {
+                dotColor = 'bg-emerald-500';
+            } else if (fmtLower.includes('doc') || titleLower.includes('blog') || titleLower.includes('how to apply') || titleLower.includes('business') || titleLower.includes('services') || titleLower.includes('pre-work')) {
+                dotColor = 'bg-rose-500';
+            } else {
+                dotColor = 'bg-blue-600';
             }
 
-            function openWeeklyTaskAssigneeModal(arg1, arg2) {
-                const modal = document.getElementById('weeklyTaskAssigneeModal');
-                if (!modal) return;
+            const cardBorderClass = isSelected
+                ? 'border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-1 ring-indigo-400/40 shadow-sm'
+                : 'border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
 
-                let dateStr = '';
-                let clientName = '';
+            return `
+                <div class="weekly-task-card p-3.5 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-center justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <span class="w-3 h-3 rounded-full shrink-0 ${dotColor}"></span>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
+                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
+                                <iconify-icon icon="${formatIcon}" width="14" class="text-slate-400 shrink-0"></iconify-icon>
+                                <span>Format: ${safeEsc(fmt)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="shrink-0">
+                        ${isSelected ? `
+                        <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                            <svg class="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="3">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                            </svg>
+                        </div>
+                        ` : `
+                        <div class="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-slate-400 transition-colors"></div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
 
-                const isDatePattern = function(str) {
-                    return typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
-                };
+    function selectWeeklyTaskCard(taskId, shouldRerender = true) {
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        const footerHint = document.getElementById('weekly-modal-footer-hint');
 
-                if (isDatePattern(arg1)) {
-                    dateStr = arg1;
-                    clientName = arg2 || '';
-                } else if (isDatePattern(arg2)) {
-                    dateStr = arg2;
-                    clientName = arg1 || '';
+        const tasksList = window._currentWeeklyModalTasks || [];
+        const task = tasksList.find(t => String(t.id) === String(taskId));
+        if (!task) return;
+
+        const safeEsc = function(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
+        if (selectedIdEl) selectedIdEl.value = task.id;
+        if (titleEl) titleEl.value = task.title;
+        if (clientEl) clientEl.value = task.client;
+        if (formatEl) formatEl.value = task.format;
+        if (ownerEl) ownerEl.value = task.owner || '';
+        if (selectEl) selectEl.value = task.id;
+
+        if (footerHint) {
+            footerHint.innerHTML = `Selected: <strong class="text-indigo-600 dark:text-indigo-400 font-bold">${safeEsc(task.title)}</strong>`;
+        }
+
+        if (shouldRerender !== false) {
+            renderWeeklyModalCards(tasksList, task.id);
+        }
+    }
+
+    function triggerWeeklyTaskDatePicker() {
+        const dateEl = document.getElementById('weekly-assign-date');
+        if (dateEl) {
+            if (typeof dateEl.showPicker === 'function') {
+                dateEl.showPicker();
+            } else {
+                dateEl.focus();
+                dateEl.click();
+            }
+        }
+    }
+
+    function setWeeklyTaskModalDateToToday() {
+        const dateEl = document.getElementById('weekly-assign-date');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateEl) {
+            dateEl.value = todayStr;
+            handleWeeklyTaskModalDateChange();
+        }
+    }
+
+    function handleWeeklyTaskModalClientChange() {
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        if (!clientEl) return;
+        const selectedClient = clientEl.value;
+        const selectedDate = dateEl ? dateEl.value : '';
+        populateWeeklyTaskDropdownForClient(selectedClient, selectedDate);
+    }
+
+    function handleWeeklyTaskModalDateChange() {
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const selectedClient = clientEl ? clientEl.value : '';
+        const selectedDate = dateEl ? dateEl.value : '';
+        populateWeeklyTaskDropdownForClient(selectedClient, selectedDate);
+    }
+
+    function openWeeklyTaskAssigneeModal(arg1, arg2) {
+        const modal = document.getElementById('weeklyTaskAssigneeModal');
+        if (!modal) return;
+
+        let dateStr = '';
+        let clientName = '';
+
+        const isDatePattern = function(str) {
+            return typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str.trim());
+        };
+
+        if (isDatePattern(arg1)) {
+            dateStr = arg1;
+            clientName = arg2 || '';
+        } else if (isDatePattern(arg2)) {
+            dateStr = arg2;
+            clientName = arg1 || '';
+        } else {
+            clientName = arg1 || arg2 || '';
+            if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
+                const now = new Date();
+                if (strategyCurrentDate.getFullYear() === now.getFullYear() && strategyCurrentDate.getMonth() === now.getMonth()) {
+                    dateStr = now.toISOString().split('T')[0];
                 } else {
-                    clientName = arg1 || arg2 || '';
-                    dateStr = new Date().toISOString().split('T')[0];
+                    const y = strategyCurrentDate.getFullYear();
+                    const m = String(strategyCurrentDate.getMonth() + 1).padStart(2, '0');
+                    dateStr = `${y}-${m}-01`;
                 }
-
-                const titleEl = document.getElementById('weekly-assign-title');
-                const clientEl = document.getElementById('weekly-assign-client');
-                const dateEl = document.getElementById('weekly-assign-date');
-                const ownerEl = document.getElementById('weekly-assign-owner');
-                const formatEl = document.getElementById('weekly-assign-format');
-                const selectedIdEl = document.getElementById('weekly-assign-selected-id');
-
-                if (selectedIdEl) selectedIdEl.value = '';
-                if (titleEl) titleEl.value = '';
-
-                const targetClient = (clientName || 'Einstein').trim();
-
-                if (clientEl) {
-                    let exists = Array.from(clientEl.options).some(opt => opt.value.toLowerCase() === targetClient.toLowerCase());
-                    if (!exists && targetClient) {
-                        const newOpt = document.createElement('option');
-                        newOpt.value = targetClient;
-                        newOpt.textContent = targetClient;
-                        clientEl.appendChild(newOpt);
-                    }
-                    clientEl.value = targetClient;
-                }
-
-                if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
-                if (ownerEl) ownerEl.value = '';
-                if (formatEl) formatEl.value = 'Poster';
-
-                populateWeeklyTaskDropdownForClient(targetClient);
-                modal.showModal();
+            } else {
+                dateStr = new Date().toISOString().split('T')[0];
             }
+        }
 
-            function handleWeeklyTaskModalSelectChange() {
-                const selectEl = document.getElementById('weekly-assign-task-select');
-                const titleEl = document.getElementById('weekly-assign-title');
-                const ownerEl = document.getElementById('weekly-assign-owner');
-                const formatEl = document.getElementById('weekly-assign-format');
-                const selectedIdEl = document.getElementById('weekly-assign-selected-id');
-
-                if (!selectEl || !titleEl || !selectedIdEl) return;
-
-                const val = selectEl.value;
-                if (val === '__NEW_CUSTOM__' || !val) {
-                    selectedIdEl.value = '';
-                    if (val === '__NEW_CUSTOM__') {
-                        titleEl.value = '';
-                        titleEl.focus();
+        // Intelligently detect the active client filter if not explicitly passed
+        let targetClient = (clientName || '').trim();
+        if (!targetClient) {
+            if (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') {
+                targetClient = activeStrategyClientFilter;
+            } else {
+                const matrixFilter = document.getElementById('matrix-filter-client');
+                if (matrixFilter && matrixFilter.value && matrixFilter.value !== 'All') {
+                    targetClient = matrixFilter.value;
+                } else {
+                    const assignClient = document.getElementById('weekly-assign-client');
+                    if (assignClient && assignClient.value) {
+                        targetClient = assignClient.value;
                     }
-                    return;
-                }
-
-                const selectedOption = selectEl.options[selectEl.selectedIndex];
-                if (!selectedOption) return;
-
-                const taskTitle = selectedOption.getAttribute('data-title') || '';
-                const taskFormat = selectedOption.getAttribute('data-format') || 'Poster';
-                const taskOwner = selectedOption.getAttribute('data-owner') || '';
-
-                selectedIdEl.value = val;
-                titleEl.value = taskTitle;
-
-                if (formatEl && taskFormat) formatEl.value = taskFormat;
-                if (ownerEl && taskOwner) ownerEl.value = taskOwner;
-            }
-
-            function saveWeeklyTaskAssignment() {
-                const selectedIdEl = document.getElementById('weekly-assign-selected-id');
-                const titleEl = document.getElementById('weekly-assign-title');
-                const clientEl = document.getElementById('weekly-assign-client');
-                const dateEl = document.getElementById('weekly-assign-date');
-                const ownerEl = document.getElementById('weekly-assign-owner');
-                const formatEl = document.getElementById('weekly-assign-format');
-
-                const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
-                const title = titleEl ? titleEl.value.trim() : '';
-                const client = clientEl ? clientEl.value : 'Einstein';
-                const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
-                const owner = ownerEl ? ownerEl.value : '';
-                const format = formatEl ? formatEl.value : 'Poster';
-
-                const toastFn = (typeof toast === 'function') ? toast : (window.toast || alert);
-
-                if (!title && !selectedTaskId) return toastFn('Please select or enter a task title', 'error');
-
-                const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
-                const activeDb = (typeof db !== 'undefined' && db) ? db : window.db;
-                const activeRef = (typeof ref === 'function') ? ref : window.ref;
-                const activeUpdate = (typeof update === 'function') ? update : window.update;
-                const activeSet = (typeof set === 'function') ? set : window.set;
-                const activeRenderCalendar = (typeof renderStrategyCalendar === 'function') ? renderStrategyCalendar : window.renderStrategyCalendar;
-
-                if (selectedTaskId && sEvents && sEvents[selectedTaskId]) {
-                    const updates = {};
-                    updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
-                    updates[`worksync/strategy_events/${selectedTaskId}/date`] = dateStr;
-                    updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
-                    updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
-
-                    if (activeDb && activeRef && activeUpdate) {
-                        activeUpdate(activeRef(activeDb), updates)
-                            .then(() => {
-                                toastFn(`Assigned "${title}" to ${owner || 'team'} for ${dateStr}`, 'success');
-                                document.getElementById('weeklyTaskAssigneeModal')?.close();
-                                if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
-                            })
-                            .catch(err => {
-                                toastFn('Failed to assign task: ' + err.message, 'error');
-                            });
-                    }
-                    return;
-                }
-
-                const newId = `strat_${Date.now()}`;
-                const newEvent = {
-                    title,
-                    client,
-                    date: dateStr,
-                    owner,
-                    format,
-                    platform: 'General Brand',
-                    status: 'To Do',
-                    createdAt: new Date().toISOString()
-                };
-
-                if (activeDb && activeRef && activeSet) {
-                    activeSet(activeRef(activeDb, 'worksync/strategy_events/' + newId), newEvent)
-                        .then(() => {
-                            toastFn(`Task created & assigned to ${owner || 'team'}`, 'success');
-                            document.getElementById('weeklyTaskAssigneeModal')?.close();
-                            if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
-                        })
-                        .catch(err => {
-                            toastFn('Failed to create task: ' + err.message, 'error');
-                        });
                 }
             }
+        }
+        if (!targetClient) targetClient = 'Genesys';
 
-            window.populateWeeklyTaskDropdownForClient = populateWeeklyTaskDropdownForClient;
-            window.handleWeeklyTaskModalClientChange = handleWeeklyTaskModalClientChange;
-            window.openWeeklyTaskAssigneeModal = openWeeklyTaskAssigneeModal;
-            window.handleWeeklyTaskModalSelectChange = handleWeeklyTaskModalSelectChange;
-            window.saveWeeklyTaskAssignment = saveWeeklyTaskAssignment;
-        })();
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+
+        if (selectedIdEl) selectedIdEl.value = '';
+        if (titleEl) titleEl.value = '';
+
+        if (clientEl) {
+            clientEl.value = targetClient;
+        }
+
+        if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
+        if (ownerEl) ownerEl.value = '';
+        if (formatEl) formatEl.value = 'Poster';
+
+        populateWeeklyTaskDropdownForClient(targetClient, dateEl ? dateEl.value : dateStr);
+        modal.showModal();
+    }
+
+    function handleWeeklyTaskModalSelectChange() {
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+
+        if (!selectEl || !titleEl || !selectedIdEl) return;
+
+        const val = selectEl.value;
+        if (val === '__NEW_CUSTOM__' || !val) {
+            selectedIdEl.value = '';
+            if (val === '__NEW_CUSTOM__') {
+                titleEl.value = '';
+                titleEl.focus();
+            }
+            return;
+        }
+
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        if (!selectedOption) return;
+
+        const taskTitle = selectedOption.getAttribute('data-title') || '';
+        const taskFormat = selectedOption.getAttribute('data-format') || 'Poster';
+        const taskOwner = selectedOption.getAttribute('data-owner') || '';
+
+        selectedIdEl.value = val;
+        titleEl.value = taskTitle;
+
+        if (formatEl && taskFormat) formatEl.value = taskFormat;
+        if (ownerEl && taskOwner) ownerEl.value = taskOwner;
+    }
+
+    function saveWeeklyTaskAssignment() {
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const formatEl = document.getElementById('weekly-assign-format');
+
+        const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
+        const title = titleEl ? titleEl.value.trim() : '';
+        const client = clientEl ? clientEl.value : 'Genesys';
+        const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+        const owner = ownerEl ? ownerEl.value : '';
+        const format = formatEl ? formatEl.value : 'Poster';
+
+        const toastFn = (typeof toast === 'function') ? toast : (window.toast || alert);
+
+        if (!title && !selectedTaskId) return toastFn('Please select a task to assign', 'error');
+
+        const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
+        const activeDb = (typeof db !== 'undefined' && db) ? db : window.db;
+        const activeRef = (typeof ref === 'function') ? ref : window.ref;
+        const activeUpdate = (typeof update === 'function') ? update : window.update;
+        const activeSet = (typeof set === 'function') ? set : window.set;
+        const activeRenderCalendar = (typeof renderStrategyCalendar === 'function') ? renderStrategyCalendar : window.renderStrategyCalendar;
+
+        if (selectedTaskId && sEvents && sEvents[selectedTaskId]) {
+            const updates = {};
+            updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
+            updates[`worksync/strategy_events/${selectedTaskId}/date`] = dateStr;
+            if (owner) updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
+            if (format) updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
+
+            if (activeDb && activeRef && activeUpdate) {
+                activeUpdate(activeRef(activeDb), updates)
+                    .then(() => {
+                        toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
+                        document.getElementById('weeklyTaskAssigneeModal')?.close();
+                        if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
+                    })
+                    .catch(err => {
+                        toastFn('Failed to assign task: ' + err.message, 'error');
+                    });
+            }
+            return;
+        }
+
+        const newId = `strat_${Date.now()}`;
+        const newEvent = {
+            title,
+            client,
+            date: dateStr,
+            owner,
+            format,
+            platform: 'General Brand',
+            status: 'To Do',
+            createdAt: new Date().toISOString()
+        };
+
+        if (activeDb && activeRef && activeSet) {
+            activeSet(activeRef(activeDb, 'worksync/strategy_events/' + newId), newEvent)
+                .then(() => {
+                    toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
+                    document.getElementById('weeklyTaskAssigneeModal')?.close();
+                    if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
+                })
+                .catch(err => {
+                    toastFn('Failed to create task: ' + err.message, 'error');
+                });
+        }
+    }
+
+    window.populateWeeklyTaskDropdownForClient = populateWeeklyTaskDropdownForClient;
+    window.handleWeeklyTaskModalClientChange = handleWeeklyTaskModalClientChange;
+    window.handleWeeklyTaskModalDateChange = handleWeeklyTaskModalDateChange;
+    window.openWeeklyTaskAssigneeModal = openWeeklyTaskAssigneeModal;
+    window.handleWeeklyTaskModalSelectChange = handleWeeklyTaskModalSelectChange;
+    window.saveWeeklyTaskAssignment = saveWeeklyTaskAssignment;
+    window.selectWeeklyTaskCard = selectWeeklyTaskCard;
+    window.triggerWeeklyTaskDatePicker = triggerWeeklyTaskDatePicker;
+    window.setWeeklyTaskModalDateToToday = setWeeklyTaskModalDateToToday;
+})();
     </script>
 
 </head>
@@ -20182,17 +20552,125 @@ function isStrategyTask(t) {
     // ══════════════════════════════════════════════════════════════════════════════
     // WEEKLY TEAM TASK ASSIGNMENT MODAL & HELPERS
     // ══════════════════════════════════════════════════════════════════════════════
-    function populateWeeklyTaskDropdownForClient(clientName) {
+    function populateWeeklyTaskDropdownForClient(clientName, specificDateStr) {
         const selectEl = document.getElementById('weekly-assign-task-select');
         if (!selectEl) return;
+
+        const dateEl = document.getElementById('weekly-assign-date');
+        const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toISOString().split('T')[0];
+
+        let targetYear, targetMonth;
+        if (dateVal && /^\d{4}-\d{2}/.test(dateVal)) {
+            const parts = dateVal.split('-');
+            targetYear = parseInt(parts[0], 10);
+            targetMonth = parseInt(parts[1], 10); // 1-indexed (1..12)
+        } else if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
+            targetYear = strategyCurrentDate.getFullYear();
+            targetMonth = strategyCurrentDate.getMonth() + 1;
+        } else {
+            const now = new Date();
+            targetYear = now.getFullYear();
+            targetMonth = now.getMonth() + 1;
+        }
+
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthPrefixes = [
+            'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+            'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+        ];
+        const targetMonthName = monthNames[targetMonth - 1] || 'Current Month';
+        const targetPrefix = monthPrefixes[targetMonth - 1] || '';
 
         const safeEsc = function(s) {
             return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
 
+        // Rigorous Subtask check - Main Tasks Only!
+        const isSubtask = function(t) {
+            if (!t) return false;
+            if (t.parentId || t.parent || t.parentKey || t.parent_id || t.parent_task_id) return true;
+            if (t.isSubtask === true || t.isSubtask === 'true' || t.is_subtask === true) return true;
+            if (t.fields && t.fields.issuetype && t.fields.issuetype.subtask === true) return true;
+            const typeStr = String(t.format || t.issueType || t.type || t.contentType || t.taskType || '').trim().toLowerCase();
+            if (typeStr.includes('subtask') || typeStr.includes('sub-task') || typeStr.includes('sub task')) return true;
+            const titleStr = String(t.title || t.desc || t.summary || '').trim().toLowerCase();
+            if (titleStr.startsWith('subtask:') || titleStr.startsWith('sub-task:') || titleStr.startsWith('[subtask]')) return true;
+            return false;
+        };
+
+        // Helper to verify task/event belongs strictly to the target month plan
+        const isItemInTargetMonth = function(item) {
+            if (!item) return false;
+
+            // 1. Direct date fields check
+            const dStr = item.date || item.postDate || item.duedate || item.dueDate || item.targetDate;
+            if (dStr && typeof dStr === 'string') {
+                const m = dStr.trim().match(/^(\d{4})-(\d{1,2})/);
+                if (m) {
+                    const y = parseInt(m[1], 10);
+                    const mo = parseInt(m[2], 10);
+                    if (y === targetYear && mo === targetMonth) return true;
+                    return false; // Explicit date belongs to another month
+                }
+            }
+
+            // 2. Calculated postDate for Jira tasks (4 days after due date)
+            if (item.duedate && typeof calculatePostDate4DaysAfter === 'function') {
+                const calcPost = calculatePostDate4DaysAfter(item.duedate);
+                if (calcPost && typeof calcPost === 'string') {
+                    const m = calcPost.trim().match(/^(\d{4})-(\d{1,2})/);
+                    if (m) {
+                        const y = parseInt(m[1], 10);
+                        const mo = parseInt(m[2], 10);
+                        if (y === targetYear && mo === targetMonth) return true;
+                        return false;
+                    }
+                }
+            }
+
+            // 3. Jira key prefix check (e.g., SEP- for September)
+            const itemId = String(item.id || item.jiraId || item.jiraTaskId || '').trim().toUpperCase();
+            if (targetPrefix && (itemId.startsWith(targetPrefix + '-') || (targetPrefix === 'JUL' && itemId.startsWith('JULY-')))) {
+                return true;
+            }
+
+            // If ID starts with another month's Jira prefix (e.g. AUG-, JUN-, JULY-, MAY-), it's definitely another month
+            const hasOtherMonthPrefix = monthPrefixes.some(p => itemId.startsWith(p + '-') || (p === 'JUL' && itemId.startsWith('JULY-')));
+            if (hasOtherMonthPrefix) {
+                return false;
+            }
+
+            // 4. Check title mentions of other months (e.g. "June 2026", "June updates", "August 2026", "July 2026")
+            const titleLower = String(item.title || item.desc || item.summary || '').toLowerCase();
+            for (let idx = 0; idx < monthNames.length; idx++) {
+                if (idx !== (targetMonth - 1)) {
+                    const otherMName = monthNames[idx].toLowerCase();
+                    if (titleLower.includes(otherMName + ' 20') || titleLower.includes(otherMName + ' updates') || titleLower.includes(otherMName + ' plan')) {
+                        return false;
+                    }
+                }
+            }
+
+            // 5. Fallback to createdAt if no other date was present
+            if (item.createdAt && typeof item.createdAt === 'string') {
+                const m = item.createdAt.trim().match(/^(\d{4})-(\d{1,2})/);
+                if (m) {
+                    const y = parseInt(m[1], 10);
+                    const mo = parseInt(m[2], 10);
+                    if (y === targetYear && mo === targetMonth) return true;
+                }
+            }
+
+            return false;
+        };
+
         const EXCLUDED_STATUSES = new Set([
             'done',
             'completed',
+            'posted',
             'published',
             'closed',
             'archived',
@@ -20206,15 +20684,85 @@ function isStrategyTask(t) {
             return !EXCLUDED_STATUSES.has(norm);
         };
 
+        // Comprehensive check to ensure task strictly belongs to chosen client (and not solar/other clients)
+        const targetClient = String(clientName || '').trim();
+        const targetClientNorm = targetClient.toLowerCase();
+
+        const isStrictChosenClient = function(item) {
+            if (!item) return false;
+            if (!targetClientNorm || targetClientNorm === 'all') return true;
+
+            const titleLower = String(item.title || item.desc || item.summary || '').toLowerCase();
+            const itemClientStr = String(item.client || '').trim();
+            const itemClientNorm = itemClientStr.toLowerCase();
+
+            // Specific topic disassociations:
+            // Solar, Surya Ghar, EB vs, etc. belong exclusively to VilPower
+            const isSolarContent = titleLower.includes('solar') || titleLower.includes('surya ghar') || 
+                                   titleLower.includes('pm surya') || titleLower.includes('eb vs') || 
+                                   titleLower.includes('current bill') || titleLower.includes('vilpower');
+
+            if (targetClientNorm === 'genesys') {
+                if (isSolarContent) return false; // Strictly Vilpower!
+            } else if (targetClientNorm === 'vilpower' || targetClientNorm === 'vil power') {
+                if (titleLower.includes('genesys')) return false;
+            }
+
+            // Disqualify if title mentions another known client
+            const knownOtherClients = [
+                { key: 'vilpower', kw: ['vilpower', 'vil power', 'surya ghar', 'pm surya', 'solar panels', 'solar vs', 'eb vs solar'] },
+                { key: 'einstein', kw: ['einstein'] },
+                { key: 'ntt', kw: ['ntt '] },
+                { key: 'muva herbals', kw: ['muva'] },
+                { key: 'mr.millet', kw: ['mr.millet', 'millet'] },
+                { key: 'hanith citroen', kw: ['citroen', 'hanith'] },
+                { key: 'iniya', kw: ['iniya'] },
+                { key: '3jo toys', kw: ['3jo'] },
+                { key: 'ashmithashree', kw: ['ashmitha'] },
+                { key: 'dreamdaa', kw: ['dreamdaa'] },
+                { key: 'pg constructions', kw: ['pg construction', 'rg construction'] },
+                { key: 'quade', kw: ['quade'] },
+                { key: 'salesnaany', kw: ['salesnaany'] },
+                { key: 'skm', kw: ['skm'] }
+            ];
+
+            for (const oc of knownOtherClients) {
+                if (oc.key !== targetClientNorm && !targetClientNorm.includes(oc.key)) {
+                    if (oc.kw.some(w => titleLower.includes(w))) {
+                        return false;
+                    }
+                }
+            }
+
+            // Now check explicit client field
+            if (itemClientStr) {
+                if (typeof isMatchingStrategyClient === 'function' && isMatchingStrategyClient(itemClientStr, targetClient)) {
+                    return true;
+                }
+                if (itemClientNorm === targetClientNorm) return true;
+                if (itemClientNorm.includes(targetClientNorm) || targetClientNorm.includes(itemClientNorm)) return true;
+                return false;
+            }
+
+            // If client field is completely missing/empty, only accept if title contains the chosen client name
+            if (titleLower.includes(targetClientNorm)) {
+                return true;
+            }
+
+            return false;
+        };
+
         const clientTasks = [];
-        const otherTasks = [];
         const seenTitles = new Set();
 
-        const targetClientNorm = String(clientName || '').trim().toLowerCase();
-
+        // 1. Process strategyEvents strictly for target month, chosen client, and main tasks
         const sEvents = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
         Object.entries(sEvents).forEach(([id, ev]) => {
             if (!ev || !ev.title) return;
+            if (isSubtask(ev)) return; // MAIN TASKS ONLY
+            if (!isItemInTargetMonth(ev)) return; // CURRENT MONTH ONLY
+            if (!isStrictChosenClient(ev)) return; // CHOSEN CLIENT ONLY
+
             const status = ev.status || 'To Do';
             if (!isAllowedStatus(status)) return;
 
@@ -20222,26 +20770,25 @@ function isStrategyTask(t) {
             if (seenTitles.has(titleTrim.toLowerCase())) return;
             seenTitles.add(titleTrim.toLowerCase());
 
-            const evClientNorm = String(ev.client || '').trim().toLowerCase();
-            const taskObj = {
+            clientTasks.push({
                 id,
                 title: titleTrim,
                 format: ev.format || 'Poster',
                 owner: ev.owner || ev.assignee || '',
-                client: ev.client || '',
+                client: ev.client || targetClient,
                 status: status
-            };
-
-            if (targetClientNorm && evClientNorm && (evClientNorm.includes(targetClientNorm) || targetClientNorm.includes(evClientNorm))) {
-                clientTasks.push(taskObj);
-            } else {
-                otherTasks.push(taskObj);
-            }
+            });
         });
 
+        // 2. Process tasks (Jira tasks) strictly for target month, chosen client, and main tasks
         const allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : (window.tasks || []);
         allTasks.forEach(t => {
             if (!t) return;
+            if (t.manual || (typeof isInternalTask === 'function' && isInternalTask(t))) return;
+            if (isSubtask(t)) return; // MAIN TASKS ONLY
+            if (!isItemInTargetMonth(t)) return; // CURRENT MONTH ONLY
+            if (!isStrictChosenClient(t)) return; // CHOSEN CLIENT ONLY
+
             const status = t.status || 'To Do';
             if (!isAllowedStatus(status)) return;
 
@@ -20249,27 +20796,46 @@ function isStrategyTask(t) {
             if (!titleTrim || seenTitles.has(titleTrim.toLowerCase())) return;
             seenTitles.add(titleTrim.toLowerCase());
 
-            const tClientNorm = String(t.client || '').trim().toLowerCase();
-            const taskObj = {
+            clientTasks.push({
                 id: t.id,
                 title: titleTrim,
                 format: (t.issueType || t.type || '').toLowerCase().includes('video') ? 'Video' : 'Poster',
                 owner: t.assignee || '',
-                client: t.client || '',
+                client: t.client || targetClient,
                 status: status
-            };
-
-            if (targetClientNorm && tClientNorm && (tClientNorm.includes(targetClientNorm) || targetClientNorm.includes(tClientNorm))) {
-                clientTasks.push(taskObj);
-            } else {
-                otherTasks.push(taskObj);
-            }
+            });
         });
 
-        let optionsHtml = '<option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>';
+        window._currentWeeklyModalTasks = clientTasks;
+
+        // Update the date header display e.g. "Tasks on 2 September 2026"
+        const dateDisplayEl = document.getElementById('weekly-modal-date-display');
+        if (dateDisplayEl) {
+            dateDisplayEl.textContent = formatWeeklyModalDate(dateVal);
+        }
+
+        // Update the count badge e.g. "12 Tasks"
+        const countBadgeEl = document.getElementById('weekly-modal-count-badge');
+        if (countBadgeEl) {
+            countBadgeEl.textContent = `${clientTasks.length} Task${clientTasks.length === 1 ? '' : 's'}`;
+        }
+
+        // Check if an existing task was selected, otherwise preselect the first task
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        let currentSelectedId = selectedIdEl ? selectedIdEl.value : '';
+        if ((!currentSelectedId || !clientTasks.some(t => String(t.id) === String(currentSelectedId))) && clientTasks.length > 0) {
+            currentSelectedId = clientTasks[0].id;
+            selectWeeklyTaskCard(currentSelectedId, false);
+        } else if (currentSelectedId) {
+            selectWeeklyTaskCard(currentSelectedId, false);
+        } else {
+            renderWeeklyModalCards(clientTasks, '');
+        }
+
+        let optionsHtml = `<option value="">📋 Select Pre-Created Task (${safeEsc(targetMonthName)} ${targetYear})...</option>`;
 
         if (clientTasks.length > 0) {
-            optionsHtml += `<optgroup label="Tasks for ${safeEsc(clientName || 'Selected Client')}">`;
+            optionsHtml += `<optgroup label="${safeEsc(targetMonthName)} Tasks for ${safeEsc(targetClient || 'Selected Client')} (${clientTasks.length})">`;
             clientTasks.forEach(t => {
                 const icon = t.format === 'Video' ? '🎥' : '📷';
                 const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
@@ -20277,17 +20843,9 @@ function isStrategyTask(t) {
                 optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${statusTxt}${ownerTxt}</option>`;
             });
             optionsHtml += '</optgroup>';
-        }
-
-        if (otherTasks.length > 0) {
-            optionsHtml += `<optgroup label="Other Available Strategy & Project Tasks">`;
-            otherTasks.forEach(t => {
-                const icon = t.format === 'Video' ? '🎥' : '📷';
-                const clientTxt = t.client ? (' [' + t.client + ']') : '';
-                const ownerTxt = t.owner ? (' (' + t.owner + ')') : ' (Unassigned)';
-                const statusTxt = t.status ? (' - ' + t.status) : '';
-                optionsHtml += `<option value="${t.id}" data-title="${safeEsc(t.title)}" data-format="${t.format}" data-owner="${t.owner}">${icon} ${safeEsc(t.title)}${clientTxt}${statusTxt}${ownerTxt}</option>`;
-            });
+        } else {
+            optionsHtml += `<optgroup label="No ${safeEsc(targetMonthName)} Tasks for ${safeEsc(targetClient || 'Selected Client')}">`;
+            optionsHtml += `<option value="" disabled>No pre-created main tasks found for ${safeEsc(targetClient || 'this client')} in ${safeEsc(targetMonthName)}</option>`;
             optionsHtml += '</optgroup>';
         }
 
@@ -20295,11 +20853,168 @@ function isStrategyTask(t) {
         selectEl.innerHTML = optionsHtml;
     }
 
+    function formatWeeklyModalDate(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length < 3) return dateStr;
+        const day = parseInt(parts[2], 10);
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const month = monthNames[parseInt(parts[1], 10) - 1] || '';
+        const year = parts[0];
+        return `${day} ${month} ${year}`;
+    }
+
+    function renderWeeklyModalCards(clientTasks, selectedId) {
+        const grid = document.getElementById('weekly-modal-cards-grid');
+        if (!grid) return;
+
+        if (!clientTasks || clientTasks.length === 0) {
+            grid.innerHTML = `
+                <div class="col-span-full py-12 flex flex-col items-center justify-center text-center">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center mb-3">
+                        <iconify-icon icon="solar:notes-bold" width="28"></iconify-icon>
+                    </div>
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">No strategy tasks found</h4>
+                    <p class="text-xs text-slate-400 mt-1 max-w-sm">No pre-created strategy tasks found for this client in the selected month plan.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const safeEsc = function(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
+        grid.innerHTML = clientTasks.map(t => {
+            const isSelected = selectedId && String(t.id) === String(selectedId);
+
+            // Format icon & text
+            const fmt = String(t.format || 'Video').trim();
+            let formatIcon = 'solar:videocamera-record-bold';
+            if (fmt.toLowerCase().includes('poster') || fmt.toLowerCase().includes('thumbnail') || fmt.toLowerCase().includes('image')) {
+                formatIcon = 'solar:gallery-wide-bold';
+            } else if (fmt.toLowerCase().includes('doc') || fmt.toLowerCase().includes('content') || fmt.toLowerCase().includes('blog')) {
+                formatIcon = 'solar:document-text-bold';
+            }
+
+            // Dot color matching screenshot exactly (blue, green, red)
+            let dotColor = 'bg-blue-600';
+            const titleLower = String(t.title || '').toLowerCase();
+            const fmtLower = fmt.toLowerCase();
+
+            if (fmtLower.includes('poster') || titleLower.includes('thumbnail') || titleLower.includes('benefits') || titleLower.includes('need') || titleLower.includes('govt scheme')) {
+                dotColor = 'bg-emerald-500';
+            } else if (fmtLower.includes('doc') || titleLower.includes('blog') || titleLower.includes('how to apply') || titleLower.includes('business') || titleLower.includes('services') || titleLower.includes('pre-work')) {
+                dotColor = 'bg-rose-500';
+            } else {
+                dotColor = 'bg-blue-600';
+            }
+
+            const cardBorderClass = isSelected
+                ? 'border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-1 ring-indigo-400/40 shadow-sm'
+                : 'border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
+
+            return `
+                <div class="weekly-task-card p-3.5 rounded-2xl ${cardBorderClass} transition-all cursor-pointer flex items-center justify-between gap-3 group select-none" onclick="selectWeeklyTaskCard('${safeEsc(t.id)}')">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <span class="w-3 h-3 rounded-full shrink-0 ${dotColor}"></span>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 transition-colors" title="${safeEsc(t.title)}">${safeEsc(t.title)}</h4>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">Client: ${safeEsc(t.client || 'Genesys')}</p>
+                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
+                                <iconify-icon icon="${formatIcon}" width="14" class="text-slate-400 shrink-0"></iconify-icon>
+                                <span>Format: ${safeEsc(fmt)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="shrink-0">
+                        ${isSelected ? `
+                        <div class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                            <svg class="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="3">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                            </svg>
+                        </div>
+                        ` : `
+                        <div class="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-slate-400 transition-colors"></div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectWeeklyTaskCard(taskId, shouldRerender = true) {
+        const selectedIdEl = document.getElementById('weekly-assign-selected-id');
+        const titleEl = document.getElementById('weekly-assign-title');
+        const clientEl = document.getElementById('weekly-assign-client');
+        const formatEl = document.getElementById('weekly-assign-format');
+        const ownerEl = document.getElementById('weekly-assign-owner');
+        const selectEl = document.getElementById('weekly-assign-task-select');
+        const footerHint = document.getElementById('weekly-modal-footer-hint');
+
+        const tasksList = window._currentWeeklyModalTasks || [];
+        const task = tasksList.find(t => String(t.id) === String(taskId));
+        if (!task) return;
+
+        const safeEsc = function(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
+        if (selectedIdEl) selectedIdEl.value = task.id;
+        if (titleEl) titleEl.value = task.title;
+        if (clientEl) clientEl.value = task.client;
+        if (formatEl) formatEl.value = task.format;
+        if (ownerEl) ownerEl.value = task.owner || '';
+        if (selectEl) selectEl.value = task.id;
+
+        if (footerHint) {
+            footerHint.innerHTML = `Selected: <strong class="text-indigo-600 dark:text-indigo-400 font-bold">${safeEsc(task.title)}</strong>`;
+        }
+
+        if (shouldRerender !== false) {
+            renderWeeklyModalCards(tasksList, task.id);
+        }
+    }
+
+    function triggerWeeklyTaskDatePicker() {
+        const dateEl = document.getElementById('weekly-assign-date');
+        if (dateEl) {
+            if (typeof dateEl.showPicker === 'function') {
+                dateEl.showPicker();
+            } else {
+                dateEl.focus();
+                dateEl.click();
+            }
+        }
+    }
+
+    function setWeeklyTaskModalDateToToday() {
+        const dateEl = document.getElementById('weekly-assign-date');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateEl) {
+            dateEl.value = todayStr;
+            handleWeeklyTaskModalDateChange();
+        }
+    }
+
     function handleWeeklyTaskModalClientChange() {
         const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
         if (!clientEl) return;
         const selectedClient = clientEl.value;
-        populateWeeklyTaskDropdownForClient(selectedClient);
+        const selectedDate = dateEl ? dateEl.value : '';
+        populateWeeklyTaskDropdownForClient(selectedClient, selectedDate);
+    }
+
+    function handleWeeklyTaskModalDateChange() {
+        const clientEl = document.getElementById('weekly-assign-client');
+        const dateEl = document.getElementById('weekly-assign-date');
+        const selectedClient = clientEl ? clientEl.value : '';
+        const selectedDate = dateEl ? dateEl.value : '';
+        populateWeeklyTaskDropdownForClient(selectedClient, selectedDate);
     }
 
     function openWeeklyTaskAssigneeModal(arg1, arg2) {
@@ -20321,8 +21036,38 @@ function isStrategyTask(t) {
             clientName = arg1 || '';
         } else {
             clientName = arg1 || arg2 || '';
-            dateStr = new Date().toISOString().split('T')[0];
+            if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
+                const now = new Date();
+                if (strategyCurrentDate.getFullYear() === now.getFullYear() && strategyCurrentDate.getMonth() === now.getMonth()) {
+                    dateStr = now.toISOString().split('T')[0];
+                } else {
+                    const y = strategyCurrentDate.getFullYear();
+                    const m = String(strategyCurrentDate.getMonth() + 1).padStart(2, '0');
+                    dateStr = `${y}-${m}-01`;
+                }
+            } else {
+                dateStr = new Date().toISOString().split('T')[0];
+            }
         }
+
+        // Intelligently detect the active client filter if not explicitly passed
+        let targetClient = (clientName || '').trim();
+        if (!targetClient) {
+            if (typeof activeStrategyClientFilter !== 'undefined' && activeStrategyClientFilter && activeStrategyClientFilter !== 'All') {
+                targetClient = activeStrategyClientFilter;
+            } else {
+                const matrixFilter = document.getElementById('matrix-filter-client');
+                if (matrixFilter && matrixFilter.value && matrixFilter.value !== 'All') {
+                    targetClient = matrixFilter.value;
+                } else {
+                    const assignClient = document.getElementById('weekly-assign-client');
+                    if (assignClient && assignClient.value) {
+                        targetClient = assignClient.value;
+                    }
+                }
+            }
+        }
+        if (!targetClient) targetClient = 'Genesys';
 
         const titleEl = document.getElementById('weekly-assign-title');
         const clientEl = document.getElementById('weekly-assign-client');
@@ -20334,16 +21079,7 @@ function isStrategyTask(t) {
         if (selectedIdEl) selectedIdEl.value = '';
         if (titleEl) titleEl.value = '';
 
-        const targetClient = (clientName || 'Einstein').trim();
-
         if (clientEl) {
-            let exists = Array.from(clientEl.options).some(opt => opt.value.toLowerCase() === targetClient.toLowerCase());
-            if (!exists && targetClient) {
-                const newOpt = document.createElement('option');
-                newOpt.value = targetClient;
-                newOpt.textContent = targetClient;
-                clientEl.appendChild(newOpt);
-            }
             clientEl.value = targetClient;
         }
 
@@ -20351,7 +21087,7 @@ function isStrategyTask(t) {
         if (ownerEl) ownerEl.value = '';
         if (formatEl) formatEl.value = 'Poster';
 
-        populateWeeklyTaskDropdownForClient(targetClient);
+        populateWeeklyTaskDropdownForClient(targetClient, dateEl ? dateEl.value : dateStr);
         modal.showModal();
     }
 
@@ -20398,24 +21134,24 @@ function isStrategyTask(t) {
 
         const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
         const title = titleEl ? titleEl.value.trim() : '';
-        const client = clientEl ? clientEl.value : 'Einstein';
+        const client = clientEl ? clientEl.value : 'Genesys';
         const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
         const owner = ownerEl ? ownerEl.value : '';
         const format = formatEl ? formatEl.value : 'Poster';
 
-        if (!title && !selectedTaskId) return typeof toast === 'function' ? toast('Please select or enter a task title', 'error') : alert('Please select or enter a task title');
+        if (!title && !selectedTaskId) return typeof toast === 'function' ? toast('Please select a task to assign', 'error') : alert('Please select a task to assign');
 
         if (selectedTaskId && typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[selectedTaskId]) {
             const updates = {};
             updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
             updates[`worksync/strategy_events/${selectedTaskId}/date`] = dateStr;
-            updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
-            updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
+            if (owner) updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
+            if (format) updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
 
             if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof update === 'function') {
                 update(ref(db), updates)
                     .then(() => {
-                        if (typeof toast === 'function') toast(`Assigned "${title}" to ${owner || 'team'} for ${dateStr}`, 'success');
+                        if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                         document.getElementById('weeklyTaskAssigneeModal')?.close();
                         if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
                     })
@@ -20441,7 +21177,7 @@ function isStrategyTask(t) {
         if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
             set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
                 .then(() => {
-                    if (typeof toast === 'function') toast(`Task created & assigned to ${owner || 'team'}`, 'success');
+                    if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                     document.getElementById('weeklyTaskAssigneeModal')?.close();
                     if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
                 })
@@ -20455,7 +21191,11 @@ function isStrategyTask(t) {
     window.handleWeeklyTaskModalSelectChange = handleWeeklyTaskModalSelectChange;
     window.saveWeeklyTaskAssignment = saveWeeklyTaskAssignment;
     window.populateWeeklyTaskDropdownForClient = populateWeeklyTaskDropdownForClient;
+    window.selectWeeklyTaskCard = selectWeeklyTaskCard;
+    window.triggerWeeklyTaskDatePicker = triggerWeeklyTaskDatePicker;
+    window.setWeeklyTaskModalDateToToday = setWeeklyTaskModalDateToToday;
     window.handleWeeklyTaskModalClientChange = handleWeeklyTaskModalClientChange;
+    window.handleWeeklyTaskModalDateChange = handleWeeklyTaskModalDateChange;
 
 
     function openAddStrategyEventModal(dateStr, clientStr) {
@@ -49015,6 +49755,7 @@ function isStrategyTask(t) {
             safeExpose('saveWeeklyTaskAssignment', () => saveWeeklyTaskAssignment);
             safeExpose('populateWeeklyTaskDropdownForClient', () => populateWeeklyTaskDropdownForClient);
             safeExpose('handleWeeklyTaskModalClientChange', () => handleWeeklyTaskModalClientChange);
+            safeExpose('handleWeeklyTaskModalDateChange', () => handleWeeklyTaskModalDateChange);
 
             safeExpose('closeStrategyEventModal', () => closeStrategyEventModal);
             safeExpose('selectStrategyFormat', () => selectStrategyFormat);
@@ -55615,88 +56356,78 @@ function isStrategyTask(t) {
     </script>
     <script src="js/matrix_planner.js"></script>
 
-    <!-- ════ WEEKLY TASK ASSIGNEE MODAL (Weekly Team Planning) ════ -->
-    <dialog id="weeklyTaskAssigneeModal" class="p-0 rounded-3xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden bg-white dark:bg-slate-900">
-        <form method="dialog" class="p-0">
-            <div class="bg-indigo-900 p-6 text-white flex items-center justify-between rounded-t-3xl border-b border-indigo-800">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-indigo-800 flex items-center justify-center text-white border border-indigo-700 shadow-inner">
-                        <iconify-icon icon="solar:user-plus-bold" width="22"></iconify-icon>
+    <!-- ════ WEEKLY TASK ASSIGNEE MODAL (Weekly Team Planning - Redesigned UI) ════ -->
+    <dialog id="weeklyTaskAssigneeModal" class="p-0 rounded-3xl backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm shadow-2xl border border-slate-100 dark:border-slate-800 max-w-3xl w-full overflow-hidden bg-white dark:bg-slate-900">
+        <form method="dialog" class="p-0 flex flex-col max-h-[90vh]" onsubmit="event.preventDefault();">
+            <!-- 1. TOP HEADER (Rich purple/indigo gradient) -->
+            <div class="bg-gradient-to-r from-[#212064] via-[#2a2578] to-[#392b8c] p-5 text-white flex items-center justify-between flex-shrink-0">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/15 shadow-inner">
+                        <iconify-icon icon="solar:shield-user-bold" width="22"></iconify-icon>
                     </div>
                     <div>
-                        <h3 class="text-base font-black text-white">Weekly Team Task Assignment</h3>
-                        <p class="text-xs text-indigo-100 font-medium">Assign strategy tasks to team members for weekly plan</p>
+                        <h3 class="text-lg font-bold text-white tracking-tight">Weekly Team Task Assignment</h3>
+                        <p class="text-xs text-white/70 font-medium">Assign strategy tasks to team members for weekly plan</p>
                     </div>
                 </div>
-                <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all">
+                <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all cursor-pointer">
                     <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
                 </button>
             </div>
 
-            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-                <input type="hidden" id="weekly-assign-selected-id" value="">
-
-                <div>
-                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">1. Pre-Created Strategy Task List</label>
-                    <select id="weekly-assign-task-select" onchange="handleWeeklyTaskModalSelectChange()" class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
-                        <option value="">📋 Select Pre-Created Task from Strategy Calendar...</option>
-                    </select>
+            <!-- 2. TOOLBAR / SUB-HEADER (Tasks on [Date] + Count Badge + Change Date + Today) -->
+            <div class="px-7 pt-5 pb-3 flex items-center justify-between flex-wrap gap-3 flex-shrink-0 bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-3">
+                    <h4 class="text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                        Tasks on <span id="weekly-modal-date-display">2 September 2026</span>
+                    </h4>
+                    <span id="weekly-modal-count-badge" class="bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-xs font-black px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/50">
+                        0 Tasks
+                    </span>
                 </div>
-
-                <div id="weekly-assign-title-container">
-                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Task Title</label>
-                    <input id="weekly-assign-title" type="text" placeholder="Enter task title..." class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Client</label>
-                        <select id="weekly-assign-client" onchange="handleWeeklyTaskModalClientChange()" class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
-                            <option value="Einstein">Einstein</option>
-                            <option value="NTT">NTT</option>
-                            <option value="IVN">IVN</option>
-                            <option value="Quade">Quade</option>
-                            <option value="Nivya">Nivya</option>
-                            <option value="RG Construction">RG Construction</option>
-                            <option value="Vilpower">Vilpower</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Target Date</label>
-                        <input id="weekly-assign-date" type="date" class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Assignee (Team Member)</label>
-                        <select id="weekly-assign-owner" class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
-                            <option value="">Unassigned</option>
-                            <option value="Barath">Barath</option>
-                            <option value="Immanuel">Immanuel</option>
-                            <option value="Karthika">Karthika</option>
-                            <option value="Dharani">Dharani</option>
-                            <option value="Siddharth">Siddharth</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Format</label>
-                        <select id="weekly-assign-format" class="w-full text-xs font-bold p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800">
-                            <option value="Poster">📷 Poster</option>
-                            <option value="Video">🎥 Video</option>
-                        </select>
-                    </div>
+                <div class="flex items-center gap-2">
+                    <!-- Native date input hidden, invoked via triggerWeeklyTaskDatePicker -->
+                    <input id="weekly-assign-date" type="date" onchange="handleWeeklyTaskModalDateChange()" class="sr-only">
+                    <button type="button" onclick="triggerWeeklyTaskDatePicker()" class="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer">
+                        <iconify-icon icon="solar:calendar-linear" width="15" class="text-slate-500"></iconify-icon>
+                        <span>Change Date</span>
+                    </button>
+                    <button type="button" onclick="setWeeklyTaskModalDateToToday()" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-100 transition-all flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-900/40 cursor-pointer">
+                        <iconify-icon icon="solar:calendar-date-bold" width="15"></iconify-icon>
+                        <span>Today</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl">Cancel</button>
-                <button type="button" onclick="saveWeeklyTaskAssignment()" class="px-5 py-2.5 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200 transition-all flex items-center gap-2">
-                    <iconify-icon icon="solar:check-read-bold" width="16"></iconify-icon>
-                    Assign Task to Weekly Plan
-                </button>
+            <!-- Hidden inputs to store state for saving -->
+            <input type="hidden" id="weekly-assign-selected-id" value="">
+            <input type="hidden" id="weekly-assign-title" value="">
+            <input type="hidden" id="weekly-assign-client" value="Genesys">
+            <input type="hidden" id="weekly-assign-owner" value="">
+            <input type="hidden" id="weekly-assign-format" value="Video">
+            <select id="weekly-assign-task-select" class="sr-only"></select>
+
+            <!-- 3. TASK CARDS GRID (Scrollable) -->
+            <div class="px-7 py-3 overflow-y-auto flex-grow max-h-[58vh]">
+                <div id="weekly-modal-cards-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <!-- Populated dynamically by renderWeeklyModalCards() -->
+                </div>
+            </div>
+
+            <!-- 4. FOOTER BAR -->
+            <div class="px-7 py-4 bg-slate-50/90 dark:bg-slate-850/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap flex-shrink-0">
+                <p id="weekly-modal-footer-hint" class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Select a task to assign to weekly plan
+                </p>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="document.getElementById('weeklyTaskAssigneeModal').close()" class="px-5 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="saveWeeklyTaskAssignment()" id="weekly-assign-submit-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-indigo-200 dark:shadow-none flex items-center gap-2 transition-all cursor-pointer">
+                        <iconify-icon icon="solar:check-square-bold" width="16"></iconify-icon>
+                        <span>Assign Task to Weekly Plan</span>
+                    </button>
+                </div>
             </div>
         </form>
     </dialog>

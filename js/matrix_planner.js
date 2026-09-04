@@ -810,7 +810,7 @@ function renderMatrixViewGrid(container) {
                     <button onclick="addMatrixTaskRowPrompt()" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm">
                         <iconify-icon icon="solar:add-circle-bold" width="13"></iconify-icon> Add Task
                     </button>
-                    <button onclick="openAssignMonthlyPlanModal('${matrixFilterClient !== 'All' ? matrixFilterClient : ''}')" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm">
+                    <button onclick="openWeeklyTaskAssigneeModal('${matrixFilterClient !== 'All' ? matrixFilterClient : ''}')" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm">
                         <iconify-icon icon="solar:clipboard-list-bold" width="13"></iconify-icon> Assign Task
                     </button>
                 </div>
@@ -1055,7 +1055,11 @@ function renderMatrixTaskBadge(t) {
    INLINE CREATION & EDITING HANDLERS
    ========================================================================== */
 function startInlineCreateTask(client, dateStr) {
-    openAssignMonthlyPlanModal(client, dateStr);
+    if (typeof window.openWeeklyTaskAssigneeModal === 'function') {
+        window.openWeeklyTaskAssigneeModal(client, dateStr);
+    } else {
+        openAssignMonthlyPlanModal(client, dateStr);
+    }
 }
 
 function cancelInlineCreateTask() {
@@ -1517,6 +1521,10 @@ async function publishMatrixPlan() {
 let ampSelectedTasks = new Set();
 
 function openAssignMonthlyPlanModal(clientStr = '', dateStr = '') {
+    if (typeof window.openWeeklyTaskAssigneeModal === 'function') {
+        window.openWeeklyTaskAssigneeModal(clientStr, dateStr);
+        return;
+    }
     ampSelectedTasks.clear();
     renderAmpSelectedTasks();
 
