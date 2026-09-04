@@ -232,6 +232,45 @@
             border-radius: 10px;
         }
 
+        /* ── INCOMING MESSAGE NOTIFICATION TOAST CARDS ── */
+        @keyframes chatNotifSlideIn {
+            0% {
+                transform: translateX(120%) scale(0.95);
+                opacity: 0;
+            }
+            70% {
+                transform: translateX(-4%) scale(1.02);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(0) scale(1);
+                opacity: 1;
+            }
+        }
+        @keyframes chatNotifSlideOut {
+            0% {
+                transform: translateX(0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(120%) scale(0.95);
+                opacity: 0;
+            }
+        }
+        .chat-notif-enter {
+            animation: chatNotifSlideIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .chat-notif-exit {
+            animation: chatNotifSlideOut 0.28s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+        }
+        @keyframes notifProgressCountdown {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+        .notif-progress-active {
+            animation: notifProgressCountdown linear forwards;
+        }
+
         /* ── MATRIX PLANNER STYLES ── */
         .matrix-sticky-col {
             position: sticky;
@@ -13179,6 +13218,7 @@
                 <div class="flex gap-2">
                     <div class="relative flex-1">
                         <input id="strategy-jira-search" type="text" placeholder="Search Jira task key (e.g. EIS-101) or title..."
+                            oninput="searchJiraTasksForStrategy()"
                             onkeydown="if(event.key === 'Enter'){ event.preventDefault(); fetchJiraTasksForStrategy(); }"
                             class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 font-semibold text-slate-800">
                         <iconify-icon icon="solar:magnifer-linear" width="16" class="absolute right-2.5 top-3 text-slate-400 pointer-events-none"></iconify-icon>
@@ -13293,10 +13333,10 @@
                     <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
                 </button>
             </div>
-            <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Search open tasks to link with this strategy event</p>
+            <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Search open Jira tasks to link with this strategy event</p>
             <input type="hidden" id="pt-link-event-id">
             <input type="text" id="pt-link-search" oninput="searchJiraTasksForLinking()"
-                placeholder="Search task ID or description..."
+                placeholder="Search Jira task key (e.g. EIS-101) or title..."
                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-2 focus:ring-violet-500/20 outline-none dark:text-slate-300">
 
             <div id="pt-link-results" class="space-y-2 max-h-60 overflow-y-auto mt-2 pr-1">
@@ -20105,7 +20145,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (strategyEvents) {
                     Object.values(strategyEvents).forEach(ev => {
                         const jId = ev.jiraId || ev.jiraTaskId;
-                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                        if (jId && /^[A-Z][A-Z0-9]*-\d+$/i.test(jId) && !String(jId).toUpperCase().startsWith('M-') && !String(jId).toUpperCase().startsWith('LEARN-')) {
+                            strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                        }
                     });
                 }
 
@@ -20124,8 +20166,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     let rawStatus = ev.status || 'To Do';
                     const evJiraId = ev.jiraId || ev.jiraTaskId;
-                    if (evJiraId) {
-                        const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                    if (evJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(evJiraId) && !String(evJiraId).toUpperCase().startsWith('M-') && !String(evJiraId).toUpperCase().startsWith('LEARN-')) {
+                        const matchedJiraTask = (window.allTasks || tasks)?.find(t => t && !t.manual && !isInternalTask(t) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && (String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase())));
                         if (matchedJiraTask && matchedJiraTask.status) {
                             rawStatus = matchedJiraTask.status;
                         }
@@ -20291,14 +20333,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function findMatchedStrategyTask(eventTitle, eventDesc, eventJiraId, debugMode = false) {
-                if (!tasks || tasks.length === 0) {
-                    if (debugMode) console.log(`[findMatchedStrategyTask] ❌ No tasks available (tasks.length = ${tasks?.length})`);
+                // Strictly filter to genuine Jira tasks only - NEVER match internal or manual tasks
+                const jiraTasks = (tasks || []).filter(t => t && !t.manual && !isInternalTask(t) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && !String(t.id || '').toUpperCase().startsWith('M-') && !String(t.id || '').toUpperCase().startsWith('LEARN-'));
+
+                if (jiraTasks.length === 0) {
+                    if (debugMode) console.log(`[findMatchedStrategyTask] ❌ No Jira tasks available (jiraTasks.length = 0)`);
                     return null;
                 }
 
-                // 0. Explicit saved Jira ID match
-                if (eventJiraId) {
-                    const matched = tasks.find(t => t.id.toLowerCase() === eventJiraId.toLowerCase());
+                // 0. Explicit saved Jira ID match (only if valid Jira issue key)
+                if (eventJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(eventJiraId) && !eventJiraId.toUpperCase().startsWith('M-') && !eventJiraId.toUpperCase().startsWith('LEARN-')) {
+                    const matched = jiraTasks.find(t => t.id.toLowerCase() === eventJiraId.toLowerCase());
                     if (matched) {
                         if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by Jira ID: ${eventJiraId}`);
                         return matched;
@@ -20310,14 +20355,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const desc = (eventDesc || '').toLowerCase().trim();
 
                 // 1. Direct Jira ID match (if title/desc contains Jira key)
-                let matched = tasks.find(t => title.includes(t.id.toLowerCase()) || desc.includes(t.id.toLowerCase()));
+                let matched = jiraTasks.find(t => title.includes(t.id.toLowerCase()) || desc.includes(t.id.toLowerCase()));
                 if (matched) {
                     if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by ID in text: ${matched.id}`);
                     return matched;
                 }
 
                 // 2. Exact Title match
-                matched = tasks.find(t => (t.desc || '').toLowerCase().trim() === title);
+                matched = jiraTasks.find(t => (t.desc || '').toLowerCase().trim() === title);
                 if (matched) {
                     if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by exact title: ${matched.id}`);
                     return matched;
@@ -20326,14 +20371,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // 3. Partial word matching (case-insensitive, word boundaries)
                 const titleWords = title.split(/\s+/).filter(w => w.length > 2);
                 if (titleWords.length > 0) {
-                    for (const t of tasks) {
+                    for (const t of jiraTasks) {
                         const taskDesc = (t.desc || '').toLowerCase();
                         const matchCount = titleWords.filter(word => taskDesc.includes(word)).length;
                         const matchRatio = matchCount / titleWords.length;
                         
                         // Match if 50% of significant words are in the task
                         if (matchRatio >= 0.5) {
-                            if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by word ratio (${(matchRatio*100).toFixed(0)}%): ${matched.id}`);
+                            if (debugMode) console.log(`[findMatchedStrategyTask] ✅ Matched by word ratio (${(matchRatio*100).toFixed(0)}%): ${t.id}`);
                             return t;
                         }
                     }
@@ -20358,7 +20403,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let bestMatch = null;
                 let bestSimilarity = 0;
 
-                for (const t of tasks) {
+                for (const t of jiraTasks) {
                     const taskDesc = (t.desc || '').toLowerCase();
                     const taskTokens = getSignificantTokens(taskDesc);
                     if (taskTokens.size === 0) continue;
@@ -20386,7 +20431,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.log(`[findMatchedStrategyTask] ⚠️ Best match below threshold (${(bestSimilarity*100).toFixed(0)}%): ${bestMatch.id}`);
                 }
                 if (debugMode && !bestMatch) {
-                    console.log(`[findMatchedStrategyTask] ❌ No matches found. Available tasks: ${tasks.length}`);
+                    console.log(`[findMatchedStrategyTask] ❌ No matches found. Available Jira tasks: ${jiraTasks.length}`);
                 }
 
                 return null;
@@ -20481,8 +20526,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // 2. Process Jira tasks (only add Jira tasks that do NOT belong to a Strategy Event)
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
-                        // Filter: Only Jira tasks (not manual, not internal)
-                        if (task.manual || isInternalTask(task)) {
+                        // Filter: Only genuine Jira tasks (not manual, not internal)
+                        if (task.manual || isInternalTask(task) || !/^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '') || String(task.id || '').toUpperCase().startsWith('M-') || String(task.id || '').toUpperCase().startsWith('LEARN-')) {
                             return; // Skip manual and internal tasks
                         }
 
@@ -20547,8 +20592,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         // For Jira tasks, use task.status directly (already synced from Jira)
                         // For strategy events, try to find matching Jira task
                         let finalStatus = task.status || 'To Do';
-                        if (task.isStrategyEvent && task.jiraId) {
-                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(task.jiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(task.jiraId).toLowerCase()));
+                        if (task.isStrategyEvent && task.jiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(task.jiraId) && !String(task.jiraId).toUpperCase().startsWith('M-') && !String(task.jiraId).toUpperCase().startsWith('LEARN-')) {
+                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => t && !t.manual && !isInternalTask(t) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && (String(t.id).toLowerCase() === String(task.jiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(task.jiraId).toLowerCase())));
                             if (matchedJiraTask && matchedJiraTask.status) {
                                 finalStatus = matchedJiraTask.status;
                             }
@@ -20630,8 +20675,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         let finalStatus = ev.status || 'To Do';
                         const evJiraId = ev.jiraId || ev.jiraTaskId;
-                        if (evJiraId) {
-                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                        if (evJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(evJiraId) && !String(evJiraId).toUpperCase().startsWith('M-') && !String(evJiraId).toUpperCase().startsWith('LEARN-')) {
+                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => t && !t.manual && !isInternalTask(t) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && (String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase())));
                             if (matchedJiraTask && matchedJiraTask.status) {
                                 finalStatus = matchedJiraTask.status;
                             }
@@ -20660,7 +20705,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (tasks && tasks.length > 0) {
                     tasks.forEach(task => {
                         // Filter: Skip manual and internal tasks
-                        if (task.manual || isInternalTask(task)) {
+                        if (task.manual || isInternalTask(task) || !/^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '') || String(task.id || '').toUpperCase().startsWith('M-') || String(task.id || '').toUpperCase().startsWith('LEARN-')) {
                             return; // Skip internal tasks
                         }
 
@@ -20804,67 +20849,102 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // Show loading state
-                    dropdown.innerHTML = '<div class="p-3 text-center"><iconify-icon icon="svg-spinners:ring-resize" width="20" class="text-indigo-400"></iconify-icon><p class="text-xs text-slate-500 mt-1">Searching Jira...</p></div>';
+                    dropdown.innerHTML = '<div class="p-3 text-center"><iconify-icon icon="svg-spinners:ring-resize" width="20" class="text-indigo-400"></iconify-icon><p class="text-xs text-slate-500 mt-1">Searching Jira tasks...</p></div>';
                     dropdown.classList.remove('hidden');
 
-                    // Build JQL query to search for matching tasks safely
-                    let jql;
-                    if (/^[A-Za-z0-9]+-\d+$/i.test(searchTerm)) {
-                        const escapedKey = escapeJqlValue(searchTerm);
-                        jql = `key = "${escapedKey}" OR summary ~ "${escapedKey}" OR description ~ "${escapedKey}" ORDER BY updated DESC`;
-                    } else {
-                        // Replace JQL special characters with spaces to prevent parser syntax errors on text search
-                        const sanitized = searchTerm.replace(/[\\+\-&|!(){}\[\]^~*?:"]/g, ' ').trim().replace(/\s+/g, ' ');
-                        const escapedTerm = escapeJqlValue(sanitized);
-                        
-                        if (!escapedTerm) {
-                            dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No search term after sanitization</div>';
-                            return;
-                        }
-                        
-                        jql = `summary ~ "${escapedTerm}" OR description ~ "${escapedTerm}" ORDER BY updated DESC`;
-                    }
-                    const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=20&fields=key,summary,status,assignee`;
-                    
-                    const res = await jiraRequest(url, 'get');
-                    
-                    if (res.success && res.data?.issues) {
-                        const issues = res.data.issues;
-                        
-                        if (issues.length === 0) {
-                            dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No matching Jira tasks found</div>';
-                            return;
+                    let issues = [];
+
+                    // 1. Query Jira Cloud API
+                    try {
+                        let jql;
+                        if (/^[A-Za-z0-9]+-\d+$/i.test(searchTerm) && !searchTerm.toUpperCase().startsWith('M-') && !searchTerm.toUpperCase().startsWith('LEARN-')) {
+                            const escapedKey = escapeJqlValue(searchTerm);
+                            jql = `key = "${escapedKey}" OR summary ~ "${escapedKey}" OR description ~ "${escapedKey}" ORDER BY updated DESC`;
+                        } else {
+                            // Replace JQL special characters with spaces to prevent parser syntax errors on text search
+                            const sanitized = searchTerm.replace(/[\\+\-&|!(){}\[\]^~*?:"]/g, ' ').trim().replace(/\s+/g, ' ');
+                            const escapedTerm = escapeJqlValue(sanitized);
+                            if (escapedTerm) {
+                                jql = `summary ~ "${escapedTerm}" OR description ~ "${escapedTerm}" ORDER BY updated DESC`;
+                            }
                         }
 
-                        // Build dropdown HTML
-                        let html = '';
-                        issues.forEach(issue => {
-                            const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
-                            const status = issue.fields?.status?.name || 'Unknown';
-                            const summaryEscaped = escapeHtml(issue.fields.summary);
-                            const summaryJs = issue.fields.summary.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                            html += `
-                                <div onclick="selectJiraTaskForStrategy('${issue.key}', '${summaryJs}')" 
-                                     class="p-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors">
-                                    <div class="flex items-start justify-between gap-2">
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-[10px] font-bold text-indigo-600">${issue.key}</p>
-                                            <p class="text-xs text-slate-800 dark:text-slate-200 truncate">${summaryEscaped}</p>
-                                            <div class="flex gap-2 mt-1">
-                                                <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">📌 ${status}</span>
-                                                <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">👤 ${escapeHtml(assignee)}</span>
-                                            </div>
+                        if (jql) {
+                            const url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=20&fields=key,summary,status,assignee`;
+                            const res = await jiraRequest(url, 'get');
+                            if (res.success && res.data?.issues) {
+                                // Strictly keep only genuine Jira tasks
+                                issues = res.data.issues.filter(issue => 
+                                    issue && issue.key &&
+                                    /^[A-Z][A-Z0-9]*-\d+$/i.test(issue.key) &&
+                                    !issue.key.toUpperCase().startsWith('M-') &&
+                                    !issue.key.toUpperCase().startsWith('LEARN-')
+                                );
+                            }
+                        }
+                    } catch (apiErr) {
+                        console.warn('Jira API search failed, falling back to local Jira tasks:', apiErr);
+                    }
+
+                    // 2. Also search locally cached Jira tasks (STRICTLY genuine Jira tasks only - NO internal or manual tasks)
+                    if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                        const qLower = searchTerm.toLowerCase();
+                        const localJiraTasks = tasks.filter(t => 
+                            t && !t.manual && !isInternalTask(t) &&
+                            /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') &&
+                            !String(t.id || '').toUpperCase().startsWith('M-') &&
+                            !String(t.id || '').toUpperCase().startsWith('LEARN-') &&
+                            (String(t.id || '').toLowerCase().includes(qLower) || String(t.desc || '').toLowerCase().includes(qLower))
+                        );
+
+                        const existingKeys = new Set(issues.map(iss => String(iss.key).toUpperCase()));
+                        for (const lt of localJiraTasks) {
+                            const uKey = String(lt.id).toUpperCase();
+                            if (!existingKeys.has(uKey)) {
+                                existingKeys.add(uKey);
+                                issues.push({
+                                    key: lt.id,
+                                    fields: {
+                                        summary: lt.desc || lt.id,
+                                        status: { name: lt.status || 'To Do' },
+                                        assignee: { displayName: lt.assignee || lt.assigneeName || 'Unassigned' }
+                                    }
+                                });
+                            }
+                            if (issues.length >= 25) break;
+                        }
+                    }
+
+                    if (issues.length === 0) {
+                        dropdown.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 italic">No matching Jira tasks found</div>';
+                        return;
+                    }
+
+                    // Build dropdown HTML
+                    let html = '';
+                    issues.forEach(issue => {
+                        const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
+                        const status = issue.fields?.status?.name || 'Unknown';
+                        const summaryEscaped = escapeHtml(issue.fields.summary);
+                        const summaryJs = issue.fields.summary.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        html += `
+                            <div onclick="selectJiraTaskForStrategy('${issue.key}', '${summaryJs}')" 
+                                 class="p-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-[10px] font-bold text-indigo-600">${issue.key}</p>
+                                        <p class="text-xs text-slate-800 dark:text-slate-200 truncate">${summaryEscaped}</p>
+                                        <div class="flex gap-2 mt-1">
+                                            <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">📌 ${status}</span>
+                                            <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded">👤 ${escapeHtml(assignee)}</span>
                                         </div>
                                     </div>
                                 </div>
-                            `;
-                        });
-                        
-                        dropdown.innerHTML = html;
-                    } else {
-                        const errMsg = jiraErrorMessage(res);
-                        dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Error: ${escapeHtml(errMsg)}</div>`;
-                    }
+                            </div>
+                        `;
+                    });
+                    
+                    dropdown.innerHTML = html;
                 } catch (err) {
                     console.error('Failed to fetch Jira tasks:', err);
                     dropdown.innerHTML = `<div class="p-3 text-center text-xs text-red-500">Failed to search Jira: ${escapeHtml(err.message || err)}</div>`;
@@ -20876,6 +20956,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function selectJiraTaskForStrategy(taskId, taskSummary) {
                 console.log('selectJiraTaskForStrategy called with:', { taskId, taskSummary });
                 
+                // Strictly validate Jira Key - NEVER link internal or manual tasks
+                if (!taskId || !/^[A-Z][A-Z0-9]*-\d+$/i.test(taskId) || String(taskId).toUpperCase().startsWith('M-') || String(taskId).toUpperCase().startsWith('LEARN-')) {
+                    toast('Only genuine Jira tasks can be linked', 'warning');
+                    return;
+                }
+
                 const sjId1 = document.getElementById('strategy-jira-id'); if (sjId1) sjId1.value = taskId;
                 const sjSearch1 = document.getElementById('strategy-jira-search'); if (sjSearch1) sjSearch1.value = `${taskId}: ${taskSummary}`;
                 const sjSel1 = document.getElementById('strategy-jira-selected'); if (sjSel1) sjSel1.innerHTML = `✅ Selected: <strong>${taskId}</strong> - ${escapeHtml(taskSummary)}`;
@@ -20934,12 +21020,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             console.error('Assignee field not found!');
                         }
                     } else {
-                        console.error('Jira request failed:', res);
-                        toast('Failed to fetch Jira task details', 'error');
+                        // Fallback sync from cached Jira task
+                        const localTask = (typeof tasks !== 'undefined' && tasks) ? tasks.find(t => t && !t.manual && !isInternalTask(t) && String(t.id).toUpperCase() === taskId.toUpperCase()) : null;
+                        if (localTask) {
+                            const statusField = document.getElementById('strategy-status');
+                            if (statusField && localTask.status) statusField.value = normalizeStrategyStatus(localTask.status);
+                            const assigneeField = document.getElementById('strategy-owner');
+                            if (assigneeField && (localTask.assigneeEmail || localTask.assignee)) {
+                                assigneeField.value = localTask.assigneeEmail || localTask.assignee;
+                            }
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to fetch task details:', err);
-                    toast('Failed to sync Jira task details: ' + err.message, 'error');
                 }
                 
                 toast(`✅ Linked to Jira task ${taskId} - Status and Assignee synced!`, 'success');
@@ -21838,9 +21931,15 @@ function isStrategyTask(t) {
                     }
                 }
 
-                // If still not found, check if it's a Jira task (e.g., JULY-123 or AUG-45)
+                // If still not found, check if it's a genuine Jira task (e.g., JULY-123 or AUG-45)
                 if (!ev && typeof tasks !== 'undefined' && tasks) {
-                    const matchedJiraTask = tasks.find(t => t.id.toLowerCase() === eventId.toLowerCase());
+                    const matchedJiraTask = tasks.find(t => 
+                        t && !t.manual && !isInternalTask(t) &&
+                        /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') &&
+                        !String(t.id || '').toUpperCase().startsWith('M-') &&
+                        !String(t.id || '').toUpperCase().startsWith('LEARN-') &&
+                        t.id.toLowerCase() === eventId.toLowerCase()
+                    );
                     if (matchedJiraTask) {
                         const calculatedPostDate = matchedJiraTask.postDate || calculatePostDate4DaysAfter(matchedJiraTask.duedate) || matchedJiraTask.duedate || '';
                         ev = {
@@ -21883,8 +21982,10 @@ function isStrategyTask(t) {
                     if (videosCountEl) videosCountEl.value = ev.videosCount || '';
                     if (postersCountEl) postersCountEl.value = ev.postersCount || '';
                     
-                    // Restore Jira ID if explicitly saved, otherwise auto-match
-                    const jiraId = ev.jiraId || '';
+                    // Restore Jira ID if explicitly saved (and genuine Jira key), otherwise auto-match
+                    const rawJiraId = (ev.jiraId || '').trim();
+                    const isValidJiraKey = rawJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(rawJiraId) && !rawJiraId.toUpperCase().startsWith('M-') && !rawJiraId.toUpperCase().startsWith('LEARN-');
+                    const jiraId = isValidJiraKey ? rawJiraId : '';
                     const sjId4 = document.getElementById('strategy-jira-id'); if (sjId4) sjId4.value = jiraId;
                     const jiraSearch = document.getElementById('strategy-jira-search');
                     const jiraSelected = document.getElementById('strategy-jira-selected');
@@ -21892,20 +21993,28 @@ function isStrategyTask(t) {
                     
                     let matchedTask = null;
                     if (jiraId) {
-                        matchedTask = tasks ? tasks.find(t => t.id.toLowerCase() === jiraId.toLowerCase()) : null;
+                        matchedTask = tasks ? tasks.find(t => 
+                            t && !t.manual && !isInternalTask(t) &&
+                            /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') &&
+                            !String(t.id || '').toUpperCase().startsWith('M-') &&
+                            !String(t.id || '').toUpperCase().startsWith('LEARN-') &&
+                            t.id.toLowerCase() === jiraId.toLowerCase()
+                        ) : null;
                         const summaryText = matchedTask && matchedTask.desc ? ` - ${matchedTask.desc}` : '';
                         if (jiraSearch) jiraSearch.value = `${jiraId}${summaryText}`;
                         if (jiraSelected) jiraSelected.innerHTML = `✅ Selected: <strong>${jiraId}</strong>${escapeHtml(summaryText)}`;
                         if (clearBtn2) clearBtn2.classList.remove('hidden');
                     } else {
                         matchedTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(ev.title, ev.desc) : null;
-                        if (matchedTask) {
+                        if (matchedTask && !matchedTask.manual && !isInternalTask(matchedTask) && /^[A-Z][A-Z0-9]*-\d+$/i.test(matchedTask.id || '') && !String(matchedTask.id || '').toUpperCase().startsWith('M-') && !String(matchedTask.id || '').toUpperCase().startsWith('LEARN-')) {
                             const mJiraId = matchedTask.id;
                             if (sjId4) sjId4.value = mJiraId;
                             if (jiraSearch) jiraSearch.value = `${mJiraId} - ${matchedTask.desc || ''}`;
                             if (jiraSelected) jiraSelected.innerHTML = `⚠️ Auto-Matched: <strong>${mJiraId}</strong> - ${escapeHtml(matchedTask.desc || '')}`;
                             if (clearBtn2) clearBtn2.classList.remove('hidden');
                         } else {
+                            matchedTask = null;
+                            if (sjId4) sjId4.value = '';
                             if (jiraSearch) jiraSearch.value = '';
                             if (jiraSelected) jiraSelected.innerHTML = 'No task selected';
                             if (clearBtn2) clearBtn2.classList.add('hidden');
@@ -22039,7 +22148,8 @@ function isStrategyTask(t) {
                 const status = document.getElementById('strategy-status').value;
                 const desc = document.getElementById('strategy-desc')?.value?.trim() || '';
                 const format = document.getElementById('strategy-format').value;
-                const jiraId = document.getElementById('strategy-jira-id').value || '';
+                const rawJiraId = (document.getElementById('strategy-jira-id')?.value || '').trim();
+                const jiraId = (rawJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(rawJiraId) && !rawJiraId.toUpperCase().startsWith('M-') && !rawJiraId.toUpperCase().startsWith('LEARN-')) ? rawJiraId : '';
                 const videosCount = parseInt(document.getElementById('strategy-videos-count')?.value) || 0;
                 const postersCount = parseInt(document.getElementById('strategy-posters-count')?.value) || 0;
 
@@ -22088,7 +22198,8 @@ function isStrategyTask(t) {
                         // Capture existing strategy event data before update
                         const existingEv = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents[id] : null;
                         const oldTitle = existingEv ? existingEv.title : null;
-                        const targetJiraId = jiraId || (existingEv ? existingEv.jiraId : null);
+                        const existingJiraId = (existingEv && existingEv.jiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(existingEv.jiraId) && !existingEv.jiraId.toUpperCase().startsWith('M-') && !existingEv.jiraId.toUpperCase().startsWith('LEARN-')) ? existingEv.jiraId : null;
+                        const targetJiraId = jiraId || existingJiraId;
 
                         // Update Strategy Event in Firebase
                         await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
@@ -22464,14 +22575,20 @@ function isStrategyTask(t) {
                         }
                     }
 
-                    // Determine target Jira task key
-                    let targetJiraKey = jiraId || (existingEv ? (existingEv.jiraId || existingEv.jiraTaskId) : null);
-                    if (!targetJiraKey && id && id.includes('-')) {
+                    // Determine target Jira task key (must be genuine Jira task key - NEVER internal/manual)
+                    let targetJiraKey = (jiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(jiraId) && !jiraId.toUpperCase().startsWith('M-') && !jiraId.toUpperCase().startsWith('LEARN-')) ? jiraId : null;
+                    if (!targetJiraKey && existingEv) {
+                        const candidate = existingEv.jiraId || existingEv.jiraTaskId;
+                        if (candidate && /^[A-Z][A-Z0-9]*-\d+$/i.test(candidate) && !candidate.toUpperCase().startsWith('M-') && !candidate.toUpperCase().startsWith('LEARN-')) {
+                            targetJiraKey = candidate;
+                        }
+                    }
+                    if (!targetJiraKey && id && /^[A-Z][A-Z0-9]*-\d+$/i.test(id) && !id.toUpperCase().startsWith('M-') && !id.toUpperCase().startsWith('LEARN-')) {
                         targetJiraKey = id;
                     }
                     if (!targetJiraKey && existingEv && typeof findMatchedStrategyTask === 'function') {
                         const matched = findMatchedStrategyTask(existingEv.title, existingEv.desc);
-                        if (matched && !matched.manual && matched.id && matched.id.includes('-')) {
+                        if (matched && !matched.manual && !isInternalTask(matched) && matched.id && /^[A-Z][A-Z0-9]*-\d+$/i.test(matched.id) && !matched.id.toUpperCase().startsWith('M-') && !matched.id.toUpperCase().startsWith('LEARN-')) {
                             targetJiraKey = matched.id;
                         }
                     }
@@ -22555,7 +22672,32 @@ function isStrategyTask(t) {
             }
 
             function ptMatchedTasks(ev) {
-                if (!ev || !ev.date) return [];
+                if (!ev) return [];
+
+                // 1. Explicitly linked Jira tasks (from ev.linkedTasks or ev.jiraId) - strictly genuine Jira only
+                const explicitTasks = [];
+                const explicitKeys = new Set();
+
+                const addExplicitTask = (taskId) => {
+                    if (!taskId) return;
+                    const key = String(taskId).trim();
+                    if (!/^[A-Z][A-Z0-9]*-\d+$/i.test(key) || key.toUpperCase().startsWith('M-') || key.toUpperCase().startsWith('LEARN-')) return;
+                    if (explicitKeys.has(key.toUpperCase())) return;
+                    const found = (tasks || []).find(t => t && !t.manual && (typeof isInternalTask !== 'function' || !isInternalTask(t)) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && t.id.toLowerCase() === key.toLowerCase());
+                    if (found) {
+                        explicitKeys.add(key.toUpperCase());
+                        explicitTasks.push(found);
+                    }
+                };
+
+                if (ev.jiraId) addExplicitTask(ev.jiraId);
+                if (ev.jiraTaskId) addExplicitTask(ev.jiraTaskId);
+                if (ev.linkedTasks && typeof ev.linkedTasks === 'object') {
+                    Object.keys(ev.linkedTasks).forEach(tid => addExplicitTask(tid));
+                }
+
+                if (!ev.date) return explicitTasks;
+
                 const windowStart = ptAddDays(ev.date, -14);
                 const windowEnd = ptAddDays(ev.date, 3);
 
@@ -22565,8 +22707,11 @@ function isStrategyTask(t) {
                     .split(/\s+/)
                     .filter(w => w.length > 2 && !stopWords.has(w));
 
-                return tasks.filter(t => {
-                    if (t.manual || isInternalTask(t)) return false;
+                const autoMatched = (tasks || []).filter(t => {
+                    if (!t || t.manual || (typeof isInternalTask === 'function' && isInternalTask(t))) return false;
+                    if (!/^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') || String(t.id || '').toUpperCase().startsWith('M-') || String(t.id || '').toUpperCase().startsWith('LEARN-')) return false;
+                    if (explicitKeys.has(String(t.id).toUpperCase())) return false;
+
                     const clientMatch = ev.client && t.client && t.client.toLowerCase() === ev.client.toLowerCase();
                     const labelMatch = ev.client && (t.clientLabels || []).some(l => l.toLowerCase().includes(ev.client.toLowerCase()));
                     if (!clientMatch && !labelMatch) return false;
@@ -22582,10 +22727,12 @@ function isStrategyTask(t) {
                     }
                     return true;
                 });
+
+                return [...explicitTasks, ...autoMatched];
             }
 
             function ptTasksDueOn(dateStr) {
-                return tasks.filter(t => t.duedate === dateStr && !isDone(t.status) && !t.manual && !isInternalTask(t));
+                return tasks.filter(t => t && t.duedate === dateStr && !isDone(t.status) && !t.manual && (typeof isInternalTask !== 'function' || !isInternalTask(t)) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && !String(t.id || '').toUpperCase().startsWith('M-') && !String(t.id || '').toUpperCase().startsWith('LEARN-'));
             }
 
             function ptTrackStatus(ev) {
@@ -22838,13 +22985,20 @@ function isStrategyTask(t) {
                     return;
                 }
 
-                const matched = tasks.filter(t =>
+                // Strictly filter to genuine Jira tasks only - NEVER show internal or manual tasks
+                const matched = (tasks || []).filter(t =>
+                    t &&
                     !isDone(t.status) &&
-                    (t.id.toLowerCase().includes(query) || (t.desc || '').toLowerCase().includes(query))
+                    !t.manual &&
+                    (typeof isInternalTask !== 'function' || !isInternalTask(t)) &&
+                    /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') &&
+                    !String(t.id || '').toUpperCase().startsWith('M-') &&
+                    !String(t.id || '').toUpperCase().startsWith('LEARN-') &&
+                    (String(t.id || '').toLowerCase().includes(query) || String(t.desc || '').toLowerCase().includes(query))
                 ).slice(0, 10);
 
                 if (matched.length === 0) {
-                    container.innerHTML = '<p class="text-[10px] text-slate-400 italic text-center py-4">No open tasks matched your search.</p>';
+                    container.innerHTML = '<p class="text-[10px] text-slate-400 italic text-center py-4">No open Jira tasks matched your search.</p>';
                     return;
                 }
 
@@ -22863,11 +23017,19 @@ function isStrategyTask(t) {
 
             async function linkJiraTaskToStrategy(taskId) {
                 if (!activeLinkEventId || !taskId || !db) return;
+
+                // Strictly validate Jira Key - NEVER link internal or manual tasks
+                const cleanKey = String(taskId).trim();
+                if (!/^[A-Z][A-Z0-9]*-\d+$/i.test(cleanKey) || cleanKey.toUpperCase().startsWith('M-') || cleanKey.toUpperCase().startsWith('LEARN-')) {
+                    toast('Only genuine Jira tasks can be linked', 'warning');
+                    return;
+                }
+
                 try {
-                    await update(ref(db, `worksync/strategy_events/${activeLinkEventId}/linkedTasks`), { [taskId]: true });
+                    await update(ref(db, `worksync/strategy_events/${activeLinkEventId}/linkedTasks`), { [cleanKey]: true });
 
                     if (!strategyEvents[activeLinkEventId].linkedTasks) strategyEvents[activeLinkEventId].linkedTasks = {};
-                    strategyEvents[activeLinkEventId].linkedTasks[taskId] = true;
+                    strategyEvents[activeLinkEventId].linkedTasks[cleanKey] = true;
 
                     document.getElementById('ptLinkTaskModal').close();
                     renderPlanTrackingView();
@@ -24295,7 +24457,10 @@ function isStrategyTask(t) {
             }
 
             function isJiraCloudTask(task) {
-                return task && !task.manual && /^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '');
+                if (!task) return false;
+                const id = String(task.id || task.key || '').toUpperCase();
+                if (task.manual || (typeof isInternalTask === 'function' && isInternalTask(task)) || id.startsWith('M-') || id.startsWith('LEARN-') || id.startsWith('INTERNAL-')) return false;
+                return /^[A-Z][A-Z0-9]+-\d+$/i.test(id);
             }
 
             function applyLocalTaskAssignee(taskId, userEmail, accountId = '') {
@@ -25715,7 +25880,14 @@ function isStrategyTask(t) {
             }
 
             function isInternalTask(t) {
-                return t?.manual === true || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true;
+                if (!t) return false;
+                const id = String(t.id || t.taskId || t.key || '').toUpperCase();
+                return t.manual === true ||
+                       String(t.taskType || '').toLowerCase() === 'internal' ||
+                       t.internal === true ||
+                       id.startsWith('M-') ||
+                       id.startsWith('LEARN-') ||
+                       id.startsWith('INTERNAL-');
             }
 
             function morningLearningTaskId(email) {
@@ -48668,22 +48840,36 @@ function isStrategyTask(t) {
 
             async function syncTaskStatusToStrategy(taskId, newStatus) {
                 try {
+                    // Strictly sync only for genuine Jira tasks - NEVER for internal or manual tasks
+                    if (!taskId || !/^[A-Z][A-Z0-9]*-\d+$/i.test(taskId) || String(taskId).toUpperCase().startsWith('M-') || String(taskId).toUpperCase().startsWith('LEARN-')) {
+                        return;
+                    }
+
+                    const task = (tasks || []).find(t => t && t.id && t.id.toLowerCase() === String(taskId).toLowerCase());
+                    if (task && (task.manual || (typeof isInternalTask === 'function' && isInternalTask(task)))) {
+                        return;
+                    }
+
                     let events = strategyEvents;
                     if (!events || Object.keys(events).length === 0) {
                         const snap = await get(ref(db, 'worksync/strategy_events'));
                         events = snap.val() || {};
                     }
 
+                    const lowerId = taskId.toLowerCase();
                     const matchedEntry = Object.entries(events).find(([id, ev]) => {
+                        // 0. Explicit Jira ID or linked task match
+                        if (ev.jiraId && ev.jiraId.toLowerCase() === lowerId) return true;
+                        if (ev.jiraTaskId && ev.jiraTaskId.toLowerCase() === lowerId) return true;
+                        if (ev.linkedTasks && (ev.linkedTasks[taskId] || ev.linkedTasks[lowerId] || ev.linkedTasks[taskId.toUpperCase()])) return true;
+
                         const title = (ev.title || '').toLowerCase();
                         const desc = (ev.desc || '').toLowerCase();
-                        const lowerId = taskId.toLowerCase();
 
                         // 1. Direct match
                         if (title.includes(lowerId) || desc.includes(lowerId)) return true;
 
-                        // 2. Title/desc match
-                        const task = tasks.find(t => t.id === taskId);
+                        // 2. Title/desc match with genuine Jira task
                         if (task) {
                             const taskDesc = (task.desc || '').toLowerCase();
                             if (taskDesc === title) return true;
@@ -48699,7 +48885,9 @@ function isStrategyTask(t) {
                         if (ev.status !== newStatus) {
                             await update(ref(db, `worksync/strategy_events/${eventId}`), { status: newStatus });
                             // Update local cache too in case listener hasn't fired yet
-                            strategyEvents[eventId].status = newStatus;
+                            if (strategyEvents && strategyEvents[eventId]) {
+                                strategyEvents[eventId].status = newStatus;
+                            }
                             if (activeView === 'strategy-calendar') {
                                 renderStrategyCalendar();
                                 renderStrategySidebar();
@@ -48765,7 +48953,7 @@ function isStrategyTask(t) {
                             sendClientSentNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
 
-                        await syncTaskStatusToStrategy(taskId, newStatus);
+                        // Internal/manual tasks must NEVER sync to or alter Strategy Events
                         return true;
                     } catch (err) {
                         toast('Failed to update status', 'error');
@@ -51702,7 +51890,7 @@ function isStrategyTask(t) {
                     // 1. Process execution Jira tasks first
                     const allTasksList = window.allTasks || tasks || [];
                     allTasksList.forEach(t => {
-                        if (typeof isInternalTask === 'function' && isInternalTask(t)) return;
+                        if (!t || t.manual || (typeof isInternalTask === 'function' && isInternalTask(t)) || !/^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') || String(t.id || '').toUpperCase().startsWith('M-') || String(t.id || '').toUpperCase().startsWith('LEARN-')) return;
                         if (isSubtaskItem(t)) return;
                         const taskClient = getNormalizedClientName(t.client || 'Other');
                         if (client !== 'ALL' && taskClient !== client) return;
@@ -51766,8 +51954,8 @@ function isStrategyTask(t) {
 
                         // Check if we can find a matching Jira task across ALL tasks in the system
                         let linkedTask = null;
-                        if (evJiraId) {
-                            linkedTask = allTasksList.find(t => String(t.id).toLowerCase() === evJiraId || (t.key && String(t.key).toLowerCase() === evJiraId));
+                        if (evJiraId && /^[A-Z][A-Z0-9]*-\d+$/i.test(evJiraId) && !evJiraId.toUpperCase().startsWith('M-') && !evJiraId.toUpperCase().startsWith('LEARN-')) {
+                            linkedTask = allTasksList.find(t => t && !t.manual && (typeof isInternalTask !== 'function' || !isInternalTask(t)) && /^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') && (String(t.id).toLowerCase() === evJiraId || (t.key && String(t.key).toLowerCase() === evJiraId)));
                         }
                         if (!linkedTask && typeof findMatchedStrategyTask === 'function') {
                             linkedTask = findMatchedStrategyTask(ev.title, ev.desc, ev.jiraId || ev.jiraTaskId);
@@ -51799,7 +51987,7 @@ function isStrategyTask(t) {
                     const allTasksList = window.allTasks || tasks || [];
 
                     allTasksList.forEach(t => {
-                        if (typeof isInternalTask === 'function' && isInternalTask(t)) return;
+                        if (!t || t.manual || (typeof isInternalTask === 'function' && isInternalTask(t)) || !/^[A-Z][A-Z0-9]*-\d+$/i.test(t.id || '') || String(t.id || '').toUpperCase().startsWith('M-') || String(t.id || '').toUpperCase().startsWith('LEARN-')) return;
                         if (isSubtaskItem(t)) return;
                         const taskClient = getNormalizedClientName(t.client || 'Other');
                         if (client !== 'ALL' && taskClient !== client) return;
