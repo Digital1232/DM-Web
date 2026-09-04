@@ -106,7 +106,7 @@ Check: Alert message and console output
 □ API token has required scopes
 □ Project key "J2" exists in Jira
 □ Project has at least one task
-□ Authentication email is correct (thanushvilpower@gmail.com)
+□ Authentication email is correct (digitalmarketing@vilpower.com)
 □ Google Script URL is accessible
 ```
 

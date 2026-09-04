@@ -107,7 +107,7 @@ Two status filter buttons appear below the date:
 - See task details, client info, and status
 
 ❌ **Karthika Cannot:**
-- See other team members' tasks (Sneha, Thanush, Palanirajan, Nanjil, Murugesh)
+- See other team members' tasks (Sneha, Palanirajan, Nanjil, Murugesh)
 - Edit or modify Barath/Immanuel's tasks
 - Change task assignments
 - Access admin features

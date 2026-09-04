@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneDesk - Remove Thanush & Related Document Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-8">
+        <!-- Header -->
+        <div class="flex items-center gap-4 border-b border-slate-800/80 pb-6 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <iconify-icon icon="solar:user-cross-bold-duotone" width="28"></iconify-icon>
+            </div>
+            <div>
+                <h1 class="text-xl font-black tracking-tight text-white">OneDesk Database Cleanup Utility</h1>
+                <p class="text-xs text-slate-400 font-medium">Remove Thanush (<code class="text-rose-300">thanushvilpower@gmail.com</code>) & all associated documents/files</p>
+            </div>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginSection" class="space-y-4">
+            <p class="text-xs text-slate-400 leading-relaxed">
+                Sign in with an authorized OneDesk administrator account (<code class="text-indigo-300">digitalmarketing@vilpower.com</code> or <code class="text-indigo-300">nanjil@vilpower.com</code>) to scan and delete Thanush's profile, document records, requests, plans, and files from Firebase.
+            </p>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Admin Email</label>
+                <input type="email" id="email" value="digitalmarketing@vilpower.com" class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">Password</label>
+                <input type="password" id="password" placeholder="••••••••" class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+            </div>
+            <button onclick="loginAdmin()" id="loginBtn" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+                <iconify-icon icon="solar:lock-keyhole-bold" width="18"></iconify-icon>
+                <span>Authenticate & Access Cleanup</span>
+            </button>
+        </div>
+
+        <!-- Action Dashboard -->
+        <div id="actionSection" class="hidden space-y-6">
+            <div class="flex items-center justify-between p-4 bg-slate-800/60 rounded-2xl border border-slate-700/60">
+                <div class="flex items-center gap-3">
+                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                    <span id="userInfo" class="text-xs font-bold text-slate-200"></span>
+                </div>
+                <button onclick="logoutAdmin()" class="text-xs font-semibold text-slate-400 hover:text-white transition-colors">Sign Out</button>
+            </div>
+
+            <!-- Target Summary Card -->
+            <div class="p-5 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-2">
+                <p class="text-xs font-black text-rose-400 uppercase tracking-wider">Target for Complete Removal</p>
+                <div class="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                    <div><span class="text-slate-500">Name:</span> <strong class="text-white">Thanush V</strong></div>
+                    <div><span class="text-slate-500">Email:</span> <strong class="text-white">thanushvilpower@gmail.com</strong></div>
+                    <div><span class="text-slate-500">DB Key:</span> <strong class="text-white">thanushvilpower_gmail_com</strong></div>
+                    <div><span class="text-slate-500">Data Scoped:</span> <span class="text-emerald-400">Users, Plans, Docs, Requests, Ideas</span></div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="space-y-3">
+                <button onclick="startCleanup()" id="cleanupBtn" class="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-black text-sm rounded-xl transition-all shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2">
+                    <iconify-icon icon="solar:trash-bin-trash-bold" width="20"></iconify-icon>
+                    <span>Execute Complete Purge of Thanush & Documents</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Live Log Console -->
+        <div id="logSection" class="mt-6 hidden">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Activity Log</span>
+                <span id="logSummary" class="text-[11px] font-bold text-slate-400"></span>
+            </div>
+            <div id="statusLog" class="p-4 bg-black/60 border border-slate-800 rounded-2xl font-mono text-xs text-slate-300 max-h-72 overflow-y-auto space-y-1"></div>
+        </div>
+    </div>
+
+    <script>
+        const FB_CONFIG = {
+            apiKey: "AIzaSyAL7Z1D_Lhbu-eW9qgiP4hs25ccv_hRu3w",
+            authDomain: "worksync-vilpower.firebaseapp.com",
+            databaseURL: "https://worksync-vilpower-default-rtdb.firebaseio.com",
+            projectId: "worksync-vilpower",
+            storageBucket: "worksync-vilpower.firebasestorage.app",
+            messagingSenderId: "738955842044",
+            appId: "1:738955842044:web:44d3a76012329578186279"
+        };
+
+        const app = firebase.initializeApp(FB_CONFIG);
+        const auth = firebase.auth(app);
+        const db = firebase.database(app);
+
+        const TARGET_EMAIL = 'thanushvilpower@gmail.com';
+        const TARGET_KEY = 'thanushvilpower_gmail_com';
+
+        function log(msg, type = 'info') {
+            const el = document.getElementById('statusLog');
+            document.getElementById('logSection').classList.remove('hidden');
+            const color = type === 'success' ? 'text-emerald-400' :
+                          type === 'error' ? 'text-rose-400' :
+                          type === 'warn' ? 'text-amber-400' : 'text-slate-300';
+            const item = document.createElement('div');
+            item.className = color;
+            item.innerHTML = msg;
+            el.appendChild(item);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function loginAdmin() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            if (!email || !password) return alert('Enter email and password');
+
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Authenticating...</span>';
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                log(`Authenticated successfully as ${email}`, 'success');
+            } catch (err) {
+                log(`Authentication error: ${err.message}`, 'error');
+                alert('Login failed: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<span>Authenticate & Access Cleanup</span>';
+            }
+        }
+
+        async function logoutAdmin() {
+            await auth.signOut();
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('actionSection').classList.add('hidden');
+            document.getElementById('logSection').classList.add('hidden');
+            document.getElementById('statusLog').innerHTML = '';
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('actionSection').classList.remove('hidden');
+                document.getElementById('userInfo').textContent = `Logged in: ${user.email}`;
+            }
+        });
+
+        async function startCleanup() {
+            if (!confirm(`Are you sure you want to permanently delete Thanush (${TARGET_EMAIL}) and all related document files, requests, plans, and ideas from OneDesk?`)) {
+                return;
+            }
+
+            const btn = document.getElementById('cleanupBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Purging in progress...</span>';
+            document.getElementById('statusLog').innerHTML = '';
+
+            let deletedCount = 0;
+
+            try {
+                log('🚀 Starting complete OneDesk purge for Thanush...', 'warn');
+
+                // 1. Delete user profile
+                log('1. Checking user profile (worksync/users/' + TARGET_KEY + ')...');
+                const userSnap = await db.ref(`worksync/users/${TARGET_KEY}`).once('value');
+                if (userSnap.exists()) {
+                    await db.ref(`worksync/users/${TARGET_KEY}`).remove();
+                    log(`   ✓ Deleted worksync/users/${TARGET_KEY}`, 'success');
+                    deletedCount++;
+                } else {
+                    log(`   - User profile was already removed.`);
+                }
+
+                // 2. Delete daily plans
+                log('2. Checking daily plans (worksync/daily_plans/' + TARGET_KEY + ')...');
+                const dpSnap = await db.ref(`worksync/daily_plans/${TARGET_KEY}`).once('value');
+                if (dpSnap.exists()) {
+                    await db.ref(`worksync/daily_plans/${TARGET_KEY}`).remove();
+                    log(`   ✓ Deleted worksync/daily_plans/${TARGET_KEY}`, 'success');
+                    deletedCount++;
+                } else {
+                    log(`   - No daily plans found.`);
+                }
+
+                // 3. Delete manual tasks
+                log('3. Checking manual tasks (worksync/manual_tasks/' + TARGET_KEY + ')...');
+                const mtSnap = await db.ref(`worksync/manual_tasks/${TARGET_KEY}`).once('value');
+                if (mtSnap.exists()) {
+                    await db.ref(`worksync/manual_tasks/${TARGET_KEY}`).remove();
+                    log(`   ✓ Deleted worksync/manual_tasks/${TARGET_KEY}`, 'success');
+                    deletedCount++;
+                } else {
+                    log(`   - No manual tasks found.`);
+                }
+
+                // 4. Clean requests (leaves, permissions, saturday offs)
+                log('4. Scanning requests (worksync/requests)...');
+                const reqSnap = await db.ref('worksync/requests').once('value');
+                const reqs = reqSnap.val() || {};
+                let reqDel = 0;
+                for (const [id, r] of Object.entries(reqs)) {
+                    const u = (r.userId || r.userEmail || '').toLowerCase();
+                    const n = (r.userName || '').toLowerCase();
+                    if (u.includes(TARGET_EMAIL) || n.includes('thanush')) {
+                        await db.ref(`worksync/requests/${id}`).remove();
+                        reqDel++;
+                    }
+                }
+                if (reqDel > 0) {
+                    log(`   ✓ Deleted ${reqDel} request(s) associated with Thanush`, 'success');
+                    deletedCount += reqDel;
+                } else {
+                    log(`   - No requests found for Thanush.`);
+                }
+
+                // 5. Clean workplace ideas
+                log('5. Scanning workplace ideas (worksync/workplace_ideas)...');
+                const wpSnap = await db.ref('worksync/workplace_ideas').once('value');
+                const wpIdeas = wpSnap.val() || {};
+                let wpDel = 0;
+                for (const [id, idea] of Object.entries(wpIdeas)) {
+                    if ((idea.userId || '').toLowerCase() === TARGET_EMAIL || (idea.userName || '').toLowerCase().includes('thanush')) {
+                        await db.ref(`worksync/workplace_ideas/${id}`).remove();
+                        wpDel++;
+                    }
+                }
+                if (wpDel > 0) {
+                    log(`   ✓ Deleted ${wpDel} workplace idea(s) by Thanush`, 'success');
+                    deletedCount += wpDel;
+                } else {
+                    log(`   - No workplace ideas found for Thanush.`);
+                }
+
+                // 6. Clean monthly organiser assignments
+                log('6. Checking monthly organisers...');
+                const orgSnap = await db.ref('worksync/monthly_organisers').once('value');
+                const orgs = orgSnap.val() || {};
+                for (const [roleKey, roleObj] of Object.entries(orgs)) {
+                    if (roleObj && (roleObj.email || '').toLowerCase() === TARGET_EMAIL) {
+                        await db.ref(`worksync/monthly_organisers/${roleKey}`).remove();
+                        log(`   ✓ Removed Thanush from monthly_organisers/${roleKey}`, 'success');
+                        deletedCount++;
+                    }
+                }
+
+                // 7. Clean attendance events
+                log('7. Scanning attendance events...');
+                const attSnap = await db.ref('worksync/attendance_events').once('value');
+                const atts = attSnap.val() || {};
+                let attDel = 0;
+                for (const [id, att] of Object.entries(atts)) {
+                    if ((att.userId || '').toLowerCase() === TARGET_EMAIL) {
+                        await db.ref(`worksync/attendance_events/${id}`).remove();
+                        attDel++;
+                    }
+                }
+                if (attDel > 0) {
+                    log(`   ✓ Deleted ${attDel} attendance record(s)`, 'success');
+                    deletedCount += attDel;
+                } else {
+                    log(`   - No attendance records found.`);
+                }
+
+                // 8. Clean file systems / drives
+                log('8. Scanning file systems (worksync/file_systems)...');
+                const fsSnap = await db.ref('worksync/file_systems').once('value');
+                const systems = fsSnap.val() || {};
+                let sysDel = 0;
+                for (const [id, sys] of Object.entries(systems)) {
+                    if ((sys.owner || '').toLowerCase().includes('thanush')) {
+                        await db.ref(`worksync/file_systems/${id}`).remove();
+                        sysDel++;
+                    }
+                }
+                if (sysDel > 0) {
+                    log(`   ✓ Deleted ${sysDel} file system(s) owned by Thanush`, 'success');
+                    deletedCount += sysDel;
+                } else {
+                    log(`   - No file systems owned by Thanush.`);
+                }
+
+                // 9. Clean drive uploads / documents
+                log('9. Scanning drive uploads / documents (worksync/drive_uploads)...');
+                const duSnap = await db.ref('worksync/drive_uploads').once('value');
+                const uploads = duSnap.val() || {};
+                let duDel = 0;
+                for (const [id, up] of Object.entries(uploads)) {
+                    if ((up.userEmail || up.userId || '').toLowerCase() === TARGET_EMAIL) {
+                        await db.ref(`worksync/drive_uploads/${id}`).remove();
+                        duDel++;
+                    }
+                }
+                if (duDel > 0) {
+                    log(`   ✓ Deleted ${duDel} drive document upload(s)`, 'success');
+                    deletedCount += duDel;
+                } else {
+                    log(`   - No drive uploads found.`);
+                }
+
+                // 10. Clean personal conversations
+                log('10. Scanning direct conversations...');
+                const convSnap = await db.ref('worksync/conversations').once('value');
+                const convs = convSnap.val() || {};
+                let convDel = 0;
+                for (const id of Object.keys(convs)) {
+                    if (id.includes(TARGET_KEY) || id.includes('thanush')) {
+                        await db.ref(`worksync/conversations/${id}`).remove();
+                        await db.ref(`worksync/messages/${id}`).remove().catch(() => {});
+                        convDel++;
+                    }
+                }
+                if (convDel > 0) {
+                    log(`   ✓ Deleted ${convDel} conversation thread(s)`, 'success');
+                    deletedCount += convDel;
+                } else {
+                    log(`   - No personal conversations found.`);
+                }
+
+                log(`🎉 Complete! Cleaned ${deletedCount} item(s) associated with Thanush. OneDesk is completely clean.`, 'success');
+                alert(`Purge Complete! Thanush and all related document records have been removed (${deletedCount} items cleaned).`);
+            } catch (err) {
+                log(`❌ Error during cleanup: ${err.message}`, 'error');
+                alert('Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Execute Complete Purge of Thanush & Documents</span>';
+            }
+        }
+    </script>
+</body>
+</html>

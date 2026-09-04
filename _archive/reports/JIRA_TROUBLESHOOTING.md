@@ -17,7 +17,7 @@ This error occurs when the Jira API connection works, but no tasks are returned.
   
 **Steps to Check:**
 1. Log in to Jira Cloud at `https://id.atlassian.com/manage/api-tokens`
-2. Find the token used (should be associated with `thanushvilpower@gmail.com`)
+2. Find the token used (should be associated with `digitalmarketing@vilpower.com`)
 3. Verify it has these scopes listed
 4. If missing scopes, delete and create a new token with proper permissions
 
@@ -80,7 +80,7 @@ This error occurs when the Jira API connection works, but no tasks are returned.
 ---
 
 #### 6. **Wrong Authentication Email** ❌
-**Current Config:** `const authEmail = 'thanushvilpower@gmail.com';`
+**Current Config:** `const authEmail = 'digitalmarketing@vilpower.com';`
 
 **Issue:** If the API token doesn't belong to this email, the query may fail silently
 
@@ -115,7 +115,7 @@ This error occurs when the Jira API connection works, but no tasks are returned.
 ### Example Console Output:
 ```
 Active Sync ID: 5b7f3c0d9e2a1b4c6f8e9d0a1b2c3d
-Auth Email: thanushvilpower@gmail.com
+Auth Email: digitalmarketing@vilpower.com
 Jira Domain: vilpowerdigitalmarketing.atlassian.net
 Project Key: J2
 Sync Strategy: Trying JQL [project = "J2" AND ...]

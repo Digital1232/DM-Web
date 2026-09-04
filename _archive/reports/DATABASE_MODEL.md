@@ -349,9 +349,9 @@
 ```jsonc
 {
   "type": "permission",
-  "userId": "thanushvilpower@gmail.com",
-  "userName": "Thanush V",
-  "userRole": "Manager - Digital Content Productions",
+  "userId": "barathvilpower@gmail.com",
+  "userName": "Barath Magesh M",
+  "userRole": "Manager - Creative Content & Visual",
   "date": "2026-06-10",
   "fromTime": "14:00",
   "toTime": "15:30",
@@ -537,8 +537,8 @@
   },
 
   "workplace": {
-    "email": "thanushvilpower@gmail.com",
-    "name": "Thanush V",
+    "email": "barathvilpower@gmail.com",
+    "name": "Barath Magesh M",
     "count": 1                        // workplace suggestions submitted this month
   },
 
@@ -584,8 +584,8 @@
 {
   "title": "Standing desk request",
   "details": "Adding standing desk options would improve ergonomics...",
-  "userId": "thanushvilpower@gmail.com",
-  "userName": "Thanush V",
+  "userId": "barathvilpower@gmail.com",
+  "userName": "Barath Magesh M",
   "createdAt": 1717900000000
 }
 ```
