@@ -18528,16 +18528,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     try { history.replaceState(null, '', '#' + view); } catch (e) { }
                 }
 
-                // ════ CLEANUP: If leaving chat, stop all listeners and clean up UI ════
+                // ════ CLEANUP: If leaving chat, clean up active chat room state (keep background convListeners active) ════
                 if (activeView === 'chat' && view !== 'chat') {
-                    // Stop all conversation listeners
-                    Object.values(convListeners).forEach(unsubscribe => {
-                        if (unsubscribe && typeof unsubscribe === 'function') {
-                            try { unsubscribe(); } catch (e) { console.error('Error unsubscribing:', e); }
-                        }
-                    });
-                    convListeners = {};
-
                     // Stop message listeners
                     if (msgListener && typeof msgListener === 'function') {
                         try { msgListener(); } catch (e) { }

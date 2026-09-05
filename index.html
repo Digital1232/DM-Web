@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="0.0.2">
+    <meta name="app-version" content="1.0.18">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -7450,6 +7450,22 @@
                             </button>
                         </div>
 
+                        <!-- Notification Permission Banner (shown if Notification.permission !== 'granted') -->
+                        <div id="chat-notification-banner" class="hidden mx-3 mb-2 p-2.5 bg-indigo-50/90 dark:bg-indigo-950/70 border border-indigo-200/60 dark:border-indigo-800/60 rounded-2xl flex items-center justify-between gap-2 shadow-xs transition-all">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs text-xs">
+                                    <iconify-icon icon="solar:bell-bold" width="15"></iconify-icon>
+                                </span>
+                                <div class="min-w-0 text-left">
+                                    <div class="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight truncate" id="chat-notif-banner-title">Desktop Notifications</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate" id="chat-notif-banner-desc">Get alerted for new team messages</div>
+                                </div>
+                            </div>
+                            <button type="button" id="chat-enable-notif-btn" onclick="requestChatNotificationPermission(true)" class="px-2.5 py-1 text-[11px] font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-xs transition-colors">
+                                Enable
+                            </button>
+                        </div>
+
                         <!-- Unified List with Collapsible Sections -->
                         <!-- Unified List with Collapsible Sections -->
                         <!-- Conversations Scroll Area -->
@@ -7590,6 +7606,13 @@
                                                     <iconify-icon icon="solar:bell-off-bold" width="15"
                                                         class="text-slate-400" id="chat-mute-menu-icon"></iconify-icon>
                                                     <span id="chat-mute-menu-label">Mute Notifications</span>
+                                                </button>
+                                                <button type="button"
+                                                    onclick="testChatNotification(); toggleChatOptionsMenu();"
+                                                    class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left text-indigo-600 dark:text-indigo-400 font-semibold"
+                                                    id="chat-test-notif-menu-btn">
+                                                    <iconify-icon icon="solar:bell-bing-bold" width="15"></iconify-icon>
+                                                    <span>Test Desktop Notification</span>
                                                 </button>
                                             </div>
                                             <div class="py-1">
@@ -19815,6 +19838,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (floatChatBtn) floatChatBtn.style.setProperty('display', 'none', 'important');
                     if (floatChatPanel) floatChatPanel.style.setProperty('display', 'none', 'important');
                     if (typeof fcpOpen !== 'undefined') fcpOpen = false;
+                    if (typeof updateNotificationPermissionBanner === 'function') {
+                        updateNotificationPermissionBanner();
+                    }
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        if (typeof requestChatNotificationPermission === 'function') {
+                            requestChatNotificationPermission(false);
+                        }
+                    }
                 } else {
                     document.documentElement.classList.remove('chat-page-active');
                     if (floatChatBtn && currentUser) {
@@ -19822,17 +19853,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 }
 
-                // ════ CLEANUP: If leaving chat, stop all listeners and clean up UI ════
+                // ════ CLEANUP: If leaving chat, clean up active chat room state (keep background convListeners active) ════
                 if (prevView === 'chat' && view !== 'chat') {
-                    // Stop all conversation listeners
-                    Object.values(convListeners).forEach(unsubscribe => {
-                        if (unsubscribe && typeof unsubscribe === 'function') {
-                            try { unsubscribe(); } catch (e) { console.error('Error unsubscribing:', e); }
-                        }
-                    });
-                    convListeners = {};
-
-                    // Stop message listeners
+                    // Stop active message room listeners
                     if (msgListener && typeof msgListener === 'function') {
                         try { msgListener(); } catch (e) { }
                         msgListener = null;
@@ -31024,7 +31047,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     chatConversations = snap.val() || {};
                     const myKey = eKey(currentUser.email);
                     renderChatSidebar();
-                    watchConversationNotifications(Object.entries(chatConversations).filter(([, c]) => c && c.members && c.members[myKey]));
+                    const userConversations = Object.entries(chatConversations).filter(([id, c]) => {
+                        if (!c) return false;
+                        if (c.members && c.members[myKey]) return true;
+                        if (id.startsWith('dm_') && id.includes(myKey)) return true;
+                        return false;
+                    });
+                    watchConversationNotifications(userConversations);
                 });
             }
             window.initChat = initChat;
@@ -31039,13 +31068,39 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
                 conversations.forEach(([id, conv]) => {
                     if (convListeners[id]) return;
-                    const listenerStartedAt = Date.now() - 10000;
+                    
+                    const seenKeys = new Set();
+                    let initialLoaded = false;
+                    const listenerStartedAt = Date.now() - 30000;
                     const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
+
+                    // Pre-fetch last message key to avoid notifying for historical message upon listener attachment
+                    get(q).then(snap => {
+                        if (snap.exists()) {
+                            snap.forEach(child => seenKeys.add(child.key));
+                        }
+                        initialLoaded = true;
+                    }).catch(() => {
+                        initialLoaded = true;
+                    });
+
                     convListeners[id] = onChildAdded(q, snap => {
+                        const msgKey = snap.key;
                         const msg = snap.val();
-                        if (!msg || !currentUser || !currentUser.email || msg.senderEmail === currentUser.email || msg.unsent || (msg.timestamp || 0) < listenerStartedAt) return;
+                        if (!msg || !currentUser || !currentUser.email) return;
+                        if (msg.senderEmail === currentUser.email || msg.unsent) return;
+                        
+                        // Ignore already processed or existing historical message
+                        if (seenKeys.has(msgKey)) return;
+                        seenKeys.add(msgKey);
+                        if (!initialLoaded && (msg.timestamp || 0) < listenerStartedAt) return;
+                        if ((msg.timestamp || 0) < listenerStartedAt - 60000) return;
+
                         const isCurrentActive = (id === activeConvId) || (activeConvId && id === getAltDmId(activeConvId));
-                        if (!isCurrentActive) {
+                        const isAppHidden = document.hidden;
+                        const isChatView = activeView === 'chat';
+
+                        if (!isCurrentActive || isAppHidden) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
                             renderChatBadge();
                             const unreadBadge = document.getElementById(`unread-badge-${id}`) || (getAltDmId(id) ? document.getElementById(`unread-badge-${getAltDmId(id)}`) : null);
@@ -31055,6 +31110,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 unreadBadge.textContent = totalUnread;
                                 unreadBadge.classList.remove('hidden');
                             }
+                        }
+
+                        // Trigger notification when not actively viewing this chat or when the browser window is hidden
+                        if (!isCurrentActive || isAppHidden || !isChatView) {
+                            notifyIncomingMessage(msg, conv, id);
                         }
                     });
                 });
@@ -31070,6 +31130,49 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.renderChatBadge = renderChatBadge;
 
+            async function showBrowserNotification(title, options = {}, onClickCallback = null) {
+                if (!('Notification' in window)) return;
+                if (Notification.permission !== 'granted') return;
+
+                const defaultOptions = {
+                    icon: 'img/Fav-Icon.png',
+                    badge: 'img/Fav-Icon.png',
+                    ...options
+                };
+
+                let swShown = false;
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const reg = await navigator.serviceWorker.ready;
+                        if (reg && typeof reg.showNotification === 'function') {
+                            await reg.showNotification(title, defaultOptions);
+                            swShown = true;
+                        }
+                    } catch (swErr) {
+                        console.warn('[Notification] ServiceWorker showNotification failed, falling back:', swErr);
+                    }
+                }
+
+                if (!swShown) {
+                    try {
+                        const n = new Notification(title, defaultOptions);
+                        if (onClickCallback && typeof onClickCallback === 'function') {
+                            n.onclick = () => {
+                                try { window.focus(); } catch (e) { }
+                                try { n.close(); } catch (e) { }
+                                onClickCallback();
+                            };
+                        }
+                        setTimeout(() => {
+                            try { n.close(); } catch (e) { }
+                        }, 5000);
+                    } catch (err) {
+                        console.warn('[Notification] Window notification failed:', err);
+                    }
+                }
+            }
+            window.showBrowserNotification = showBrowserNotification;
+
             function notifyIncomingMessage(msg, conv, convId) {
                 if (chatNotificationsMuted) return;
                 if (currentUser && currentUser.email && convId) {
@@ -31077,38 +31180,169 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const mutedList = JSON.parse(localStorage.getItem('worksync_muted_chats_' + myKey) || '[]');
                     if (mutedList.includes(convId)) return;
                 }
-                const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
-                toast(`New message from ${title}`, 'info');
+                const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'New message');
+                
+                const isCurrentActive = (convId === activeConvId) || (activeConvId && convId === getAltDmId(activeConvId));
+                const isChatActiveAndVisible = !document.hidden && activeView === 'chat' && isCurrentActive;
+                
+                if (!isChatActiveAndVisible) {
+                    toast(`New message from ${title}`, 'info');
+                }
 
                 if (typeof playNotificationSound === 'function') {
                     playNotificationSound();
                 }
 
-                if ('Notification' in window) {
-                    if (Notification.permission === 'granted') {
-                        const notification = new Notification(title, {
-                            body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message'),
-                            icon: 'img/Fav-Icon.png'
-                        });
-                        notification.onclick = async () => {
-                            window.focus();
-                            try { notification.close(); } catch (e) { }
-                            switchView('chat');
-                            if (conv?.type === 'dm') {
-                                openDm(msg.senderEmail);
-                            } else {
-                                openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
-                            }
-                        };
-                        setTimeout(() => {
-                            try { notification.close(); } catch (e) { }
-                        }, 4000);
-                    } else if (Notification.permission === 'default') {
-                        try { Notification.requestPermission(); } catch (e) { }
+                showBrowserNotification(title, {
+                    body: msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : (msg.attachments?.length ? `📎 ${msg.attachments.length} attachments` : 'New message')),
+                    icon: 'img/Fav-Icon.png',
+                    badge: 'img/Fav-Icon.png',
+                    tag: 'chat-' + convId,
+                    renotify: true,
+                    data: {
+                        convId: convId,
+                        senderEmail: msg.senderEmail,
+                        type: conv?.type || (convId.startsWith('dm_') ? 'dm' : 'group'),
+                        name: conv?.name || msg.senderName || 'Chat',
+                        profilePicture: conv?.profilePicture || ''
+                    }
+                }, () => {
+                    window.focus();
+                    if (typeof switchView === 'function') switchView('chat');
+                    if (conv?.type === 'dm' || convId.startsWith('dm_')) {
+                        if (typeof openDm === 'function') openDm(msg.senderEmail);
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                        }
+                    }
+                });
+            }
+            window.notifyIncomingMessage = notifyIncomingMessage;
+
+            async function requestChatNotificationPermission(explicitUserAction = false) {
+                if (!('Notification' in window)) {
+                    if (explicitUserAction) toast('Your browser does not support notifications.', 'warning');
+                    return false;
+                }
+
+                if (Notification.permission === 'granted') {
+                    updateNotificationPermissionBanner();
+                    if (explicitUserAction) {
+                        toast('Desktop notifications are active! 🎉', 'success');
+                        testChatNotification();
+                    }
+                    return true;
+                }
+
+                if (Notification.permission === 'denied') {
+                    updateNotificationPermissionBanner();
+                    if (explicitUserAction) {
+                        toast('Notifications are blocked in your browser. Click the site settings/lock icon in your address bar to allow notifications.', 'warning', 6000);
+                    }
+                    return false;
+                }
+
+                try {
+                    const permission = await Notification.requestPermission();
+                    updateNotificationPermissionBanner();
+                    if (permission === 'granted') {
+                        toast('Chat notifications enabled! 🎉', 'success');
+                        testChatNotification();
+                        return true;
+                    } else if (permission === 'denied') {
+                        if (explicitUserAction) {
+                            toast('Notification permission was denied in your browser.', 'warning');
+                        }
+                        return false;
+                    }
+                } catch (e) {
+                    console.warn('Error requesting notification permission:', e);
+                }
+                return false;
+            }
+            window.requestChatNotificationPermission = requestChatNotificationPermission;
+
+            function testChatNotification() {
+                if (!('Notification' in window)) {
+                    toast('Browser notifications not supported.', 'warning');
+                    return;
+                }
+                if (Notification.permission !== 'granted') {
+                    requestChatNotificationPermission(true);
+                    return;
+                }
+                if (typeof playNotificationSound === 'function') {
+                    playNotificationSound();
+                }
+                showBrowserNotification('One Desk - Notification Test 🔔', {
+                    body: 'Desktop notifications are working properly! You will be alerted when new team messages arrive.',
+                    icon: 'img/Fav-Icon.png'
+                }, () => {
+                    window.focus();
+                    if (typeof switchView === 'function') switchView('chat');
+                });
+                toast('Test notification sent to your desktop!', 'success');
+            }
+            window.testChatNotification = testChatNotification;
+
+            function updateNotificationPermissionBanner() {
+                const banner = document.getElementById('chat-notification-banner');
+                if (!banner) return;
+                if (!('Notification' in window) || Notification.permission === 'granted') {
+                    banner.classList.add('hidden');
+                    return;
+                }
+                const titleEl = document.getElementById('chat-notif-banner-title');
+                const descEl = document.getElementById('chat-notif-banner-desc');
+                const btnEl = document.getElementById('chat-enable-notif-btn');
+
+                if (Notification.permission === 'denied') {
+                    banner.classList.remove('hidden');
+                    if (titleEl) titleEl.textContent = 'Notifications Blocked';
+                    if (descEl) descEl.textContent = 'Enable in browser address bar';
+                    if (btnEl) {
+                        btnEl.textContent = 'Help';
+                        btnEl.className = 'px-2.5 py-1 text-[11px] font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shrink-0 shadow-xs transition-colors';
+                    }
+                } else {
+                    banner.classList.remove('hidden');
+                    if (titleEl) titleEl.textContent = 'Desktop Notifications';
+                    if (descEl) descEl.textContent = 'Get alerted for incoming team messages';
+                    if (btnEl) {
+                        btnEl.textContent = 'Enable';
+                        btnEl.className = 'px-2.5 py-1 text-[11px] font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-xs transition-colors';
                     }
                 }
             }
-            window.notifyIncomingMessage = notifyIncomingMessage;
+            window.updateNotificationPermissionBanner = updateNotificationPermissionBanner;
+
+            // Service worker message routing for notification clicks
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+                        const data = event.data.chatData || {};
+                        window.focus();
+                        if (typeof switchView === 'function') switchView('chat');
+                        if (data.convId) {
+                            if (data.type === 'dm' && data.senderEmail) {
+                                if (typeof openDm === 'function') openDm(data.senderEmail);
+                            } else {
+                                if (typeof openConversation === 'function') {
+                                    openConversation(data.convId, data.name || 'Group', 'group', data.profilePicture || '');
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Register service worker for desktop notifications and background handling
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js').catch(err => {
+                        console.warn('[ServiceWorker] Registration failed:', err);
+                    });
+                });
+            }
 
             function renderConversationCard(item) {
                 const isGroup = item.type === 'group';
@@ -33708,14 +33942,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // Parallel Firebase push & conversation update
+                    const convUpdateData = {
+                        lastMessage: lastMsg,
+                        lastTimestamp: Date.now()
+                    };
+                    if (targetConvId.startsWith('dm_')) {
+                        convUpdateData.type = 'dm';
+                        const parts = targetConvId.replace('dm_', '').split('_');
+                        if (parts.length >= 2) {
+                            convUpdateData.members = {
+                                [parts[0]]: true,
+                                [parts[1]]: true
+                            };
+                        }
+                    }
                     const updates = [
                         push(ref(db, `worksync/messages/${targetConvId}`), payload),
-                        update(ref(db, `worksync/conversations/${targetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() })
+                        update(ref(db, `worksync/conversations/${targetConvId}`), convUpdateData)
                     ];
                     const altTargetConvId = getAltDmId(targetConvId);
                     if (altTargetConvId) {
                         updates.push(
-                            update(ref(db, `worksync/conversations/${altTargetConvId}`), { lastMessage: lastMsg, lastTimestamp: Date.now() }).catch(() => { })
+                            update(ref(db, `worksync/conversations/${altTargetConvId}`), convUpdateData).catch(() => { })
                         );
                     }
                     await Promise.all(updates);
@@ -57471,9 +57719,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     lastMsg = savedText || (attachments.length > 1 ? '📎 ' + attachments.length + ' attachments' : '📎 ' + attachments[0].name);
                 }
 
+                var fcpConvData = { lastMessage: lastMsg, lastTimestamp: Date.now() };
+                if (targetId.startsWith('dm_')) {
+                    fcpConvData.type = 'dm';
+                    var parts = targetId.replace('dm_', '').split('_');
+                    if (parts.length >= 2) {
+                        fcpConvData.members = {
+                            [parts[0]]: true,
+                            [parts[1]]: true
+                        };
+                    }
+                }
+
                 await Promise.all([
                     _push(_ref('worksync/messages/' + targetId), payload),
-                    _upd(_ref('worksync/conversations/' + targetId), { lastMessage: lastMsg, lastTimestamp: Date.now() })
+                    _upd(_ref('worksync/conversations/' + targetId), fcpConvData)
                 ]);
             } catch (err) {
                 if (typeof toast === 'function') _toast('Failed to send: ' + err.message, 'error');

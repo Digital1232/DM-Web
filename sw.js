@@ -3,7 +3,7 @@
  * Provides offline shell support, asset caching, and PWABuilder / TWA compliance.
  */
 
-const CACHE_NAME = 'onedesk-pwa-v1.0.17';
+const CACHE_NAME = 'onedesk-pwa-v1.0.18';
 
 // Core shell assets to pre-cache
 const PRECACHE_ASSETS = [
@@ -90,4 +90,57 @@ self.addEventListener('fetch', (event) => {
         });
       })
   );
+});
+
+// Notification Click Event - Focus window and post routing data
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus().then((focusedClient) => {
+            if (focusedClient) {
+              focusedClient.postMessage({
+                type: 'NOTIFICATION_CLICK',
+                chatData: data
+              });
+            }
+          });
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('/#chat');
+      }
+    })
+  );
+});
+
+// Push Event - Handle Web Push messages if triggered
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const payload = event.data.json();
+    const title = payload.title || 'One Desk Alert';
+    const options = {
+      body: payload.body || '',
+      icon: payload.icon || '/img/Fav-Icon.png',
+      badge: payload.badge || '/img/Fav-Icon.png',
+      tag: payload.tag || 'onedesk-notification',
+      renotify: true,
+      data: payload.data || {}
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (e) {
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification('One Desk', {
+        body: text,
+        icon: '/img/Fav-Icon.png',
+        badge: '/img/Fav-Icon.png'
+      })
+    );
+  }
 });
