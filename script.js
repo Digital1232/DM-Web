@@ -15880,12 +15880,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function collectDailyPlanTasksForUser(userEmail, dateStr) {
                 const selectedDate = new Date(dateStr);
                 selectedDate.setHours(0, 0, 0, 0);
+                const selectedTime = selectedDate.getTime();
                 const normalizedEmail = (userEmail || '').toLowerCase();
                 const userPlans = dailyPlans[eKey(normalizedEmail)] || dailyPlans[eKey(userEmail)] || {};
                 let plannedTasks = [];
 
+                // Fast O(1) task lookup map
+                const allTasksList = window.allTasks || tasks || [];
+                const taskMap = new Map();
+                for (let i = 0; i < allTasksList.length; i++) {
+                    const t = allTasksList[i];
+                    if (t && t.id) taskMap.set(t.id.trim().toLowerCase(), t);
+                }
+
                 Object.entries(userPlans).forEach(([taskId, planData]) => {
-                    let task = tasks.find(t => t && t.id && t.id.trim().toLowerCase() === taskId.trim().toLowerCase());
+                    const cleanTaskId = taskId.trim().toLowerCase();
+                    let task = taskMap.get(cleanTaskId);
                     if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
                         const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && (e.jiraId === taskId || e.id === taskId));
                         if (ev) {
@@ -15909,14 +15919,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const planDate = new Date(planData.date);
                     planDate.setHours(0, 0, 0, 0);
+                    const planDateTime = planDate.getTime();
 
                     // Use the actual task status from Jira, not local overrides
                     // Always display the current status synced from Jira
                     const effectiveTask = { ...task };
 
-                    const isExactDate = (planDate.getTime() === selectedDate.getTime()) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
-                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && isDailyPlanBeforeQcStatus(effectiveTask.status);
-
+                    const isExactDate = (planDateTime === selectedTime) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
+                    const isCarryOver = planDateTime < selectedTime && isDailyPlanBeforeQcStatus(effectiveTask.status);
                     const isCompleted = isDailyPlanCompletedTask(effectiveTask.status);
 
                     if (isExactDate || (isCarryOver && !isCompleted)) {
@@ -15929,57 +15939,44 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 });
 
-                // Auto-include completed tasks for user on dateStr
-                tasks
-                    .filter(task => {
-                        if (!assigneeMatches(task, userEmail)) return false;
-                        const isCompleted = isDailyPlanCompletedTask(task.status);
-                        if (!isCompleted) return false;
+                // Single unified pass for auto-include & completed tasks
+                for (let i = 0; i < allTasksList.length; i++) {
+                    const task = allTasksList[i];
+                    if (!task || !task.id) continue;
+                    if (!assigneeMatches(task, userEmail)) continue;
+
+                    let shouldAutoInclude = false;
+
+                    // Condition A: Completed on dateStr
+                    if (isDailyPlanCompletedTask(task.status)) {
                         const completedOnDate = task.lastCompletedDate === dateStr ||
-                            (task.completedAt && new Date(task.completedAt).toISOString().split('T')[0] === dateStr);
-                        return completedOnDate;
-                    })
-                    .forEach(task => {
-                        plannedTasks.push({
-                            ...task,
-                            planData: { date: dateStr },
-                            plannedForUser: userEmail,
-                            isCarryOver: false,
-                            isAutoIncluded: true
-                        });
-                    });
+                            (task.completedAt && (typeof task.completedAt === 'string' ? task.completedAt.slice(0, 10) === dateStr : new Date(task.completedAt).toISOString().split('T')[0] === dateStr));
+                        if (completedOnDate) shouldAutoInclude = true;
+                    }
 
-                tasks
-                    .filter(task => {
-                        if (!DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) || !assigneeMatches(task, userEmail)) return false;
-                        if (task.duedate) {
+                    // Condition B: DAILY_PLAN_AUTO_INCLUDE_STATUSES
+                    if (!shouldAutoInclude && DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status)) {
+                        if (!task.duedate) {
+                            shouldAutoInclude = true;
+                        } else {
                             const taskDue = new Date(task.duedate);
                             taskDue.setHours(0, 0, 0, 0);
-                            if (taskDue.getTime() > selectedDate.getTime()) return false;
+                            if (taskDue.getTime() <= selectedTime) shouldAutoInclude = true;
                         }
-                        return true;
-                    })
-                    .forEach(task => {
-                        plannedTasks.push({
-                            ...task,
-                            planData: { date: dateStr },
-                            plannedForUser: userEmail,
-                            isCarryOver: false,
-                            isAutoIncluded: true
-                        });
-                    });
+                    }
 
-                tasks
-                    .filter(task => {
-                        if (!isInternalTask(task) || !INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) || !assigneeMatches(task, userEmail)) return false;
-                        if (task.duedate) {
+                    // Condition C: INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES
+                    if (!shouldAutoInclude && isInternalTask(task) && INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status)) {
+                        if (!task.duedate) {
+                            shouldAutoInclude = true;
+                        } else {
                             const taskDue = new Date(task.duedate);
                             taskDue.setHours(0, 0, 0, 0);
-                            if (taskDue.getTime() > selectedDate.getTime()) return false;
+                            if (taskDue.getTime() <= selectedTime) shouldAutoInclude = true;
                         }
-                        return true;
-                    })
-                    .forEach(task => {
+                    }
+
+                    if (shouldAutoInclude) {
                         plannedTasks.push({
                             ...task,
                             planData: { date: dateStr },
@@ -15987,11 +15984,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             isCarryOver: false,
                             isAutoIncluded: true
                         });
-                    });
+                    }
+                }
 
                 // SAFETY NET: If activeTaskId is running for this user, ensure it is ALWAYS included!
                 if (activeTaskId && currentUser && currentUser.email && currentUser.email.toLowerCase() === userEmail.toLowerCase()) {
-                    const runningTask = tasks.find(t => t.id === activeTaskId);
+                    const runningTask = taskMap.get(String(activeTaskId).trim().toLowerCase());
                     if (runningTask && !plannedTasks.some(pt => pt.id === runningTask.id)) {
                         plannedTasks.unshift({
                             ...runningTask,
@@ -16005,14 +16003,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const uniquePlans = [];
                 const seen = new Set();
-                plannedTasks.forEach(pt => {
+                for (let i = 0; i < plannedTasks.length; i++) {
+                    const pt = plannedTasks[i];
                     const k = `${pt.id}-${pt.plannedForUser}`;
                     if (!seen.has(k)) {
                         seen.add(k);
-                        uniquePlans.push(pt);
+                        if (typeof isLearningTask !== 'function' || !isLearningTask(pt)) {
+                            uniquePlans.push(pt);
+                        }
                     }
-                });
-                return uniquePlans.filter(pt => typeof isLearningTask === 'function' ? !isLearningTask(pt) : true);
+                }
+                return uniquePlans;
             }
             // AUTH
             async function handleLogin() {
@@ -43769,19 +43770,24 @@ function isStrategyTask(t) {
                 return `${checked.length} Users`;
             }
 
-            function collectDailyPlanRowsForView() {
-                const dateStr = document.getElementById('dp-date')?.value || todayIso();
-                let uniquePlans = [];
-                getDailyPlanTargetUserEmails().forEach(userEmail => {
-                    uniquePlans.push(...collectDailyPlanTasksForUser(userEmail, dateStr));
-                });
-                const seen = new Set();
-                uniquePlans = uniquePlans.filter(pt => {
-                    const k = `${pt.id}-${pt.plannedForUser}`;
-                    if (seen.has(k)) return false;
-                    seen.add(k);
-                    return true;
-                }).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
+            function collectDailyPlanRowsForView(preCollected) {
+                let uniquePlans;
+                if (preCollected && Array.isArray(preCollected)) {
+                    uniquePlans = [...preCollected];
+                } else {
+                    const dateStr = document.getElementById('dp-date')?.value || todayIso();
+                    uniquePlans = [];
+                    getDailyPlanTargetUserEmails().forEach(userEmail => {
+                        uniquePlans.push(...collectDailyPlanTasksForUser(userEmail, dateStr));
+                    });
+                    const seen = new Set();
+                    uniquePlans = uniquePlans.filter(pt => {
+                        const k = `${pt.id}-${pt.plannedForUser}`;
+                        if (seen.has(k)) return false;
+                        seen.add(k);
+                        return true;
+                    }).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
+                }
 
                 if (dpFilter === 'completed') {
                     // Filter for completed tasks (Quality Check, QC Started, Done, Design Completed, etc.)
@@ -43990,21 +43996,48 @@ function isStrategyTask(t) {
             function renderDailyPlanStats(uniquePlans) {
                 uniquePlans = (uniquePlans || []).filter(t => typeof isLearningTask === 'function' ? !isLearningTask(t) : true);
                 const statsGrid = document.getElementById('dp-stats-dashboard');
+                if (!statsGrid) return;
                 
-                // Count each category - exclude completed tasks from categorization
                 const statusToLower = (t) => (t.status || '').trim().toLowerCase();
                 
+                let todo = 0, designInProgress = 0, rework = 0, thumbnail = 0, hold = 0, qualityCheck = 0, completed = 0;
+                const todoStatuses = new Set(['to do', 'to-do', 'design to do', 'backlog', 'selected for development']);
+                const inProgressStatuses = new Set(['in progress', 'design in progress', 'content in progress', 'shoot in progress', 'shoot planned', 'active']);
+                const reworkStatuses = new Set(['rework designs', 'rework', 'rework design']);
+                const thumbnailStatuses = new Set(['thumbnail waiting', 'thumbnail', 'thumbnail in progress']);
+                const holdStatuses = new Set(['hold', 'design hold', 'on hold']);
+                const qcStatuses = new Set(['quality check', 'qc started', 'in review', 'review', 'testing', 'qa', 'client content approval', 'client review']);
+
+                for (let i = 0; i < uniquePlans.length; i++) {
+                    const t = uniquePlans[i];
+                    const s = statusToLower(t);
+                    if (isDailyPlanCompletedTask(t.status)) {
+                        completed++;
+                    } else if (todoStatuses.has(s)) {
+                        todo++;
+                    } else if (inProgressStatuses.has(s)) {
+                        designInProgress++;
+                    } else if (s.includes('rework') || reworkStatuses.has(s)) {
+                        rework++;
+                    } else if (thumbnailStatuses.has(s)) {
+                        thumbnail++;
+                    } else if (holdStatuses.has(s)) {
+                        hold++;
+                    } else if (qcStatuses.has(s)) {
+                        qualityCheck++;
+                    }
+                }
+
                 const stats = {
                     total: uniquePlans.length,
-                    todo: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['to do', 'to-do', 'design to do', 'backlog', 'selected for development'].includes(statusToLower(t))).length,
-                    designInProgress: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['in progress', 'design in progress', 'content in progress', 'shoot in progress', 'shoot planned', 'active'].includes(statusToLower(t))).length,
-                    rework: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && (statusToLower(t).includes('rework') || ['rework designs', 'rework', 'rework design'].includes(statusToLower(t)))).length,
-                    thumbnail: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['thumbnail waiting', 'thumbnail', 'thumbnail in progress'].includes(statusToLower(t))).length,
-                    hold: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['hold', 'design hold', 'on hold'].includes(statusToLower(t))).length,
-                    qualityCheck: uniquePlans.filter(t => !isDailyPlanCompletedTask(t.status) && ['quality check', 'qc started', 'in review', 'review', 'testing', 'qa', 'client content approval', 'client review'].includes(statusToLower(t))).length,
-                    completed: uniquePlans.filter(t => isDailyPlanCompletedTask(t.status)).length
+                    todo,
+                    designInProgress,
+                    rework,
+                    thumbnail,
+                    hold,
+                    qualityCheck,
+                    completed
                 };
-                if (!statsGrid) return;
                 const cards = [
                     {
                         title: 'Total Tasks',
@@ -44308,8 +44341,8 @@ function isStrategyTask(t) {
                 // Render stats from ALL tasks (including completed)
                 renderDailyPlanStats(allPlans);
                 
-                // Now get filtered view (excludes completed tasks) for table rendering
-                const uniquePlans = collectDailyPlanRowsForView();
+                // Pass pre-collected allPlans to avoid re-scanning all users and tasks
+                const uniquePlans = collectDailyPlanRowsForView(allPlans);
                 countEl.textContent = `${uniquePlans.length} Task${uniquePlans.length !== 1 ? 's' : ''}`;
 
                 if (dpViewMode === 'text') {
@@ -44329,12 +44362,17 @@ function isStrategyTask(t) {
                     return;
                 }
 
+                const liveUserByEmail = new Map();
+                (currentWorkUsers || []).forEach(u => {
+                    if (u && u.email) liveUserByEmail.set(u.email.toLowerCase(), u);
+                });
+
                 if (dpSortCol) {
                     updateSortIconUI('dp', dpSortCol, dpSortDir);
                     uniquePlans.sort((a, b) => {
                         if (dpSortCol === 'assignee') {
-                            const nameA = (currentWorkUsers.find(u => (u.email || '').toLowerCase() === (a.plannedForUser || '').toLowerCase())?.name || a.plannedForUser || '').toLowerCase();
-                            const nameB = (currentWorkUsers.find(u => (u.email || '').toLowerCase() === (b.plannedForUser || '').toLowerCase())?.name || b.plannedForUser || '').toLowerCase();
+                            const nameA = (liveUserByEmail.get((a.plannedForUser || '').toLowerCase())?.name || a.plannedForUser || '').toLowerCase();
+                            const nameB = (liveUserByEmail.get((b.plannedForUser || '').toLowerCase())?.name || b.plannedForUser || '').toLowerCase();
                             if (nameA < nameB) return dpSortDir === 'asc' ? -1 : 1;
                             if (nameA > nameB) return dpSortDir === 'asc' ? 1 : -1;
                             return 0;
@@ -44358,7 +44396,7 @@ function isStrategyTask(t) {
                         ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === currentStatus.toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 `;
-                    const userLive = currentWorkUsers.find(u => (u.email || '').toLowerCase() === t.plannedForUser.toLowerCase());
+                    const userLive = liveUserByEmail.get((t.plannedForUser || '').toLowerCase());
                     const assigneeNameStr = userLive?.name || t.plannedForUser;
 
                     const isWorkingOnThis = userLive?.currentTask?.taskId === t.id;
