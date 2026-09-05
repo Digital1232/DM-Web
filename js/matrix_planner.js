@@ -88,6 +88,8 @@ function initClientsAndAssignees() {
 
 function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
 let rawMonthlyPlansData = null;
+let rawStrategyEventsData = null;
+let strategyEventsUnsub = null;
 
 /**
  * Robust Date Normalizer to ISO YYYY-MM-DD
@@ -169,10 +171,26 @@ function setupFirebaseRealtimeListener() {
             mergeAndRenderAllStrategyTasks();
         }, (error) => {
             if (error && (error.code === 'PERMISSION_DENIED' || String(error).includes('permission_denied'))) {
-                // Ignore permission error if user is unauthenticated or restricted by DB rules
                 return;
             }
-            console.warn('[MatrixEngine] Monthly Plans Sync (requires Firebase RTDB permission):', error.message || error);
+            console.warn('[MatrixEngine] Monthly Plans Sync:', error.message || error);
+        });
+
+        // Also sync worksync/strategy_events for real-time strategy calendar & weekly matrix tasks
+        if (strategyEventsUnsub) {
+            try { strategyEventsUnsub(); } catch (e) {}
+            strategyEventsUnsub = null;
+        }
+        const stratRef = rtdb.ref(db, 'worksync/strategy_events');
+        strategyEventsUnsub = rtdb.onValue(stratRef, (snapshot) => {
+            rawStrategyEventsData = snapshot.val() || {};
+            window.strategyEvents = rawStrategyEventsData;
+            mergeAndRenderAllStrategyTasks();
+        }, (error) => {
+            if (error && (error.code === 'PERMISSION_DENIED' || String(error).includes('permission_denied'))) {
+                return;
+            }
+            console.warn('[MatrixEngine] Strategy Events Sync:', error.message || error);
         });
     } catch (err) {
         console.warn('[MatrixEngine] Failed to setup RTDB listeners:', err);
@@ -240,6 +258,7 @@ function isExcludedTask(t) {
 function mergeAndRenderAllStrategyTasks() {
     matrixTasksMap.clear();
 
+    // 1. Merge Monthly Plans Tasks
     if (rawMonthlyPlansData && typeof rawMonthlyPlansData === 'object') {
         Object.entries(rawMonthlyPlansData).forEach(([userKey, userMonths]) => {
             if (userMonths && typeof userMonths === 'object') {
@@ -262,6 +281,78 @@ function mergeAndRenderAllStrategyTasks() {
         });
     }
 
+    // 2. Merge Strategy Events (worksync/strategy_events)
+    const stratEvents = rawStrategyEventsData || window.strategyEvents || (typeof strategyEvents !== 'undefined' ? strategyEvents : null);
+    if (stratEvents && typeof stratEvents === 'object') {
+        Object.entries(stratEvents).forEach(([id, ev]) => {
+            if (!ev || isExcludedTask(ev)) return;
+
+            const title = ev.title || ev.desc || ev.summary || 'Untitled Task';
+            const rawDate = ev.date || ev.dueDate || ev.duedate || ev.postDate || '';
+            const isoDate = normalizeDateStringToISO(rawDate);
+            const client = (ev.client || 'Unassigned').trim();
+            const format = ev.format || ev.contentType || 'Poster';
+            const status = ev.status || 'To Do';
+            const assignee = ev.owner || ev.assignee || ev.assigneeName || 'Unassigned';
+
+            const task = {
+                ...ev,
+                id: id,
+                title: title,
+                desc: title,
+                client: client,
+                date: isoDate,
+                dueDate: isoDate,
+                postDate: isoDate,
+                status: status,
+                contentType: format,
+                format: format,
+                assignee: assignee,
+                assigneeName: assignee,
+                isStrategyEvent: true,
+                jiraId: ev.jiraId || '',
+                updatedAt: ev.updatedAt || Date.now()
+            };
+            matrixTasksMap.set(id, task);
+        });
+    }
+
+    // 3. Merge Global Tasks / Jira Tasks (window.tasks)
+    const globalTasks = Array.isArray(window.tasks) ? window.tasks : ((typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : []);
+    if (Array.isArray(globalTasks)) {
+        globalTasks.forEach(t => {
+            if (!t || !t.id || isExcludedTask(t)) return;
+            if (!matrixTasksMap.has(t.id)) {
+                const title = t.desc || t.title || t.summary || t.id;
+                const rawDate = t.date || t.dueDate || t.duedate || t.postDate || '';
+                const isoDate = normalizeDateStringToISO(rawDate);
+                const client = (t.client || 'Unassigned').trim();
+                const format = t.contentType || t.format || ((t.issueType || '').toLowerCase().includes('video') ? 'Video' : 'Poster');
+                const status = t.status || 'To Do';
+                const assignee = t.assignee || t.assigneeName || 'Unassigned';
+
+                const task = {
+                    ...t,
+                    id: t.id,
+                    title: title,
+                    desc: title,
+                    client: client,
+                    date: isoDate,
+                    dueDate: isoDate,
+                    postDate: isoDate,
+                    status: status,
+                    contentType: format,
+                    format: format,
+                    assignee: assignee,
+                    assigneeName: assignee,
+                    jiraId: t.jiraId || (isJiraKey(t.id) ? t.id : ''),
+                    updatedAt: t.updatedAt || Date.now()
+                };
+                matrixTasksMap.set(t.id, task);
+            }
+        });
+    }
+
     // Dynamic client discovery
     matrixTasksMap.forEach(taskObj => {
         if (taskObj.client && taskObj.client !== 'Unassigned' && !matrixClientsList.includes(taskObj.client)) {
@@ -270,8 +361,9 @@ function mergeAndRenderAllStrategyTasks() {
     });
     matrixClientsList.sort();
 
-    console.log(`[MatrixEngine] Multi-Source Realtime Sync: Loaded ${matrixTasksMap.size} Monthly Plan tasks across ${matrixClientsList.length} clients.`);
+    console.log(`[MatrixEngine] Multi-Source Realtime Sync: Loaded ${matrixTasksMap.size} tasks across ${matrixClientsList.length} clients.`);
     populateMatrixFilterDropdowns();
+    if (typeof populateWeeklyMatrixDropdowns === 'function') populateWeeklyMatrixDropdowns();
     renderMatrixPlanner();
     if (typeof renderMatrixTable === 'function') renderMatrixTable();
 }
@@ -321,7 +413,7 @@ async function saveMatrixTaskToFirebase(taskId, updatedFields) {
     let mergedTask = { ...existingTask, ...updatedFields, updatedAt: Date.now() };
 
     // Standardize date fields
-    if (updatedFields.date) {
+    if (updatedFields.date !== undefined) {
         mergedTask.date = updatedFields.date;
         mergedTask.duedate = updatedFields.date;
         mergedTask.dueDate = updatedFields.date;
@@ -335,9 +427,30 @@ async function saveMatrixTaskToFirebase(taskId, updatedFields) {
 
     // Re-render instantly across all active views
     renderMatrixPlanner();
+    if (typeof renderMatrixTable === 'function') renderMatrixTable();
 
     if (rtdb && db) {
         try {
+            // Also update worksync/strategy_events if task originated from or exists in strategy_events
+            if (existingTask.isStrategyEvent || String(taskId).startsWith('strat_') || (rawStrategyEventsData && rawStrategyEventsData[taskId]) || (window.strategyEvents && window.strategyEvents[taskId])) {
+                const stratRef = rtdb.ref(db, `worksync/strategy_events/${taskId}`);
+                const stratUpdate = {
+                    client: mergedTask.client || '',
+                    date: mergedTask.date || '',
+                    dueDate: mergedTask.date || '',
+                    postDate: mergedTask.date || '',
+                    status: mergedTask.status || 'To Do',
+                    updatedAt: Date.now()
+                };
+                if (mergedTask.assignee && mergedTask.assignee !== 'Unassigned') {
+                    stratUpdate.owner = mergedTask.assignee;
+                }
+                rtdb.update(stratRef, stratUpdate).catch(err => console.warn('[MatrixEngine] Error syncing strategy event:', err));
+                if (window.strategyEvents && window.strategyEvents[taskId]) {
+                    Object.assign(window.strategyEvents[taskId], stratUpdate);
+                }
+            }
+
             let pushId = existingTask.pushId;
             const newEmail = mergedTask.assigneeEmail || oldEmail;
             const newDate = mergedTask.duedate || mergedTask.date || oldDate;
@@ -1830,16 +1943,26 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
    ========================================================================== */
 
 // STATE
-let weeklyMatrixCurrentDate = new Date(2026, 7, 3); // August 3, 2026 as reference (or current date)
+let weeklyMatrixCurrentDate = new Date(); // Defaults to current week
 let weeklyDraggedTaskId = null;
 
 // Helpers
+function formatLocalDateToISO(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
 function getStartOfWeek(d) {
     const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
     const day = date.getDay();
     // Adjust Sunday (0) to be index 6, Monday (1) to be index 0
     const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
+    date.setDate(diff);
+    return date;
 }
 
 function getWeekDates(startOfWeek) {
@@ -1847,6 +1970,7 @@ function getWeekDates(startOfWeek) {
     for (let i = 0; i < 7; i++) {
         const d = new Date(startOfWeek);
         d.setDate(startOfWeek.getDate() + i);
+        d.setHours(0, 0, 0, 0);
         dates.push(d);
     }
     return dates;
@@ -2027,7 +2151,10 @@ function weeklyMatrixEditTask(taskId) {
 
 // Core Init & Render
 function initWeeklyMatrix() {
-    console.log('[WeeklyMatrix] Initializing Weekly Matrix View...');
+    console.log('[WeeklyMatrix] Initializing Weekly Matrix View for current week...');
+    if (!weeklyMatrixCurrentDate || isNaN(weeklyMatrixCurrentDate.getTime())) {
+        weeklyMatrixCurrentDate = new Date();
+    }
     initClientsAndAssignees();
     populateWeeklyMatrixDropdowns();
     renderMatrixTable();
@@ -2041,15 +2168,16 @@ function renderMatrixTable() {
     const monday = getStartOfWeek(weeklyMatrixCurrentDate);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
     
     const weekLabelEl = document.getElementById('matrix-week-display');
     if (weekLabelEl) {
         weekLabelEl.textContent = formatWeekRange(monday, sunday);
     }
 
-    // Populate columns headers
+    // Populate columns headers using local ISO dates (prevents UTC timezone off-by-one errors)
     const weekDates = getWeekDates(monday);
-    const dateStrings = weekDates.map(d => d.toISOString().split('T')[0]);
+    const dateStrings = weekDates.map(d => formatLocalDateToISO(d));
     
     const dayHeaders = document.querySelectorAll('.matrix-day-date');
     dayHeaders.forEach(el => {
@@ -2071,11 +2199,11 @@ function renderMatrixTable() {
 
     // Filtered clients list
     const visibleClients = clientFilter === 'All' 
-        ? matrixClientsList 
+        ? [...matrixClientsList] 
         : matrixClientsList.filter(c => c === clientFilter);
 
-    // Get all tasks - JIRA tasks only for Weekly Matrix Planner
-    const allTasks = Array.from(matrixTasksMap.values()).filter(t => t.jiraId || isJiraKey(t.id));
+    // Get all tasks for Weekly Matrix Planner (Strategy tasks, Jira tasks, Monthly plan tasks)
+    const allTasks = Array.from(matrixTasksMap.values());
 
     // Group tasks
     const grouped = {};
@@ -2087,12 +2215,26 @@ function renderMatrixTable() {
     });
 
     allTasks.forEach(t => {
-        const client = t.client || 'Unassigned';
-        if (!grouped[client]) return; // client filtered out
+        const client = (t.client || 'Unassigned').trim();
+        
+        // Auto-include client in visible clients if not filtered out
+        if (!grouped[client]) {
+            if (clientFilter === 'All' || clientFilter === client) {
+                if (!visibleClients.includes(client)) {
+                    visibleClients.push(client);
+                }
+                grouped[client] = { backlog: [] };
+                dateStrings.forEach(ds => {
+                    grouped[client][ds] = [];
+                });
+            } else {
+                return; // client filtered out
+            }
+        }
 
         // Apply assignee filter
         if (assigneeFilter !== 'All') {
-            const taskAssignee = t.assignee || t.assigneeName || 'Unassigned';
+            const taskAssignee = t.assignee || t.assigneeName || t.owner || 'Unassigned';
             if (taskAssignee !== assigneeFilter) {
                 return;
             }
@@ -2100,20 +2242,22 @@ function renderMatrixTable() {
 
         // Apply search query filter
         if (searchQuery) {
-            const title = (t.title || t.desc || '').toLowerCase();
-            const assignee = (t.assignee || t.assigneeName || '').toLowerCase();
+            const title = (t.title || t.desc || t.summary || '').toLowerCase();
+            const assignee = (t.assignee || t.assigneeName || t.owner || '').toLowerCase();
             if (!title.includes(searchQuery) && !assignee.includes(searchQuery) && !client.toLowerCase().includes(searchQuery)) {
                 return;
             }
         }
 
-        const taskDate = t.date || t.dueDate || t.postDate || '';
+        const taskDate = normalizeDateStringToISO(t.date || t.dueDate || t.postDate || t.duedate || '');
         if (!taskDate || t.status === 'Backlog') {
             grouped[client].backlog.push(t);
         } else if (dateStrings.includes(taskDate)) {
             grouped[client][taskDate].push(t);
         }
     });
+
+    visibleClients.sort();
 
     // Render Rows
     let html = '';
@@ -2155,7 +2299,7 @@ function renderMatrixTable() {
         // Render Day Cells
         dateStrings.forEach(ds => {
             const dayTasks = grouped[client][ds] || [];
-            const isToday = ds === new Date().toISOString().split('T')[0];
+            const isToday = ds === formatLocalDateToISO(new Date());
             
             html += `
                 <td 

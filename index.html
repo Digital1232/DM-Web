@@ -3468,6 +3468,37 @@
         const activeSet = (typeof set === 'function') ? set : window.set;
         const activeRenderCalendar = (typeof renderStrategyCalendar === 'function') ? renderStrategyCalendar : window.renderStrategyCalendar;
 
+        const syncToMatrixState = (taskId, evObj) => {
+            if (typeof matrixTasksMap !== 'undefined' && matrixTasksMap) {
+                const existing = matrixTasksMap.get(taskId) || {};
+                const mTask = {
+                    ...existing,
+                    ...evObj,
+                    id: taskId,
+                    desc: evObj.title || existing.desc || '',
+                    dueDate: evObj.date,
+                    postDate: evObj.date,
+                    contentType: evObj.format || existing.contentType || 'Poster',
+                    assignee: evObj.owner || existing.assignee || 'Unassigned',
+                    assigneeName: evObj.owner || existing.assigneeName || 'Unassigned',
+                    isStrategyEvent: true,
+                    updatedAt: Date.now()
+                };
+                matrixTasksMap.set(taskId, mTask);
+                if (typeof matrixClientsList !== 'undefined' && Array.isArray(matrixClientsList) && evObj.client && !matrixClientsList.includes(evObj.client)) {
+                    matrixClientsList.push(evObj.client);
+                    matrixClientsList.sort();
+                }
+            }
+            const sEvs = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
+            if (sEvs) {
+                sEvs[taskId] = { ...(sEvs[taskId] || {}), ...evObj };
+            }
+            if (typeof renderMatrixTable === 'function') renderMatrixTable();
+            if (typeof populateWeeklyMatrixDropdowns === 'function') populateWeeklyMatrixDropdowns();
+            if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
+        };
+
         if (selectedTaskId && sEvents && sEvents[selectedTaskId]) {
             const updates = {};
             updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
@@ -3480,7 +3511,7 @@
                     .then(() => {
                         toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                         document.getElementById('weeklyTaskAssigneeModal')?.close();
-                        if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
+                        syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: sEvents[selectedTaskId].status || 'To Do' });
                     })
                     .catch(err => {
                         toastFn('Failed to assign task: ' + err.message, 'error');
@@ -3489,8 +3520,9 @@
             return;
         }
 
-        const newId = `strat_${Date.now()}`;
+        const newId = (selectedTaskId && !sEvents[selectedTaskId]) ? selectedTaskId : `strat_${Date.now()}`;
         const newEvent = {
+            id: newId,
             title,
             client,
             date: dateStr,
@@ -3500,13 +3532,16 @@
             status: 'To Do',
             createdAt: new Date().toISOString()
         };
+        if (selectedTaskId && selectedTaskId !== newId) {
+            newEvent.jiraId = selectedTaskId;
+        }
 
         if (activeDb && activeRef && activeSet) {
             activeSet(activeRef(activeDb, 'worksync/strategy_events/' + newId), newEvent)
                 .then(() => {
                     toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                     document.getElementById('weeklyTaskAssigneeModal')?.close();
-                    if (typeof activeRenderCalendar === 'function') activeRenderCalendar();
+                    syncToMatrixState(newId, newEvent);
                 })
                 .catch(err => {
                     toastFn('Failed to create task: ' + err.message, 'error');
@@ -21783,6 +21818,37 @@ function isStrategyTask(t) {
 
         if (!title && !selectedTaskId) return typeof toast === 'function' ? toast('Please select a task to assign', 'error') : alert('Please select a task to assign');
 
+        const syncToMatrixState = (taskId, evObj) => {
+            if (typeof matrixTasksMap !== 'undefined' && matrixTasksMap) {
+                const existing = matrixTasksMap.get(taskId) || {};
+                const mTask = {
+                    ...existing,
+                    ...evObj,
+                    id: taskId,
+                    desc: evObj.title || existing.desc || '',
+                    dueDate: evObj.date,
+                    postDate: evObj.date,
+                    contentType: evObj.format || existing.contentType || 'Poster',
+                    assignee: evObj.owner || existing.assignee || 'Unassigned',
+                    assigneeName: evObj.owner || existing.assigneeName || 'Unassigned',
+                    isStrategyEvent: true,
+                    updatedAt: Date.now()
+                };
+                matrixTasksMap.set(taskId, mTask);
+                if (typeof matrixClientsList !== 'undefined' && Array.isArray(matrixClientsList) && evObj.client && !matrixClientsList.includes(evObj.client)) {
+                    matrixClientsList.push(evObj.client);
+                    matrixClientsList.sort();
+                }
+            }
+            const sEvs = (typeof strategyEvents !== 'undefined' && strategyEvents) ? strategyEvents : (window.strategyEvents || {});
+            if (sEvs) {
+                sEvs[taskId] = { ...(sEvs[taskId] || {}), ...evObj };
+            }
+            if (typeof renderMatrixTable === 'function') renderMatrixTable();
+            if (typeof populateWeeklyMatrixDropdowns === 'function') populateWeeklyMatrixDropdowns();
+            if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
+        };
+
         if (selectedTaskId && typeof strategyEvents !== 'undefined' && strategyEvents && strategyEvents[selectedTaskId]) {
             const updates = {};
             updates[`worksync/strategy_events/${selectedTaskId}/client`] = client;
@@ -21795,7 +21861,7 @@ function isStrategyTask(t) {
                     .then(() => {
                         if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                         document.getElementById('weeklyTaskAssigneeModal')?.close();
-                        if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
+                        syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: strategyEvents[selectedTaskId].status || 'To Do' });
                     })
                     .catch(err => {
                         if (typeof toast === 'function') toast('Failed to assign task: ' + err.message, 'error');
@@ -21804,8 +21870,9 @@ function isStrategyTask(t) {
             return;
         }
 
-        const newId = `strat_${Date.now()}`;
+        const newId = (selectedTaskId && (!strategyEvents || !strategyEvents[selectedTaskId])) ? selectedTaskId : `strat_${Date.now()}`;
         const newEvent = {
+            id: newId,
             title,
             client,
             date: dateStr,
@@ -21815,13 +21882,16 @@ function isStrategyTask(t) {
             status: 'To Do',
             createdAt: new Date().toISOString()
         };
+        if (selectedTaskId && selectedTaskId !== newId) {
+            newEvent.jiraId = selectedTaskId;
+        }
 
         if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
             set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
                 .then(() => {
                     if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
                     document.getElementById('weeklyTaskAssigneeModal')?.close();
-                    if (typeof renderStrategyCalendar === 'function') renderStrategyCalendar();
+                    syncToMatrixState(newId, newEvent);
                 })
                 .catch(err => {
                     if (typeof toast === 'function') toast('Failed to create task: ' + err.message, 'error');
