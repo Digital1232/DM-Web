@@ -5064,6 +5064,9 @@
                     </div>
                     <!-- Format Counts -->
                     <div class="flex items-center gap-3 flex-wrap">
+                        <div id="strategy-format-summary-cards" class="flex items-center gap-3 flex-wrap">
+                            <!-- Populated dynamically by renderStrategyFormatSummaryCards() -->
+                        </div>
 
                         <!-- Add Button (only visible to permitted users) -->
                         <div id="strategy-action-buttons" class="hidden">
@@ -19149,6 +19152,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // This ensures UI appears on first load, before Firebase callback fires
                 console.log('[initStrategyCalendar] Rendering with current data (may be empty on first load)');
                 renderStrategyClientTabs();
+                renderStrategyFormatSummaryCards();
+                renderStrategyStatusFilters();
                 renderStrategyCalendar();
                 renderStrategySidebar();
 
@@ -19171,6 +19176,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     
                     // Re-render with new data from Firebase
                     renderStrategyClientTabs();
+                    renderStrategyFormatSummaryCards();
+                    renderStrategyStatusFilters();
                     renderStrategyCalendar();
                     renderStrategySidebar();
                     
@@ -19184,6 +19191,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else {
                     strategyCurrentDate.setMonth(strategyCurrentDate.getMonth() + direction);
                 }
+                renderStrategyClientTabs();
+                renderStrategyFormatSummaryCards();
+                renderStrategyStatusFilters();
                 renderStrategyCalendar();
                 renderStrategySidebar();
             }
@@ -19466,6 +19476,246 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.isMatchingStrategyClient = isMatchingStrategyClient;
 
+            function getStrategyItemFormat(item) {
+                if (!item) return 'poster';
+
+                const rawFormat = String(item.format || item.contentType || item.deliverableType || item.taskType || item.issueType || item.type || '').trim().toLowerCase();
+                const text = `${item.title || ''} ${item.desc || ''} ${item.summary || ''}`.toLowerCase();
+
+                // 1. Check for Thumbnail first (so subtasks like "Thumbnail - Video Title" or "Video Thumbnail" are separated)
+                if (rawFormat.includes('thumbnail') || rawFormat.includes('thumb') || text.includes('thumbnail') || text.includes('thumb-') || text.includes('thumb :') || text.includes('thumb:')) {
+                    return 'thumbnail';
+                }
+
+                // 2. Check for Video
+                if (rawFormat.includes('video') || rawFormat === 'av video' || rawFormat.includes('reel') || rawFormat.includes('short') || rawFormat.includes('motion') || rawFormat.includes('animation') || rawFormat.includes('film') || rawFormat.includes('teaser')) {
+                    return 'video';
+                }
+
+                // 3. Check for Poster / Graphic
+                if (rawFormat.includes('poster') || rawFormat === 'printing material' || rawFormat.includes('carousel') || rawFormat.includes('graphic') || rawFormat.includes('static') || rawFormat.includes('banner') || rawFormat.includes('flyer')) {
+                    return 'poster';
+                }
+
+                const vCount = Number(item.videosCount ?? item.videoCount ?? item.videos ?? 0) || 0;
+                const pCount = Number(item.postersCount ?? item.posterCount ?? item.posters ?? 0) || 0;
+                if (vCount > 0 && pCount === 0) return 'video';
+                if (pCount > 0 && vCount === 0) return 'poster';
+
+                const videoKeywords = ['video', 'videos', 'reel', 'reels', 'animation', 'animations', 'motion', 'motion graphic', 'shorts', 'yt short', 'youtube short', 'film', 'teaser'];
+                if (videoKeywords.some(kw => text.includes(kw))) {
+                    return 'video';
+                }
+
+                return 'poster';
+            }
+            window.getStrategyItemFormat = getStrategyItemFormat;
+
+            function computeStrategyCalendarCounts() {
+                const month = strategyCurrentDate.getMonth();
+                const year = strategyCurrentDate.getFullYear();
+
+                const strategyJiraIds = new Set();
+                if (strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        const jId = ev.jiraId || ev.jiraTaskId;
+                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                    });
+                }
+
+                const filterCounts = {
+                    video: { total: 0, pending: 0, completed: 0, posted: 0 },
+                    poster: { total: 0, pending: 0, completed: 0, posted: 0 },
+                    thumbnail: { total: 0, pending: 0, completed: 0, posted: 0 },
+                    total: { total: 0, pending: 0, completed: 0, posted: 0 }
+                };
+
+                const clientCounts = { 'All': 0 };
+
+                function recordItem(clientName, format, statusCat, matchesFilter) {
+                    const normClient = normalizeClientName(clientName);
+                    const clientKey = normClient || 'Others';
+                    clientCounts[clientKey] = (clientCounts[clientKey] || 0) + 1;
+                    clientCounts['All'] = (clientCounts['All'] || 0) + 1;
+
+                    if (matchesFilter) {
+                        let fmt = 'poster';
+                        if (format === 'video') fmt = 'video';
+                        else if (format === 'thumbnail') fmt = 'thumbnail';
+
+                        filterCounts[fmt].total++;
+                        filterCounts[fmt][statusCat]++;
+
+                        filterCounts.total.total++;
+                        filterCounts.total[statusCat]++;
+                    }
+                }
+
+                // 1. Process Strategy Events
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+                    if (!ev.date) return;
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    let rawStatus = ev.status || 'To Do';
+                    const evJiraId = ev.jiraId || ev.jiraTaskId;
+                    if (evJiraId) {
+                        const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                        if (matchedJiraTask && matchedJiraTask.status) {
+                            rawStatus = matchedJiraTask.status;
+                        }
+                    }
+                    const statusCat = getStrategyStatusCategory(rawStatus);
+                    const format = getStrategyItemFormat(ev);
+                    const matchesFilter = isMatchingStrategyClient(ev.client, activeStrategyClientFilter);
+
+                    recordItem(ev.client, format, statusCat, matchesFilter);
+                });
+
+                // 2. Process Jira tasks (deduplicated against Strategy Events)
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        if (task.manual || isInternalTask(task)) return;
+                        const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
+                        if (!targetPostDate) return;
+                        const [ty, tm, td] = targetPostDate.split('-').map(Number);
+                        if (tm - 1 !== month || ty !== year) return;
+
+                        const lowerTaskId = String(task.id).toLowerCase().trim();
+                        if (strategyJiraIds.has(lowerTaskId)) return;
+                        if (!task.id.toUpperCase().startsWith('SEP-')) return;
+
+                        const statusCat = getStrategyStatusCategory(task.status);
+                        const format = getStrategyItemFormat(task);
+                        const matchesFilter = isMatchingStrategyClient(task.client, activeStrategyClientFilter);
+
+                        recordItem(task.client, format, statusCat, matchesFilter);
+                    });
+                }
+
+                return { filterCounts, clientCounts };
+            }
+            window.computeStrategyCalendarCounts = computeStrategyCalendarCounts;
+
+            function renderStrategyFormatSummaryCards() {
+                const container = document.getElementById('strategy-format-summary-cards');
+                if (!container) return;
+
+                const { filterCounts } = computeStrategyCalendarCounts();
+                const v = filterCounts.video;
+                const p = filterCounts.poster;
+                const th = filterCounts.thumbnail;
+                const t = filterCounts.total;
+
+                container.innerHTML = `
+                    <!-- Videos Card -->
+                    <div class="bg-slate-50/80 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 rounded-2xl px-4 py-2.5 flex items-center gap-3.5 transition-all shadow-sm">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                            <iconify-icon icon="solar:videocamera-record-bold" width="20"></iconify-icon>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Videos</div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-black text-slate-900 dark:text-white leading-none">${v.total}</span>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                            </div>
+                        </div>
+                        <div class="border-l border-slate-200/80 dark:border-slate-700 pl-3 ml-1 flex flex-col gap-0.5 text-[10px] font-bold min-w-[95px]">
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Pending</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${v.pending}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Completed</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${v.completed}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Posted</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${v.posted}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Posters Card -->
+                    <div class="bg-slate-50/80 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 rounded-2xl px-4 py-2.5 flex items-center gap-3.5 transition-all shadow-sm">
+                        <div class="w-10 h-10 rounded-xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 dark:text-pink-400 flex items-center justify-center flex-shrink-0">
+                            <iconify-icon icon="solar:gallery-wide-bold" width="20"></iconify-icon>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Posters</div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-black text-slate-900 dark:text-white leading-none">${p.total}</span>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                            </div>
+                        </div>
+                        <div class="border-l border-slate-200/80 dark:border-slate-700 pl-3 ml-1 flex flex-col gap-0.5 text-[10px] font-bold min-w-[95px]">
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Pending</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${p.pending}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Completed</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${p.completed}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Posted</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${p.posted}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thumbnails Card -->
+                    <div class="bg-slate-50/80 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 rounded-2xl px-4 py-2.5 flex items-center gap-3.5 transition-all shadow-sm">
+                        <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                            <iconify-icon icon="solar:crop-minimalistic-bold" width="20"></iconify-icon>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Thumbnails</div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-black text-slate-900 dark:text-white leading-none">${th.total}</span>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                            </div>
+                        </div>
+                        <div class="border-l border-slate-200/80 dark:border-slate-700 pl-3 ml-1 flex flex-col gap-0.5 text-[10px] font-bold min-w-[95px]">
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Pending</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${th.pending}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Completed</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${th.completed}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                                <span class="text-slate-400 dark:text-slate-400 font-medium">Posted</span>
+                                <span class="font-black text-slate-800 dark:text-slate-100 ml-auto">${th.posted}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total Items Card -->
+                    <div class="bg-slate-50/80 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 rounded-2xl px-4 py-2.5 flex items-center gap-3.5 transition-all shadow-sm">
+                        <div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
+                            <iconify-icon icon="solar:layers-bold" width="20"></iconify-icon>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Total Items</div>
+                            <div class="text-xl font-black text-slate-900 dark:text-white leading-none">${t.total}</div>
+                            <div class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">(Videos + Posters + Thumbnails)</div>
+                        </div>
+                    </div>
+                `;
+            }
+            window.renderStrategyFormatSummaryCards = renderStrategyFormatSummaryCards;
+
             function renderStrategyClientTabs() {
                 const container = document.getElementById('strategy-client-tabs-container');
                 const containerMonthly = document.getElementById('monthly-plan-client-tabs-container');
@@ -19532,6 +19782,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     activeStrategyClientFilter = 'All';
                 }
 
+                const { clientCounts } = computeStrategyCalendarCounts();
+
                 // CRITICAL: Build HTML with performance optimization
                 const tabsHtml = tabs.map(tab => {
                     const isActive = activeStrategyClientFilter === tab;
@@ -19539,13 +19791,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
                         : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 hover:border-slate-200';
 
-                    return `<button onclick="setStrategyClientFilter(this.getAttribute('data-client'))" data-client="${escapeHtml(tab)}" class="px-4 py-2 rounded-2xl text-xs font-bold transition-all ${activeClass}">${escapeHtml(tab)}</button>`;
+                    let count = 0;
+                    if (tab === 'All') {
+                        count = clientCounts['All'] || 0;
+                    } else {
+                        for (const [c, cnt] of Object.entries(clientCounts)) {
+                            if (c === 'All') continue;
+                            if (isMatchingStrategyClient(c, tab)) {
+                                count += cnt;
+                            }
+                        }
+                    }
+                    const countDisplay = (count > 0 || tab === 'All') ? ` (${count})` : '';
+
+                    return `<button onclick="setStrategyClientFilter(this.getAttribute('data-client'))" data-client="${escapeHtml(tab)}" class="px-4 py-2 rounded-2xl text-xs font-bold transition-all ${activeClass}">${escapeHtml(tab)}${countDisplay}</button>`;
                 }).join('');
 
                 // Set HTML in one operation (not incremental)
                 if (container) container.innerHTML = tabsHtml;
                 if (containerMonthly) containerMonthly.innerHTML = tabsHtml;
-                if (typeof renderStrategyFormatSummary === 'function') renderStrategyFormatSummary();
+                if (typeof renderStrategyFormatSummaryCards === 'function') renderStrategyFormatSummaryCards();
                 if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
                 console.log('[renderStrategyClientTabs] Containers updated with', tabs.length, 'tabs');
             }
@@ -19586,66 +19851,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const container = document.getElementById('strategy-status-filter-container');
                 if (!container) return;
 
-                const month = strategyCurrentDate.getMonth();
-                const year = strategyCurrentDate.getFullYear();
-
-                const strategyJiraIds = new Set();
-                if (strategyEvents) {
-                    Object.values(strategyEvents).forEach(ev => {
-                        const jId = ev.jiraId || ev.jiraTaskId;
-                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
-                    });
-                }
-
-                let countPending = 0;
-                let countCompleted = 0;
-                let countPosted = 0;
-                let countTotal = 0;
-
-                // 1. Count Strategy Events
-                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
-                    if (!ev.date) return;
-                    const [ey, em, ed] = ev.date.split('-').map(Number);
-                    if (em - 1 !== month || ey !== year) return;
-
-                    if (!isMatchingStrategyClient(ev.client, activeStrategyClientFilter)) return;
-
-                    let rawStatus = ev.status || 'To Do';
-                    const evJiraId = ev.jiraId || ev.jiraTaskId;
-                    if (evJiraId) {
-                        const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
-                        if (matchedJiraTask && matchedJiraTask.status) {
-                            rawStatus = matchedJiraTask.status;
-                        }
-                    }
-                    const cat = getStrategyStatusCategory(rawStatus);
-                    if (cat === 'posted') countPosted++;
-                    else if (cat === 'completed') countCompleted++;
-                    else countPending++;
-                    countTotal++;
-                });
-
-                // 2. Count Jira tasks
-                if (tasks && tasks.length > 0) {
-                    tasks.forEach(task => {
-                        if (task.manual || isInternalTask(task)) return;
-                        if (!isMatchingStrategyClient(task.client, activeStrategyClientFilter)) return;
-                        const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
-                        if (!targetPostDate) return;
-                        const [ty, tm, td] = targetPostDate.split('-').map(Number);
-                        if (tm - 1 !== month || ty !== year) return;
-
-                        const lowerTaskId = String(task.id).toLowerCase().trim();
-                        if (strategyJiraIds.has(lowerTaskId)) return;
-                        if (!task.id.toUpperCase().startsWith('SEP-')) return;
-
-                        const cat = getStrategyStatusCategory(task.status);
-                        if (cat === 'posted') countPosted++;
-                        else if (cat === 'completed') countCompleted++;
-                        else countPending++;
-                        countTotal++;
-                    });
-                }
+                const { filterCounts } = computeStrategyCalendarCounts();
+                const countTotal = filterCounts.total.total;
+                const countPending = filterCounts.total.pending;
+                const countCompleted = filterCounts.total.completed;
+                const countPosted = filterCounts.total.posted;
 
                 const isAll = activeStrategyStatusFilter === 'All';
                 const isPending = activeStrategyStatusFilter === 'pending';
@@ -19690,6 +19900,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function setStrategyClientFilter(client) {
                 activeStrategyClientFilter = client;
                 renderStrategyClientTabs();
+                renderStrategyFormatSummaryCards();
+                renderStrategyStatusFilters();
                 renderStrategyCalendar();
                 renderStrategySidebar();
             }
@@ -20084,6 +20296,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     grid.innerHTML += `<div class="border-r border-b border-slate-50 bg-slate-50/30 min-h-[90px]"></div>`;
                 }
 
+                if (typeof renderStrategyFormatSummaryCards === 'function') renderStrategyFormatSummaryCards();
                 if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
             }
 
@@ -49835,6 +50048,8 @@ function isStrategyTask(t) {
             safeExpose('saveStrategyEvent', () => saveStrategyEvent);
             safeExpose('deleteStrategyEvent', () => deleteStrategyEvent);
             safeExpose('setStrategyClientFilter', () => setStrategyClientFilter);
+            safeExpose('renderStrategyFormatSummaryCards', () => renderStrategyFormatSummaryCards);
+            safeExpose('computeStrategyCalendarCounts', () => computeStrategyCalendarCounts);
             safeExpose('initMonthlyPlan', () => initMonthlyPlan);
             safeExpose('navigateMonthlyPlan', () => navigateMonthlyPlan);
             safeExpose('filterMonthlyPlanByTeamMember', () => filterMonthlyPlanByTeamMember);
