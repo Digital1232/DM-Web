@@ -18271,8 +18271,29 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.viewOrOpenPdf = viewOrOpenPdf;
 
-            // ── Web Audio API Notification Sound Synthesizer ──
+            // ── Web Audio API Notification Sound Synthesizer & Auto-Unlock ──
+            let sharedAudioCtx = null;
+            function getSharedAudioContext() {
+                if (!sharedAudioCtx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        try { sharedAudioCtx = new AudioCtx(); } catch (e) { }
+                    }
+                }
+                if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+                    try { sharedAudioCtx.resume().catch(() => { }); } catch (e) { }
+                }
+                return sharedAudioCtx;
+            }
+            // Proactively unlock audio on first user gesture anywhere in document
+            ['click', 'touchstart', 'keydown'].forEach(evt => {
+                document.addEventListener(evt, () => {
+                    getSharedAudioContext();
+                }, { once: false, passive: true });
+            });
+
             function playNotificationSound() {
+                // 1. Try playing through audio element if present
                 try {
                     const soundEl = document.getElementById('chat-notification-sound');
                     if (soundEl && soundEl.src && !soundEl.src.includes('notificationsounds.com')) {
@@ -18281,32 +18302,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 } catch (e) { }
 
+                // 2. Synthesize chime tone via Web Audio API
                 try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (!AudioContext) return;
-                    const ctx = new AudioContext();
+                    const ctx = getSharedAudioContext();
+                    if (!ctx) return;
+                    if (ctx.state === 'suspended') {
+                        ctx.resume().catch(() => { });
+                    }
 
+                    const now = ctx.currentTime;
                     const osc1 = ctx.createOscillator();
                     const gain1 = ctx.createGain();
                     osc1.type = 'sine';
-                    osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
-                    gain1.gain.setValueAtTime(0.15, ctx.currentTime);
-                    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                    osc1.frequency.setValueAtTime(587.33, now); // D5
+                    gain1.gain.setValueAtTime(0.2, now);
+                    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
                     osc1.connect(gain1);
                     gain1.connect(ctx.destination);
-                    osc1.start(ctx.currentTime);
-                    osc1.stop(ctx.currentTime + 0.15);
+                    osc1.start(now);
+                    osc1.stop(now + 0.18);
 
                     const osc2 = ctx.createOscillator();
                     const gain2 = ctx.createGain();
                     osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
-                    gain2.gain.setValueAtTime(0.2, ctx.currentTime + 0.1);
-                    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                    osc2.frequency.setValueAtTime(880, now + 0.1); // A5
+                    gain2.gain.setValueAtTime(0.25, now + 0.1);
+                    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
                     osc2.connect(gain2);
                     gain2.connect(ctx.destination);
-                    osc2.start(ctx.currentTime + 0.1);
-                    osc2.stop(ctx.currentTime + 0.35);
+                    osc2.start(now + 0.1);
+                    osc2.stop(now + 0.4);
                 } catch (e) { }
             }
             window.playNotificationSound = playNotificationSound;
@@ -25752,8 +25777,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function mergeTasksById(taskList) {
                 const targetIds = ['M-1779279416802', 'M-1777551877624'];
                 const map = new Map();
+                const contentDedupMap = new Map();
+
                 (taskList || []).forEach(task => {
                     if (!task?.id || targetIds.includes(task.id)) return;
+
+                    // Manual / Internal task deduplication guard
+                    if (task.manual || task.taskType === 'internal') {
+                        const cleanDesc = (task.desc || task.summary || task.title || '').trim().toLowerCase();
+                        const cleanAssignee = (task.assigneeEmail || task.userId || task.assignee || '').trim().toLowerCase();
+                        const cleanDate = (task.duedate || '').trim();
+                        if (cleanDesc && cleanAssignee) {
+                            const dedupKey = `${cleanDesc}__${cleanAssignee}__${cleanDate}`;
+                            if (contentDedupMap.has(dedupKey)) {
+                                const existingId = contentDedupMap.get(dedupKey);
+                                const existingTask = map.get(existingId);
+                                if (existingTask) {
+                                    Object.assign(existingTask, task);
+                                    return; // Skip duplicate task object
+                                }
+                            } else {
+                                contentDedupMap.set(dedupKey, task.id);
+                            }
+                        }
+                    }
+
                     const merged = { ...(map.get(task.id) || {}), ...task };
                     if (merged.client) {
                         merged.client = resolveClientDisplay(merged.client);
@@ -27150,11 +27198,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             };
 
                             for (const ok of targetOwnerKeys) {
-                                if (Object.keys(updates).length) {
-                                    await update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates);
-                                } else {
-                                    await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
-                                }
+                                await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
                             }
 
                             const idx = tasks.findIndex(t => t.id === taskId);
@@ -27377,11 +27421,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             };
 
                             for (const ok of targetOwnerKeys) {
-                                if (Object.keys(updates).length) {
-                                    await update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates);
-                                } else {
-                                    await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
-                                }
+                                await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
                             }
 
                             const idx = tasks.findIndex(t => t.id === taskId);
@@ -31003,6 +31043,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             let chatConversations = {};
             let chatMessageCache = {};
+            let activeConvPreviousLastSeen = 0;
+            let activeConvHadUnreadOnOpen = false;
             let userOnlineListeners = {};
             let chatFilterTab = 'all'; // 'all' | 'personal' | 'groups'
             let chatSearchQuery = '';
@@ -31113,14 +31155,50 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!currentUser || !currentUser.email) return;
                     chatConversations = snap.val() || {};
                     const myKey = eKey(currentUser.email);
-                    renderChatSidebar();
-                    const userConversations = Object.entries(chatConversations).filter(([id, c]) => {
-                        if (!c) return false;
-                        if (c.members && c.members[myKey]) return true;
-                        if (id.startsWith('dm_') && id.includes(myKey)) return true;
-                        return false;
+
+                    // Compute initial unread counts from stored lastSeen markers
+                    const storedLastSeenKey = 'worksync_last_read_' + myKey;
+                    let storedLastSeen = {};
+                    try { storedLastSeen = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}'); } catch (e) { }
+
+                    Object.entries(chatConversations).forEach(([id, c]) => {
+                        if (!c) return;
+                        const isMember = (c.members && c.members[myKey]) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
+                        if (!isMember) return;
+                        const lastTs = c.lastTimestamp || 0;
+                        const lastSender = (c.lastSenderEmail || '').toLowerCase();
+                        const isMe = lastSender && currentUser.email && lastSender === currentUser.email.toLowerCase();
+                        const seenAt = storedLastSeen[id] || 0;
+                        if (lastTs > seenAt && !isMe && lastTs > 0 && id !== activeConvId) {
+                            unreadCounts[id] = Math.max(unreadCounts[id] || 0, 1);
+                        }
                     });
-                    watchConversationNotifications(userConversations);
+
+                    renderChatBadge();
+                    renderChatSidebar();
+
+                    // Gather all user conversations to watch
+                    const convsToWatch = new Map();
+                    Object.entries(chatConversations).forEach(([id, c]) => {
+                        if (!c) return;
+                        if ((c.members && c.members[myKey]) || (id.includes(myKey) && (id.startsWith('dm_') || id.includes('_')))) {
+                            convsToWatch.set(id, c);
+                        }
+                    });
+
+                    // Ensure teammate direct message channels are always watched even before first message
+                    if (typeof allUsersMap !== 'undefined' && allUsersMap instanceof Map) {
+                        allUsersMap.forEach(u => {
+                            if (u && u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase()) {
+                                const did = dmId(currentUser.email, u.email);
+                                if (!convsToWatch.has(did)) {
+                                    convsToWatch.set(did, chatConversations[did] || { type: 'dm' });
+                                }
+                            }
+                        });
+                    }
+
+                    watchConversationNotifications(Array.from(convsToWatch.entries()));
                 });
             }
             window.initChat = initChat;
@@ -31135,33 +31213,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
                 conversations.forEach(([id, conv]) => {
                     if (convListeners[id]) return;
-                    
-                    const seenKeys = new Set();
-                    let initialLoaded = false;
-                    const listenerStartedAt = Date.now() - 30000;
-                    const q = query(ref(db, `worksync/messages/${id}`), limitToLast(1));
 
-                    // Pre-fetch last message key to avoid notifying for historical message upon listener attachment
-                    get(q).then(snap => {
-                        if (snap.exists()) {
-                            snap.forEach(child => seenKeys.add(child.key));
-                        }
-                        initialLoaded = true;
-                    }).catch(() => {
-                        initialLoaded = true;
-                    });
+                    const knownMsgKeys = new Set();
+                    let initialSnapshotDone = false;
+                    const listenerMountedAt = Date.now();
+                    const q = query(ref(db, `worksync/messages/${id}`), limitToLast(2));
 
                     convListeners[id] = onChildAdded(q, snap => {
                         const msgKey = snap.key;
                         const msg = snap.val();
                         if (!msg || !currentUser || !currentUser.email) return;
+
+                        // Distinguish historical messages from real-time incoming messages
+                        if (!initialSnapshotDone) {
+                            if ((msg.timestamp || 0) >= listenerMountedAt - 5000) {
+                                // Fresh message sent right as listener was mounting
+                            } else {
+                                knownMsgKeys.add(msgKey);
+                                return;
+                            }
+                        }
+
+                        if (knownMsgKeys.has(msgKey)) return;
+                        knownMsgKeys.add(msgKey);
+
                         if (msg.senderEmail === currentUser.email || msg.unsent) return;
-                        
-                        // Ignore already processed or existing historical message
-                        if (seenKeys.has(msgKey)) return;
-                        seenKeys.add(msgKey);
-                        if (!initialLoaded && (msg.timestamp || 0) < listenerStartedAt) return;
-                        if ((msg.timestamp || 0) < listenerStartedAt - 60000) return;
 
                         const isCurrentActive = (id === activeConvId) || (activeConvId && id === getAltDmId(activeConvId));
                         const isAppHidden = document.hidden;
@@ -31177,12 +31253,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 unreadBadge.textContent = totalUnread;
                                 unreadBadge.classList.remove('hidden');
                             }
+                            renderChatSidebar();
                         }
 
                         // Trigger notification when not actively viewing this chat or when the browser window is hidden
                         if (!isCurrentActive || isAppHidden || !isChatView) {
                             notifyIncomingMessage(msg, conv, id);
+                        } else {
+                            // User is actively looking at this conversation: play gentle chime
+                            playNotificationSound();
                         }
+                    });
+
+                    // Pre-fetch existing messages to mark initial snapshot as complete
+                    get(q).then(snap => {
+                        if (snap.exists()) {
+                            snap.forEach(child => knownMsgKeys.add(child.key));
+                        }
+                        initialSnapshotDone = true;
+                    }).catch(() => {
+                        initialSnapshotDone = true;
                     });
                 });
             }
@@ -31191,9 +31281,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function renderChatBadge() {
                 const total = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
                 const badge = document.getElementById('chat-badge');
-                if (!badge) return;
-                badge.textContent = total;
-                badge.classList.toggle('hidden', total === 0);
+                if (badge) {
+                    badge.textContent = total;
+                    badge.classList.toggle('hidden', total === 0);
+                }
+                const floatBadge = document.getElementById('float-chat-badge');
+                if (floatBadge) {
+                    floatBadge.textContent = total;
+                    floatBadge.classList.toggle('hidden', total === 0);
+                    floatBadge.style.display = total === 0 ? 'none' : 'flex';
+                }
+                const mobBadge = document.getElementById('mob-chat-badge');
+                if (mobBadge) {
+                    mobBadge.textContent = total;
+                    mobBadge.classList.toggle('hidden', total === 0);
+                    mobBadge.style.display = total === 0 ? 'none' : 'inline-flex';
+                }
             }
             window.renderChatBadge = renderChatBadge;
 
@@ -31210,13 +31313,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let swShown = false;
                 if ('serviceWorker' in navigator) {
                     try {
-                        const reg = await navigator.serviceWorker.ready;
+                        // 400ms timeout race to prevent hanging if ServiceWorker is inactive or pending
+                        const reg = await Promise.race([
+                            navigator.serviceWorker.ready,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 400))
+                        ]);
                         if (reg && typeof reg.showNotification === 'function') {
                             await reg.showNotification(title, defaultOptions);
                             swShown = true;
                         }
                     } catch (swErr) {
-                        console.warn('[Notification] ServiceWorker showNotification failed, falling back:', swErr);
+                        // ServiceWorker not ready, proceed to standard Notification fallback
                     }
                 }
 
@@ -31248,12 +31355,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (mutedList.includes(convId)) return;
                 }
                 const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'New message');
-                
+
                 const isCurrentActive = (convId === activeConvId) || (activeConvId && convId === getAltDmId(activeConvId));
                 const isChatActiveAndVisible = !document.hidden && activeView === 'chat' && isCurrentActive;
-                
+
+                const openAction = () => {
+                    window.focus();
+                    if (typeof switchView === 'function') switchView('chat');
+                    if (conv?.type === 'dm' || convId.startsWith('dm_')) {
+                        if (typeof openDm === 'function') openDm(msg.senderEmail);
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                        }
+                    }
+                };
+
                 if (!isChatActiveAndVisible) {
-                    toast(`New message from ${title}`, 'info');
+                    toast(`New message from ${title}: ${msg.text ? msg.text.substring(0, 45) : 'Attachment'}`, 'info', openAction, 4500);
                 }
 
                 if (typeof playNotificationSound === 'function') {
@@ -31273,17 +31392,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         name: conv?.name || msg.senderName || 'Chat',
                         profilePicture: conv?.profilePicture || ''
                     }
-                }, () => {
-                    window.focus();
-                    if (typeof switchView === 'function') switchView('chat');
-                    if (conv?.type === 'dm' || convId.startsWith('dm_')) {
-                        if (typeof openDm === 'function') openDm(msg.senderEmail);
-                    } else {
-                        if (typeof openConversation === 'function') {
-                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                }, openAction);
+
+                // If PushManager trigger exists, send push notification
+                if (window.PushManager && typeof window.PushManager.triggerPushNotification === 'function') {
+                    try {
+                        const recipientKey = convId.startsWith('dm_') ? convId.replace('dm_', '').replace(eKey(currentUser.email), '').replace(/^_|_$/g, '') : null;
+                        if (recipientKey) {
+                            window.PushManager.triggerPushNotification({
+                                userKey: recipientKey,
+                                title: title,
+                                body: msg.text || 'New message',
+                                data: { convId, senderEmail: msg.senderEmail, view: 'chat' }
+                            });
                         }
-                    }
-                });
+                    } catch (e) { }
+                }
             }
             window.notifyIncomingMessage = notifyIncomingMessage;
 
@@ -31381,8 +31505,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         btnEl.className = 'px-2.5 py-1 text-[11px] font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-xs transition-colors';
                     }
                 }
-            }
             window.updateNotificationPermissionBanner = updateNotificationPermissionBanner;
+            setTimeout(updateNotificationPermissionBanner, 500);
+            if (navigator.permissions && navigator.permissions.query) {
+                try {
+                    navigator.permissions.query({ name: 'notifications' }).then(status => {
+                        if (status) status.onchange = () => updateNotificationPermissionBanner();
+                    }).catch(() => {});
+                } catch (e) { }
+            }
 
             // Service worker message routing for notification clicks
             if ('serviceWorker' in navigator) {
@@ -31404,11 +31535,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 // Register service worker for desktop notifications and background handling
-                window.addEventListener('load', () => {
+                const regSW = () => {
                     navigator.serviceWorker.register('./sw.js').catch(err => {
                         console.warn('[ServiceWorker] Registration failed:', err);
                     });
-                });
+                };
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    regSW();
+                } else {
+                    window.addEventListener('load', regSW);
+                }
             }
 
             function renderConversationCard(item) {
@@ -31423,8 +31559,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const safeNameJs = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const safeConvIdJs = convId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const activeClass = isSelected
-                    ? 'bg-indigo-50/90 dark:bg-indigo-950/70 border-l-4 border-indigo-600 shadow-xs'
-                    : (unread > 0 ? 'bg-slate-50 dark:bg-slate-800/60 font-bold' : '');
+                    ? 'bg-indigo-50/95 dark:bg-indigo-950/80 border-l-4 border-indigo-600 shadow-xs'
+                    : (unread > 0 ? 'bg-indigo-50/70 dark:bg-indigo-950/50 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-xs' : '');
 
                 const avatarHtml = item.avatarHtml;
                 const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (isGroup ? 'Team Group' : (item.user?.designation || 'Team Member'));
@@ -31440,14 +31576,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1.5 min-w-0">
-                                    <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-slate-900 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
+                                    <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-indigo-950 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
+                                    ${unread > 0 ? `<span class="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 shrink-0 animate-pulse" title="Unread messages"></span>` : ''}
                                     ${isMuted ? `<span class="text-slate-400 shrink-0 flex items-center" title="Muted"><iconify-icon icon="solar:bell-off-bold" width="12"></iconify-icon></span>` : ''}
                                 </div>
                                 ${item.lastTimestamp ? `<span class="text-[9px] ${unread > 0 ? 'font-black text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} whitespace-nowrap shrink-0">${formatChatTime(item.lastTimestamp)}</span>` : ''}
                             </div>
                             <div class="flex items-center justify-between mt-1 gap-2">
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[150px]">${previewText}</p>
-                                <span id="unread-badge-${convId}" class="${unread > 0 ? '' : 'hidden'} bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0 min-w-[1.25rem] text-center shadow-xs">${unread}</span>
+                                <p class="text-[11px] ${unread > 0 ? 'font-bold text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'} truncate max-w-[150px]">${previewText}</p>
+                                <span id="unread-badge-${convId}" class="${unread > 0 ? '' : 'hidden'} bg-gradient-to-r from-rose-500 to-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 min-w-[1.25rem] text-center shadow-xs animate-pulse">${unread}</span>
                             </div>
                         </div>
                     </button>
@@ -31973,10 +32110,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!convId) return;
                 activeConvId = convId;
                 const altConvId = getAltDmId(convId);
+
+                const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                const storedLastSeenKey = 'worksync_last_read_' + myKey;
+                let storedLastSeenMap = {};
+                try { storedLastSeenMap = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}'); } catch (e) { }
+
+                const prevSeenA = storedLastSeenMap[convId] || 0;
+                const prevSeenB = altConvId ? (storedLastSeenMap[altConvId] || 0) : 0;
+                const receiptSeen = (activeConvReadReceipts && activeConvReadReceipts[myKey]?.seenAt) || 0;
+                activeConvPreviousLastSeen = Math.max(prevSeenA, prevSeenB, receiptSeen);
+
+                const currentUnread = (unreadCounts[convId] || 0) + (altConvId ? (unreadCounts[altConvId] || 0) : 0);
+                activeConvHadUnreadOnOpen = currentUnread > 0;
+
+                // Record current timestamp as last seen in localStorage
+                storedLastSeenMap[convId] = Date.now();
+                if (altConvId) storedLastSeenMap[altConvId] = Date.now();
+                try { localStorage.setItem(storedLastSeenKey, JSON.stringify(storedLastSeenMap)); } catch (e) { }
+
                 unreadCounts[convId] = 0;
                 if (altConvId) unreadCounts[altConvId] = 0;
                 if (currentUser && currentUser.email) {
-                    const myKey = eKey(currentUser.email);
                     const manualUnreadKey = 'worksync_manual_unread_' + myKey;
                     let manualUnreadList = JSON.parse(localStorage.getItem(manualUnreadKey) || '[]');
                     if (manualUnreadList.includes(convId) || (altConvId && manualUnreadList.includes(altConvId))) {
@@ -32739,7 +32894,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const frag = document.createDocumentFragment();
                 let lastDateHeader = '';
+                let unreadDividerInserted = false;
+
                 rows.forEach(([id, msg]) => {
+                    const isMe = msg.senderEmail === currentUser.email;
+                    const isUnread = !isMe && !msg.unsent && (
+                        (activeConvPreviousLastSeen > 0 && (msg.timestamp || 0) > activeConvPreviousLastSeen) ||
+                        (activeConvHadUnreadOnOpen && (msg.timestamp || 0) >= (activeConvPreviousLastSeen || 0))
+                    );
+
                     const dateHeader = getChatDateHeader(msg.timestamp);
                     if (dateHeader && dateHeader !== lastDateHeader) {
                         lastDateHeader = dateHeader;
@@ -32748,9 +32911,35 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         dateDiv.innerHTML = `<span class="px-3.5 py-1 rounded-full text-[10px] font-black bg-slate-100/90 dark:bg-slate-800/90 backdrop-blur-sm text-slate-500 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 shadow-2xs">${dateHeader}</span>`;
                         frag.appendChild(dateDiv);
                     }
-                    appendMessage(id, msg, frag);
+
+                    if (isUnread && !unreadDividerInserted) {
+                        unreadDividerInserted = true;
+                        const unreadDiv = document.createElement('div');
+                        unreadDiv.id = 'chat-unread-divider';
+                        unreadDiv.className = 'flex items-center my-4 gap-3 px-4 select-none';
+                        unreadDiv.innerHTML = `
+                            <div class="flex-1 h-0.5 bg-gradient-to-r from-transparent via-rose-300 dark:via-rose-700 to-rose-500"></div>
+                            <span class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-50 dark:bg-rose-950/90 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-xs">
+                                <iconify-icon icon="solar:bell-bing-bold" width="13"></iconify-icon>
+                                Unread Messages
+                            </span>
+                            <div class="flex-1 h-0.5 bg-gradient-to-l from-transparent via-rose-300 dark:via-rose-700 to-rose-500"></div>
+                        `;
+                        frag.appendChild(unreadDiv);
+                    }
+
+                    appendMessage(id, msg, frag, isUnread);
                 });
                 area.appendChild(frag);
+
+                if (unreadDividerInserted) {
+                    requestAnimationFrame(() => {
+                        const divider = document.getElementById('chat-unread-divider');
+                        if (divider) {
+                            divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                }
             }
             function mergeChatMessages(nextMessages) {
                 if (!nextMessages) return;
@@ -32812,7 +33001,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
-            function appendMessage(id, msg, container) {
+            function appendMessage(id, msg, container, isUnread = false) {
                 const area = container || document.getElementById('messages-area');
                 const isMe = msg.senderEmail === currentUser.email;
                 const time = formatChatTime(msg.timestamp);
@@ -32994,9 +33183,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </div>
                 ` : ''}
                 <div class="max-w-[82%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
-                    ${!isMe ? `<p class="text-[11px] font-bold text-slate-400 mb-1 ml-1 tracking-tight">${escapeHtml(msg.senderName || '')}</p>` : ''}
+                    ${!isMe ? `
+                        <div class="flex items-center gap-1.5 mb-1 ml-1">
+                            <p class="text-[11px] font-bold text-slate-400 tracking-tight">${escapeHtml(msg.senderName || '')}</p>
+                            ${isUnread ? `<span class="inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-black bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 uppercase tracking-tight shadow-2xs animate-pulse">New</span>` : ''}
+                        </div>
+                    ` : ''}
                     <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} min-w-0 w-full">
-                        <div class="message-bubble px-4 py-3 rounded-2xl text-xs md:text-sm shadow-xs min-w-0 leading-relaxed ${msg.unsent ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 italic border border-slate-200 dark:border-slate-700' : (isMe ? 'bg-indigo-50/80 dark:bg-indigo-950/60 text-slate-900 dark:text-white border border-indigo-100 dark:border-indigo-900/60 rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-100 dark:border-slate-700/80 rounded-tl-none')}">
+                        <div class="message-bubble px-4 py-3 rounded-2xl text-xs md:text-sm shadow-xs min-w-0 leading-relaxed ${msg.unsent ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 italic border border-slate-200 dark:border-slate-700' : (isMe ? 'bg-indigo-50/80 dark:bg-indigo-950/60 text-slate-900 dark:text-white border border-indigo-100 dark:border-indigo-900/60 rounded-tr-none' : (isUnread ? 'bg-indigo-50/90 dark:bg-indigo-950/70 text-slate-900 dark:text-slate-100 border-2 border-indigo-500/80 dark:border-indigo-500 rounded-tl-none ring-2 ring-indigo-400/30 dark:ring-indigo-500/30' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-100 dark:border-slate-700/80 rounded-tl-none'))}">
                             ${replyToHtml}
                             ${attachmentHtml}
                             ${meetCardHtml}
@@ -45266,30 +45460,43 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 internalFields.classList.toggle('hidden', taskType !== 'internal');
             }
 
+            let isSubmittingManualTask = false;
             async function submitManualTask(startNow = false) {
-                const platform = document.getElementById('mt-platform').value;
-                const taskType = document.getElementById('mt-task-type').value;
-                const title = document.getElementById('mt-title').value.trim();
-                const client = document.getElementById('mt-client').value;
-                const status = taskType === 'internal' ? document.getElementById('mt-internal-status').value : document.getElementById('mt-status').value;
-                const priority = taskType === 'internal' ? document.getElementById('mt-internal-priority').value : document.getElementById('mt-priority').value;
-                const assigneeEmail = document.getElementById('mt-assignee').value;
-                const assigneeNameVal = assigneeEmail ? allUsersMap.get(assigneeEmail.toLowerCase())?.name || assigneeEmail : 'Unassigned';
-                const duedate = taskType === 'internal'
-                    ? (document.getElementById('mt-internal-duedate')?.value || null)
-                    : null;
-                const description = taskType === 'internal'
-                    ? (document.getElementById('mt-internal-description')?.value.trim() || '')
-                    : '';
+                if (isSubmittingManualTask) return;
+                isSubmittingManualTask = true;
 
-                if (!title) return toast('Enter a task title', 'error');
+                const submitBtn = document.getElementById('mt-submit-btn');
+                const startNowBtn = document.getElementById('mt-start-now-btn');
+                const originalSubmitText = submitBtn ? submitBtn.textContent : 'Add Task';
+                const originalStartNowHtml = startNowBtn ? startNowBtn.innerHTML : '';
 
-                const btn = document.getElementById('mt-submit-btn');
-                const originalText = btn.textContent;
-                btn.disabled = true;
-                btn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Creating...`;
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    if (!startNow) submitBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="18"></iconify-icon> Creating...`;
+                }
+                if (startNowBtn) {
+                    startNowBtn.disabled = true;
+                    if (startNow) startNowBtn.innerHTML = `<iconify-icon icon="svg-spinners:ring-resize" width="16"></iconify-icon> Starting...`;
+                }
 
                 try {
+                    const platform = document.getElementById('mt-platform').value;
+                    const taskType = document.getElementById('mt-task-type').value;
+                    const title = document.getElementById('mt-title').value.trim();
+                    const client = document.getElementById('mt-client').value;
+                    const status = taskType === 'internal' ? document.getElementById('mt-internal-status').value : document.getElementById('mt-status').value;
+                    const priority = taskType === 'internal' ? document.getElementById('mt-internal-priority').value : document.getElementById('mt-priority').value;
+                    const assigneeEmail = document.getElementById('mt-assignee').value;
+                    const assigneeNameVal = assigneeEmail ? allUsersMap.get(assigneeEmail.toLowerCase())?.name || assigneeEmail : 'Unassigned';
+                    const duedate = taskType === 'internal'
+                        ? (document.getElementById('mt-internal-duedate')?.value || null)
+                        : null;
+                    const description = taskType === 'internal'
+                        ? (document.getElementById('mt-internal-description')?.value.trim() || '')
+                        : '';
+
+                    if (!title) return toast('Enter a task title', 'error');
+
                     if (platform === 'jira') {
                         const taskDueDate = document.getElementById('task-duedate')?.value || '';
                         const projectKey = getJiraProjectKeyForDate(taskDueDate);
@@ -45323,7 +45530,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             throw new Error(jiraErrorMessage(res));
                         }
                     } else {
-                        if (!client) { toast('Select a client', 'error'); btn.disabled = false; btn.textContent = originalText; return; }
+                        if (!client) { toast('Select a client', 'error'); return; }
                         const taskId = 'M-' + Date.now();
                         const task = {
                             id: taskId,
@@ -45361,8 +45568,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.error('Task creation failed:', err);
                     toast('Creation failed: ' + err.message, 'error');
                 } finally {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
+                    isSubmittingManualTask = false;
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalSubmitText;
+                    }
+                    if (startNowBtn) {
+                        startNowBtn.disabled = false;
+                        startNowBtn.innerHTML = originalStartNowHtml;
+                    }
                 }
             }
 
@@ -45607,12 +45821,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else if (isAjith) {
                     // Ajith loads from both ajithvilpower_gmail_com and ajith_vilpower_com
                     const ajithKeys = ['ajithvilpower_gmail_com', 'ajith_vilpower_com'];
+                    const ajithTasksByOwner = {};
                     ajithKeys.forEach(userKey => {
                         onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
                             if (!currentUser || !currentUser.email) return;
-                            const manual = Object.values(snap.val() || {});
-                            tasks = mergeTasksById([...tasks, ...manual]);
-                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(manual)); } catch (e) {}
+                            ajithTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const allAjithTasks = Object.values(ajithTasksByOwner).flat();
+                            tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAjithTasks]);
+                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAjithTasks)); } catch (e) {}
                             populateAssigneeFilter();
                             populateClientFilter();
                             populateInternalAssigneeFilter();
