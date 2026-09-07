@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.18">
+    <meta name="app-version" content="1.0.19">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -14492,9 +14492,9 @@
             console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage, window.rtdb');
 
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
-            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
-            const MANAGER_EMAILS = ['murugeshvilpower@gmail.com'];
-            const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'murugeshvilpower@gmail.com'];
+            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
+            const MANAGER_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
+            const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
 
             const PIPELINE_STAGES = [
                 { id: "received", title: "Tasks Received", statuses: ["To Do", "Shoot Needed", "Content To Do"], color: "slate" },
@@ -17225,13 +17225,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // Condition C: INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES
-                    if (!shouldAutoInclude && isInternalTask(task) && INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status)) {
-                        if (!task.duedate) {
-                            shouldAutoInclude = true;
-                        } else {
-                            const taskDue = new Date(task.duedate);
-                            taskDue.setHours(0, 0, 0, 0);
-                            if (taskDue.getTime() <= selectedTime) shouldAutoInclude = true;
+                    if (!shouldAutoInclude && isInternalTask(task)) {
+                        const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(s => s.toLowerCase() === (task.status || '').toLowerCase()) ||
+                            (task.status || '').toLowerCase() === 'to do';
+                        if (statusMatch) {
+                            if (!task.duedate) {
+                                shouldAutoInclude = true;
+                            } else {
+                                const taskDue = new Date(task.duedate);
+                                taskDue.setHours(0, 0, 0, 0);
+                                if (taskDue.getTime() <= selectedTime) shouldAutoInclude = true;
+                            }
                         }
                     }
 
@@ -17419,6 +17423,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         getAllUsers().then(users => { allUsersMap = users; window.allUsersMap = users; if (activeView === 'chat') renderDmList(); return users; })
                     ]);
 
+                    // Immediately trigger recurring tasks check without waiting for full background load
+                    setTimeout(() => {
+                        if (typeof ensureAllRecurringTasks === 'function') ensureAllRecurringTasks();
+                    }, 100);
+
                     // Run morning learning and daily task setup in parallel AFTER allUsersMap is ready
                     backgroundTasks.then(() => {
                         runMorningLearningSetup();
@@ -17426,7 +17435,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (typeof fcpRenderList === 'function' && fcpOpen) fcpRenderList();
 
                         // Run all daily task ensures in parallel instead of sequentially
-                        return Promise.all([
+                        return Promise.allSettled([
                             ensureMurugeshDailyTasks(),
                             ensureAjithDailyTasks(),
                             ensurePalaniDailyTasks()
@@ -26985,7 +26994,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('murugeshTasks_lastRun');
-                if (lastRunDay === todayKey && murugeshTasksEnsureStarted) return;
+                const hasAllMurugeshTasksInMemory = MURUGESH_TASKS_CONFIG.every((cfg, i) => {
+                    const baseIdStr = cfg.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                    const taskId = `M-${baseIdStr}-${i}`;
+                    const t = tasks.find(tk => tk.id === taskId);
+                    return t && t.duedate === todayKey;
+                });
+
+                if (lastRunDay === todayKey && murugeshTasksEnsureStarted && hasAllMurugeshTasksInMemory) return;
                 if (lastRunDay !== todayKey) {
                     murugeshTasksEnsureStarted = false;
                     sessionStorage.removeItem('murugeshTasks_lastRun');
@@ -26996,9 +27012,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const requestsSnap = await get(ref(db, 'worksync/requests'));
                     if (requestsSnap.exists()) {
                         const allRequests = Object.values(requestsSnap.val());
-                        const checkEmail = targetEmail;
+                        const checkEmails = [targetEmail, 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
                         const isOnLeaveToday = allRequests.some(r => {
-                            if ((r.userId || r.userEmail || '').toLowerCase().trim() !== checkEmail) return false;
+                            const reqEmail = (r.userId || r.userEmail || '').toLowerCase().trim();
+                            if (!checkEmails.includes(reqEmail)) return false;
                             if (r.type !== 'leave') return false;
                             const statusLower = (r.status || '').toLowerCase().trim();
                             const fullyApproved = statusLower === 'approved' ||
@@ -27026,38 +27043,46 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 try {
                     const email = targetEmail;
                     const assigneeName = 'Murugesh Kumar A';
-                    const ownerKey = eKey(email);
+                    const targetOwnerKeys = ['murugeshvilpower_gmail_com', 'murugesh_vilpower_com'];
                     const today = todayKey;
 
                     // ── Clean up legacy single "Report to MD" tasks (without exact time suffix) ─────────────
                     const oldMdTitles = ['report to md', 'reports to md'];
-                    try {
-                        const allMTasksSnap = await get(ref(db, `worksync/manual_tasks/${ownerKey}`));
-                        if (allMTasksSnap.exists()) {
-                            const allMTasks = allMTasksSnap.val();
-                            for (const taskId in allMTasks) {
-                                const t = allMTasks[taskId];
-                                const descLower = (t?.desc || '').toLowerCase().trim();
-                                if (t?.murugeshTask && oldMdTitles.includes(descLower)) {
-                                    await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
-                                    tasks = tasks.filter(tk => tk.id !== taskId);
-                                    console.log(`[MurugeshTasks] Removed old task: ${taskId} (${t?.desc})`);
+                    for (const ownerKey of targetOwnerKeys) {
+                        try {
+                            const allMTasksSnap = await get(ref(db, `worksync/manual_tasks/${ownerKey}`));
+                            if (allMTasksSnap.exists()) {
+                                const allMTasks = allMTasksSnap.val();
+                                for (const taskId in allMTasks) {
+                                    const t = allMTasks[taskId];
+                                    const descLower = (t?.desc || '').toLowerCase().trim();
+                                    if (t?.murugeshTask && oldMdTitles.includes(descLower)) {
+                                        await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
+                                        tasks = tasks.filter(tk => tk.id !== taskId);
+                                        console.log(`[MurugeshTasks] Removed old task: ${taskId} (${t?.desc}) from ${ownerKey}`);
+                                    }
                                 }
                             }
+                        } catch (cleanupErr) {
+                            console.warn('[MurugeshTasks] Old task cleanup failed:', cleanupErr);
                         }
-                    } catch (cleanupErr) {
-                        console.warn('[MurugeshTasks] Old task cleanup failed:', cleanupErr);
                     }
 
                     for (let i = 0; i < MURUGESH_TASKS_CONFIG.length; i++) {
                         const taskConfig = MURUGESH_TASKS_CONFIG[i];
                         const baseIdStr = taskConfig.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
                         const taskId = `M-${baseIdStr}-${i}`;
-                        const path = `worksync/manual_tasks/${ownerKey}/${taskId}`;
 
-                        const snap = await get(ref(db, path));
+                        let existing = null;
+                        for (const ok of targetOwnerKeys) {
+                            const snap = await get(ref(db, `worksync/manual_tasks/${ok}/${taskId}`));
+                            if (snap.exists()) {
+                                existing = snap.val();
+                                break;
+                            }
+                        }
 
-                        if (!snap.exists()) {
+                        if (!existing) {
                             const task = {
                                 id: taskId,
                                 desc: taskConfig.title,
@@ -27075,26 +27100,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 createdAt: Date.now(),
                                 duedate: today
                             };
-                            await set(ref(db, path), task);
+                            for (const ok of targetOwnerKeys) {
+                                await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), task);
+                            }
                             tasks = mergeTasksById([task, ...tasks]);
                         } else {
-                            const existing = snap.val();
                             const completedToday = existing.lastCompletedDate === today;
                             const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
-                            const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                            const isPastDueDate = !existing.duedate || existing.duedate < today || existing.duedate !== today;
-                            const needsDailyReset = !completedToday && (completedPreviousDay || (isTerminal && isPastDueDate));
+                            const isPastDueDate = !existing.duedate || existing.duedate !== today;
 
                             let updates = {};
-                            if (needsDailyReset && isTerminal) {
-                                updates.status = 'To do';
+                            if (isPastDueDate || (isTerminal && !completedToday)) {
                                 updates.duedate = today;
-                                updates.lastCompletedDate = null;
-                            } else if (existing.duedate !== today) {
-                                updates.duedate = today;
-                                if (isTerminal && !completedToday) {
+                                if (!completedToday) {
                                     updates.status = 'To do';
                                     updates.lastCompletedDate = null;
+                                    updates.completedAt = null;
+                                }
+                                if (taskConfig.needsClient) {
+                                    updates.client = 'Others';
+                                    updates.description = 'Requires Client Selection';
                                 }
                             }
 
@@ -27114,12 +27139,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (existing.taskType !== 'internal') updates.taskType = 'internal';
                             if (existing.desc !== taskConfig.title) updates.desc = taskConfig.title;
 
-                            if (Object.keys(updates).length) {
-                                await update(ref(db, path), updates);
-                                const idx = tasks.findIndex(t => t.id === taskId);
-                                if (idx >= 0) Object.assign(tasks[idx], updates);
-                            }
-
                             const mergedTask = {
                                 ...existing,
                                 ...updates,
@@ -27129,10 +27148,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 murugeshTask: true,
                                 duedate: updates.duedate || existing.duedate || today
                             };
+
+                            for (const ok of targetOwnerKeys) {
+                                if (Object.keys(updates).length) {
+                                    await update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates);
+                                } else {
+                                    await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
+                                }
+                            }
+
+                            const idx = tasks.findIndex(t => t.id === taskId);
+                            if (idx >= 0) Object.assign(tasks[idx], mergedTask);
                             tasks = mergeTasksById([mergedTask, ...tasks]);
                         }
                     }
 
+                    PerfOptimizer.invalidateCache('filterTasks');
                     if (isInternalTabActive()) renderInternalTasks();
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
 
@@ -27171,7 +27202,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('ajithTasks_lastRun');
-                if (lastRunDay === todayKey && ajithTasksEnsureStarted) return;
+                const hasAllAjithTasksInMemory = AJITH_TASKS_CONFIG.every((cfg, i) => {
+                    const baseIdStr = cfg.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                    const taskId = `A-${baseIdStr}-${i}`;
+                    const t = tasks.find(tk => tk.id === taskId);
+                    return t && t.duedate === todayKey;
+                });
+
+                if (lastRunDay === todayKey && ajithTasksEnsureStarted && hasAllAjithTasksInMemory) return;
                 if (lastRunDay !== todayKey) {
                     ajithTasksEnsureStarted = false;
                     sessionStorage.removeItem('ajithTasks_lastRun');
@@ -27182,9 +27220,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const requestsSnap = await get(ref(db, 'worksync/requests'));
                     if (requestsSnap.exists()) {
                         const allRequests = Object.values(requestsSnap.val());
-                        const ajithEmail = targetEmail;
+                        const checkEmails = [targetEmail, 'ajith@vilpower.com'];
                         const isOnLeaveToday = allRequests.some(r => {
-                            if ((r.userId || r.userEmail || '').toLowerCase().trim() !== ajithEmail) return false;
+                            const reqEmail = (r.userId || r.userEmail || '').toLowerCase().trim();
+                            if (!checkEmails.includes(reqEmail)) return false;
                             if (r.type !== 'leave') return false;
                             const statusLower = (r.status || '').toLowerCase().trim();
                             const fullyApproved = statusLower === 'approved' ||
@@ -27211,46 +27250,53 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 try {
                     const email = targetEmail;
-                    const ownerKey = eKey(email);
+                    const targetOwnerKeys = ['ajithvilpower_gmail_com', 'ajith_vilpower_com'];
                     const today = todayKey;
                     const assigneeName = 'Ajith';
 
                     // Clean up old recurring tasks that are no longer for Ajith
-                    try {
-                        const ajithTasksRef = ref(db, `worksync/manual_tasks/${ownerKey}`);
-                        const ajithTasksSnap = await get(ajithTasksRef);
-                        if (ajithTasksSnap.exists()) {
-                            const ajithTasksData = ajithTasksSnap.val();
-                            const oldTitles = [
-                                'internal reporting',
-                                'social media comments',
-                                'social media commnts',
-                                'client message',
-                                'ads management',
-                                'social media upload'
-                            ];
-                            for (const taskId in ajithTasksData) {
-                                const t = ajithTasksData[taskId];
-                                if (t && t.desc && oldTitles.includes(t.desc.toLowerCase().trim())) {
-                                    await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
-                                    tasks = tasks.filter(tk => tk.id !== taskId);
-                                    console.log(`Removed old Ajith task from Firebase: ${taskId} (${t.desc})`);
+                    const oldTitles = [
+                        'internal reporting',
+                        'social media comments',
+                        'social media commnts',
+                        'client message',
+                        'ads management',
+                        'social media upload'
+                    ];
+                    for (const ownerKey of targetOwnerKeys) {
+                        try {
+                            const ajithTasksSnap = await get(ref(db, `worksync/manual_tasks/${ownerKey}`));
+                            if (ajithTasksSnap.exists()) {
+                                const ajithTasksData = ajithTasksSnap.val();
+                                for (const taskId in ajithTasksData) {
+                                    const t = ajithTasksData[taskId];
+                                    if (t && t.desc && oldTitles.includes(t.desc.toLowerCase().trim())) {
+                                        await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
+                                        tasks = tasks.filter(tk => tk.id !== taskId);
+                                        console.log(`Removed old Ajith task from Firebase: ${taskId} (${t.desc}) from ${ownerKey}`);
+                                    }
                                 }
                             }
+                        } catch (cleanupErr) {
+                            console.warn('Failed to clean up old Ajith tasks:', cleanupErr);
                         }
-                    } catch (cleanupErr) {
-                        console.warn('Failed to clean up old Ajith tasks:', cleanupErr);
                     }
 
                     for (let i = 0; i < AJITH_TASKS_CONFIG.length; i++) {
                         const taskConfig = AJITH_TASKS_CONFIG[i];
                         const baseIdStr = taskConfig.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
                         const taskId = `A-${baseIdStr}-${i}`;
-                        const path = `worksync/manual_tasks/${ownerKey}/${taskId}`;
 
-                        const snap = await get(ref(db, path));
+                        let existing = null;
+                        for (const ok of targetOwnerKeys) {
+                            const snap = await get(ref(db, `worksync/manual_tasks/${ok}/${taskId}`));
+                            if (snap.exists()) {
+                                existing = snap.val();
+                                break;
+                            }
+                        }
 
-                        if (!snap.exists()) {
+                        if (!existing) {
                             const task = {
                                 id: taskId,
                                 desc: taskConfig.title,
@@ -27268,26 +27314,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 createdAt: Date.now(),
                                 duedate: today
                             };
-                            await set(ref(db, path), task);
+                            for (const ok of targetOwnerKeys) {
+                                await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), task);
+                            }
                             tasks = mergeTasksById([task, ...tasks]);
                         } else {
-                            const existing = snap.val();
                             const completedToday = existing.lastCompletedDate === today;
                             const isTerminal = existing.status === 'Completed' || isInternalDone(existing.status) || isDone(existing.status);
-                            const completedPreviousDay = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                            const isPastDueDate = !existing.duedate || existing.duedate < today || existing.duedate !== today;
-                            const needsDailyReset = !completedToday && (completedPreviousDay || (isTerminal && isPastDueDate));
+                            const isPastDueDate = !existing.duedate || existing.duedate !== today;
 
                             let updates = {};
-                            if (needsDailyReset && isTerminal) {
-                                updates.status = 'To do';
+                            if (isPastDueDate || (isTerminal && !completedToday)) {
                                 updates.duedate = today;
-                                updates.lastCompletedDate = null;
-                            } else if (existing.duedate !== today) {
-                                updates.duedate = today;
-                                if (isTerminal && !completedToday) {
+                                if (!completedToday) {
                                     updates.status = 'To do';
                                     updates.lastCompletedDate = null;
+                                    updates.completedAt = null;
+                                }
+                                if (taskConfig.needsClient) {
+                                    updates.client = 'Internal';
+                                    updates.description = 'Requires Client Selection';
                                 }
                             }
 
@@ -27320,12 +27366,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 }
                             }
 
-                            if (Object.keys(updates).length) {
-                                await update(ref(db, path), updates);
-                                const idx = tasks.findIndex(t => t.id === taskId);
-                                if (idx >= 0) Object.assign(tasks[idx], updates);
-                            }
-
                             const mergedTask = {
                                 ...existing,
                                 ...updates,
@@ -27335,10 +27375,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 ajithTask: true,
                                 duedate: updates.duedate || existing.duedate || today
                             };
+
+                            for (const ok of targetOwnerKeys) {
+                                if (Object.keys(updates).length) {
+                                    await update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates);
+                                } else {
+                                    await set(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), mergedTask);
+                                }
+                            }
+
+                            const idx = tasks.findIndex(t => t.id === taskId);
+                            if (idx >= 0) Object.assign(tasks[idx], mergedTask);
                             tasks = mergeTasksById([mergedTask, ...tasks]);
                         }
                     }
 
+                    PerfOptimizer.invalidateCache('filterTasks');
                     if (isInternalTabActive()) renderInternalTasks();
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
 
@@ -27369,12 +27421,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('palaniTasks_lastRun');
-                if (lastRunDay === todayKey && palaniTasksEnsureStarted) return;
+                const hasPalaniTaskInMemory = PALANI_TASKS_CONFIG.every((cfg, i) => {
+                    const baseIdStr = cfg.title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+                    const taskId = `P-${baseIdStr}-${i}`;
+                    const t = tasks.find(tk => tk.id === taskId);
+                    return t && t.duedate === todayKey;
+                });
+                if (lastRunDay === todayKey && palaniTasksEnsureStarted && hasPalaniTaskInMemory) return;
                 if (lastRunDay !== todayKey) {
                     palaniTasksEnsureStarted = false;
                     sessionStorage.removeItem('palaniTasks_lastRun');
                 }
 
+                // Leave check for Palani
                 try {
                     const requestsSnap = await get(ref(db, 'worksync/requests'));
                     if (requestsSnap.exists()) {
@@ -27408,9 +27467,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 try {
                     const email = palaniEmail;
+                    const assigneeName = 'Palanirajan R';
                     const ownerKey = eKey(email);
                     const today = todayKey;
-                    const assigneeName = 'Digital Marketing';
 
                     for (let i = 0; i < PALANI_TASKS_CONFIG.length; i++) {
                         const taskConfig = PALANI_TASKS_CONFIG[i];
@@ -27424,10 +27483,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const task = {
                                 id: taskId,
                                 desc: taskConfig.title,
-                                description: taskConfig.needsClient ? 'Requires Client Selection' : 'Daily Recurring Task',
-                                client: taskConfig.client || 'Others',
+                                description: 'Daily Recurring Task',
+                                client: taskConfig.client || 'Vilpower DM',
                                 status: 'To do',
-                                priority: 'Medium',
+                                priority: 'High',
                                 assignee: currentUser.name || assigneeName,
                                 assigneeEmail: email,
                                 manual: true,
@@ -27823,6 +27882,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
 
                 if (taskEmail && filterEmail && taskEmail === filterEmail) return true;
+
+                // Direct alias matching for Murugesh and Ajith
+                const MURUGESH_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
+                const AJITH_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com'];
+                if (MURUGESH_EMAILS.includes(filterEmail) && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
+                if (AJITH_EMAILS.includes(filterEmail) && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
+                if (task.murugeshTask && (filterEmail.includes('murugesh') || (filterUser?.name || '').toLowerCase().includes('murugesh'))) return true;
+                if (task.ajithTask && (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'))) return true;
 
                 const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
                 const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
@@ -45497,8 +45564,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function loadManualTasks() {
                 if (!currentUser) return;
-                if (isAdmin()) {
-                    // Admins load all manual tasks from all users
+                const userEmail = (currentUser.email || '').toLowerCase().trim();
+                const isMurugesh = userEmail === 'murugeshvilpower@gmail.com' || userEmail === 'murugesh@vilpower.com' || userEmail.includes('murugesh');
+                const isAjith = userEmail === 'ajithvilpower@gmail.com' || userEmail === 'ajith@vilpower.com' || userEmail.includes('ajith');
+
+                if (isAdmin() || isMurugesh) {
+                    // Admins and Murugesh load all manual tasks from all users
                     onValue(ref(db, `worksync/manual_tasks`), snap => {
                         // Cleanup target tasks requested by user
                         const targetIds = ['M-1779279416802', 'M-1777551877624'];
@@ -45532,6 +45603,29 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                         if (activeView === 'plan-tracking') renderPlanTrackingView();
+                    });
+                } else if (isAjith) {
+                    // Ajith loads from both ajithvilpower_gmail_com and ajith_vilpower_com
+                    const ajithKeys = ['ajithvilpower_gmail_com', 'ajith_vilpower_com'];
+                    ajithKeys.forEach(userKey => {
+                        onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
+                            if (!currentUser || !currentUser.email) return;
+                            const manual = Object.values(snap.val() || {});
+                            tasks = mergeTasksById([...tasks, ...manual]);
+                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(manual)); } catch (e) {}
+                            populateAssigneeFilter();
+                            populateClientFilter();
+                            populateInternalAssigneeFilter();
+                            populateInternalClientFilter();
+                            PerfOptimizer.invalidateCache('filterTasks');
+                            PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                            PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                            if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                            if (activeView === 'shoots') renderShootCalendar();
+                            if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+                            if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                            if (activeView === 'plan-tracking') renderPlanTrackingView();
+                        });
                     });
                 } else {
                     // Regular users load only their own tasks

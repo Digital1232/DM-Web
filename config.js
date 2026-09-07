@@ -9,7 +9,7 @@ export const FB_CONFIG = {
 };
 
 export const ADMIN_ROLES = ['System Admin', 'Administrator', 'Head of Operations', 'MD & Core Team'];
-export const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com'];
+export const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
 
 export const USERS = [
     { email: 'nanjil@vilpower.com', name: 'Nanjil Manohar S', role: 'Head of Operations', avatar: 'Nanjil' },
