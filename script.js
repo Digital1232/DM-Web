@@ -18766,6 +18766,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
                     }
                 });
+                // Ensure aliases are accessible via either key in merged map
+                const alexCanonical = merged.get('alexvilpower@gmail.com') || merged.get('alex@vilpower.com');
+                if (alexCanonical) {
+                    if (!merged.has('alexvilpower@gmail.com')) merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
+                    if (!merged.has('alex@vilpower.com')) merged.set('alex@vilpower.com', { ...alexCanonical, email: 'alex@vilpower.com' });
+                }
                 return merged; // Return the map directly
             }
 
@@ -26486,6 +26492,41 @@ function isStrategyTask(t) {
 
             const GENERIC_NAME_TOKENS = new Set(['vilpower', 'admin', 'team', 'system', 'qc', 'jira', 'worksync', 'unassigned', 'learning', 'discussion', 'vilpoweradmin']);
 
+            const ALEX_EMAILS = ['alexvilpower@gmail.com', 'alex@vilpower.com'];
+            const MURUGESH_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
+            const AJITH_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com'];
+
+            function getUniqueAssigneeUsers() {
+                const list = [];
+                const isPresent = (u) => {
+                    const uEmail = (u.email || '').toLowerCase();
+                    const uNorm = normalizeAssigneeValue(u.name || uEmail);
+                    return list.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exNorm = normalizeAssigneeValue(existing.name || exEmail);
+                        if (uEmail && exEmail && uEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (uNorm && exNorm && (uNorm === exNorm || (uNorm.startsWith('alex') && exNorm.startsWith('alex')))) return true;
+                        if (uNorm && exNorm && !GENERIC_NAME_TOKENS.has(uNorm) && !GENERIC_NAME_TOKENS.has(exNorm)) {
+                            if (uNorm.length >= 4 && exNorm.length >= 4 && (uNorm.includes(exNorm) || exNorm.includes(uNorm))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                Array.from(allUsersMap.values()).forEach(u => {
+                    if (!u.email || u.email === '123') return;
+                    if (!isPresent(u)) {
+                        const canonicalEmail = ALEX_EMAILS.includes((u.email || '').toLowerCase()) ? 'alexvilpower@gmail.com' : u.email;
+                        list.push({ ...u, email: canonicalEmail, name: u.name || canonicalEmail });
+                    }
+                });
+
+                return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            }
+
             function assigneeMatches(task, filterValue) {
                 if (!filterValue) return false;
                 if (!currentUser && filterValue === 'me') return false;
@@ -26498,6 +26539,23 @@ function isStrategyTask(t) {
                 const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
 
                 if (taskEmail && filterEmail && taskEmail === filterEmail) return true;
+
+                // Direct alias matching for Murugesh, Ajith, and Alex
+                if (MURUGESH_EMAILS.includes(filterEmail) && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
+                if (AJITH_EMAILS.includes(filterEmail) && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
+                if (ALEX_EMAILS.includes(filterEmail) && (ALEX_EMAILS.includes(taskEmail) || task.alexTask)) return true;
+                if (task.murugeshTask && (filterEmail.includes('murugesh') || (filterUser?.name || '').toLowerCase().includes('murugesh'))) return true;
+                if (task.ajithTask && (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'))) return true;
+                if (task.alexTask && (filterEmail.includes('alex') || (filterUser?.name || '').toLowerCase().includes('alex'))) return true;
+
+                if (ALEX_EMAILS.includes(filterEmail)) {
+                    const tName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
+                    if (tName === 'alex' || tName.startsWith('alex')) return true;
+                }
+                if (ALEX_EMAILS.includes(taskEmail)) {
+                    const fName = normalizeAssigneeValue(filterUser?.name || (filterValue || '').replace(/^name:/, ''));
+                    if (fName === 'alex' || fName.startsWith('alex')) return true;
+                }
 
                 const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
                 const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
@@ -41878,7 +41936,7 @@ function isStrategyTask(t) {
                 document.querySelector('#addTaskModal h3').textContent = taskType === 'internal' ? 'Add Internal Task' : 'Add Manual Task';
 
                 const assigneeSelect = document.getElementById('mt-assignee');
-                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + Array.from(allUsersMap.values()).map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + getUniqueAssigneeUsers().map(u => `<option value="${u.email}">${u.name}</option>`).join('');
                 assigneeSelect.value = currentUser ? currentUser.email : '';
 
                 document.getElementById('mt-status').innerHTML = MANUAL_TASK_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -42037,7 +42095,7 @@ function isStrategyTask(t) {
 
                 // Populate Assignee dropdown
                 const assigneeSelect = document.getElementById('et-assignee'); // Use allUsersMap
-                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + Array.from(allUsersMap.values()).map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + getUniqueAssigneeUsers().map(u => `<option value="${u.email}">${u.name}</option>`).join('');
                 assigneeSelect.value = task.assigneeEmail || '';
 
                 const deleteBtn = document.querySelector('#editTaskModal button[onclick="deleteManualTask()"]');
@@ -42197,8 +42255,13 @@ function isStrategyTask(t) {
 
             function loadManualTasks() {
                 if (!currentUser) return;
-                if (isAdmin()) {
-                    // Admins load all manual tasks from all users
+                const userEmail = (currentUser.email || '').toLowerCase().trim();
+                const isMurugesh = userEmail === 'murugeshvilpower@gmail.com' || userEmail === 'murugesh@vilpower.com' || userEmail.includes('murugesh');
+                const isAjith = userEmail === 'ajithvilpower@gmail.com' || userEmail === 'ajith@vilpower.com' || userEmail.includes('ajith');
+                const isAlex = ALEX_EMAILS.includes(userEmail) || userEmail.includes('alex');
+
+                if (isAdmin() || isMurugesh) {
+                    // Admins and Murugesh load all manual tasks from all users
                     onValue(ref(db, `worksync/manual_tasks`), snap => {
                         // Cleanup target tasks requested by user
                         const targetIds = ['M-1779279416802', 'M-1777551877624'];
@@ -42219,6 +42282,7 @@ function isStrategyTask(t) {
                             allManualTasks.push(...Object.values(userTasksSnap.val() || {}));
                         });
                         tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allManualTasks]);
+                        try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allManualTasks)); } catch (e) {}
                         populateAssigneeFilter();
                         populateClientFilter();
                         populateInternalAssigneeFilter();
@@ -42231,6 +42295,56 @@ function isStrategyTask(t) {
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                         if (activeView === 'plan-tracking') renderPlanTrackingView();
+                    });
+                } else if (isAjith) {
+                    // Ajith loads from both ajithvilpower_gmail_com and ajith_vilpower_com
+                    const ajithKeys = ['ajithvilpower_gmail_com', 'ajith_vilpower_com'];
+                    const ajithTasksByOwner = {};
+                    ajithKeys.forEach(userKey => {
+                        onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
+                            if (!currentUser || !currentUser.email) return;
+                            ajithTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const allAjithTasks = Object.values(ajithTasksByOwner).flat();
+                            tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAjithTasks]);
+                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAjithTasks)); } catch (e) {}
+                            populateAssigneeFilter();
+                            populateClientFilter();
+                            populateInternalAssigneeFilter();
+                            populateInternalClientFilter();
+                            PerfOptimizer.invalidateCache('filterTasks');
+                            PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                            PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                            if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                            if (activeView === 'shoots') renderShootCalendar();
+                            if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+                            if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                            if (activeView === 'plan-tracking') renderPlanTrackingView();
+                        });
+                    });
+                } else if (isAlex) {
+                    // Alex loads from both alexvilpower_gmail_com and alex_vilpower_com
+                    const alexKeys = ['alexvilpower_gmail_com', 'alex_vilpower_com'];
+                    const alexTasksByOwner = {};
+                    alexKeys.forEach(userKey => {
+                        onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
+                            if (!currentUser || !currentUser.email) return;
+                            alexTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const allAlexTasks = Object.values(alexTasksByOwner).flat();
+                            tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAlexTasks]);
+                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAlexTasks)); } catch (e) {}
+                            populateAssigneeFilter();
+                            populateClientFilter();
+                            populateInternalAssigneeFilter();
+                            populateInternalClientFilter();
+                            PerfOptimizer.invalidateCache('filterTasks');
+                            PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                            PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                            if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                            if (activeView === 'shoots') renderShootCalendar();
+                            if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+                            if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                            if (activeView === 'plan-tracking') renderPlanTrackingView();
+                        });
                     });
                 } else {
                     // Regular users load only their own tasks
@@ -42249,6 +42363,7 @@ function isStrategyTask(t) {
 
                         const manual = Object.values(snap.val() || {});
                         tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...manual]);
+                        try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(manual)); } catch (e) {}
                         populateAssigneeFilter();
                         populateClientFilter();
                         populateInternalAssigneeFilter();
@@ -43117,44 +43232,61 @@ function isStrategyTask(t) {
                 <option value="me">Assigned to me (${currentUser?.name || 'me'})</option>
             `;
 
-                const uniqueIdentities = new Map(); // Key: email or name:norm, Value: { email, name }
+                const uniqueList = getUniqueAssigneeUsers().map(u => ({ ...u }));
 
-                // 1. System Users (Config + Live)
-                Array.from(allUsersMap.values()).forEach(u => { // Use allUsersMap directly
-                    if (!u.email || u.email === '123') return;
-                    const emailKey = u.email.toLowerCase();
-                    if (!uniqueIdentities.has(emailKey)) {
-                        uniqueIdentities.set(emailKey, { email: u.email, name: u.name });
-                    }
-                });
+                const isAlreadyPresent = (email, name) => {
+                    const normEmail = (email || '').toLowerCase();
+                    const cleanName = (name || '').replace(/^name:/, '').trim();
+                    const normName = normalizeAssigneeValue(cleanName || normEmail.replace(/^name:/, ''));
 
-                // 2. Names from synced tasks (Deduplicated against system users)
+                    return uniqueList.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exCleanName = (existing.name || '').replace(/^name:/, '').trim();
+                        const exNormName = normalizeAssigneeValue(exCleanName || exEmail.replace(/^name:/, ''));
+
+                        if (normEmail && exEmail && normEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(normEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(normEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(normEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (normName && exNormName && normName === exNormName) return true;
+                        if (normName && exNormName && (normName.startsWith('alex') || normEmail.includes('alex')) && (exNormName.startsWith('alex') || exEmail.includes('alex'))) return true;
+                        if (normName && exNormName && !GENERIC_NAME_TOKENS.has(normName) && !GENERIC_NAME_TOKENS.has(exNormName)) {
+                            if (normName.length >= 4 && exNormName.length >= 4 && (normName.includes(exNormName) || exNormName.includes(normName))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                // Add synced Jira task assignees
                 tasks.filter(t => !isInternalTask(t)).forEach(t => {
-                    const name = t.assignee || assigneeName(t);
+                    const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
 
                     if (!name || name === 'Unassigned') return;
-
-                    // If we have an email and it's already in our map, skip
-                    if (email && uniqueIdentities.has(email)) return;
+                    if (isAlreadyPresent(email, name)) return;
 
                     const normName = normalizeAssigneeValue(name);
-
-                    // Check if this normalized name matches any existing user's name
-                    const isKnown = [...uniqueIdentities.values()].some(u => {
-                        const uNorm = normalizeAssigneeValue(u.name);
-                        return uNorm.includes(normName) || normName.includes(uNorm);
-                    });
-
-                    if (!isKnown && !uniqueIdentities.has('name:' + normName)) {
-                        uniqueIdentities.set('name:' + normName, { email: 'name:' + normName, name: name });
-                    }
+                    const optEmail = email || ('name:' + normName);
+                    uniqueList.push({ email: optEmail, name });
                 });
 
-                // 3. Render sorted options
-                [...uniqueIdentities.values()]
-                    .filter(u => u.email.toLowerCase() !== currentUser?.email.toLowerCase())
-                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                // Filter out current user and aliases
+                const currentEmail = (currentUser?.email || '').toLowerCase();
+                const currentNormName = normalizeAssigneeValue(currentUser?.name || currentEmail);
+
+                uniqueList
+                    .filter(u => {
+                        if (!currentUser) return true;
+                        const uEmail = (u.email || '').toLowerCase();
+                        if (uEmail && currentEmail && uEmail === currentEmail) return false;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(currentEmail)) return false;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(currentEmail)) return false;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(currentEmail)) return false;
+                        const uNormName = normalizeAssigneeValue(u.name || uEmail.replace(/^name:/, ''));
+                        if (uNormName && currentNormName && uNormName === currentNormName && !GENERIC_NAME_TOKENS.has(uNormName)) return false;
+                        return true;
+                    })
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                     .forEach(u => {
                         const opt = document.createElement('option');
                         opt.value = u.email;
@@ -43162,7 +43294,13 @@ function isStrategyTask(t) {
                         sel.appendChild(opt);
                     });
 
-                sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
+                if ([...sel.options].some(o => o.value === existingValue)) {
+                    sel.value = existingValue;
+                } else if (ALEX_EMAILS.includes(existingValue) && [...sel.options].some(o => ALEX_EMAILS.includes(o.value))) {
+                    sel.value = [...sel.options].find(o => ALEX_EMAILS.includes(o.value)).value;
+                } else {
+                    sel.value = 'all';
+                }
                 currentAssigneeFilter = sel.value;
             }
 
@@ -43176,22 +43314,60 @@ function isStrategyTask(t) {
                 <option value="me">Assigned to me (${currentUser?.name || 'me'})</option>
             `;
 
-                const uniqueIdentities = new Map();
-                Array.from(allUsersMap.values()).forEach(u => {
-                    if (!u.email || u.email === '123') return;
-                    uniqueIdentities.set(u.email.toLowerCase(), { email: u.email, name: u.name });
-                });
+                const uniqueList = getUniqueAssigneeUsers().map(u => ({ ...u }));
+
+                const isAlreadyPresent = (email, name) => {
+                    const normEmail = (email || '').toLowerCase();
+                    const cleanName = (name || '').replace(/^name:/, '').trim();
+                    const normName = normalizeAssigneeValue(cleanName || normEmail.replace(/^name:/, ''));
+
+                    return uniqueList.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exCleanName = (existing.name || '').replace(/^name:/, '').trim();
+                        const exNormName = normalizeAssigneeValue(exCleanName || exEmail.replace(/^name:/, ''));
+
+                        if (normEmail && exEmail && normEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(normEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(normEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(normEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (normName && exNormName && normName === exNormName) return true;
+                        if (normName && exNormName && (normName.startsWith('alex') || normEmail.includes('alex')) && (exNormName.startsWith('alex') || exEmail.includes('alex'))) return true;
+                        if (normName && exNormName && !GENERIC_NAME_TOKENS.has(normName) && !GENERIC_NAME_TOKENS.has(exNormName)) {
+                            if (normName.length >= 4 && exNormName.length >= 4 && (normName.includes(exNormName) || exNormName.includes(normName))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                // Add any names from internal tasks that aren't in system users
                 tasks.filter(isInternalTask).forEach(t => {
-                    const name = t.assignee || assigneeName(t);
+                    const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
+
                     if (!name || name === 'Unassigned') return;
-                    if (email && uniqueIdentities.has(email)) return;
+                    if (isAlreadyPresent(email, name)) return;
+
                     const normName = normalizeAssigneeValue(name);
-                    if (!uniqueIdentities.has('name:' + normName)) uniqueIdentities.set('name:' + normName, { email: 'name:' + normName, name });
+                    const optEmail = email || ('name:' + normName);
+                    uniqueList.push({ email: optEmail, name });
                 });
 
-                [...uniqueIdentities.values()]
-                    .filter(u => u.email.toLowerCase() !== currentUser?.email?.toLowerCase())
+                // Filter out current user and their aliases
+                const currentEmail = (currentUser?.email || '').toLowerCase();
+                const currentNormName = normalizeAssigneeValue(currentUser?.name || currentEmail);
+
+                uniqueList
+                    .filter(u => {
+                        if (!currentUser) return true;
+                        const uEmail = (u.email || '').toLowerCase();
+                        if (uEmail && currentEmail && uEmail === currentEmail) return false;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(currentEmail)) return false;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(currentEmail)) return false;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(currentEmail)) return false;
+                        const uNormName = normalizeAssigneeValue(u.name || uEmail.replace(/^name:/, ''));
+                        if (uNormName && currentNormName && uNormName === currentNormName && !GENERIC_NAME_TOKENS.has(uNormName)) return false;
+                        return true;
+                    })
                     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                     .forEach(u => {
                         const opt = document.createElement('option');
@@ -43200,7 +43376,13 @@ function isStrategyTask(t) {
                         sel.appendChild(opt);
                     });
 
-                sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
+                if ([...sel.options].some(o => o.value === existingValue)) {
+                    sel.value = existingValue;
+                } else if (ALEX_EMAILS.includes(existingValue) && [...sel.options].some(o => ALEX_EMAILS.includes(o.value))) {
+                    sel.value = [...sel.options].find(o => ALEX_EMAILS.includes(o.value)).value;
+                } else {
+                    sel.value = 'all';
+                }
                 currentInternalAssigneeFilter = sel.value;
             }
 
@@ -43553,7 +43735,20 @@ function isStrategyTask(t) {
                 Array.from(allUsersMap.values()).forEach(u => {
                     if (u.email && u.email !== '123') merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
                 });
-                const usersList = [...merged.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                const seenDp = new Set();
+                const usersList = [];
+                [...merged.values()].forEach(u => {
+                    const normEmail = (u.email || '').toLowerCase();
+                    const canonicalEmail = ALEX_EMAILS.includes(normEmail) ? 'alexvilpower@gmail.com' :
+                        (MURUGESH_EMAILS.includes(normEmail) ? 'murugeshvilpower@gmail.com' :
+                        (AJITH_EMAILS.includes(normEmail) ? 'ajithvilpower@gmail.com' : u.email));
+                    const key = canonicalEmail.toLowerCase();
+                    if (!seenDp.has(key)) {
+                        seenDp.add(key);
+                        usersList.push({ ...u, email: canonicalEmail, name: u.name || canonicalEmail });
+                    }
+                });
+                usersList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
                 container.innerHTML = usersList.map(u => {
                     const email = u.email.toLowerCase();
@@ -45911,9 +46106,10 @@ function isStrategyTask(t) {
                 const missedEmails = [];
 
                 employees.forEach(u => {
-                    const taskId = morningLearningTaskId(u.email);
-                    const task = tasks.find(t => t.id === taskId);
-                    if (!task || (task.lastCompletedDate !== today && !isInternalDone(task.status))) {
+                    const aliases = (typeof getUserAliases === 'function') ? getUserAliases(u.email) : [u.email.toLowerCase()];
+                    const task = tasks.find(t => isMorningLearningTask(t) && (aliases.includes((t.assigneeEmail || t.userId || '').toLowerCase()) || (typeof assigneeMatches === 'function' && assigneeMatches(t, u.email))));
+                    const isCompleted = task && (task.lastCompletedDate === today || isInternalDone(task.status)) && task.status !== 'Missed';
+                    if (!task || !isCompleted) {
                         missedEmails.push(u.email.toLowerCase());
                     }
                 });
@@ -45959,10 +46155,15 @@ function isStrategyTask(t) {
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const todayStr = new Date().toISOString().slice(0, 10);
 
-                // Get all users who have morning learning tasks (non-excluded)
-                const learningUsers = Array.from(allUsersMap.values())
-                    .filter(u => u.email && u.email !== '123' && !MORNING_LEARNING_EXCLUDED_EMAILS.some(e => e.toLowerCase() === u.email.toLowerCase()))
-                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                // Get all users who have morning learning tasks (non-excluded, deduplicated)
+                const learningUsers = getLearningEmployees();
+                const getUserAliases = (email) => {
+                    const e = (email || '').toLowerCase();
+                    if (ALEX_EMAILS.includes(e)) return ALEX_EMAILS;
+                    if (MURUGESH_EMAILS.includes(e)) return MURUGESH_EMAILS;
+                    if (AJITH_EMAILS.includes(e)) return AJITH_EMAILS;
+                    return [e];
+                };
 
                 // Build attendance map: { 'YYYY-MM-DD': { attended: Set<email>, reasoned: Set<email>, autoMissed: Set<email> } }
                 const attendanceByDate = {};
@@ -46008,7 +46209,11 @@ function isStrategyTask(t) {
                 // --- Summary bar ---
                 html += `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">`;
                 learningUsers.forEach(u => {
-                    const attended = pastWeekdays.filter(d => (attendanceByDate[d]?.attended || new Set()).has(u.email.toLowerCase())).length;
+                    const aliases = getUserAliases(u.email);
+                    const attended = pastWeekdays.filter(d => {
+                        const dayAttended = attendanceByDate[d]?.attended || new Set();
+                        return aliases.some(a => dayAttended.has(a));
+                    }).length;
                     const missed = pastWeekdays.length - attended;
                     const rate = pastWeekdays.length > 0 ? Math.round((attended / pastWeekdays.length) * 100) : 0;
                     const avatar = u.profilePicture || getUserAvatarSrc(u);
@@ -46073,10 +46278,13 @@ function isStrategyTask(t) {
                             title = 'Upcoming';
                         } else {
                             const dayData = attendanceByDate[dateStr] || { attended: new Set(), reasoned: new Set() };
-                            if (dayData.attended.has(u.email.toLowerCase())) {
+                            const aliases = getUserAliases(u.email);
+                            const hasAttended = aliases.some(a => dayData.attended.has(a));
+                            const hasReasoned = aliases.some(a => dayData.reasoned.has(a));
+                            if (hasAttended) {
                                 dot = `<span class="w-5 h-5 rounded-full bg-emerald-500 inline-flex items-center justify-center shadow-sm" title="Learned"><iconify-icon icon="solar:check-circle-bold" class="text-white" width="12"></iconify-icon></span>`;
                                 title = 'Learned';
-                            } else if (dayData.reasoned.has(u.email.toLowerCase())) {
+                            } else if (hasReasoned) {
                                 dot = `<span class="w-5 h-5 rounded-full bg-amber-500 inline-flex items-center justify-center shadow-sm" title="Missed (Reason Submitted)"><iconify-icon icon="solar:info-circle-bold" class="text-white" width="12"></iconify-icon></span>`;
                                 title = 'Missed (Reason Submitted)';
                             } else {

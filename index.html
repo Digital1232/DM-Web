@@ -15326,9 +15326,9 @@
             const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail'];
             const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework'];
-            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
+            const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Learnings'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework', 'Learnings'];
+            const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Learnings'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
 
@@ -17226,11 +17226,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     // Condition C: INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES
                     if (!shouldAutoInclude && isInternalTask(task)) {
+                        const isLearning = isMorningLearningTask(task);
                         const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(s => s.toLowerCase() === (task.status || '').toLowerCase()) ||
-                            (task.status || '').toLowerCase() === 'to do';
+                            (task.status || '').toLowerCase() === 'to do' || isLearning;
                         if (statusMatch) {
-                            if (!task.duedate) {
-                                shouldAutoInclude = true;
+                            if (!task.duedate || isLearning) {
+                                if (isLearning) {
+                                    const isDueToday = !task.duedate || task.duedate === dateStr || dateStr === todayIso();
+                                    if (isDueToday) shouldAutoInclude = true;
+                                } else {
+                                    shouldAutoInclude = true;
+                                }
                             } else {
                                 const taskDue = new Date(task.duedate);
                                 taskDue.setHours(0, 0, 0, 0);
@@ -20129,6 +20135,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
                     }
                 });
+                // Ensure aliases are accessible via either key in merged map
+                const alexCanonical = merged.get('alexvilpower@gmail.com') || merged.get('alex@vilpower.com');
+                if (alexCanonical) {
+                    if (!merged.has('alexvilpower@gmail.com')) merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
+                    if (!merged.has('alex@vilpower.com')) merged.set('alex@vilpower.com', { ...alexCanonical, email: 'alex@vilpower.com' });
+                }
                 return merged; // Return the map directly
             }
 
@@ -26862,18 +26874,29 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else {
                     base = USERS;
                 }
+                const seen = new Set();
                 return base.filter(u =>
                     u.email &&
                     u.email !== '123' &&
                     !isExcludedFromMorningLearning(u.email)
-                ).map(u => ({
-                    // Ensure both email and name are always populated
-                    email: u.email,
-                    name: u.name || u.email,
-                    role: u.role || 'Team Member',
-                    profilePicture: u.profilePicture || null,
-                    avatar: u.avatar || u.name || u.email
-                }));
+                ).map(u => {
+                    const normEmail = (u.email || '').toLowerCase();
+                    const canonicalEmail = ALEX_EMAILS.includes(normEmail) ? 'alexvilpower@gmail.com' :
+                        (MURUGESH_EMAILS.includes(normEmail) ? 'murugeshvilpower@gmail.com' :
+                        (AJITH_EMAILS.includes(normEmail) ? 'ajithvilpower@gmail.com' : u.email));
+                    return {
+                        email: canonicalEmail,
+                        name: u.name || canonicalEmail,
+                        role: u.role || 'Team Member',
+                        profilePicture: u.profilePicture || null,
+                        avatar: u.avatar || u.name || canonicalEmail
+                    };
+                }).filter(u => {
+                    const key = u.email.toLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
             }
 
             function buildMorningLearningTask(user) {
@@ -26952,35 +26975,35 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (descIsWrong) updates.desc = expectedTitle;
 
                 // ── Daily reset: if completed on a previous day, reset to Learnings ─
-                const completedToday = existing.lastCompletedDate === today;
+                const completedToday = existing.lastCompletedDate === today && (existing.status === 'Completed' || isInternalDone(existing.status)) && existing.status !== 'Missed' && existing.status !== 'Skipped';
                 const completedBefore = existing.lastCompletedDate && existing.lastCompletedDate < today;
-                const isTerminalStatus = existing.status === 'Completed' || isInternalDone(existing.status);
+                const isTerminalStatus = existing.status === 'Completed' || existing.status === 'Missed' || existing.status === 'Skipped' || isInternalDone(existing.status);
 
-                if (completedBefore && isTerminalStatus && !completedToday) {
+                if ((completedBefore && isTerminalStatus && !completedToday) || (existing.duedate !== today && isTerminalStatus && !completedToday)) {
                     // Completed on a previous day — reset for today
                     updates.status = 'Learnings';
                     updates.duedate = today;
+                    delete updates.completedAt;
                 } else if (existing.duedate !== today) {
                     // Always keep duedate current — this refreshes the task every day
                     // even if the user never completed the previous day's task
                     updates.duedate = today;
-                    // If it was in a terminal state from a previous day, reset status too
-                    if (isTerminalStatus && !completedToday) {
-                        updates.status = 'Learnings';
-                    }
+                }
+
+                // Always ensure task exists in local in-memory tasks array
+                const finalTask = { ...existing, ...updates, id: taskId };
+                const idx = tasks.findIndex(t => t.id === taskId);
+                if (idx >= 0) {
+                    Object.assign(tasks[idx], updates);
+                } else {
+                    tasks = mergeTasksById([finalTask, ...tasks]);
                 }
 
                 // ── Write updates if anything changed ───────────────────────────────
                 if (Object.keys(updates).length) {
                     await update(ref(db, path), updates);
-                    const idx = tasks.findIndex(t => t.id === taskId);
-                    if (idx >= 0) {
-                        Object.assign(tasks[idx], updates);
-                    } else {
-                        tasks = mergeTasksById([{ ...existing, ...updates, id: taskId }, ...tasks]);
-                    }
                 }
-                return { ...existing, ...updates };
+                return finalTask;
             }
 
             async function ensureMorningLearningTasks() {
@@ -27608,6 +27631,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function ensureAllRecurringTasks() {
                 try {
                     await Promise.allSettled([
+                        runMorningLearningSetup(),
                         ensureMurugeshDailyTasks(),
                         ensureAjithDailyTasks(),
                         ensurePalaniDailyTasks()
@@ -27624,11 +27648,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Reset the flag if it's a new day (daily reset)
                 const todayKey = todayIso();
                 const lastRunDay = sessionStorage.getItem('morningLearning_lastRun');
+                const hasMyLearningInMemory = tasks.some(t => isMorningLearningTask(t) && assigneeMatches(t, currentUser.email) && t.duedate === todayKey);
+                if (lastRunDay === todayKey && morningLearningEnsureStarted && hasMyLearningInMemory) return;
                 if (lastRunDay !== todayKey) {
                     morningLearningEnsureStarted = false;
                     sessionStorage.removeItem('morningLearning_lastRun');
                 }
-                if (morningLearningEnsureStarted) return;
                 morningLearningEnsureStarted = true;
                 sessionStorage.setItem('morningLearning_lastRun', todayKey);
 
@@ -27652,6 +27677,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     // Start the auto-complete scheduler for current user
                     scheduleMorningLearningAutoComplete();
+
+                    PerfOptimizer.invalidateCache('filterTasks');
+                    if (isInternalTabActive()) renderInternalTasks();
+                    if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                 } catch (err) {
                     console.warn('Morning learning setup failed:', err);
                     morningLearningEnsureStarted = false;
@@ -27699,7 +27728,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // CHECK IF STARTED TODAY
-                    const started = localStorage.getItem('worksync_learning_started_' + today) === 'true';
+                    const isCurrentlyActive = activeTaskId === task.id;
+                    const hasLocalStartedFlag = localStorage.getItem('worksync_learning_started_' + today) === 'true';
+                    const hasTaskStartedFlag = task.startedToday === today || task.lastStartedDate === today;
+                    const hasStartedStatus = task.status === 'In Progress' || task.status === 'Working' || task.status === 'Completed';
+                    const isTimerRunningOnThis = isCurrentlyActive && (taskSeconds > 0 || !taskOnHold);
+
+                    let started = hasLocalStartedFlag || isCurrentlyActive || hasTaskStartedFlag || hasStartedStatus || isTimerRunningOnThis;
+
+                    if (!started && db) {
+                        try {
+                            const timeLogsSnap = await get(ref(db, 'worksync/timelogs'));
+                            const allTimeLogs = Object.values(timeLogsSnap.val() || {});
+                            const userEmails = ALEX_EMAILS.includes((currentUser.email || '').toLowerCase()) ? ALEX_EMAILS : [(currentUser.email || '').toLowerCase()];
+                            const hasTimeLogToday = allTimeLogs.some(l => {
+                                if (!userEmails.includes((l.userId || '').toLowerCase())) return false;
+                                if (l.taskId !== task.id && !String(l.taskId || '').startsWith('LEARN-')) return false;
+                                const logDate = l.startTime ? new Date(l.startTime).toISOString().slice(0, 10) : (l.endTime ? new Date(l.endTime).toISOString().slice(0, 10) : null);
+                                return logDate === today;
+                            });
+                            if (hasTimeLogToday) started = true;
+                        } catch (e) { /* ignore */ }
+                    }
 
                     if (!started) {
                         // User never started their learning → mark as Missed
@@ -27755,15 +27805,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function completeMorningLearningTask(task, learningContent = '', videoUrl = '', skipRender = false) {
                 if (!task || !isMorningLearningTask(task) || !db) return false;
                 const today = todayIso();
-                if (task.lastCompletedDate === today) return true;
+                if (task.lastCompletedDate === today && (task.status === 'Completed' || isInternalDone(task.status)) && task.status !== 'Missed' && task.status !== 'Skipped') return true;
 
                 const userEmail = (task.assigneeEmail || task.userId || currentUser?.email || '').toLowerCase();
-                const user = allUsersMap.get(userEmail) || {
-                    email: task.assigneeEmail || task.userId,
+                const canonicalUserEmail = ALEX_EMAILS.includes(userEmail) ? 'alexvilpower@gmail.com' :
+                    (MURUGESH_EMAILS.includes(userEmail) ? 'murugeshvilpower@gmail.com' :
+                    (AJITH_EMAILS.includes(userEmail) ? 'ajithvilpower@gmail.com' : userEmail));
+                const user = allUsersMap.get(canonicalUserEmail) || allUsersMap.get(userEmail) || {
+                    email: canonicalUserEmail,
                     name: task.assignee || 'Employee'
                 };
-                const userSlot = getMorningLearningSlot(userEmail);
-                const userTitle = getMorningLearningTitle(userEmail);
+                const userSlot = getMorningLearningSlot(canonicalUserEmail);
+                const userTitle = getMorningLearningTitle(canonicalUserEmail);
 
                 let details = `Attended morning learning session (${userSlot}) on ${today}.`;
                 if (learningContent) details += `\n\nLearnings:\n${learningContent}`;
@@ -27795,7 +27848,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     })
                 ]);
 
-                const idx = tasks.findIndex(t => t.id === task.id);
+                // Clean up any auto-marked missed entry for today
+                try {
+                    const logsSnap = await get(ref(db, 'worksync/learning_logs'));
+                    const logs = logsSnap.val() || {};
+                    const aliases = [canonicalUserEmail, userEmail, ...(ALEX_EMAILS.includes(canonicalUserEmail) ? ALEX_EMAILS : [])];
+                    for (const [logId, entry] of Object.entries(logs)) {
+                        if (entry && entry.logType === 'missed' && (entry.attendanceDate === today || entry.missedDate === today)) {
+                            if (aliases.includes((entry.userId || '').toLowerCase())) {
+                                await remove(ref(db, `worksync/learning_logs/${logId}`));
+                            }
+                        }
+                    }
+                } catch (cleanErr) {
+                    console.warn('[MorningLearning] Could not clean up missed log:', cleanErr);
+                }
+
+                const idx = tasks.findIndex(t => t.id === task.id || (isMorningLearningTask(t) && assigneeMatches(t, userEmail)));
                 if (idx >= 0) {
                     tasks[idx].status = 'Completed';
                     tasks[idx].lastCompletedDate = today;
@@ -27910,6 +27979,41 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             const GENERIC_NAME_TOKENS = new Set(['vilpower', 'admin', 'team', 'system', 'qc', 'jira', 'worksync', 'unassigned', 'learning', 'discussion', 'vilpoweradmin']);
 
+            const ALEX_EMAILS = ['alexvilpower@gmail.com', 'alex@vilpower.com'];
+            const MURUGESH_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
+            const AJITH_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com'];
+
+            function getUniqueAssigneeUsers() {
+                const list = [];
+                const isPresent = (u) => {
+                    const uEmail = (u.email || '').toLowerCase();
+                    const uNorm = normalizeAssigneeValue(u.name || uEmail);
+                    return list.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exNorm = normalizeAssigneeValue(existing.name || exEmail);
+                        if (uEmail && exEmail && uEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (uNorm && exNorm && (uNorm === exNorm || (uNorm.startsWith('alex') && exNorm.startsWith('alex')))) return true;
+                        if (uNorm && exNorm && !GENERIC_NAME_TOKENS.has(uNorm) && !GENERIC_NAME_TOKENS.has(exNorm)) {
+                            if (uNorm.length >= 4 && exNorm.length >= 4 && (uNorm.includes(exNorm) || exNorm.includes(uNorm))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                Array.from(allUsersMap.values()).forEach(u => {
+                    if (!u.email || u.email === '123') return;
+                    if (!isPresent(u)) {
+                        const canonicalEmail = ALEX_EMAILS.includes((u.email || '').toLowerCase()) ? 'alexvilpower@gmail.com' : u.email;
+                        list.push({ ...u, email: canonicalEmail, name: u.name || canonicalEmail });
+                    }
+                });
+
+                return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            }
+
             function assigneeMatches(task, filterValue) {
                 if (!filterValue) return false;
                 if (!currentUser && filterValue === 'me') return false;
@@ -27923,13 +28027,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (taskEmail && filterEmail && taskEmail === filterEmail) return true;
 
-                // Direct alias matching for Murugesh and Ajith
-                const MURUGESH_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
-                const AJITH_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com'];
+                // Direct alias matching for Murugesh, Ajith, and Alex
                 if (MURUGESH_EMAILS.includes(filterEmail) && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
                 if (AJITH_EMAILS.includes(filterEmail) && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
+                if (ALEX_EMAILS.includes(filterEmail) && (ALEX_EMAILS.includes(taskEmail) || task.alexTask)) return true;
                 if (task.murugeshTask && (filterEmail.includes('murugesh') || (filterUser?.name || '').toLowerCase().includes('murugesh'))) return true;
                 if (task.ajithTask && (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'))) return true;
+                if (task.alexTask && (filterEmail.includes('alex') || (filterUser?.name || '').toLowerCase().includes('alex'))) return true;
+
+                if (ALEX_EMAILS.includes(filterEmail)) {
+                    const tName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
+                    if (tName === 'alex' || tName.startsWith('alex')) return true;
+                }
+                if (ALEX_EMAILS.includes(taskEmail)) {
+                    const fName = normalizeAssigneeValue(filterUser?.name || (filterValue || '').replace(/^name:/, ''));
+                    if (fName === 'alex' || fName.startsWith('alex')) return true;
+                }
 
                 const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
                 const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
@@ -28592,6 +28705,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                     await updateInternalTaskStatus(id, resolvedStartStatus);
+                } else if (task && isMorningLearningTask(task)) {
+                    const today = todayIso();
+                    try {
+                        localStorage.setItem('worksync_learning_started_' + today, 'true');
+                    } catch (e) { }
+                    task.startedToday = today;
+                    task.lastStartedDate = today;
+                    task.startedAt = Date.now();
+                    task.status = 'In Progress';
+                    const ownerKey = eKey(task.userId || currentUser.email);
+                    try {
+                        await update(ref(db, `worksync/manual_tasks/${ownerKey}/${id}`), {
+                            startedToday: today,
+                            lastStartedDate: today,
+                            startedAt: Date.now(),
+                            status: 'In Progress'
+                        });
+                    } catch (e) {
+                        console.warn('[MorningLearning] Failed to update start status in Firebase:', e);
+                    }
                 } else if (task && !isInternalTask(task)) {
                     // For Jira tasks: Only Sneha gets "Content In Progress", everyone else (Palani, Designers, etc.) gets "Design In Progress"
                     const isSneha = (typeof isSnehaUser === 'function' && isSnehaUser(currentUser)) ||
@@ -31505,6 +31638,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         btnEl.className = 'px-2.5 py-1 text-[11px] font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-xs transition-colors';
                     }
                 }
+            }
             window.updateNotificationPermissionBanner = updateNotificationPermissionBanner;
             setTimeout(updateNotificationPermissionBanner, 500);
             if (navigator.permissions && navigator.permissions.query) {
@@ -32260,8 +32394,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Re-render sidebar highlights
                 renderDmList();
-                const myKey = eKey(currentUser.email);
-                const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && (myKey ? c.members[myKey] : true));
                 renderGroupList(groups);
 
                 // Check in-memory message cache for INSTANT render
@@ -45439,7 +45572,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.querySelector('#addTaskModal h3').textContent = taskType === 'internal' ? 'Add Internal Task' : 'Add Manual Task';
 
                 const assigneeSelect = document.getElementById('mt-assignee');
-                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + Array.from(allUsersMap.values()).map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + getUniqueAssigneeUsers().map(u => `<option value="${u.email}">${u.name}</option>`).join('');
                 assigneeSelect.value = currentUser ? currentUser.email : '';
 
                 document.getElementById('mt-status').innerHTML = MANUAL_TASK_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -45618,7 +45751,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Populate Assignee dropdown
                 const assigneeSelect = document.getElementById('et-assignee'); // Use allUsersMap
-                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + Array.from(allUsersMap.values()).map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+                assigneeSelect.innerHTML = `<option value="">Unassigned</option>` + getUniqueAssigneeUsers().map(u => `<option value="${u.email}">${u.name}</option>`).join('');
                 assigneeSelect.value = task.assigneeEmail || '';
 
                 const deleteBtn = document.querySelector('#editTaskModal button[onclick="deleteManualTask()"]');
@@ -45781,6 +45914,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const userEmail = (currentUser.email || '').toLowerCase().trim();
                 const isMurugesh = userEmail === 'murugeshvilpower@gmail.com' || userEmail === 'murugesh@vilpower.com' || userEmail.includes('murugesh');
                 const isAjith = userEmail === 'ajithvilpower@gmail.com' || userEmail === 'ajith@vilpower.com' || userEmail.includes('ajith');
+                const isAlex = ALEX_EMAILS.includes(userEmail) || userEmail.includes('alex');
 
                 if (isAdmin() || isMurugesh) {
                     // Admins and Murugesh load all manual tasks from all users
@@ -45829,6 +45963,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const allAjithTasks = Object.values(ajithTasksByOwner).flat();
                             tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAjithTasks]);
                             try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAjithTasks)); } catch (e) {}
+                            populateAssigneeFilter();
+                            populateClientFilter();
+                            populateInternalAssigneeFilter();
+                            populateInternalClientFilter();
+                            PerfOptimizer.invalidateCache('filterTasks');
+                            PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                            PerfOptimizer.queueRender(() => updateStats(), 'normal');
+                            if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
+                            if (activeView === 'shoots') renderShootCalendar();
+                            if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
+                            if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
+                            if (activeView === 'plan-tracking') renderPlanTrackingView();
+                        });
+                    });
+                } else if (isAlex) {
+                    // Alex loads from both alexvilpower_gmail_com and alex_vilpower_com
+                    const alexKeys = ['alexvilpower_gmail_com', 'alex_vilpower_com'];
+                    const alexTasksByOwner = {};
+                    alexKeys.forEach(userKey => {
+                        onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
+                            if (!currentUser || !currentUser.email) return;
+                            alexTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const allAlexTasks = Object.values(alexTasksByOwner).flat();
+                            tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAlexTasks]);
+                            try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAlexTasks)); } catch (e) {}
                             populateAssigneeFilter();
                             populateClientFilter();
                             populateInternalAssigneeFilter();
@@ -46729,44 +46888,61 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 <option value="me">Assigned to me (${currentUser?.name || 'me'})</option>
             `;
 
-                const uniqueIdentities = new Map(); // Key: email or name:norm, Value: { email, name }
+                const uniqueList = getUniqueAssigneeUsers().map(u => ({ ...u }));
 
-                // 1. System Users (Config + Live)
-                Array.from(allUsersMap.values()).forEach(u => { // Use allUsersMap directly
-                    if (!u.email || u.email === '123') return;
-                    const emailKey = u.email.toLowerCase();
-                    if (!uniqueIdentities.has(emailKey)) {
-                        uniqueIdentities.set(emailKey, { email: u.email, name: u.name });
-                    }
-                });
+                const isAlreadyPresent = (email, name) => {
+                    const normEmail = (email || '').toLowerCase();
+                    const cleanName = (name || '').replace(/^name:/, '').trim();
+                    const normName = normalizeAssigneeValue(cleanName || normEmail.replace(/^name:/, ''));
 
-                // 2. Names from synced tasks (Deduplicated against system users)
+                    return uniqueList.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exCleanName = (existing.name || '').replace(/^name:/, '').trim();
+                        const exNormName = normalizeAssigneeValue(exCleanName || exEmail.replace(/^name:/, ''));
+
+                        if (normEmail && exEmail && normEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(normEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(normEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(normEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (normName && exNormName && normName === exNormName) return true;
+                        if (normName && exNormName && (normName.startsWith('alex') || normEmail.includes('alex')) && (exNormName.startsWith('alex') || exEmail.includes('alex'))) return true;
+                        if (normName && exNormName && !GENERIC_NAME_TOKENS.has(normName) && !GENERIC_NAME_TOKENS.has(exNormName)) {
+                            if (normName.length >= 4 && exNormName.length >= 4 && (normName.includes(exNormName) || exNormName.includes(normName))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                // Add synced Jira task assignees
                 tasks.filter(t => !isInternalTask(t)).forEach(t => {
-                    const name = t.assignee || assigneeName(t);
+                    const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
 
                     if (!name || name === 'Unassigned') return;
-
-                    // If we have an email and it's already in our map, skip
-                    if (email && uniqueIdentities.has(email)) return;
+                    if (isAlreadyPresent(email, name)) return;
 
                     const normName = normalizeAssigneeValue(name);
-
-                    // Check if this normalized name matches any existing user's name
-                    const isKnown = [...uniqueIdentities.values()].some(u => {
-                        const uNorm = normalizeAssigneeValue(u.name);
-                        return uNorm.includes(normName) || normName.includes(uNorm);
-                    });
-
-                    if (!isKnown && !uniqueIdentities.has('name:' + normName)) {
-                        uniqueIdentities.set('name:' + normName, { email: 'name:' + normName, name: name });
-                    }
+                    const optEmail = email || ('name:' + normName);
+                    uniqueList.push({ email: optEmail, name });
                 });
 
-                // 3. Render sorted options
-                [...uniqueIdentities.values()]
-                    .filter(u => u.email.toLowerCase() !== currentUser?.email.toLowerCase())
-                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                // Filter out current user and aliases
+                const currentEmail = (currentUser?.email || '').toLowerCase();
+                const currentNormName = normalizeAssigneeValue(currentUser?.name || currentEmail);
+
+                uniqueList
+                    .filter(u => {
+                        if (!currentUser) return true;
+                        const uEmail = (u.email || '').toLowerCase();
+                        if (uEmail && currentEmail && uEmail === currentEmail) return false;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(currentEmail)) return false;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(currentEmail)) return false;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(currentEmail)) return false;
+                        const uNormName = normalizeAssigneeValue(u.name || uEmail.replace(/^name:/, ''));
+                        if (uNormName && currentNormName && uNormName === currentNormName && !GENERIC_NAME_TOKENS.has(uNormName)) return false;
+                        return true;
+                    })
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                     .forEach(u => {
                         const opt = document.createElement('option');
                         opt.value = u.email;
@@ -46774,7 +46950,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         sel.appendChild(opt);
                     });
 
-                sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
+                if ([...sel.options].some(o => o.value === existingValue)) {
+                    sel.value = existingValue;
+                } else if (ALEX_EMAILS.includes(existingValue) && [...sel.options].some(o => ALEX_EMAILS.includes(o.value))) {
+                    sel.value = [...sel.options].find(o => ALEX_EMAILS.includes(o.value)).value;
+                } else {
+                    sel.value = 'all';
+                }
                 currentAssigneeFilter = sel.value;
             }
 
@@ -46788,22 +46970,60 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 <option value="me">Assigned to me (${currentUser?.name || 'me'})</option>
             `;
 
-                const uniqueIdentities = new Map();
-                Array.from(allUsersMap.values()).forEach(u => {
-                    if (!u.email || u.email === '123') return;
-                    uniqueIdentities.set(u.email.toLowerCase(), { email: u.email, name: u.name });
-                });
+                const uniqueList = getUniqueAssigneeUsers().map(u => ({ ...u }));
+
+                const isAlreadyPresent = (email, name) => {
+                    const normEmail = (email || '').toLowerCase();
+                    const cleanName = (name || '').replace(/^name:/, '').trim();
+                    const normName = normalizeAssigneeValue(cleanName || normEmail.replace(/^name:/, ''));
+
+                    return uniqueList.some(existing => {
+                        const exEmail = (existing.email || '').toLowerCase();
+                        const exCleanName = (existing.name || '').replace(/^name:/, '').trim();
+                        const exNormName = normalizeAssigneeValue(exCleanName || exEmail.replace(/^name:/, ''));
+
+                        if (normEmail && exEmail && normEmail === exEmail) return true;
+                        if (ALEX_EMAILS.includes(normEmail) && ALEX_EMAILS.includes(exEmail)) return true;
+                        if (MURUGESH_EMAILS.includes(normEmail) && MURUGESH_EMAILS.includes(exEmail)) return true;
+                        if (AJITH_EMAILS.includes(normEmail) && AJITH_EMAILS.includes(exEmail)) return true;
+                        if (normName && exNormName && normName === exNormName) return true;
+                        if (normName && exNormName && (normName.startsWith('alex') || normEmail.includes('alex')) && (exNormName.startsWith('alex') || exEmail.includes('alex'))) return true;
+                        if (normName && exNormName && !GENERIC_NAME_TOKENS.has(normName) && !GENERIC_NAME_TOKENS.has(exNormName)) {
+                            if (normName.length >= 4 && exNormName.length >= 4 && (normName.includes(exNormName) || exNormName.includes(normName))) return true;
+                        }
+                        return false;
+                    });
+                };
+
+                // Add any names from internal tasks that aren't in system users
                 tasks.filter(isInternalTask).forEach(t => {
-                    const name = t.assignee || assigneeName(t);
+                    const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
+
                     if (!name || name === 'Unassigned') return;
-                    if (email && uniqueIdentities.has(email)) return;
+                    if (isAlreadyPresent(email, name)) return;
+
                     const normName = normalizeAssigneeValue(name);
-                    if (!uniqueIdentities.has('name:' + normName)) uniqueIdentities.set('name:' + normName, { email: 'name:' + normName, name });
+                    const optEmail = email || ('name:' + normName);
+                    uniqueList.push({ email: optEmail, name });
                 });
 
-                [...uniqueIdentities.values()]
-                    .filter(u => u.email.toLowerCase() !== currentUser?.email?.toLowerCase())
+                // Filter out current user and their aliases
+                const currentEmail = (currentUser?.email || '').toLowerCase();
+                const currentNormName = normalizeAssigneeValue(currentUser?.name || currentEmail);
+
+                uniqueList
+                    .filter(u => {
+                        if (!currentUser) return true;
+                        const uEmail = (u.email || '').toLowerCase();
+                        if (uEmail && currentEmail && uEmail === currentEmail) return false;
+                        if (ALEX_EMAILS.includes(uEmail) && ALEX_EMAILS.includes(currentEmail)) return false;
+                        if (MURUGESH_EMAILS.includes(uEmail) && MURUGESH_EMAILS.includes(currentEmail)) return false;
+                        if (AJITH_EMAILS.includes(uEmail) && AJITH_EMAILS.includes(currentEmail)) return false;
+                        const uNormName = normalizeAssigneeValue(u.name || uEmail.replace(/^name:/, ''));
+                        if (uNormName && currentNormName && uNormName === currentNormName && !GENERIC_NAME_TOKENS.has(uNormName)) return false;
+                        return true;
+                    })
                     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                     .forEach(u => {
                         const opt = document.createElement('option');
@@ -46812,7 +47032,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         sel.appendChild(opt);
                     });
 
-                sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
+                if ([...sel.options].some(o => o.value === existingValue)) {
+                    sel.value = existingValue;
+                } else if (ALEX_EMAILS.includes(existingValue) && [...sel.options].some(o => ALEX_EMAILS.includes(o.value))) {
+                    sel.value = [...sel.options].find(o => ALEX_EMAILS.includes(o.value)).value;
+                } else {
+                    sel.value = 'all';
+                }
                 currentInternalAssigneeFilter = sel.value;
             }
 
@@ -47168,7 +47394,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 Array.from(allUsersMap.values()).forEach(u => {
                     if (u.email && u.email !== '123') merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
                 });
-                const usersList = [...merged.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                const seenDp = new Set();
+                const usersList = [];
+                [...merged.values()].forEach(u => {
+                    const normEmail = (u.email || '').toLowerCase();
+                    const canonicalEmail = ALEX_EMAILS.includes(normEmail) ? 'alexvilpower@gmail.com' :
+                        (MURUGESH_EMAILS.includes(normEmail) ? 'murugeshvilpower@gmail.com' :
+                        (AJITH_EMAILS.includes(normEmail) ? 'ajithvilpower@gmail.com' : u.email));
+                    const key = canonicalEmail.toLowerCase();
+                    if (!seenDp.has(key)) {
+                        seenDp.add(key);
+                        usersList.push({ ...u, email: canonicalEmail, name: u.name || canonicalEmail });
+                    }
+                });
+                usersList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
                 if (hasExisting && existingInputs.length === usersList.length) {
                     return; // Already populated, avoid expensive DOM reflow
@@ -49536,9 +49775,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const missedEmails = [];
 
                 employees.forEach(u => {
-                    const taskId = morningLearningTaskId(u.email);
-                    const task = tasks.find(t => t.id === taskId);
-                    if (!task || (task.lastCompletedDate !== today && !isInternalDone(task.status))) {
+                    const aliases = (typeof getUserAliases === 'function') ? getUserAliases(u.email) : [u.email.toLowerCase()];
+                    const task = tasks.find(t => isMorningLearningTask(t) && (aliases.includes((t.assigneeEmail || t.userId || '').toLowerCase()) || (typeof assigneeMatches === 'function' && assigneeMatches(t, u.email))));
+                    const isCompleted = task && (task.lastCompletedDate === today || isInternalDone(task.status)) && task.status !== 'Missed';
+                    if (!task || !isCompleted) {
                         missedEmails.push(u.email.toLowerCase());
                     }
                 });
@@ -49584,10 +49824,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const todayStr = new Date().toISOString().slice(0, 10);
 
-                // Get all users who have morning learning tasks (non-excluded)
-                const learningUsers = Array.from(allUsersMap.values())
-                    .filter(u => u.email && u.email !== '123' && !MORNING_LEARNING_EXCLUDED_EMAILS.some(e => e.toLowerCase() === u.email.toLowerCase()))
-                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                // Get all users who have morning learning tasks (non-excluded, deduplicated)
+                const learningUsers = getLearningEmployees();
+                const getUserAliases = (email) => {
+                    const e = (email || '').toLowerCase();
+                    if (ALEX_EMAILS.includes(e)) return ALEX_EMAILS;
+                    if (MURUGESH_EMAILS.includes(e)) return MURUGESH_EMAILS;
+                    if (AJITH_EMAILS.includes(e)) return AJITH_EMAILS;
+                    return [e];
+                };
 
                 // Build attendance map: { 'YYYY-MM-DD': { attended: Set<email>, reasoned: Set<email>, autoMissed: Set<email> } }
                 const attendanceByDate = {};
@@ -49633,7 +49878,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // --- Summary bar ---
                 html += `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">`;
                 learningUsers.forEach(u => {
-                    const attended = pastWeekdays.filter(d => (attendanceByDate[d]?.attended || new Set()).has(u.email.toLowerCase())).length;
+                    const aliases = getUserAliases(u.email);
+                    const attended = pastWeekdays.filter(d => {
+                        const dayAttended = attendanceByDate[d]?.attended || new Set();
+                        return aliases.some(a => dayAttended.has(a));
+                    }).length;
                     const missed = pastWeekdays.length - attended;
                     const rate = pastWeekdays.length > 0 ? Math.round((attended / pastWeekdays.length) * 100) : 0;
                     const avatar = u.profilePicture || getUserAvatarSrc(u);
@@ -49698,10 +49947,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             title = 'Upcoming';
                         } else {
                             const dayData = attendanceByDate[dateStr] || { attended: new Set(), reasoned: new Set() };
-                            if (dayData.attended.has(u.email.toLowerCase())) {
+                            const aliases = getUserAliases(u.email);
+                            const hasAttended = aliases.some(a => dayData.attended.has(a));
+                            const hasReasoned = aliases.some(a => dayData.reasoned.has(a));
+                            if (hasAttended) {
                                 dot = `<span class="w-5 h-5 rounded-full bg-emerald-500 inline-flex items-center justify-center shadow-sm" title="Learned"><iconify-icon icon="solar:check-circle-bold" class="text-white" width="12"></iconify-icon></span>`;
                                 title = 'Learned';
-                            } else if (dayData.reasoned.has(u.email.toLowerCase())) {
+                            } else if (hasReasoned) {
                                 dot = `<span class="w-5 h-5 rounded-full bg-amber-500 inline-flex items-center justify-center shadow-sm" title="Missed (Reason Submitted)"><iconify-icon icon="solar:info-circle-bold" class="text-white" width="12"></iconify-icon></span>`;
                                 title = 'Missed (Reason Submitted)';
                             } else {

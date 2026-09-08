@@ -21,6 +21,7 @@ export const USERS = [
     { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
     { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
     { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
+    { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
     { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
 ];
 
