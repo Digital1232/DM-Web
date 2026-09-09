@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.19">
+    <meta name="app-version" content="1.0.22">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -7408,11 +7408,18 @@
                         <!-- Chats Header -->
                         <div class="p-5 pb-3 flex items-center justify-between">
                             <h2 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">Chats</h2>
-                            <button id="group-create-btn" onclick="openNewGroupModal()"
-                                class="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors"
-                                title="New Group / Chat">
-                                <iconify-icon icon="solar:pen-new-square-bold" width="18"></iconify-icon>
-                            </button>
+                            <div class="flex items-center gap-1">
+                                <button type="button" onclick="markAllChatsAsRead()"
+                                    class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                                    title="Mark all chats as read">
+                                    <iconify-icon icon="solar:check-read-linear" width="18"></iconify-icon>
+                                </button>
+                                <button id="group-create-btn" onclick="openNewGroupModal()"
+                                    class="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors"
+                                    title="New Group / Chat">
+                                    <iconify-icon icon="solar:pen-new-square-bold" width="18"></iconify-icon>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Filter Tabs (All / Personal / Groups) -->
@@ -15019,6 +15026,7 @@
             let timerRef = null;
             let seconds = 0;
             let unreadCounts = {};
+            window.unreadCounts = unreadCounts;
             let convListeners = {};
             let msgListener = null;
             let altMsgListener = null;
@@ -26468,18 +26476,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </tr>`;
                     }).join('');
                 }
-                Object.entries(unreadCounts).forEach(([id, count]) => {
-                    const badgeEl = document.getElementById(`unread-badge-${id}`);
-                    const btnEl = document.getElementById(`dm-btn-${id}`);
-                    if (badgeEl) {
-                        badgeEl.textContent = count;
-                        badgeEl.classList.toggle('hidden', count === 0);
-                    }
-                    if (btnEl) {
-                        if (count > 0) btnEl.classList.add('bg-indigo-50/50', 'border-l-2', 'border-indigo-600');
-                        else btnEl.classList.remove('bg-indigo-50/50', 'border-l-2', 'border-indigo-600');
-                    }
-                });
             }
 
             function renderInternalTasks() {
@@ -31134,6 +31130,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (id.includes('_') && !id.startsWith('group_')) return 'dm_' + id;
                 return null;
             }
+            window.getAltDmId = getAltDmId;
 
             function registerOnline() {
                 if (!db || !currentUser) return;
@@ -31294,6 +31291,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     let storedLastSeen = {};
                     try { storedLastSeen = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}'); } catch (e) { }
 
+                    // Always reset unreadCounts before recalculation to eliminate phantom/stale counts
+                    unreadCounts = {};
+
                     Object.entries(chatConversations).forEach(([id, c]) => {
                         if (!c) return;
                         const isMember = (c.members && c.members[myKey]) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
@@ -31301,9 +31301,81 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const lastTs = c.lastTimestamp || 0;
                         const lastSender = (c.lastSenderEmail || '').toLowerCase();
                         const isMe = lastSender && currentUser.email && lastSender === currentUser.email.toLowerCase();
-                        const seenAt = storedLastSeen[id] || 0;
-                        if (lastTs > seenAt && !isMe && lastTs > 0 && id !== activeConvId) {
-                            unreadCounts[id] = Math.max(unreadCounts[id] || 0, 1);
+
+                        const altId = getAltDmId(id);
+                        const seenAtA = storedLastSeen[id] || 0;
+                        const seenAtB = altId ? (storedLastSeen[altId] || 0) : 0;
+                        const seenAt = Math.max(seenAtA, seenAtB);
+
+                        const isCurrentlyActive = (id === activeConvId) || (altId && altId === activeConvId);
+                        const hasMessage = !!(c.lastMessage && String(c.lastMessage).trim());
+
+                        if (hasMessage && lastTs > seenAt && !isMe && lastTs > 0 && !isCurrentlyActive) {
+                            unreadCounts[id] = 1;
+                            if (altId) unreadCounts[altId] = 1;
+
+                            // If lastSenderEmail is missing on this conversation node, resolve from messages
+                            if (!c.lastSenderEmail) {
+                                get(query(ref(db, `worksync/messages/${id}`), limitToLast(1))).then(mSnap => {
+                                    if (mSnap.exists()) {
+                                        mSnap.forEach(ch => {
+                                            const m = ch.val();
+                                            if (m && m.senderEmail) {
+                                                c.lastSenderEmail = m.senderEmail;
+                                                c.lastSenderName = m.senderName || m.senderEmail;
+                                                if (m.senderEmail.toLowerCase() === currentUser.email.toLowerCase()) {
+                                                    unreadCounts[id] = 0;
+                                                    if (altId) unreadCounts[altId] = 0;
+                                                    renderChatBadge();
+                                                    renderChatSidebar();
+                                                }
+                                            }
+                                        });
+                                    }
+                                }).catch(() => { });
+                            }
+                        } else {
+                            unreadCounts[id] = 0;
+                            if (altId) unreadCounts[altId] = 0;
+                        }
+                    });
+
+                    // Synchronize read receipts from Firebase so cross-device/clean-session read states are respected
+                    get(ref(db, 'worksync/read_receipts')).then(rrSnap => {
+                        if (!rrSnap.exists()) return;
+                        const rrData = rrSnap.val() || {};
+                        let anyNewSeen = false;
+                        Object.entries(rrData).forEach(([cid, uMap]) => {
+                            if (uMap && uMap[myKey] && uMap[myKey].seenAt) {
+                                const fbSeen = uMap[myKey].seenAt;
+                                const altCid = getAltDmId(cid);
+                                if (fbSeen > (storedLastSeen[cid] || 0)) {
+                                    storedLastSeen[cid] = fbSeen;
+                                    if (altCid) storedLastSeen[altCid] = fbSeen;
+                                    anyNewSeen = true;
+                                    if (unreadCounts[cid] && (!chatConversations[cid] || (chatConversations[cid].lastTimestamp || 0) <= fbSeen)) {
+                                        unreadCounts[cid] = 0;
+                                        if (altCid) unreadCounts[altCid] = 0;
+                                    }
+                                }
+                            }
+                        });
+                        if (anyNewSeen) {
+                            try { localStorage.setItem(storedLastSeenKey, JSON.stringify(storedLastSeen)); } catch (e) { }
+                            renderChatBadge();
+                            renderChatSidebar();
+                        }
+                    }).catch(() => { });
+
+                    // Factor in manually flagged unread conversations
+                    const manualUnreadKey = 'worksync_manual_unread_' + myKey;
+                    let manualUnreadList = [];
+                    try { manualUnreadList = JSON.parse(localStorage.getItem(manualUnreadKey) || '[]'); } catch (e) { }
+                    manualUnreadList.forEach(mid => {
+                        if (mid && mid !== activeConvId) {
+                            unreadCounts[mid] = 1;
+                            const altMid = getAltDmId(mid);
+                            if (altMid) unreadCounts[altMid] = 1;
                         }
                     });
 
@@ -31357,14 +31429,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const msg = snap.val();
                         if (!msg || !currentUser || !currentUser.email) return;
 
-                        // Distinguish historical messages from real-time incoming messages
-                        if (!initialSnapshotDone) {
-                            if ((msg.timestamp || 0) >= listenerMountedAt - 5000) {
-                                // Fresh message sent right as listener was mounting
-                            } else {
-                                knownMsgKeys.add(msgKey);
-                                return;
-                            }
+                        // Strictly ignore messages sent before or at listener mount time (historical messages)
+                        if ((msg.timestamp || 0) <= listenerMountedAt) {
+                            knownMsgKeys.add(msgKey);
+                            return;
                         }
 
                         if (knownMsgKeys.has(msgKey)) return;
@@ -31378,12 +31446,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         if (!isCurrentActive || isAppHidden) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
+                            const altId = getAltDmId(id);
+                            if (altId) unreadCounts[altId] = unreadCounts[id];
                             renderChatBadge();
-                            const unreadBadge = document.getElementById(`unread-badge-${id}`) || (getAltDmId(id) ? document.getElementById(`unread-badge-${getAltDmId(id)}`) : null);
+                            const unreadBadge = document.getElementById(`unread-badge-${id}`) || (altId ? document.getElementById(`unread-badge-${altId}`) : null);
                             if (unreadBadge) {
-                                const altId = getAltDmId(id);
-                                const totalUnread = (unreadCounts[id] || 0) + (altId ? (unreadCounts[altId] || 0) : 0);
-                                unreadBadge.textContent = totalUnread;
+                                unreadBadge.textContent = unreadCounts[id] || 1;
                                 unreadBadge.classList.remove('hidden');
                             }
                             renderChatSidebar();
@@ -31411,8 +31479,66 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.watchConversationNotifications = watchConversationNotifications;
 
+            function getChatUnreadTotal() {
+                if (!currentUser || !currentUser.email) return 0;
+                const myKey = eKey(currentUser.email);
+                let total = 0;
+                const countedConvs = new Set();
+
+                // 1. Gather all unique team member DMs
+                let usersList = [];
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap instanceof Map && allUsersMap.size > 0) {
+                        usersList = Array.from(allUsersMap.values());
+                    } else if (Array.isArray(allUsersMap) && allUsersMap.length > 0) {
+                        usersList = allUsersMap;
+                    } else if (typeof allUsersMap === 'object' && Object.keys(allUsersMap).length > 0) {
+                        usersList = Object.values(allUsersMap);
+                    }
+                }
+                if (!usersList.length && typeof users !== 'undefined' && Array.isArray(users)) usersList = users;
+                if (!usersList.length && typeof USERS !== 'undefined' && Array.isArray(USERS)) usersList = USERS;
+
+                const seenEmails = new Set();
+                usersList.forEach(u => {
+                    if (!u || !u.email) return;
+                    const em = u.email.toLowerCase();
+                    if (em === currentUser.email.toLowerCase() || seenEmails.has(em)) return;
+                    seenEmails.add(em);
+
+                    const convId = dmId(currentUser.email, em);
+                    const altConvId = getAltDmId(convId);
+                    if (countedConvs.has(convId) || (altConvId && countedConvs.has(altConvId))) return;
+                    countedConvs.add(convId);
+                    if (altConvId) countedConvs.add(altConvId);
+
+                    const unread = Math.max(unreadCounts[convId] || 0, altConvId ? (unreadCounts[altConvId] || 0) : 0);
+                    total += unread;
+                });
+
+                // 2. Gather all groups and unique conversations the current user belongs to
+                if (typeof chatConversations !== 'undefined' && chatConversations) {
+                    Object.entries(chatConversations).forEach(([id, c]) => {
+                        if (!c) return;
+                        const altId = getAltDmId(id);
+                        if (countedConvs.has(id) || (altId && countedConvs.has(altId))) return;
+                        countedConvs.add(id);
+                        if (altId) countedConvs.add(altId);
+
+                        const isMember = (c.members && c.members[myKey]) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
+                        if (isMember) {
+                            const unread = Math.max(unreadCounts[id] || 0, altId ? (unreadCounts[altId] || 0) : 0);
+                            total += unread;
+                        }
+                    });
+                }
+
+                return total;
+            }
+            window.getChatUnreadTotal = getChatUnreadTotal;
+
             function renderChatBadge() {
-                const total = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+                const total = getChatUnreadTotal();
                 const badge = document.getElementById('chat-badge');
                 if (badge) {
                     badge.textContent = total;
@@ -31432,6 +31558,66 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
             window.renderChatBadge = renderChatBadge;
+
+            function markAllChatsAsRead() {
+                if (!currentUser || !currentUser.email) return;
+                const myKey = eKey(currentUser.email);
+                const storedLastSeenKey = 'worksync_last_read_' + myKey;
+                let storedLastSeen = {};
+                try { storedLastSeen = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}'); } catch (e) { }
+
+                const now = Date.now();
+                unreadCounts = {};
+
+                if (typeof chatConversations !== 'undefined' && chatConversations) {
+                    Object.keys(chatConversations).forEach(id => {
+                        storedLastSeen[id] = now;
+                        const altId = getAltDmId(id);
+                        if (altId) storedLastSeen[altId] = now;
+                        try {
+                            set(ref(db, `worksync/read_receipts/${id}/${myKey}`), {
+                                email: currentUser.email,
+                                name: currentUser.name || currentUser.email,
+                                seenAt: now
+                            }).catch(() => { });
+                        } catch (e) { }
+                    });
+                }
+
+                let allUsers = [];
+                if (typeof allUsersMap !== 'undefined' && allUsersMap instanceof Map) allUsers = Array.from(allUsersMap.values());
+                else if (typeof USERS !== 'undefined' && Array.isArray(USERS)) allUsers = USERS;
+
+                allUsers.forEach(u => {
+                    if (u && u.email && u.email.toLowerCase() !== currentUser.email.toLowerCase()) {
+                        const did = dmId(currentUser.email, u.email);
+                        const altDid = getAltDmId(did);
+                        storedLastSeen[did] = now;
+                        if (altDid) storedLastSeen[altDid] = now;
+                        try {
+                            set(ref(db, `worksync/read_receipts/${did}/${myKey}`), {
+                                email: currentUser.email,
+                                name: currentUser.name || currentUser.email,
+                                seenAt: now
+                            }).catch(() => { });
+                        } catch (e) { }
+                    }
+                });
+
+                try { localStorage.setItem(storedLastSeenKey, JSON.stringify(storedLastSeen)); } catch (e) { }
+
+                const manualUnreadKey = 'worksync_manual_unread_' + myKey;
+                try { localStorage.setItem(manualUnreadKey, '[]'); } catch (e) { }
+
+                renderChatBadge();
+                renderChatSidebar();
+                if (typeof fcpUpdateFloatBadge === 'function') fcpUpdateFloatBadge();
+                if (typeof fcpRenderDmList === 'function') fcpRenderDmList();
+                if (typeof fcpRenderGroupList === 'function') fcpRenderGroupList();
+
+                toast('All chats marked as read', 'success');
+            }
+            window.markAllChatsAsRead = markAllChatsAsRead;
 
             async function showBrowserNotification(title, options = {}, onClickCallback = null) {
                 if (!('Notification' in window)) return;
@@ -31823,7 +32009,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const isMuted = mutedList.includes(convId) || mutedList.includes(altConvId);
                     const lastTimestamp = (conv && conv.lastTimestamp) || 0;
                     const lastMessage = (conv && conv.lastMessage) || '';
-                    const unread = (unreadCounts[convId] || 0) + (unreadCounts[altConvId] || 0);
+                    const unread = Math.max(unreadCounts[convId] || 0, altConvId ? (unreadCounts[altConvId] || 0) : 0);
                     const name = u.name || u.email.split('@')[0];
                     const key = otherKey;
                     const avatarSrc = u.profilePicture || getUserAvatarSrc(u);
@@ -32022,7 +32208,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 set(ref(db, 'worksync/conversations/' + id), {
                                     type: 'dm',
                                     members: { [myKey]: true, [otherKey]: true },
-                                    lastTimestamp: Date.now()
+                                    lastTimestamp: 0
                                 }).catch(e => console.warn('Failed to initialize DM:', e));
                             }
                         }).catch(e => console.warn('DM check failed:', e));
@@ -32274,6 +32460,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 }
                 renderChatBadge();
+                if (typeof renderChatSidebar === 'function') renderChatSidebar();
+                if (typeof fcpUpdateFloatBadge === 'function') fcpUpdateFloatBadge();
+                if (typeof fcpRenderDmList === 'function') fcpRenderDmList();
+                if (typeof fcpRenderGroupList === 'function') fcpRenderGroupList();
 
                 const welcomeEl = document.getElementById('chat-welcome');
                 const headerEl = document.getElementById('chat-active-header');
@@ -34338,7 +34528,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Parallel Firebase push & conversation update
                     const convUpdateData = {
                         lastMessage: lastMsg,
-                        lastTimestamp: Date.now()
+                        lastTimestamp: Date.now(),
+                        lastSenderEmail: currentUser.email,
+                        lastSenderName: currentUser.name || currentUser.email
                     };
                     if (targetConvId.startsWith('dm_')) {
                         convUpdateData.type = 'dm';
@@ -34361,6 +34553,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         );
                     }
                     await Promise.all(updates);
+
+                    // Mark conversation as read for sender
+                    const senderKey = eKey(currentUser.email);
+                    const storedLastSeenKey = 'worksync_last_read_' + senderKey;
+                    try {
+                        const stored = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}');
+                        stored[targetConvId] = convUpdateData.lastTimestamp;
+                        if (altTargetConvId) stored[altTargetConvId] = convUpdateData.lastTimestamp;
+                        localStorage.setItem(storedLastSeenKey, JSON.stringify(stored));
+                    } catch (e) { }
+                    unreadCounts[targetConvId] = 0;
+                    if (altTargetConvId) unreadCounts[altTargetConvId] = 0;
+                    renderChatBadge();
                 } catch (err) {
                     console.error('Failed to send message:', err);
                     toast('Failed to send message: ' + err.message, 'error');
@@ -57730,9 +57935,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     <iconify-icon icon="solar:chat-round-dots-bold" style="color:white;" width="18"></iconify-icon>
                     <span style="color:white;font-size:13px;font-weight:900;">Team Chat</span>
                 </div>
-                <button onclick="toggleFloatChat()"
-                    style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;"
-                    title="Minimise">−</button>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button type="button" onclick="if (typeof markAllChatsAsRead === 'function') markAllChatsAsRead();"
+                        style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;"
+                        title="Mark all as read">
+                        <iconify-icon icon="solar:check-read-linear" width="14"></iconify-icon>
+                    </button>
+                    <button onclick="toggleFloatChat()"
+                        style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;"
+                        title="Minimise">−</button>
+                </div>
             </div>
             <!-- Tabs -->
             <div style="display:flex;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
@@ -58099,7 +58311,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             fcpConvId = convId;
             fcpConvName = name;
             fcpConvType = type;
-            _fcpUC()[convId] = 0;
+            if (_fcpUC()) {
+                _fcpUC()[convId] = 0;
+                var altId = typeof getAltDmId === 'function' ? getAltDmId(convId) : null;
+                if (altId) _fcpUC()[altId] = 0;
+            }
+            var u = _fcpCU();
+            if (u && u.email) {
+                var storedLastSeenKey = 'worksync_last_read_' + _fcpEK(u.email);
+                try {
+                    var stored = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}');
+                    var now = Date.now();
+                    stored[convId] = now;
+                    var altId2 = typeof getAltDmId === 'function' ? getAltDmId(convId) : null;
+                    if (altId2) stored[altId2] = now;
+                    localStorage.setItem(storedLastSeenKey, JSON.stringify(stored));
+                } catch (e) { }
+            }
             if (typeof renderChatBadge === 'function') renderChatBadge();
             fcpUpdateFloatBadge();
 
@@ -58121,7 +58349,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         var members2 = {};
                         members2[myKey2] = true;
                         parts.forEach(function (p) { members2[p] = true; });
-                        _set(_ref('worksync/conversations/' + convId), { type: 'dm', members: members2, lastTimestamp: Date.now() });
+                        _set(_ref('worksync/conversations/' + convId), { type: 'dm', members: members2, lastTimestamp: 0 });
                     }
                 }).catch(function (err) {
                     console.error("FCP DM init error:", err);
@@ -58281,7 +58509,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     lastMsg = savedText || (attachments.length > 1 ? '📎 ' + attachments.length + ' attachments' : '📎 ' + attachments[0].name);
                 }
 
-                var fcpConvData = { lastMessage: lastMsg, lastTimestamp: Date.now() };
+                var fcpSender = _fcpCU();
+                var fcpConvData = {
+                    lastMessage: lastMsg,
+                    lastTimestamp: Date.now(),
+                    lastSenderEmail: fcpSender?.email || '',
+                    lastSenderName: fcpSender?.name || fcpSender?.email || ''
+                };
                 if (targetId.startsWith('dm_')) {
                     fcpConvData.type = 'dm';
                     var parts = targetId.replace('dm_', '').split('_');
@@ -58361,7 +58595,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
         }
 
         function fcpUpdateFloatBadge() {
-            var total = _fcpUC() ? Object.values(_fcpUC()).reduce(function (s, c) { return s + (c || 0); }, 0) : 0;
+            var total = typeof getChatUnreadTotal === 'function' ? getChatUnreadTotal() : (_fcpUC() ? Object.values(_fcpUC()).reduce(function (s, c) { return s + (c || 0); }, 0) : 0);
             var badge = document.getElementById('float-chat-badge');
             if (!badge) return;
             badge.textContent = total;
