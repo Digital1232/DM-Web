@@ -41924,10 +41924,12 @@ function isStrategyTask(t) {
 
             // MANUAL TASKS
             function openAddTaskModal(taskType = 'manual') {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                 document.getElementById('mt-title').value = '';
                 document.getElementById('mt-client').value = '';
                 const internalDueEl = document.getElementById('mt-internal-duedate');
-                if (internalDueEl) internalDueEl.value = '';
+                if (internalDueEl) internalDueEl.value = todayStr;
                 const internalDescEl = document.getElementById('mt-internal-description');
                 if (internalDescEl) internalDescEl.value = '';
                 document.getElementById('mt-platform').value = 'internal';
@@ -41955,6 +41957,13 @@ function isStrategyTask(t) {
                 const internalFields = document.getElementById('mt-internal-fields');
                 manualFields.classList.toggle('hidden', taskType === 'internal');
                 internalFields.classList.toggle('hidden', taskType !== 'internal');
+                if (taskType === 'internal') {
+                    const internalDueEl = document.getElementById('mt-internal-duedate');
+                    if (internalDueEl && !internalDueEl.value) {
+                        const now = new Date();
+                        internalDueEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    }
+                }
             }
 
             async function submitManualTask(startNow = false) {
@@ -50617,6 +50626,15 @@ function isStrategyTask(t) {
                     // Show 1 decimal only if needed (e.g. 1.5 TB, not 2.0 TB)
                     return (tb % 1 === 0 ? tb.toFixed(0) : tb.toFixed(1)) + ' TB';
                 }
+                if (n < 1) {
+                    const mb = n * 1024;
+                    if (mb >= 1) {
+                        const roundedMb = Math.round(mb * 10) / 10;
+                        return (roundedMb % 1 === 0 ? roundedMb.toFixed(0) : roundedMb.toFixed(1)) + ' MB';
+                    }
+                    const kb = mb * 1024;
+                    return Math.round(kb) + ' KB';
+                }
                 // GB — show up to 1 decimal, strip trailing .0
                 const rounded = Math.round(n * 10) / 10;
                 return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + ' GB';
@@ -53009,6 +53027,23 @@ function isStrategyTask(t) {
                 const actionLabel = existing ? 'Save Folder' : 'Add Folder';
                 const actionIcon = existing ? 'solar:diskette-bold' : 'solar:folder-add-bold';
 
+                // Determine size and unit for display
+                const sizeUnit = existing?.sizeUnit || (existing?.size !== undefined && Number(existing?.size) > 0 && Number(existing?.size) < 1 ? 'MB' : 'GB');
+                let displaySize = '';
+                if (existing && existing.size !== undefined && existing.size !== null && existing.size !== '') {
+                    if (existing.sizeUnit === 'MB') {
+                        displaySize = existing.rawSize !== undefined ? existing.rawSize : Math.round(Number(existing.size) * 1024 * 100) / 100;
+                    } else if (existing.sizeUnit === 'GB') {
+                        displaySize = existing.rawSize !== undefined ? existing.rawSize : existing.size;
+                    } else {
+                        if (Number(existing.size) > 0 && Number(existing.size) < 1) {
+                            displaySize = Math.round(Number(existing.size) * 1024 * 100) / 100;
+                        } else {
+                            displaySize = existing.size;
+                        }
+                    }
+                }
+
                 // Build client dropdown from customClients / CLIENTS
                 const clientList = (typeof customClients !== 'undefined' && customClients.length)
                     ? customClients
@@ -53045,9 +53080,15 @@ function isStrategyTask(t) {
                         <!-- Folder details -->
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Size (GB) *</label>
-                                <input id="fm-folder-size" type="number" min="0" step="0.1" placeholder="0" value="${existing?.size ?? ''}"
-                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Size *</label>
+                                <div class="flex gap-2">
+                                    <input id="fm-folder-size" type="number" min="0" step="any" placeholder="0" value="${displaySize}"
+                                        class="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/30">
+                                    <select id="fm-folder-size-unit" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400/30 shrink-0">
+                                        <option value="GB" ${sizeUnit === 'GB' ? 'selected' : ''}>GB</option>
+                                        <option value="MB" ${sizeUnit === 'MB' ? 'selected' : ''}>MB</option>
+                                    </select>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Count</label>
@@ -53117,7 +53158,9 @@ function isStrategyTask(t) {
                     ? (document.getElementById('fm-folder-client-custom')?.value.trim() || '')
                     : clientSel;
                 if (!name) return toast('Please select a client', 'error');
-                const size = Number(document.getElementById('fm-folder-size')?.value || 0);
+                const rawSize = Number(document.getElementById('fm-folder-size')?.value || 0);
+                const sizeUnit = document.getElementById('fm-folder-size-unit')?.value || 'GB';
+                const size = sizeUnit === 'MB' ? (rawSize / 1024) : rawSize;
                 const count = Number(document.getElementById('fm-folder-count')?.value || 0);
                 const fileType = document.getElementById('fm-folder-filetype')?.value || '';
                 const dateRange = document.getElementById('fm-folder-daterange')?.value.trim() || '';
@@ -53125,7 +53168,7 @@ function isStrategyTask(t) {
 
                 const sysId = fmSelectedSystemId, driveLabel = fmSelectedDriveLabel;
                 const currentDrive = fmSystems[sysId]?.drives?.[driveLabel] || { total: 0, used: 0, folders: [] };
-                const folderPayload = { name, size, count, fileType, dateRange, notes, client: name };
+                const folderPayload = { name, size, rawSize, sizeUnit, count, fileType, dateRange, notes, client: name };
                 const folders = [...(currentDrive.folders || [])];
                 const editCtx = fmEditingFolder;
                 if (editCtx && editCtx.sysId === sysId && editCtx.driveLabel === driveLabel && folders[editCtx.idx]) {
@@ -53165,6 +53208,23 @@ function isStrategyTask(t) {
                 const modalTitle = existing ? `Edit Sub-Folder in ${escapeHtml(parentFolder.name)}` : `Add Sub-Folder to ${escapeHtml(parentFolder.name)}`;
                 const actionLabel = existing ? 'Update Sub-Folder' : 'Add Sub-Folder';
 
+                // Determine size and unit for sub-folder
+                const subSizeUnit = existing?.sizeUnit || (existing?.size !== undefined && Number(existing?.size) > 0 && Number(existing?.size) < 1 ? 'MB' : 'GB');
+                let subDisplaySize = '';
+                if (existing && existing.size !== undefined && existing.size !== null && existing.size !== '') {
+                    if (existing.sizeUnit === 'MB') {
+                        subDisplaySize = existing.rawSize !== undefined ? existing.rawSize : Math.round(Number(existing.size) * 1024 * 100) / 100;
+                    } else if (existing.sizeUnit === 'GB') {
+                        subDisplaySize = existing.rawSize !== undefined ? existing.rawSize : existing.size;
+                    } else {
+                        if (Number(existing.size) > 0 && Number(existing.size) < 1) {
+                            subDisplaySize = Math.round(Number(existing.size) * 1024 * 100) / 100;
+                        } else {
+                            subDisplaySize = existing.size;
+                        }
+                    }
+                }
+
                 document.getElementById('fmSubFolderModal')?.remove();
 
                 const html = `
@@ -53192,9 +53252,15 @@ function isStrategyTask(t) {
 
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Size (GB)</label>
-                                    <input id="fm-sub-size" type="number" step="0.01" min="0" placeholder="0.00" value="${existing?.size || ''}"
-                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400/30">
+                                    <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Size</label>
+                                    <div class="flex gap-2">
+                                        <input id="fm-sub-size" type="number" step="any" min="0" placeholder="0.00" value="${subDisplaySize}"
+                                            class="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400/30">
+                                        <select id="fm-sub-size-unit" class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400/30 shrink-0">
+                                            <option value="GB" ${subSizeUnit === 'GB' ? 'selected' : ''}>GB</option>
+                                            <option value="MB" ${subSizeUnit === 'MB' ? 'selected' : ''}>MB</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File Count</label>
@@ -53250,7 +53316,9 @@ function isStrategyTask(t) {
                 const name = document.getElementById('fm-sub-name')?.value.trim();
                 if (!name) return toast('Please enter a sub-folder name', 'error');
 
-                const size = Number(document.getElementById('fm-sub-size')?.value || 0);
+                const rawSubSize = Number(document.getElementById('fm-sub-size')?.value || 0);
+                const subSizeUnit = document.getElementById('fm-sub-size-unit')?.value || 'GB';
+                const size = subSizeUnit === 'MB' ? (rawSubSize / 1024) : rawSubSize;
                 const count = Number(document.getElementById('fm-sub-count')?.value || 0);
                 const fileType = document.getElementById('fm-sub-filetype')?.value || '';
                 const notes = document.getElementById('fm-sub-notes')?.value.trim() || '';
@@ -53264,7 +53332,7 @@ function isStrategyTask(t) {
                 const parentFolder = { ...folders[parentIdx] };
                 const subfolders = [...(parentFolder.subfolders || [])];
 
-                const subPayload = { name, size, count, fileType, notes, updatedAt: Date.now() };
+                const subPayload = { name, size, rawSize: rawSubSize, sizeUnit: subSizeUnit, count, fileType, notes, updatedAt: Date.now() };
 
                 if (subIdx !== undefined && subIdx !== null && subfolders[subIdx]) {
                     subfolders[subIdx] = { ...subfolders[subIdx], ...subPayload };
