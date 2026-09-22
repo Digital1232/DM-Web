@@ -1138,6 +1138,29 @@
             border-color: #253347 !important;
         }
 
+        /* ── CHAT MENTION / MESSAGE HIGHLIGHT PULSE ANIMATION ── */
+        @keyframes chatMessagePulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+                transform: scale(1.02);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.25);
+                transform: scale(1.02);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+                transform: scale(1);
+            }
+        }
+        .chat-message-highlight {
+            animation: chatMessagePulse 1s ease-in-out 3;
+            border-color: #6366f1 !important;
+            background-color: rgba(99, 102, 241, 0.08) !important;
+            border-radius: 1rem;
+            transition: all 0.3s ease;
+        }
+
         /* ── AUTOMATICALLY HIDE FLOATING CHAT BUBBLE ON CHAT PAGE ── */
         body:has(#view-chat-panel:not(.hidden)) #float-chat-btn,
         body:has(#view-chat-panel:not(.hidden)) #float-chat-panel,
@@ -19903,7 +19926,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // ════ CLEANUP: If leaving chat, clean up active chat room state (keep background convListeners active) ════
                 if (prevView === 'chat' && view !== 'chat') {
-                    // Stop active message room listeners
+                    // Stop active message room listeners to save network resources while away
                     if (msgListener && typeof msgListener === 'function') {
                         try { msgListener(); } catch (e) { }
                         msgListener = null;
@@ -19917,16 +19940,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         readReceiptsListener = null;
                     }
 
-                    // Clear active conversation state
-                    activeConvId = null;
-                    currentConvMessages = {};
-                    activeConvOldestTimestamp = null;
-                    activeConvOldestMessageKey = null;
-                    activeConvHasMore = false;
-                    activeConvLoadingMore = false;
-                    activeConvHistoryDepleted = false;
-                    activeConvReadReceipts = {};
-
                     // Clear mention dropdown
                     const mentionDropdown = document.getElementById('mention-dropdown');
                     if (mentionDropdown) mentionDropdown.classList.add('hidden');
@@ -19935,15 +19948,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const stagedAttachment = document.getElementById('chat-staged-attachment');
                     if (stagedAttachment) stagedAttachment.classList.add('hidden');
 
-                    // Clear message input
-                    const msgInput = document.getElementById('msg-input');
-                    if (msgInput) msgInput.value = '';
-
-                    // Clear messages area
-                    const messagesArea = document.getElementById('messages-area');
-                    if (messagesArea) messagesArea.innerHTML = '';
-
-                    console.log('[Chat] Cleaned up all listeners and state when leaving chat');
+                    console.log('[Chat] Paused listeners when leaving chat');
                 }
 
                 // ════ STEP 1: Hide ALL panels with BOTH CSS class AND inline styles ════
@@ -19957,12 +19962,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 ];
 
                 allPanelIds.forEach(id => {
-                    const panel = document.getElementById(`view-${id}-panel`);
-                    if (panel) {
-                        panel.classList.add('hidden');
-                        panel.style.display = 'none';
-                        panel.style.visibility = 'hidden';
-                        panel.style.pointerEvents = 'none';
+                    const el = document.getElementById(`view-${id}-panel`);
+                    if (el) {
+                        el.classList.add('hidden');
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                        el.style.pointerEvents = 'none';
                     }
 
                     // Remove nav active state
@@ -19970,7 +19975,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (nav) nav.classList.remove('nav-active');
                 });
 
-                // ════ STEP 2: Show ONLY the selected panel ════
+                // ════ STEP 2: Show the selected panel ════
                 const selectedPanel = document.getElementById(`view-${panelId}-panel`);
                 if (selectedPanel) {
                     selectedPanel.classList.remove('hidden');
@@ -20044,7 +20049,43 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         switchReportTab(currentReportTab);
                     } else if (view === 'dpr') { initDpr(); switchDprTab(currentDprTab); }
                     else if (view === 'hr') { loadMyRequests(); loadApprovals(); loadHrBadge(); }
-                    else if (view === 'chat') { document.getElementById('chat-welcome').classList.remove('hidden'); renderDmList(); }
+                    else if (view === 'chat') {
+                        const chatWelcome = document.getElementById('chat-welcome');
+                        const headerEl = document.getElementById('chat-active-header');
+                        const inputEl = document.getElementById('chat-input-area');
+                        if (activeConvId) {
+                            if (chatWelcome) chatWelcome.classList.add('hidden');
+                            if (headerEl) headerEl.classList.remove('hidden');
+                            if (inputEl) inputEl.classList.remove('hidden');
+                            // Re-bind message listener if it was paused
+                            if (!msgListener && typeof openConversation === 'function') {
+                                const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                                let saved = null;
+                                try { saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null'); } catch (e) { }
+                                if (saved && saved.convId === activeConvId) {
+                                    openConversation(saved.convId, saved.name, saved.type, saved.avatar);
+                                }
+                            }
+                        } else {
+                            let restored = false;
+                            const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                            if (myKey) {
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null');
+                                    if (saved && saved.convId && window.innerWidth >= 768) {
+                                        restored = true;
+                                        openConversation(saved.convId, saved.name, saved.type, saved.avatar);
+                                    }
+                                } catch (e) { }
+                            }
+                            if (!restored) {
+                                if (chatWelcome) chatWelcome.classList.remove('hidden');
+                                if (headerEl) headerEl.classList.add('hidden');
+                                if (inputEl) inputEl.classList.add('hidden');
+                            }
+                        }
+                        renderDmList();
+                    }
                     else if (view === 'announcements') { markAnnouncementsSeen(); loadAnnouncements(); }
                     else if (view === 'users') { loadUsersList(); }
                     else if (view === 'clients-admin') { ensureCustomClientsSeeded().then(() => loadClientNamesAdmin()); }
@@ -31681,12 +31722,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const openAction = () => {
                     window.focus();
                     if (typeof switchView === 'function') switchView('chat');
+                    const welcomeEl = document.getElementById('chat-welcome');
+                    if (welcomeEl) welcomeEl.classList.add('hidden');
                     if (conv?.type === 'dm' || convId.startsWith('dm_')) {
                         if (typeof openDm === 'function') openDm(msg.senderEmail);
                     } else {
                         if (typeof openConversation === 'function') {
                             openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
                         }
+                    }
+                    if (msg.id) {
+                        setTimeout(() => {
+                            if (typeof window.jumpToChatMessage === 'function') {
+                                window.jumpToChatMessage(msg.id);
+                            }
+                        }, 300);
                     }
                 };
 
@@ -31842,6 +31892,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const data = event.data.chatData || {};
                         window.focus();
                         if (typeof switchView === 'function') switchView('chat');
+                        const welcomeEl = document.getElementById('chat-welcome');
+                        if (welcomeEl) welcomeEl.classList.add('hidden');
                         if (data.convId) {
                             if (data.type === 'dm' && data.senderEmail) {
                                 if (typeof openDm === 'function') openDm(data.senderEmail);
@@ -31897,6 +31949,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1.5 min-w-0">
                                     <p class="text-xs ${unread > 0 || isSelected ? 'font-black text-indigo-950 dark:text-white' : 'font-bold text-slate-700 dark:text-slate-200'} truncate">${safeNameHtml}</p>
+                                    ${isPinned ? `<span class="text-amber-500 shrink-0 flex items-center" title="Pinned Chat"><iconify-icon icon="solar:pin-bold" width="12"></iconify-icon></span>` : ''}
                                     ${unread > 0 ? `<span class="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 shrink-0 animate-pulse" title="Unread messages"></span>` : ''}
                                     ${isMuted ? `<span class="text-slate-400 shrink-0 flex items-center" title="Muted"><iconify-icon icon="solar:bell-off-bold" width="12"></iconify-icon></span>` : ''}
                                 </div>
@@ -31945,6 +31998,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const pinnedKey = 'worksync_pinned_chats_' + myKey;
                 const mutedKey = 'worksync_muted_chats_' + myKey;
                 const manualUnreadKey = 'worksync_manual_unread_' + myKey;
+
+                // One-time cleanup of stale legacy pinned chats so list is accurately sorted by latest message timing
+                const pinResetKey = 'worksync_pinned_reset_v2_' + myKey;
+                if (!localStorage.getItem(pinResetKey)) {
+                    localStorage.removeItem(pinnedKey);
+                    localStorage.setItem(pinResetKey, 'true');
+                }
 
                 return {
                     pinnedList: JSON.parse(localStorage.getItem(pinnedKey) || '[]'),
@@ -32091,10 +32151,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     res.sort((a, b) => {
                         if (a.isPinned && !b.isPinned) return -1;
                         if (!a.isPinned && b.isPinned) return 1;
-                        const timeA = a.lastTimestamp || 0;
-                        const timeB = b.lastTimestamp || 0;
+                        const timeA = typeof a.lastTimestamp === 'number' ? a.lastTimestamp : (Number(a.lastTimestamp) || 0);
+                        const timeB = typeof b.lastTimestamp === 'number' ? b.lastTimestamp : (Number(b.lastTimestamp) || 0);
                         if (timeA !== timeB) {
-                            return timeB - timeA; // Descending: latest message on top!
+                            return timeB - timeA; // Descending: latest message timing on top!
                         }
                         return (a.name || '').localeCompare(b.name || '');
                     });
@@ -32113,6 +32173,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             unifiedEl.innerHTML = '<p class="p-6 text-center text-xs text-slate-400 italic">No conversations found.</p>';
                         } else {
                             unifiedEl.innerHTML = mergedList.map(item => renderConversationCard(item)).join('');
+
+                            // Auto-select first or remembered active conversation on desktop if none is currently selected
+                            if (activeView === 'chat' && !activeConvId && window.innerWidth >= 768 && mergedList.length > 0) {
+                                let opened = false;
+                                const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                                if (myKey) {
+                                    try {
+                                        const saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null');
+                                        if (saved && saved.convId) {
+                                            const found = mergedList.find(c => c.convId === saved.convId);
+                                            if (found) {
+                                                opened = true;
+                                                if (found.type === 'group') {
+                                                    openConversation(found.convId, found.name, 'group', found.group?.profilePicture || '');
+                                                } else if (found.user?.email) {
+                                                    openDm(found.user.email);
+                                                }
+                                            }
+                                        }
+                                    } catch (e) { }
+                                }
+                                if (!opened) {
+                                    const topItem = mergedList[0];
+                                    if (topItem.type === 'group') {
+                                        openConversation(topItem.convId, topItem.name, 'group', topItem.group?.profilePicture || '');
+                                    } else if (topItem.user?.email) {
+                                        openDm(topItem.user.email);
+                                    }
+                                }
+                            }
                         }
                     }
                 } else if (chatFilterTab === 'personal') {
@@ -32381,6 +32471,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     chatPanel.classList.add('no-active-chat');
                     chatPanel.classList.remove('active-chat');
                 }
+
+                try {
+                    const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                    if (myKey) {
+                        localStorage.removeItem('worksync_last_active_conv_' + myKey);
+                    }
+                } catch (e) { }
             }
             window.closeChat = closeChat;
 
@@ -32471,6 +32568,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (welcomeEl) welcomeEl.classList.add('hidden');
                 if (headerEl) headerEl.classList.remove('hidden');
                 if (inputEl) inputEl.classList.remove('hidden');
+
+                // Persist last active conversation to localStorage
+                try {
+                    if (myKey && convId) {
+                        localStorage.setItem('worksync_last_active_conv_' + myKey, JSON.stringify({
+                            convId,
+                            name,
+                            type,
+                            avatar: avatar || ''
+                        }));
+                    }
+                } catch (e) { }
 
                 const chatPanel = document.getElementById('view-chat-panel');
                 if (chatPanel) {
@@ -32923,10 +33032,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 list.innerHTML = pinnedMessages.map(([id, msg]) => {
                     const time = formatChatTime(msg.timestamp);
+                    const safeId = escapeHtml(id).replace(/'/g, "\\'");
                     return `
-                    <div class="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+                    <div onclick="switchChatSubTab('messages'); window.jumpToChatMessage('${safeId}')" role="button" tabindex="0" title="Click to view message in chat"
+                        class="p-4 bg-white dark:bg-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-all rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs group/pinned">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <span class="text-xs font-black text-slate-800 dark:text-slate-200">${escapeHtml(msg.senderName || '')}</span>
+                            <span class="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/pinned:text-indigo-600 transition-colors">${escapeHtml(msg.senderName || '')}</span>
                             <span class="text-[10px] text-slate-400">${time}</span>
                         </div>
                         <p class="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${escapeHtml(msg.text || '')}</p>
@@ -33324,6 +33435,150 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            function showChatJumpLoader(text = 'Loading mentioned message...') {
+                let loader = document.getElementById('chat-jump-loading');
+                if (!loader) {
+                    loader = document.createElement('div');
+                    loader.id = 'chat-jump-loading';
+                    loader.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2 rounded-full bg-slate-900/90 dark:bg-slate-800/95 text-white shadow-2xl backdrop-blur text-xs font-bold border border-slate-700/50 pointer-events-none transition-all';
+                    document.body.appendChild(loader);
+                }
+                loader.innerHTML = `
+                    <iconify-icon icon="svg-spinners:ring-resize" width="16" class="text-indigo-400"></iconify-icon>
+                    <span>${escapeHtml(text)}</span>
+                `;
+                loader.classList.remove('hidden');
+            }
+
+            function hideChatJumpLoader() {
+                const loader = document.getElementById('chat-jump-loading');
+                if (loader) loader.classList.add('hidden');
+            }
+
+            function highlightChatMessage(el) {
+                if (!el) return;
+                const bubble = el.querySelector('.message-bubble') || el;
+                bubble.classList.remove('chat-message-highlight');
+                void bubble.offsetWidth;
+                bubble.classList.add('chat-message-highlight');
+                setTimeout(() => {
+                    bubble.classList.remove('chat-message-highlight');
+                }, 3200);
+            }
+
+            const snippetFetchCache = new Set();
+            async function fetchAndCacheRepliedSnippet(convId, replyToId, currentMsgId) {
+                if (!convId || !replyToId || !currentMsgId || !db) return;
+                const cacheKey = `${convId}_${replyToId}`;
+                if (snippetFetchCache.has(cacheKey)) return;
+                snippetFetchCache.add(cacheKey);
+
+                try {
+                    const snap = await get(ref(db, `worksync/messages/${convId}/${replyToId}`));
+                    if (snap.exists()) {
+                        const targetMsg = snap.val();
+                        if (currentConvMessages) {
+                            currentConvMessages[replyToId] = targetMsg;
+                        }
+                        const snippetBox = document.getElementById(`reply-snippet-${currentMsgId}`);
+                        if (snippetBox) {
+                            const senderName = escapeHtml(targetMsg.senderName || 'Unknown');
+                            const textSnippet = targetMsg.unsent ? 'This message was unsent' : escapeHtml((targetMsg.text || (targetMsg.attachments?.length ? 'Image/File' : 'Message')).substring(0, 100));
+                            snippetBox.innerHTML = `
+                                <div class="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400">
+                                    <iconify-icon icon="solar:reply-bold" width="12" class="opacity-75"></iconify-icon>
+                                    <span>${senderName}</span>
+                                </div>
+                                <p class="text-slate-600 dark:text-slate-300 truncate mt-0.5">${textSnippet}</p>
+                            `;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch replied snippet:', e);
+                }
+            }
+
+            async function jumpToChatMessage(targetMsgId, targetConvId = null) {
+                if (!targetMsgId) return;
+
+                // If conversation is different, switch conversation first
+                if (targetConvId && targetConvId !== activeConvId) {
+                    const conv = chatConversations[targetConvId];
+                    if (conv) {
+                        openConversation(targetConvId, conv.name || 'Chat', conv.type || 'group', conv.profilePicture || '');
+                    }
+                }
+
+                // Ensure chat view and messages subtab are active
+                if (typeof switchView === 'function') switchView('chat');
+                if (typeof switchChatSubTab === 'function') switchChatSubTab('messages');
+
+                // Check if target is already in DOM
+                let el = document.querySelector(`[data-msg-id="${targetMsgId}"]`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    highlightChatMessage(el);
+                    return;
+                }
+
+                // If not in DOM, load from Firebase
+                const convId = targetConvId || activeConvId;
+                if (!convId || !db) return;
+
+                showChatJumpLoader('Loading mentioned message...');
+                try {
+                    const snap = await get(ref(db, `worksync/messages/${convId}/${targetMsgId}`));
+                    if (!snap.exists()) {
+                        hideChatJumpLoader();
+                        toast('Mentioned message not found or was deleted', 'warning');
+                        return;
+                    }
+
+                    const targetMsg = snap.val();
+                    currentConvMessages = currentConvMessages || {};
+                    currentConvMessages[targetMsgId] = targetMsg;
+
+                    // Fetch intermediate messages if oldest message key is available
+                    if (activeConvOldestMessageKey && activeConvOldestMessageKey !== targetMsgId) {
+                        try {
+                            const rangeSnap = await get(query(
+                                ref(db, `worksync/messages/${convId}`),
+                                orderByKey(),
+                                startAt(targetMsgId),
+                                endBefore(activeConvOldestMessageKey)
+                            ));
+                            if (rangeSnap.exists()) {
+                                mergeChatMessages(rangeSnap.val());
+                            }
+                        } catch (e) {
+                            console.warn('Range fetch error:', e);
+                        }
+                    }
+
+                    refreshChatOldestTimestamp();
+                    renderMessages(currentConvMessages);
+
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            hideChatJumpLoader();
+                            const loadedEl = document.querySelector(`[data-msg-id="${targetMsgId}"]`);
+                            if (loadedEl) {
+                                loadedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                highlightChatMessage(loadedEl);
+                            } else {
+                                toast('Loaded message into view', 'info');
+                            }
+                        }, 120);
+                    });
+                } catch (err) {
+                    hideChatJumpLoader();
+                    console.error('Failed to jump to message:', err);
+                    toast('Failed to load mentioned message', 'error');
+                }
+            }
+            window.jumpToChatMessage = jumpToChatMessage;
+            window.highlightChatMessage = highlightChatMessage;
+
             function appendMessage(id, msg, container, isUnread = false) {
                 const area = container || document.getElementById('messages-area');
                 const isMe = msg.senderEmail === currentUser.email;
@@ -33334,15 +33589,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Handle replied-to message display
                 let replyToHtml = '';
-                if (msg.replyToId && currentConvMessages[msg.replyToId]) {
+                if (msg.replyToId) {
                     const repliedMsg = currentConvMessages[msg.replyToId];
-                    const replyText = repliedMsg.unsent ? 'This message was unsent' : escapeHtml((repliedMsg.text || 'Image/File').substring(0, 100));
-                    const replySenderName = escapeHtml(repliedMsg.senderName || 'Unknown');
+                    const replyText = repliedMsg 
+                        ? (repliedMsg.unsent ? 'This message was unsent' : escapeHtml((repliedMsg.text || (repliedMsg.attachments?.length ? 'Image/File' : 'Message')).substring(0, 100)))
+                        : (msg.replyToText ? escapeHtml(msg.replyToText.substring(0, 100)) : 'Quoted message');
+                    const replySenderName = escapeHtml((repliedMsg && repliedMsg.senderName) || msg.replyToSenderName || 'Mentioned message');
+                    const safeReplyToId = escapeHtml(msg.replyToId).replace(/'/g, "\\'");
+                    const safeMsgId = escapeHtml(id).replace(/'/g, "\\'");
+                    
                     replyToHtml = `
-                    <div class="mb-2 p-2 rounded-xl ${isMe ? 'bg-white/70 dark:bg-slate-900/60 border-l-3 border-indigo-500' : 'bg-slate-100 dark:bg-slate-700/60 border-l-3 border-indigo-500'} text-xs">
-                        <p class="font-bold ${isMe ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-600 dark:text-indigo-400'}">${replySenderName}</p>
+                    <div id="reply-snippet-${safeMsgId}" onclick="window.jumpToChatMessage('${safeReplyToId}')" role="button" tabindex="0" title="Click to view mentioned message"
+                        class="mb-2 p-2 rounded-xl cursor-pointer transition-all duration-200 group/reply ${isMe ? 'bg-white/70 hover:bg-white dark:bg-slate-900/60 dark:hover:bg-slate-900/90 border-l-3 border-indigo-500 hover:shadow-sm' : 'bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-700/60 dark:hover:bg-slate-700/90 border-l-3 border-indigo-500 hover:shadow-sm'} text-xs">
+                        <div class="flex items-center gap-1.5 font-bold ${isMe ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-600 dark:text-indigo-400'}">
+                            <iconify-icon icon="solar:reply-bold" width="12" class="opacity-75 group-hover/reply:translate-x-0.5 transition-transform"></iconify-icon>
+                            <span>${replySenderName}</span>
+                        </div>
                         <p class="${isMe ? 'text-slate-600 dark:text-slate-300' : 'text-slate-600 dark:text-slate-300'} truncate mt-0.5">${replyText}</p>
                     </div>`;
+
+                    if (!repliedMsg && !msg.replyToSenderName && activeConvId) {
+                        fetchAndCacheRepliedSnippet(activeConvId, msg.replyToId, id);
+                    }
                 }
 
                 // Check for Google Meet link
@@ -34477,6 +34745,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     if (savedReplyId) {
                         payload.replyToId = savedReplyId;
+                        const repliedMsg = currentConvMessages[savedReplyId];
+                        if (repliedMsg) {
+                            payload.replyToSenderName = repliedMsg.senderName || 'Unknown';
+                            payload.replyToText = repliedMsg.unsent ? 'This message was unsent' : (repliedMsg.text || (repliedMsg.attachments?.length ? 'Image/File' : 'Message')).substring(0, 100);
+                        }
                     }
 
                     let lastMsg = savedText;
@@ -53222,6 +53495,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.handleChatDragOver = handleChatDragOver; window.handleChatDragEnter = handleChatDragEnter; window.handleChatDragLeave = handleChatDragLeave; window.handleChatDrop = handleChatDrop;
             window.dragTaskEnd = dragTaskEnd; window.dragTaskEnter = dragTaskEnter; window.dragTaskLeave = dragTaskLeave; window.dragTask = dragTask; window.dropTask = dropTask;
             window.editMessage = editMessage; window.deleteMessage = deleteMessage; window.unsendMessage = unsendMessage; window.toggleReaction = toggleReaction; window.replyToMessage = replyToMessage; window.cancelReply = cancelReply;
+            window.jumpToChatMessage = jumpToChatMessage; window.highlightChatMessage = highlightChatMessage;
             window.openNewGroupModal = openNewGroupModal; window.createGroup = createGroup;
             window.openEditGroupModal = openEditGroupModal; window.updateGroup = updateGroup; window.deleteGroup = deleteGroup; window.processGroupPhoto = processGroupPhoto; window.togglePinChat = togglePinChat;
             window.sendAnnouncement = sendAnnouncement; window.deleteAnnouncement = deleteAnnouncement;

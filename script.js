@@ -18530,7 +18530,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // ════ CLEANUP: If leaving chat, clean up active chat room state (keep background convListeners active) ════
                 if (activeView === 'chat' && view !== 'chat') {
-                    // Stop message listeners
+                    // Stop message listeners to save resources while away
                     if (msgListener && typeof msgListener === 'function') {
                         try { msgListener(); } catch (e) { }
                         msgListener = null;
@@ -18540,16 +18540,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         readReceiptsListener = null;
                     }
 
-                    // Clear active conversation state
-                    activeConvId = null;
-                    currentConvMessages = {};
-                    activeConvOldestTimestamp = null;
-                    activeConvOldestMessageKey = null;
-                    activeConvHasMore = false;
-                    activeConvLoadingMore = false;
-                    activeConvHistoryDepleted = false;
-                    activeConvReadReceipts = {};
-
                     // Clear mention dropdown
                     const mentionDropdown = document.getElementById('mention-dropdown');
                     if (mentionDropdown) mentionDropdown.classList.add('hidden');
@@ -18558,15 +18548,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const stagedAttachment = document.getElementById('chat-staged-attachment');
                     if (stagedAttachment) stagedAttachment.classList.add('hidden');
 
-                    // Clear message input
-                    const msgInput = document.getElementById('msg-input');
-                    if (msgInput) msgInput.value = '';
-
-                    // Clear messages area
-                    const messagesArea = document.getElementById('messages-area');
-                    if (messagesArea) messagesArea.innerHTML = '';
-
-                    console.log('[Chat] Cleaned up all listeners and state when leaving chat');
+                    console.log('[Chat] Paused listeners when leaving chat');
                 }
 
                 // ════ STEP 1: Hide ALL panels with BOTH CSS class AND inline styles ════
@@ -18667,7 +18649,42 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         switchReportTab(currentReportTab);
                     } else if (view === 'dpr') { initDpr(); switchDprTab(currentDprTab); }
                     else if (view === 'hr') { loadMyRequests(); loadApprovals(); loadHrBadge(); }
-                    else if (view === 'chat') { document.getElementById('chat-welcome').classList.remove('hidden'); renderDmList(); }
+                    else if (view === 'chat') {
+                        const chatWelcome = document.getElementById('chat-welcome');
+                        const headerEl = document.getElementById('chat-active-header');
+                        const inputEl = document.getElementById('chat-input-area');
+                        if (activeConvId) {
+                            if (chatWelcome) chatWelcome.classList.add('hidden');
+                            if (headerEl) headerEl.classList.remove('hidden');
+                            if (inputEl) inputEl.classList.remove('hidden');
+                            if (!msgListener && typeof openConversation === 'function') {
+                                const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                                let saved = null;
+                                try { saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null'); } catch (e) { }
+                                if (saved && saved.convId === activeConvId) {
+                                    openConversation(saved.convId, saved.name, saved.type, saved.avatar);
+                                }
+                            }
+                        } else {
+                            let restored = false;
+                            const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                            if (myKey) {
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null');
+                                    if (saved && saved.convId && window.innerWidth >= 768) {
+                                        restored = true;
+                                        openConversation(saved.convId, saved.name, saved.type, saved.avatar);
+                                    }
+                                } catch (e) { }
+                            }
+                            if (!restored) {
+                                if (chatWelcome) chatWelcome.classList.remove('hidden');
+                                if (headerEl) headerEl.classList.add('hidden');
+                                if (inputEl) inputEl.classList.add('hidden');
+                            }
+                        }
+                        renderDmList();
+                    }
                     else if (view === 'announcements') { markAnnouncementsSeen(); loadAnnouncements(); }
                     else if (view === 'users') { loadUsersList(); }
                     else if (view === 'clients-admin') { ensureCustomClientsSeeded().then(() => loadClientNamesAdmin()); }
@@ -29771,6 +29788,11 @@ function isStrategyTask(t) {
                 }
 
                 const pinnedKey = `worksync_pinned_chats_${eKey(currentUser.email)}`;
+                const pinResetKey = `worksync_pinned_reset_v2_${eKey(currentUser.email)}`;
+                if (!localStorage.getItem(pinResetKey)) {
+                    localStorage.removeItem(pinnedKey);
+                    localStorage.setItem(pinResetKey, 'true');
+                }
                 const pinnedList = JSON.parse(localStorage.getItem(pinnedKey) || '[]');
 
                 const others = Array.from(allUsersMap.values())
@@ -29787,8 +29809,10 @@ function isStrategyTask(t) {
                 mappedOthers.sort((a, b) => {
                     if (a.isPinned && !b.isPinned) return -1;
                     if (!a.isPinned && b.isPinned) return 1;
-                    if (a.lastTimestamp !== b.lastTimestamp) {
-                        return b.lastTimestamp - a.lastTimestamp;
+                    const timeA = typeof a.lastTimestamp === 'number' ? a.lastTimestamp : (Number(a.lastTimestamp) || 0);
+                    const timeB = typeof b.lastTimestamp === 'number' ? b.lastTimestamp : (Number(b.lastTimestamp) || 0);
+                    if (timeA !== timeB) {
+                        return timeB - timeA;
                     }
                     return (a.user.name || '').localeCompare(b.user.name || '');
                 });
@@ -29855,8 +29879,10 @@ function isStrategyTask(t) {
                 mappedGroups.sort((a, b) => {
                     if (a.isPinned && !b.isPinned) return -1;
                     if (!a.isPinned && b.isPinned) return 1;
-                    if (a.lastTimestamp !== b.lastTimestamp) {
-                        return b.lastTimestamp - a.lastTimestamp;
+                    const timeA = typeof a.lastTimestamp === 'number' ? a.lastTimestamp : (Number(a.lastTimestamp) || 0);
+                    const timeB = typeof b.lastTimestamp === 'number' ? b.lastTimestamp : (Number(b.lastTimestamp) || 0);
+                    if (timeA !== timeB) {
+                        return timeB - timeA;
                     }
                     return (a.group.name || '').localeCompare(b.group.name || '');
                 });
