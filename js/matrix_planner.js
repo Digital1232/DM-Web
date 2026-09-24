@@ -2326,6 +2326,528 @@ function renderMatrixTable() {
     });
 
     tbody.innerHTML = html;
+
+    // Render Live Editor Capacity & Workload Bar
+    if (typeof renderWeeklyMatrixCapacityBar === 'function') {
+        renderWeeklyMatrixCapacityBar(weekDates, dateStrings);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// WEEKLY MATRIX PLANNER: EDITOR WORKLOAD & AUTO-ALLOCATION ENGINE
+// ══════════════════════════════════════════════════════════════════════
+let weeklyMatrixCapacities = {
+    barath: 4,
+    immanuel: 4,
+    immanuelHalfDay: 2,
+    muthu: 2
+};
+
+function loadWeeklyMatrixCapacities() {
+    try {
+        const saved = localStorage.getItem('weekly_matrix_capacities');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            weeklyMatrixCapacities = { ...weeklyMatrixCapacities, ...parsed };
+        }
+    } catch (e) { }
+}
+loadWeeklyMatrixCapacities();
+
+function isReworkTask(t) {
+    if (!t) return false;
+    const s = String(t.status || '').toLowerCase();
+    const title = String(t.title || t.desc || t.summary || '').toLowerCase();
+    const labels = String(t.labels || '').toLowerCase();
+    return s.includes('rework') || s.includes('revision') || s.includes('changes') ||
+        title.includes('rework') || title.includes('revision') || title.includes('feedback') ||
+        labels.includes('rework') || t.isRework === true || (t.reworkCount && t.reworkCount > 0);
+}
+
+function isVideoDeliverable(t) {
+    if (!t) return false;
+    const fmt = String(t.contentType || t.format || t.issueType || '').toLowerCase();
+    if (fmt.includes('video') || fmt.includes('reel') || fmt.includes('anim')) return true;
+    if (typeof extractDeliverableCounts === 'function') {
+        const c = extractDeliverableCounts(t);
+        if (c && c.videos > 0) return true;
+    }
+    return false;
+}
+
+function matchesEditor(assigneeStr, editorKey) {
+    const s = String(assigneeStr || '').toLowerCase();
+    if (editorKey === 'barath') return s.includes('barath');
+    if (editorKey === 'immanuel') return s.includes('immanuel');
+    if (editorKey === 'muthu') return s.includes('muthu');
+    return false;
+}
+
+function getImmanuelShootInfo(dateStr) {
+    const allTasksList = window.tasks || (typeof tasks !== 'undefined' ? tasks : []);
+    const shootTasks = allTasksList.filter(t => {
+        const isShoot = (t.status || '').toLowerCase().includes('shoot') || 
+                        (t.issueType || '').toLowerCase().includes('shoot') || 
+                        (t.format || '').toLowerCase().includes('shoot');
+        if (!isShoot) return false;
+        const taskDate = (t.duedate || t.date || '').slice(0, 10);
+        if (taskDate !== dateStr) return false;
+        
+        const assignee = String(t.assignee || t.assigneeName || t.assigneeEmail || '').toLowerCase();
+        const hasImmanuel = assignee.includes('immanuel') || (t._assignees && t._assignees.some(a => String(a.name || a.email).toLowerCase().includes('immanuel')));
+        return hasImmanuel;
+    });
+
+    if (shootTasks.length === 0) {
+        return { hasShoot: false, isHalfDay: false, shootTime: '', quota: weeklyMatrixCapacities.immanuel };
+    }
+
+    const firstShoot = shootTasks[0];
+    const timeStr = String(firstShoot.shootTime || '').toLowerCase();
+    const titleStr = String(firstShoot.title || firstShoot.desc || firstShoot.summary || '').toLowerCase();
+    const isHalfDay = timeStr.includes('half') || titleStr.includes('half') || 
+                      (firstShoot.shootTime && !timeStr.includes('full') && !timeStr.includes('9-6') && !timeStr.includes('whole day'));
+
+    return {
+        hasShoot: true,
+        isHalfDay: isHalfDay,
+        shootTime: firstShoot.shootTime || (isHalfDay ? 'Half-day' : 'Full Day'),
+        quota: isHalfDay ? weeklyMatrixCapacities.immanuelHalfDay : 0
+    };
+}
+
+function renderWeeklyMatrixCapacityBar(weekDates, dateStrings) {
+    const barEl = document.getElementById('matrix-editor-capacity-bar');
+    if (!barEl) return;
+
+    const allTasks = Array.from(matrixTasksMap.values());
+    const dayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // We display Mon to Sat (indices 0 to 5)
+    const activeDates = dateStrings.slice(0, 6);
+
+    // Calculate metrics for each editor
+    const editors = [
+        { key: 'barath', name: 'Barath Magesh M', shortName: 'Barath', avatar: 'B', color: 'indigo' },
+        { key: 'immanuel', name: 'Immanuel Raja S', shortName: 'Immanuel', avatar: 'I', color: 'violet' },
+        { key: 'muthu', name: 'Muthu', shortName: 'Muthu', avatar: 'M', color: 'emerald' }
+    ];
+
+    let totalCapacity = 0;
+    let totalScheduled = 0;
+
+    const editorCardsHtml = editors.map(ed => {
+        let edTotalVideos = 0;
+        let edTotalCapacity = 0;
+        let edTotalReworks = 0;
+
+        const dayPills = activeDates.map((ds, idx) => {
+            const dayName = dayKeys[idx] || 'Day';
+            let dayLimit = weeklyMatrixCapacities[ed.key] || 4;
+            let shootBadge = '';
+
+            if (ed.key === 'immanuel') {
+                const shootInfo = getImmanuelShootInfo(ds);
+                dayLimit = shootInfo.quota;
+                if (shootInfo.hasShoot) {
+                    shootBadge = shootInfo.isHalfDay 
+                        ? `<span class="inline-flex items-center text-[9px] font-black text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-1 rounded" title="Half-day Shoot: ${escapeHtml(shootInfo.shootTime)}">🎬 Half</span>`
+                        : `<span class="inline-flex items-center text-[9px] font-black text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-1 rounded" title="Full-day Shoot: ${escapeHtml(shootInfo.shootTime)}">🎥 Shoot</span>`;
+                }
+            }
+
+            // Find video tasks on ds
+            const dayTasks = allTasks.filter(t => {
+                const tDate = normalizeDateStringToISO(t.date || t.dueDate || t.duedate || t.postDate || '');
+                if (tDate !== ds) return false;
+                const assignee = t.assignee || t.assigneeName || t.owner || '';
+                return matchesEditor(assignee, ed.key) && isVideoDeliverable(t);
+            });
+
+            const videoCount = dayTasks.length;
+            const reworksCount = dayTasks.filter(isReworkTask).length;
+
+            edTotalVideos += videoCount;
+            edTotalCapacity += dayLimit;
+            edTotalReworks += reworksCount;
+
+            // Health color
+            let badgeBg = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+            if (dayLimit === 0) {
+                badgeBg = 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500';
+            } else if (videoCount === dayLimit) {
+                badgeBg = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-extrabold';
+            } else if (videoCount > dayLimit) {
+                badgeBg = 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-black animate-pulse';
+            } else if (videoCount > 0) {
+                badgeBg = 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 font-bold';
+            }
+
+            const reworkHint = reworksCount > 0 ? `<span class="text-[9px] text-amber-600 font-bold" title="${reworksCount} rework(s) included">(${reworksCount}r)</span>` : '';
+
+            return `
+                <div class="flex flex-col items-center p-1.5 rounded-xl border border-slate-100 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-900/40 min-w-[46px]">
+                    <span class="text-[10px] font-black text-slate-400 uppercase">${dayName}</span>
+                    <span class="px-1.5 py-0.5 rounded-md text-[11px] mt-0.5 ${badgeBg}">${videoCount}/${dayLimit}</span>
+                    ${reworkHint}
+                    ${shootBadge}
+                </div>
+            `;
+        }).join('');
+
+        totalCapacity += edTotalCapacity;
+        totalScheduled += edTotalVideos;
+
+        const quotaRuleLabel = ed.key === 'barath' ? '4 vids/day (incl. reworks)' :
+                               ed.key === 'immanuel' ? '4 vids/day (2 on shoot)' :
+                               `${weeklyMatrixCapacities.muthu} vids/day (standard)`;
+
+        const percent = edTotalCapacity > 0 ? Math.min(100, Math.round((edTotalVideos / edTotalCapacity) * 100)) : 0;
+        const barColor = percent > 100 ? 'bg-rose-500' : percent === 100 ? 'bg-emerald-500' : 'bg-indigo-500';
+
+        return `
+            <div class="flex-1 min-w-[280px] p-3.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex flex-col justify-between gap-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-xs flex items-center justify-center border border-indigo-200/50">
+                            ${ed.avatar}
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-black text-slate-900 dark:text-white leading-tight">${ed.name}</h4>
+                            <p class="text-[10px] text-slate-400 font-semibold">${quotaRuleLabel}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-black ${edTotalVideos > edTotalCapacity ? 'text-rose-600' : 'text-slate-900 dark:text-white'}">
+                            ${edTotalVideos} / ${edTotalCapacity} <span class="text-[10px] text-slate-400 font-semibold">videos</span>
+                        </div>
+                        <div class="text-[9px] text-slate-400 font-bold">${percent}% booked</div>
+                    </div>
+                </div>
+
+                <!-- Daily Buckets -->
+                <div class="flex items-center justify-between gap-1 overflow-x-auto">
+                    ${dayPills}
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                    <div class="${barColor} h-full rounded-full transition-all duration-300" style="width: ${percent}%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    barEl.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-2.5">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Editor Daily Workload & Quota Matrix</span>
+                <span class="text-[11px] text-slate-400 font-medium">| Auto-balanced: Barath (4/day + reworks), Immanuel (4/day, 2 on shoot), Muthu (${weeklyMatrixCapacities.muthu}/day)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">Week Total: <span class="text-indigo-600 dark:text-indigo-400 font-black">${totalScheduled} / ${totalCapacity}</span> videos</span>
+                <button onclick="openWeeklyMatrixCapacitySettingsModal()" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer flex items-center gap-0.5 ml-2">
+                    <iconify-icon icon="solar:settings-bold" width="12"></iconify-icon> Edit Quotas
+                </button>
+            </div>
+        </div>
+        <div class="flex flex-wrap lg:flex-nowrap gap-3 items-stretch">
+            ${editorCardsHtml}
+        </div>
+    `;
+}
+
+function openWeeklyMatrixCapacitySettingsModal() {
+    loadWeeklyMatrixCapacities();
+    const modal = document.getElementById('weeklyMatrixCapacityModal');
+    if (!modal) return;
+
+    const elBarath = document.getElementById('quota-barath');
+    const elImmanuel = document.getElementById('quota-immanuel');
+    const elImmanuelHalf = document.getElementById('quota-immanuel-half');
+    const elMuthu = document.getElementById('quota-muthu');
+
+    if (elBarath) elBarath.value = weeklyMatrixCapacities.barath;
+    if (elImmanuel) elImmanuel.value = weeklyMatrixCapacities.immanuel;
+    if (elImmanuelHalf) elImmanuelHalf.value = weeklyMatrixCapacities.immanuelHalfDay;
+    if (elMuthu) elMuthu.value = weeklyMatrixCapacities.muthu;
+
+    modal.showModal();
+}
+
+function saveWeeklyMatrixCapacitySettings() {
+    const elBarath = document.getElementById('quota-barath');
+    const elImmanuel = document.getElementById('quota-immanuel');
+    const elImmanuelHalf = document.getElementById('quota-immanuel-half');
+    const elMuthu = document.getElementById('quota-muthu');
+
+    weeklyMatrixCapacities = {
+        barath: parseInt(elBarath?.value) || 4,
+        immanuel: parseInt(elImmanuel?.value) || 4,
+        immanuelHalfDay: parseInt(elImmanuelHalf?.value) || 2,
+        muthu: parseInt(elMuthu?.value) || 2
+    };
+
+    try {
+        localStorage.setItem('weekly_matrix_capacities', JSON.stringify(weeklyMatrixCapacities));
+    } catch (e) { }
+
+    const modal = document.getElementById('weeklyMatrixCapacityModal');
+    if (modal) modal.close();
+
+    renderMatrixTable();
+    if (typeof showToast === 'function') showToast('Editor daily capacities updated successfully!', 'success');
+}
+
+window.proposedMatrixSchedule = [];
+
+function openWeeklyMatrixAutoScheduleModal() {
+    const modal = document.getElementById('weeklyMatrixAutoScheduleModal');
+    const content = document.getElementById('weekly-matrix-auto-content');
+    if (!modal || !content) return;
+
+    loadWeeklyMatrixCapacities();
+
+    const monday = getStartOfWeek(weeklyMatrixCurrentDate);
+    const weekDates = getWeekDates(monday);
+    const dateStrings = weekDates.map(d => formatLocalDateToISO(d));
+    const activeWeekDays = dateStrings.slice(0, 6); // Mon to Sat
+
+    const allTasks = Array.from(matrixTasksMap.values());
+
+    // 1. Identify in-flight video tasks (either already scheduled this week or in backlog/upcoming)
+    const finishedStatuses = ['posted', 'analytics', 'done', 'published', 'live', 'cancelled', 'completed', 'discarded'];
+    const activeVideoTasks = allTasks.filter(t => {
+        if (typeof isInternalTask === 'function' && isInternalTask(t)) return false;
+        const st = String(t.status || '').toLowerCase();
+        if (finishedStatuses.includes(st)) return false;
+        return isVideoDeliverable(t);
+    });
+
+    // 2. Setup schedule buckets for Mon to Sat
+    const scheduleBuckets = {
+        barath: {},
+        immanuel: {},
+        muthu: {}
+    };
+
+    activeWeekDays.forEach(ds => {
+        scheduleBuckets.barath[ds] = { limit: weeklyMatrixCapacities.barath, tasks: [] };
+        
+        const shootInfo = getImmanuelShootInfo(ds);
+        scheduleBuckets.immanuel[ds] = { limit: shootInfo.quota, shootInfo, tasks: [] };
+        
+        scheduleBuckets.muthu[ds] = { limit: weeklyMatrixCapacities.muthu, tasks: [] };
+    });
+
+    // Filter tasks relevant to Barath, Immanuel, and Muthu
+    const relevantTasks = activeVideoTasks.filter(t => {
+        const a = String(t.assignee || t.assigneeName || '').toLowerCase();
+        return a.includes('barath') || a.includes('immanuel') || a.includes('muthu') || !t.assignee || t.assignee === 'Unassigned';
+    });
+
+    // Sort: Priority to Reworks first, then by Due Date ascending
+    relevantTasks.sort((a, b) => {
+        const aRework = isReworkTask(a);
+        const bRework = isReworkTask(b);
+        if (aRework && !bRework) return -1;
+        if (!aRework && bRework) return 1;
+
+        const aDate = normalizeDateStringToISO(a.duedate || a.date || a.dueDate || a.postDate || '') || '9999-99-99';
+        const bDate = normalizeDateStringToISO(b.duedate || b.date || b.dueDate || b.postDate || '') || '9999-99-99';
+        return aDate.localeCompare(bDate);
+    });
+
+    const proposedList = [];
+
+    // Schedule algorithm
+    relevantTasks.forEach(t => {
+        const a = String(t.assignee || t.assigneeName || '').toLowerCase();
+        let edKey = 'barath';
+        let edFullName = 'Barath Magesh M';
+
+        if (a.includes('immanuel')) {
+            edKey = 'immanuel';
+            edFullName = 'Immanuel Raja S';
+        } else if (a.includes('muthu')) {
+            edKey = 'muthu';
+            edFullName = 'Muthu';
+        } else if (a.includes('barath')) {
+            edKey = 'barath';
+            edFullName = 'Barath Magesh M';
+        } else {
+            // Unassigned: pick the editor with the most free capacity this week
+            const remainingCaps = {
+                barath: activeWeekDays.reduce((sum, d) => sum + Math.max(0, scheduleBuckets.barath[d].limit - scheduleBuckets.barath[d].tasks.length), 0),
+                immanuel: activeWeekDays.reduce((sum, d) => sum + Math.max(0, scheduleBuckets.immanuel[d].limit - scheduleBuckets.immanuel[d].tasks.length), 0),
+                muthu: activeWeekDays.reduce((sum, d) => sum + Math.max(0, scheduleBuckets.muthu[d].limit - scheduleBuckets.muthu[d].tasks.length), 0)
+            };
+
+            if (remainingCaps.immanuel >= remainingCaps.barath && remainingCaps.immanuel >= remainingCaps.muthu && remainingCaps.immanuel > 0) {
+                edKey = 'immanuel'; edFullName = 'Immanuel Raja S';
+            } else if (remainingCaps.muthu >= remainingCaps.barath && remainingCaps.muthu > 0) {
+                edKey = 'muthu'; edFullName = 'Muthu';
+            } else {
+                edKey = 'barath'; edFullName = 'Barath Magesh M';
+            }
+        }
+
+        const isRework = isReworkTask(t);
+        const originalDate = normalizeDateStringToISO(t.date || t.dueDate || t.duedate || t.postDate || '');
+        const targetDueDate = normalizeDateStringToISO(t.duedate || t.date || '');
+
+        // Determine best day in the active week
+        let targetSlotDate = (targetDueDate && activeWeekDays.includes(targetDueDate)) ? targetDueDate : null;
+        let chosenDate = null;
+        let allocationReason = 'Balanced to quota';
+
+        if (targetSlotDate && scheduleBuckets[edKey][targetSlotDate].tasks.length < scheduleBuckets[edKey][targetSlotDate].limit) {
+            chosenDate = targetSlotDate;
+            allocationReason = isRework ? '🎯 Due Date + Rework Priority' : '🎯 Due Date Matched';
+        } else {
+            // Try earliest available day on or before target date, else earliest day in week
+            for (const d of activeWeekDays) {
+                if (scheduleBuckets[edKey][d].tasks.length < scheduleBuckets[edKey][d].limit) {
+                    chosenDate = d;
+                    allocationReason = isRework ? '⚡ Early Slot (Rework Priority)' : (d < targetSlotDate ? '⏱️ Advanced to Prevent Overbooking' : '📦 Rolled to Available Quota');
+                    break;
+                }
+            }
+        }
+
+        if (chosenDate) {
+            scheduleBuckets[edKey][chosenDate].tasks.push(t);
+            proposedList.push({
+                task: t,
+                taskId: t.id,
+                title: t.title || t.desc || t.summary || t.id,
+                client: t.client || 'Other',
+                editorKey: edKey,
+                editorName: edFullName,
+                currentDate: originalDate || 'Backlog',
+                proposedDate: chosenDate,
+                isRework: isRework,
+                reason: allocationReason
+            });
+        }
+    });
+
+    window.proposedMatrixSchedule = proposedList;
+
+    // Render Preview Modal Content
+    if (proposedList.length === 0) {
+        content.innerHTML = `
+            <div class="text-center py-12 text-slate-400">
+                <iconify-icon icon="solar:check-circle-bold" width="36" class="text-emerald-500 mx-auto block mb-2"></iconify-icon>
+                <p class="font-extrabold text-sm text-slate-700 dark:text-slate-200">All video deliverables are already perfectly balanced!</p>
+                <p class="text-xs text-slate-400 mt-1">No pending unplaced video tasks detected for Barath, Immanuel, or Muthu this week.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const rowsHtml = proposedList.map((item, idx) => {
+        const reworkBadge = item.isRework 
+            ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">⚠️ REWORK</span>' 
+            : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">🎬 VIDEO</span>';
+
+        return `
+            <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors text-xs">
+                <td class="px-3 py-2.5 font-bold text-slate-900 dark:text-white">
+                    <div class="line-clamp-1 max-w-[200px]" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+                    <div class="text-[10px] text-slate-400 font-semibold">${escapeHtml(item.client)}</div>
+                </td>
+                <td class="px-3 py-2.5">${reworkBadge}</td>
+                <td class="px-3 py-2.5 font-semibold text-slate-700 dark:text-slate-300">${escapeHtml(item.editorName)}</td>
+                <td class="px-3 py-2.5 font-mono text-slate-400">${item.currentDate}</td>
+                <td class="px-3 py-2.5 font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-lg">
+                    ${item.proposedDate}
+                </td>
+                <td class="px-3 py-2.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">${item.reason}</td>
+            </tr>
+        `;
+    }).join('');
+
+    content.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div class="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 text-xs">
+                <div class="font-black text-indigo-900 dark:text-indigo-300">Barath: 4 Videos/Day</div>
+                <div class="text-[11px] text-indigo-700/80 dark:text-indigo-400/80 mt-0.5">Rework tasks slotted first within the 4-task quota.</div>
+            </div>
+            <div class="p-3 bg-violet-50/60 dark:bg-violet-950/40 rounded-2xl border border-violet-100 dark:border-violet-900/40 text-xs">
+                <div class="font-black text-violet-900 dark:text-violet-300">Immanuel: Shoot Aware</div>
+                <div class="text-[11px] text-violet-700/80 dark:text-violet-400/80 mt-0.5">4 vids standard • 2 on half-day shoot • 0 on full shoot.</div>
+            </div>
+            <div class="p-3 bg-emerald-50/60 dark:bg-emerald-950/40 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 text-xs">
+                <div class="font-black text-emerald-900 dark:text-emerald-300">Muthu: ${weeklyMatrixCapacities.muthu} Videos/Day</div>
+                <div class="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">Steady daily delivery quota (editable anytime).</div>
+            </div>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+            <div class="max-h-[45vh] overflow-y-auto">
+                <table class="w-full text-left">
+                    <thead class="sticky top-0 bg-slate-50 dark:bg-slate-800 text-[10px] font-black text-slate-400 uppercase border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                            <th class="px-3 py-2.5">Deliverable</th>
+                            <th class="px-3 py-2.5">Type</th>
+                            <th class="px-3 py-2.5">Assigned Editor</th>
+                            <th class="px-3 py-2.5">Current Date</th>
+                            <th class="px-3 py-2.5">Proposed Date</th>
+                            <th class="px-3 py-2.5">Schedule Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    modal.showModal();
+}
+
+async function applyWeeklyMatrixAutoSchedule() {
+    if (!window.proposedMatrixSchedule || window.proposedMatrixSchedule.length === 0) {
+        document.getElementById('weeklyMatrixAutoScheduleModal')?.close();
+        return;
+    }
+
+    const btn = document.getElementById('btn-apply-weekly-schedule');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<iconify-icon icon="solar:loading-bold" width="16" class="animate-spin"></iconify-icon> Scheduling...';
+    }
+
+    try {
+        for (const item of window.proposedMatrixSchedule) {
+            await saveMatrixTaskToFirebase(item.taskId, {
+                date: item.proposedDate,
+                duedate: item.proposedDate,
+                dueDate: item.proposedDate,
+                postDate: item.proposedDate,
+                assignee: item.editorName,
+                assigneeName: item.editorName
+            });
+        }
+
+        document.getElementById('weeklyMatrixAutoScheduleModal')?.close();
+        renderMatrixTable();
+        if (typeof showToast === 'function') {
+            showToast(`Auto-scheduled ${window.proposedMatrixSchedule.length} video deliverables into Weekly Matrix!`, 'success');
+        } else {
+            alert(`Auto-scheduled ${window.proposedMatrixSchedule.length} video deliverables into Weekly Matrix!`);
+        }
+    } catch (err) {
+        console.error('[WeeklyMatrix] Error applying auto-schedule:', err);
+        alert('Error applying auto-schedule: ' + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon> Apply Schedule to Matrix';
+        }
+    }
 }
 
 // Expose globals
@@ -2340,3 +2862,8 @@ window.weeklyMatrixDragOver = weeklyMatrixDragOver;
 window.weeklyMatrixDragLeave = weeklyMatrixDragLeave;
 window.weeklyMatrixDrop = weeklyMatrixDrop;
 window.populateWeeklyMatrixDropdowns = populateWeeklyMatrixDropdowns;
+window.openWeeklyMatrixAutoScheduleModal = openWeeklyMatrixAutoScheduleModal;
+window.applyWeeklyMatrixAutoSchedule = applyWeeklyMatrixAutoSchedule;
+window.openWeeklyMatrixCapacitySettingsModal = openWeeklyMatrixCapacitySettingsModal;
+window.saveWeeklyMatrixCapacitySettings = saveWeeklyMatrixCapacitySettings;
+window.renderWeeklyMatrixCapacityBar = renderWeeklyMatrixCapacityBar;

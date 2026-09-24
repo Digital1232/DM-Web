@@ -5062,7 +5062,30 @@
                                 campaigns, events, and business pitches</p>
                         </div>
                     </div>
-                    <!-- Format Counts -->
+
+                    <!-- Center: Strategy View Mode Switcher -->
+                    <div class="flex items-center bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-inner gap-1">
+                        <button id="strategy-view-btn-calendar" onclick="switchStrategyView('calendar')"
+                            class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                            title="Month Calendar Grid">
+                            <iconify-icon icon="solar:calendar-bold" width="16"></iconify-icon>
+                            <span>Calendar</span>
+                        </button>
+                        <button id="strategy-view-btn-list" onclick="switchStrategyView('list')"
+                            class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                            title="Comprehensive List View">
+                            <iconify-icon icon="solar:list-bold" width="16"></iconify-icon>
+                            <span>List View</span>
+                        </button>
+                        <button id="strategy-view-btn-board" onclick="switchStrategyView('board')"
+                            class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                            title="Status-wise Board / Kanban View">
+                            <iconify-icon icon="solar:widget-2-bold" width="16"></iconify-icon>
+                            <span>Board View</span>
+                        </button>
+                    </div>
+
+                    <!-- Right: Format Counts & Action Button -->
                     <div class="flex items-center gap-3 flex-wrap">
                         <div id="strategy-format-summary-cards" class="flex items-center gap-3 flex-wrap">
                             <!-- Populated dynamically by renderStrategyFormatSummaryCards() -->
@@ -5091,25 +5114,30 @@
                     <!-- Populated dynamically by JS -->
                 </div>
 
-                <!-- Main Calendar Section -->
-                <div class="grid grid-cols-1 gap-6 items-start">
-                    <!-- Calendar Board Grid -->
-                    <div
-                        class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                        <div class="p-6 border-b border-slate-50 flex items-center justify-between">
-                            <div id="strategy-calendar-header" class="flex items-center gap-4">
-                                <button onclick="navigateStrategyCalendar(-1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-left-linear" width="20"></iconify-icon></button>
-                                <h3 id="strategy-calendar-title"
-                                    class="text-lg font-black text-slate-900 tracking-tight">Month Year</h3>
-                                <button onclick="navigateStrategyCalendar(1)"
-                                    class="p-2 rounded-lg hover:bg-slate-100 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-right-linear" width="20"></iconify-icon></button>
-                            </div>
-                            <button onclick="navigateStrategyCalendar(0)"
-                                class="text-xs font-bold text-indigo-600 hover:underline">Today</button>
+                <!-- Main Workspace Section (Contains Calendar Grid, List View, and Status Board) -->
+                <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                    <!-- Shared Month Navigation Bar -->
+                    <div class="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                        <div id="strategy-calendar-header" class="flex items-center gap-3 sm:gap-4">
+                            <button onclick="navigateStrategyCalendar(-1)"
+                                class="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors" title="Previous Month">
+                                <iconify-icon icon="solar:alt-arrow-left-linear" width="20"></iconify-icon>
+                            </button>
+                            <h3 id="strategy-calendar-title"
+                                class="text-lg font-black text-slate-900 tracking-tight">Month Year</h3>
+                            <button onclick="navigateStrategyCalendar(1)"
+                                class="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors" title="Next Month">
+                                <iconify-icon icon="solar:alt-arrow-right-linear" width="20"></iconify-icon>
+                            </button>
                         </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="navigateStrategyCalendar(0)"
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 bg-indigo-50/60 hover:bg-indigo-100/80 transition-colors">Today</button>
+                        </div>
+                    </div>
+
+                    <!-- 1. CALENDAR VIEW -->
+                    <div id="strategy-view-calendar-content" class="strategy-view-pane">
                         <!-- Weekdays Header -->
                         <div class="grid grid-cols-7 border-b border-slate-50 text-center bg-slate-50/50 py-3">
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
@@ -5120,8 +5148,254 @@
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fri</span>
                             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
                         </div>
-                        <div id="strategy-calendar-grid" class="grid grid-cols-7 max-h-[600px] overflow-y-auto">
+                        <div id="strategy-calendar-grid" class="grid grid-cols-7 max-h-[620px] overflow-y-auto">
                             <!-- Calendar grid populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- 2. LIST VIEW -->
+                    <div id="strategy-view-list-content" class="strategy-view-pane hidden p-5 sm:p-6 space-y-4">
+                        <!-- List Toolbar: Search, Filters, Sort, Stats -->
+                        <div class="flex flex-col gap-3 pb-3 border-b border-slate-100">
+                            <!-- Top Row: Search + Sort + Count -->
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="relative flex-1 min-w-[240px] max-w-md">
+                                    <iconify-icon icon="solar:magnifer-linear" width="16"
+                                        class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                    <input type="text" id="strategy-list-search-input"
+                                        oninput="handleStrategyListSearch(this.value)"
+                                        placeholder="Search title, client, assignee, Jira ID, format..."
+                                        class="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
+                                    <button onclick="document.getElementById('strategy-list-search-input').value=''; handleStrategyListSearch('');"
+                                        id="strategy-list-search-clear-btn"
+                                        class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5"
+                                        title="Clear search">
+                                        <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon>
+                                    </button>
+                                </div>
+                                <div class="flex items-center gap-2.5 flex-wrap">
+                                    <div class="flex items-center gap-1.5 bg-slate-50/80 border border-slate-200/80 rounded-xl px-2.5 py-1.5 shadow-2xs">
+                                        <iconify-icon icon="solar:sort-vertical-linear" width="14" class="text-slate-400"></iconify-icon>
+                                        <span class="text-[11px] font-bold text-slate-500">Sort:</span>
+                                        <select id="strategy-list-sort-select" onchange="handleStrategyListSort(this.value)"
+                                            class="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer">
+                                            <option value="date-asc">Date (Earliest)</option>
+                                            <option value="date-desc">Date (Latest)</option>
+                                            <option value="client-asc">Client (A-Z)</option>
+                                            <option value="status-asc">Status</option>
+                                            <option value="title-asc">Title (A-Z)</option>
+                                        </select>
+                                    </div>
+                                    <span id="strategy-list-count-badge"
+                                        class="bg-indigo-50 text-indigo-700 text-xs font-black px-3 py-1.5 rounded-xl border border-indigo-100/80 flex items-center gap-1.5 shadow-2xs">
+                                        0 items
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Filter Row: Deliverables, Jira Task, Assignee, Status -->
+                            <div class="flex items-center gap-2 flex-wrap pt-0.5">
+                                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100/80 text-slate-600 text-xs font-bold shrink-0">
+                                    <iconify-icon icon="solar:tuning-4-bold-duotone" width="14" class="text-indigo-600"></iconify-icon>
+                                    <span class="text-[11px] uppercase tracking-wider">Filters</span>
+                                </div>
+
+                                <!-- Deliverables Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:clapperboard-play-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-list-filter-deliverable" onchange="handleStrategyFilterChange('deliverable', this.value)"
+                                        title="Filter by Deliverables"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Formats</option>
+                                        <option value="Video">Video</option>
+                                        <option value="Poster">Poster</option>
+                                        <option value="Thumbnail">Thumbnail</option>
+                                        <option value="Printing Material">Printing Material</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Jira Task Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:link-circle-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-list-filter-jira" onchange="handleStrategyFilterChange('jira', this.value)"
+                                        title="Filter by Jira Task"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Jira Tasks</option>
+                                        <option value="has_jira">Has Jira Task</option>
+                                        <option value="no_jira">No Jira Task</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Assignee Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:user-circle-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-list-filter-assignee" onchange="handleStrategyFilterChange('assignee', this.value)"
+                                        title="Filter by Assignee"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Assignees</option>
+                                        <option value="Unassigned">Unassigned</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Status Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:flag-2-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-list-filter-status" onchange="handleStrategyFilterChange('status', this.value)"
+                                        title="Filter by Status"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Statuses</option>
+                                        <option value="To Do">To Do / Backlog</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="In Review">In Review</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Posted">Posted</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Reset Button -->
+                                <button id="strategy-list-clear-filters-btn" onclick="clearStrategySharedFilters()"
+                                    class="hidden px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 rounded-xl text-xs font-bold transition-all items-center gap-1.5 shadow-2xs active:scale-95"
+                                    title="Clear all active filters">
+                                    <iconify-icon icon="solar:restart-bold" width="13"></iconify-icon>
+                                    <span>Reset</span>
+                                    <span id="strategy-list-active-filter-badge" class="bg-rose-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full leading-tight"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Table container -->
+                        <div id="strategy-list-table-container" class="overflow-x-auto">
+                            <!-- Rendered dynamically by renderStrategyListView() -->
+                        </div>
+                    </div>
+
+                    <!-- 3. BOARD VIEW (STATUS-WISE KANBAN) -->
+                    <div id="strategy-view-board-content" class="strategy-view-pane hidden p-5 sm:p-6 space-y-4">
+                        <!-- Board Toolbar: Search & Filters -->
+                        <div class="flex flex-col gap-3 pb-3 border-b border-slate-100">
+                            <!-- Top Row: Header & Search & Board Counter -->
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span class="text-xs font-black text-slate-800 tracking-tight">Status-wise Workflow Board</span>
+                                    <span class="text-[10px] text-slate-400 font-medium hidden sm:inline">• Drag & drop cards or move stages</span>
+                                </div>
+                                <div class="flex items-center gap-2.5 flex-wrap">
+                                    <div class="relative min-w-[220px]">
+                                        <iconify-icon icon="solar:magnifer-linear" width="16"
+                                            class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                        <input type="text" id="strategy-board-search-input"
+                                            oninput="handleStrategyBoardSearch(this.value)"
+                                            placeholder="Filter board items..."
+                                            class="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                                        <button onclick="document.getElementById('strategy-board-search-input').value=''; handleStrategyBoardSearch('');"
+                                            id="strategy-board-search-clear-btn"
+                                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5"
+                                            title="Clear search">
+                                            <iconify-icon icon="solar:close-circle-bold" width="14"></iconify-icon>
+                                        </button>
+                                    </div>
+                                    <span id="strategy-board-count-badge"
+                                        class="bg-indigo-50 text-indigo-700 text-xs font-black px-3 py-1.5 rounded-xl border border-indigo-100/80 flex items-center gap-1.5 shadow-2xs">0 items</span>
+                                </div>
+                            </div>
+
+                            <!-- Filter Row: Deliverables, Jira Task, Assignee, Status -->
+                            <div class="flex items-center gap-2 flex-wrap pt-0.5">
+                                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100/80 text-slate-600 text-xs font-bold shrink-0">
+                                    <iconify-icon icon="solar:tuning-4-bold-duotone" width="14" class="text-indigo-600"></iconify-icon>
+                                    <span class="text-[11px] uppercase tracking-wider">Filters</span>
+                                </div>
+
+                                <!-- Deliverables Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:clapperboard-play-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-board-filter-deliverable" onchange="handleStrategyFilterChange('deliverable', this.value)"
+                                        title="Filter by Deliverables"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Formats</option>
+                                        <option value="Video">Video</option>
+                                        <option value="Poster">Poster</option>
+                                        <option value="Thumbnail">Thumbnail</option>
+                                        <option value="Printing Material">Printing Material</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Jira Task Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:link-circle-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-board-filter-jira" onchange="handleStrategyFilterChange('jira', this.value)"
+                                        title="Filter by Jira Task"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Jira Tasks</option>
+                                        <option value="has_jira">Has Jira Task</option>
+                                        <option value="no_jira">No Jira Task</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Assignee Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:user-circle-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-board-filter-assignee" onchange="handleStrategyFilterChange('assignee', this.value)"
+                                        title="Filter by Assignee"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Assignees</option>
+                                        <option value="Unassigned">Unassigned</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Status Filter -->
+                                <div class="relative min-w-[145px]">
+                                    <iconify-icon icon="solar:flag-2-bold-duotone" width="14"
+                                        class="filter-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                    <select id="strategy-board-filter-status" onchange="handleStrategyFilterChange('status', this.value)"
+                                        title="Filter by Status"
+                                        class="w-full appearance-none bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl pl-8 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer shadow-2xs">
+                                        <option value="All">All Statuses</option>
+                                        <option value="To Do">To Do / Backlog</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="In Review">In Review</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Posted">Posted</option>
+                                    </select>
+                                    <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
+                                        class="filter-arrow absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors"></iconify-icon>
+                                </div>
+
+                                <!-- Reset Button -->
+                                <button id="strategy-board-clear-filters-btn" onclick="clearStrategySharedFilters()"
+                                    class="hidden px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 rounded-xl text-xs font-bold transition-all items-center gap-1.5 shadow-2xs active:scale-95"
+                                    title="Clear all active filters">
+                                    <iconify-icon icon="solar:restart-bold" width="13"></iconify-icon>
+                                    <span>Reset</span>
+                                    <span id="strategy-board-active-filter-badge" class="bg-rose-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full leading-tight"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Columns Container -->
+                        <div id="strategy-board-columns-container"
+                            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-start min-h-[500px] overflow-x-auto pb-4">
+                            <!-- Rendered dynamically by renderStrategyBoardView() -->
                         </div>
                     </div>
                 </div>
@@ -9345,23 +9619,38 @@
                                                 <!-- Row 1: Main column groups -->
                                                 <tr class="border-b border-slate-200">
                                                     <th rowspan="2" class="px-4 py-3 text-left font-bold text-slate-700 text-xs uppercase border-r border-slate-200">Client</th>
-                                                    <th colspan="2" class="px-3 py-2 text-center font-bold text-blue-700 text-xs uppercase border-r border-slate-200">📋 Planned</th>
-                                                    <th colspan="2" class="px-3 py-2 text-center font-bold text-emerald-700 text-xs uppercase border-r border-slate-200">✅ Completed</th>
-                                                    <th colspan="2" class="px-3 py-2 text-center font-bold text-indigo-700 text-xs uppercase border-r border-slate-200">📤 Posted</th>
-                                                    <th colspan="2" class="px-3 py-2 text-center font-bold text-amber-700 text-xs uppercase border-r border-slate-200">⏳ Pending</th>
+                                                    <th colspan="4" class="px-3 py-2 text-center font-bold text-blue-700 text-xs uppercase border-r border-slate-200">📋 Planned</th>
+                                                    <th colspan="4" class="px-3 py-2 text-center font-bold text-emerald-700 text-xs uppercase border-r border-slate-200">✅ Completed</th>
+                                                    <th colspan="4" class="px-3 py-2 text-center font-bold text-indigo-700 text-xs uppercase border-r border-slate-200">📤 Posted</th>
+                                                    <th colspan="4" class="px-3 py-2 text-center font-bold text-amber-700 text-xs uppercase border-r border-slate-200">⏳ Pending</th>
                                                     <th rowspan="2" class="px-3 py-2 text-center font-bold text-slate-700 text-xs uppercase border-r border-slate-100">%</th>
                                                     <th rowspan="2" class="px-3 py-2 text-center font-bold text-slate-500 text-xs uppercase">Avg Hrs</th>
                                                 </tr>
-                                                <!-- Row 2: Sub-headers for split columns -->
-                                                <tr class="bg-slate-100">
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-blue-500 uppercase">🎬 V</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-blue-500 uppercase border-r border-slate-200">🖼 P</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-emerald-500 uppercase">🎬 V</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-emerald-500 uppercase border-r border-slate-200">🖼 P</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-indigo-500 uppercase">🎬 V</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-indigo-500 uppercase border-r border-slate-200">🖼 P</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-amber-500 uppercase">🎬 V</th>
-                                                    <th class="px-3 py-1.5 text-center text-[10px] font-semibold text-amber-500 uppercase border-r border-slate-200">🖼 P</th>
+                                                <!-- Row 2: Sub-headers for 4 split deliverable categories -->
+                                                <tr class="bg-slate-100 text-[10px] font-bold uppercase select-none">
+                                                    <!-- Planned Sub-headers -->
+                                                    <th class="px-2 py-1.5 text-center text-blue-600" title="Videos">🎬 V</th>
+                                                    <th class="px-2 py-1.5 text-center text-blue-600" title="Thumbnails">🖼️ T</th>
+                                                    <th class="px-2 py-1.5 text-center text-blue-600" title="Posters">🎨 P</th>
+                                                    <th class="px-2 py-1.5 text-center text-blue-600 border-r border-slate-200" title="Printing Material">🖨️ PM</th>
+
+                                                    <!-- Completed Sub-headers -->
+                                                    <th class="px-2 py-1.5 text-center text-emerald-600" title="Videos">🎬 V</th>
+                                                    <th class="px-2 py-1.5 text-center text-emerald-600" title="Thumbnails">🖼️ T</th>
+                                                    <th class="px-2 py-1.5 text-center text-emerald-600" title="Posters">🎨 P</th>
+                                                    <th class="px-2 py-1.5 text-center text-emerald-600 border-r border-slate-200" title="Printing Material">🖨️ PM</th>
+
+                                                    <!-- Posted Sub-headers -->
+                                                    <th class="px-2 py-1.5 text-center text-indigo-600" title="Videos">🎬 V</th>
+                                                    <th class="px-2 py-1.5 text-center text-indigo-600" title="Thumbnails">🖼️ T</th>
+                                                    <th class="px-2 py-1.5 text-center text-indigo-600" title="Posters">🎨 P</th>
+                                                    <th class="px-2 py-1.5 text-center text-indigo-600 border-r border-slate-200" title="Printing Material">🖨️ PM</th>
+
+                                                    <!-- Pending Sub-headers -->
+                                                    <th class="px-2 py-1.5 text-center text-amber-600" title="Videos">🎬 V</th>
+                                                    <th class="px-2 py-1.5 text-center text-amber-600" title="Thumbnails">🖼️ T</th>
+                                                    <th class="px-2 py-1.5 text-center text-amber-600" title="Posters">🎨 P</th>
+                                                    <th class="px-2 py-1.5 text-center text-amber-600 border-r border-slate-200" title="Printing Material">🖨️ PM</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="cd-table-body" class="divide-y divide-slate-100">
@@ -19076,6 +19365,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             });
             let strategyEventsUnsub = null;
             let activeStrategyClientFilter = 'All';
+            let activeStrategyView = (function() {
+                try { return localStorage.getItem('worksync_strategy_view') || 'calendar'; } catch(e) { return 'calendar'; }
+            })();
+            window.activeStrategyView = activeStrategyView;
+            let strategyListSearchQuery = '';
+            let strategyListSortBy = 'date-asc';
+            let strategyBoardSearchQuery = '';
+            let draggedStrategyItemId = null;
 
             function populateStrategyClientDropdown(selectedValue = '') {
                 const clientSelect = document.getElementById('strategy-client');
@@ -19167,6 +19464,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // CRITICAL FIX: Render immediately with current data (even if empty)
                 // This ensures UI appears on first load, before Firebase callback fires
                 console.log('[initStrategyCalendar] Rendering with current data (may be empty on first load)');
+                switchStrategyView(activeStrategyView);
                 renderStrategyClientTabs();
                 renderStrategyFormatSummaryCards();
                 renderStrategyStatusFilters();
@@ -20314,7 +20612,1018 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (typeof renderStrategyFormatSummaryCards === 'function') renderStrategyFormatSummaryCards();
                 if (typeof renderStrategyStatusFilters === 'function') renderStrategyStatusFilters();
+                if (typeof renderStrategyActiveView === 'function') renderStrategyActiveView();
             }
+
+            // --- Strategy View Management (Calendar, List, Board) ---
+            function getStrategyFormatIconHtml(format) {
+                const f = (format || 'Video').toLowerCase();
+                if (f.includes('video')) {
+                    return `<span class="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0" title="Video"><iconify-icon icon="solar:video-frame-bold-duotone" width="14"></iconify-icon></span>`;
+                }
+                if (f.includes('poster')) {
+                    return `<span class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0" title="Poster"><iconify-icon icon="solar:gallery-wide-bold-duotone" width="14"></iconify-icon></span>`;
+                }
+                if (f.includes('reel') || f.includes('short')) {
+                    return `<span class="w-6 h-6 rounded-lg bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center shrink-0" title="Reel / Short"><iconify-icon icon="solar:smartphone-bold-duotone" width="14"></iconify-icon></span>`;
+                }
+                if (f.includes('carousel')) {
+                    return `<span class="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0" title="Carousel"><iconify-icon icon="solar:slider-minimalistic-horizontal-bold-duotone" width="14"></iconify-icon></span>`;
+                }
+                if (f.includes('print')) {
+                    return `<span class="w-6 h-6 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center shrink-0" title="Printing Material"><iconify-icon icon="solar:printer-bold-duotone" width="14"></iconify-icon></span>`;
+                }
+                return `<span class="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0" title="${escapeHtml(format || 'Content')}"><iconify-icon icon="solar:document-text-bold-duotone" width="14"></iconify-icon></span>`;
+            }
+            window.getStrategyFormatIconHtml = getStrategyFormatIconHtml;
+
+            // --- Strategy Shared Filter State (List View & Board View) ---
+            let strategySharedFilters = {
+                deliverable: 'All',
+                jira: 'All',
+                assignee: 'All',
+                status: 'All'
+            };
+            window.strategySharedFilters = strategySharedFilters;
+
+            function handleStrategyFilterChange(filterKey, value) {
+                if (!strategySharedFilters) {
+                    strategySharedFilters = { deliverable: 'All', jira: 'All', assignee: 'All', status: 'All' };
+                }
+                strategySharedFilters[filterKey] = value || 'All';
+                syncStrategyFilterDropdowns();
+                renderStrategyActiveView();
+            }
+            window.handleStrategyFilterChange = handleStrategyFilterChange;
+
+            function clearStrategySharedFilters() {
+                strategySharedFilters = {
+                    deliverable: 'All',
+                    jira: 'All',
+                    assignee: 'All',
+                    status: 'All'
+                };
+                window.strategySharedFilters = strategySharedFilters;
+                strategyListSearchQuery = '';
+                strategyBoardSearchQuery = '';
+
+                const listSearch = document.getElementById('strategy-list-search-input');
+                if (listSearch) listSearch.value = '';
+                const boardSearch = document.getElementById('strategy-board-search-input');
+                if (boardSearch) boardSearch.value = '';
+
+                syncStrategyFilterDropdowns();
+                renderStrategyActiveView();
+            }
+            window.clearStrategySharedFilters = clearStrategySharedFilters;
+
+            function syncStrategyFilterDropdowns() {
+                const filterDefs = [
+                    { key: 'deliverable', listId: 'strategy-list-filter-deliverable', boardId: 'strategy-board-filter-deliverable' },
+                    { key: 'jira', listId: 'strategy-list-filter-jira', boardId: 'strategy-board-filter-jira' },
+                    { key: 'assignee', listId: 'strategy-list-filter-assignee', boardId: 'strategy-board-filter-assignee' },
+                    { key: 'status', listId: 'strategy-list-filter-status', boardId: 'strategy-board-filter-status' }
+                ];
+
+                let activeFilterCount = 0;
+
+                filterDefs.forEach(({ key, listId, boardId }) => {
+                    const currentVal = strategySharedFilters ? (strategySharedFilters[key] || 'All') : 'All';
+                    const isActive = currentVal && currentVal !== 'All';
+                    if (isActive) activeFilterCount++;
+
+                    [document.getElementById(listId), document.getElementById(boardId)].forEach(el => {
+                        if (!el) return;
+                        if (el.value !== currentVal) el.value = currentVal;
+
+                        const wrapper = el.parentElement;
+                        const icon = wrapper ? wrapper.querySelector('.filter-icon') : null;
+                        const arrow = wrapper ? wrapper.querySelector('.filter-arrow') : null;
+
+                        if (isActive) {
+                            el.classList.add('bg-indigo-50/90', 'border-indigo-300', 'text-indigo-900', 'font-bold', 'ring-2', 'ring-indigo-500/10');
+                            el.classList.remove('bg-white', 'hover:bg-slate-50', 'border-slate-200/90', 'text-slate-700', 'font-semibold');
+                            if (icon) {
+                                icon.classList.add('text-indigo-600');
+                                icon.classList.remove('text-slate-400');
+                            }
+                            if (arrow) {
+                                arrow.classList.add('text-indigo-500');
+                                arrow.classList.remove('text-slate-400');
+                            }
+                        } else {
+                            el.classList.remove('bg-indigo-50/90', 'border-indigo-300', 'text-indigo-900', 'font-bold', 'ring-2', 'ring-indigo-500/10');
+                            el.classList.add('bg-white', 'hover:bg-slate-50', 'border-slate-200/90', 'text-slate-700', 'font-semibold');
+                            if (icon) {
+                                icon.classList.remove('text-indigo-600');
+                                icon.classList.add('text-slate-400');
+                            }
+                            if (arrow) {
+                                arrow.classList.remove('text-indigo-500');
+                                arrow.classList.add('text-slate-400');
+                            }
+                        }
+                    });
+                });
+
+                const hasSearch = Boolean(strategyListSearchQuery) || Boolean(strategyBoardSearchQuery);
+                if (hasSearch) activeFilterCount++;
+
+                // Search clear buttons
+                const listSearchClear = document.getElementById('strategy-list-search-clear-btn');
+                if (listSearchClear) listSearchClear.classList.toggle('hidden', !strategyListSearchQuery);
+
+                const boardSearchClear = document.getElementById('strategy-board-search-clear-btn');
+                if (boardSearchClear) boardSearchClear.classList.toggle('hidden', !strategyBoardSearchQuery);
+
+                // Reset buttons with dynamic counter badge
+                const listClearBtn = document.getElementById('strategy-list-clear-filters-btn');
+                const boardClearBtn = document.getElementById('strategy-board-clear-filters-btn');
+                const listActiveBadge = document.getElementById('strategy-list-active-filter-badge');
+                const boardActiveBadge = document.getElementById('strategy-board-active-filter-badge');
+
+                const showReset = activeFilterCount > 0;
+                if (listClearBtn) {
+                    listClearBtn.classList.toggle('hidden', !showReset);
+                    listClearBtn.classList.toggle('inline-flex', showReset);
+                }
+                if (boardClearBtn) {
+                    boardClearBtn.classList.toggle('hidden', !showReset);
+                    boardClearBtn.classList.toggle('inline-flex', showReset);
+                }
+                if (listActiveBadge) listActiveBadge.textContent = activeFilterCount > 0 ? String(activeFilterCount) : '';
+                if (boardActiveBadge) boardActiveBadge.textContent = activeFilterCount > 0 ? String(activeFilterCount) : '';
+            }
+            window.syncStrategyFilterDropdowns = syncStrategyFilterDropdowns;
+
+            function populateStrategyFilterOptions(allItems) {
+                const listAssignee = document.getElementById('strategy-list-filter-assignee');
+                const boardAssignee = document.getElementById('strategy-board-filter-assignee');
+                const listJira = document.getElementById('strategy-list-filter-jira');
+                const boardJira = document.getElementById('strategy-board-filter-jira');
+
+                // 1. Collect unique assignees
+                const assigneesSet = new Set();
+                (allItems || []).forEach(it => {
+                    const name = (it.ownerName || '').trim();
+                    if (name && name.toLowerCase() !== 'unassigned') {
+                        assigneesSet.add(name);
+                    }
+                });
+                const sortedAssignees = Array.from(assigneesSet).sort((a, b) => a.localeCompare(b));
+
+                const assigneeOptionsHtml = `
+                    <option value="All">All Assignees</option>
+                    <option value="Unassigned">👤 Unassigned</option>
+                    ${sortedAssignees.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}
+                `;
+
+                if (listAssignee && listAssignee.getAttribute('data-loaded-count') !== String(sortedAssignees.length)) {
+                    const currVal = strategySharedFilters.assignee;
+                    listAssignee.innerHTML = assigneeOptionsHtml;
+                    listAssignee.setAttribute('data-loaded-count', String(sortedAssignees.length));
+                    listAssignee.value = sortedAssignees.includes(currVal) || currVal === 'Unassigned' ? currVal : 'All';
+                }
+                if (boardAssignee && boardAssignee.getAttribute('data-loaded-count') !== String(sortedAssignees.length)) {
+                    const currVal = strategySharedFilters.assignee;
+                    boardAssignee.innerHTML = assigneeOptionsHtml;
+                    boardAssignee.setAttribute('data-loaded-count', String(sortedAssignees.length));
+                    boardAssignee.value = sortedAssignees.includes(currVal) || currVal === 'Unassigned' ? currVal : 'All';
+                }
+
+                // 2. Jira Tasks: distinct Jira IDs if any
+                const jiraIdsSet = new Set();
+                (allItems || []).forEach(it => {
+                    const jId = (it.jiraId || '').trim();
+                    if (jId) jiraIdsSet.add(jId);
+                });
+                const sortedJiraIds = Array.from(jiraIdsSet).sort((a, b) => a.localeCompare(b));
+
+                let jiraOptionsHtml = `
+                    <option value="All">All Jira Tasks</option>
+                    <option value="has_jira">🔗 Has Jira Task</option>
+                    <option value="no_jira">⚡ No Jira Task</option>
+                `;
+                if (sortedJiraIds.length > 0) {
+                    jiraOptionsHtml += `
+                        <optgroup label="Specific Jira IDs">
+                            ${sortedJiraIds.map(jId => `<option value="${escapeHtml(jId)}">${escapeHtml(jId)}</option>`).join('')}
+                        </optgroup>
+                    `;
+                }
+
+                if (listJira && listJira.getAttribute('data-loaded-count') !== String(sortedJiraIds.length)) {
+                    const currVal = strategySharedFilters.jira;
+                    listJira.innerHTML = jiraOptionsHtml;
+                    listJira.setAttribute('data-loaded-count', String(sortedJiraIds.length));
+                    listJira.value = currVal;
+                }
+                if (boardJira && boardJira.getAttribute('data-loaded-count') !== String(sortedJiraIds.length)) {
+                    const currVal = strategySharedFilters.jira;
+                    boardJira.innerHTML = jiraOptionsHtml;
+                    boardJira.setAttribute('data-loaded-count', String(sortedJiraIds.length));
+                    boardJira.value = currVal;
+                }
+
+                syncStrategyFilterDropdowns();
+            }
+            window.populateStrategyFilterOptions = populateStrategyFilterOptions;
+
+            function matchesStrategyFilters(it) {
+                if (!strategySharedFilters) return true;
+
+                // 1. Deliverables filter
+                const df = strategySharedFilters.deliverable;
+                if (df && df !== 'All') {
+                    const dfLower = df.toLowerCase();
+                    const itemFmt = getStrategyItemFormat(it);
+                    const rawFmt = (it.format || '').toLowerCase();
+                    const text = `${it.title || ''} ${it.desc || ''}`.toLowerCase();
+
+                    if (dfLower === 'video') {
+                        const isVideo = itemFmt === 'video' || (it.videosCount > 0) || rawFmt.includes('video') || text.includes('video') || text.includes('reel') || text.includes('short');
+                        if (!isVideo) return false;
+                    } else if (dfLower === 'poster') {
+                        const isPoster = itemFmt === 'poster' || (it.postersCount > 0) || rawFmt.includes('poster') || text.includes('poster') || text.includes('graphic');
+                        if (!isPoster) return false;
+                    } else if (dfLower === 'thumbnail') {
+                        const isThumb = itemFmt === 'thumbnail' || rawFmt.includes('thumbnail') || rawFmt.includes('thumb') || text.includes('thumbnail') || text.includes('thumb');
+                        if (!isThumb) return false;
+                    } else if (dfLower.includes('print')) {
+                        if (!rawFmt.includes('print') && !text.includes('print')) return false;
+                    } else {
+                        if (rawFmt !== dfLower && itemFmt !== dfLower) return false;
+                    }
+                }
+
+                // 2. Jira Task filter
+                const jf = strategySharedFilters.jira;
+                if (jf && jf !== 'All') {
+                    const hasJira = Boolean(it.jiraId && String(it.jiraId).trim() !== '');
+                    if (jf === 'has_jira') {
+                        if (!hasJira) return false;
+                    } else if (jf === 'no_jira') {
+                        if (hasJira) return false;
+                    } else {
+                        // Specific Jira ID
+                        const itJira = (it.jiraId || '').toLowerCase().trim();
+                        if (itJira !== jf.toLowerCase().trim()) return false;
+                    }
+                }
+
+                // 3. Assignee filter
+                const af = strategySharedFilters.assignee;
+                if (af && af !== 'All') {
+                    if (af === 'Unassigned') {
+                        const isUnassigned = !it.owner || it.ownerName === 'Unassigned' || it.owner === 'Unassigned';
+                        if (!isUnassigned) return false;
+                    } else {
+                        const afLower = af.toLowerCase().trim();
+                        const ownerLower = (it.owner || '').toLowerCase().trim();
+                        const ownerNameLower = (it.ownerName || '').toLowerCase().trim();
+                        if (ownerLower !== afLower && ownerNameLower !== afLower) return false;
+                    }
+                }
+
+                // 4. Status filter
+                const sf = strategySharedFilters.status;
+                if (sf && sf !== 'All') {
+                    const sfLower = sf.toLowerCase().trim();
+                    const itemStatus = (it.status || '').toLowerCase().trim();
+                    const cat = it.statusCategory || '';
+
+                    if (sfLower === 'todo' || sfLower === 'to do') {
+                        const todoList = ['to do', 'todo', 'planned', 'backlog', 'open'];
+                        if (!todoList.includes(itemStatus) && cat !== 'pending') return false;
+                    } else if (sfLower === 'in progress' || sfLower === 'in_progress') {
+                        const inProgList = [
+                            'in progress', 'inprogress', 'in-progress', 'shoot needed', 'shoot planned', 'shoot in progress',
+                            'content in progress', 'design to do', 'design', 'design in progress',
+                            'rework designs', 'rework', 'rework design', 'thumbnail waiting', 'thumbnail',
+                            'thumbnail to do', 'thumbnail pending', 'thumbnail in progress', 'design hold', 'on hold', 'hold', 'blocked'
+                        ];
+                        if (!inProgList.includes(itemStatus)) return false;
+                    } else if (sfLower === 'in review' || sfLower === 'in_review' || sfLower === 'review') {
+                        const reviewList = ['in review', 'review', 'code review', 'client content approval', 'quality check', 'qc'];
+                        if (!reviewList.includes(itemStatus)) return false;
+                    } else if (sfLower === 'completed') {
+                        const compList = [
+                            'design completed', 'design done', 'thumbnail completed', 'thumbnail done',
+                            'thumbnail approved', 'thumbnail ready', 'client sent', 'client send',
+                            'client approved', 'approved', 'completed'
+                        ];
+                        if (!compList.includes(itemStatus) && cat !== 'completed') return false;
+                    } else if (sfLower === 'posted') {
+                        const postedList = ['posted', 'analytics', 'done', 'closed', 'resolved'];
+                        if (!postedList.includes(itemStatus) && cat !== 'posted') return false;
+                    } else {
+                        if (itemStatus !== sfLower) return false;
+                    }
+                }
+
+                return true;
+            }
+            window.matchesStrategyFilters = matchesStrategyFilters;
+
+            function switchStrategyView(viewName) {
+                activeStrategyView = viewName || 'calendar';
+                window.activeStrategyView = activeStrategyView;
+                try {
+                    localStorage.setItem('worksync_strategy_view', activeStrategyView);
+                } catch (e) {}
+
+                const btnCal = document.getElementById('strategy-view-btn-calendar');
+                const btnList = document.getElementById('strategy-view-btn-list');
+                const btnBoard = document.getElementById('strategy-view-btn-board');
+
+                const activeClasses = ['bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-200', 'font-black'];
+                const inactiveClasses = ['text-slate-600', 'hover:text-slate-900', 'hover:bg-white/60', 'font-bold'];
+
+                [
+                    { btn: btnCal, name: 'calendar' },
+                    { btn: btnList, name: 'list' },
+                    { btn: btnBoard, name: 'board' }
+                ].forEach(({ btn, name }) => {
+                    if (!btn) return;
+                    if (name === activeStrategyView) {
+                        btn.classList.add(...activeClasses);
+                        btn.classList.remove(...inactiveClasses);
+                    } else {
+                        btn.classList.remove(...activeClasses);
+                        btn.classList.add(...inactiveClasses);
+                    }
+                });
+
+                const paneCal = document.getElementById('strategy-view-calendar-content');
+                const paneList = document.getElementById('strategy-view-list-content');
+                const paneBoard = document.getElementById('strategy-view-board-content');
+
+                if (paneCal) paneCal.classList.toggle('hidden', activeStrategyView !== 'calendar');
+                if (paneList) paneList.classList.toggle('hidden', activeStrategyView !== 'list');
+                if (paneBoard) paneBoard.classList.toggle('hidden', activeStrategyView !== 'board');
+
+                renderStrategyActiveView();
+            }
+            window.switchStrategyView = switchStrategyView;
+
+            function renderStrategyActiveView() {
+                if (activeStrategyView === 'list') {
+                    renderStrategyListView();
+                } else if (activeStrategyView === 'board') {
+                    renderStrategyBoardView();
+                }
+            }
+            window.renderStrategyActiveView = renderStrategyActiveView;
+
+            function getFilteredStrategyItems() {
+                const month = strategyCurrentDate.getMonth();
+                const year = strategyCurrentDate.getFullYear();
+                const items = [];
+
+                const strategyJiraIds = new Set();
+                if (strategyEvents) {
+                    Object.values(strategyEvents).forEach(ev => {
+                        const jId = ev.jiraId || ev.jiraTaskId;
+                        if (jId) strategyJiraIds.add(jId.toString().toLowerCase().trim());
+                    });
+                }
+
+                // 1. Process Strategy Events
+                Object.entries(strategyEvents || {}).forEach(([id, ev]) => {
+                    if (!ev.date) return;
+
+                    if (!isMatchingStrategyClient(ev.client, activeStrategyClientFilter)) {
+                        return;
+                    }
+
+                    const [ey, em, ed] = ev.date.split('-').map(Number);
+                    if (em - 1 !== month || ey !== year) return;
+
+                    let finalStatus = ev.status || 'To Do';
+                    const evJiraId = ev.jiraId || ev.jiraTaskId;
+                    if (evJiraId) {
+                        const matchedJiraTask = (window.allTasks || tasks)?.find(t =>
+                            String(t.id).toLowerCase() === String(evJiraId).toLowerCase() ||
+                            (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase())
+                        );
+                        if (matchedJiraTask && matchedJiraTask.status) {
+                            finalStatus = matchedJiraTask.status;
+                        }
+                    }
+
+                    if (activeStrategyStatusFilter !== 'All') {
+                        const cat = getStrategyStatusCategory(finalStatus);
+                        if (cat !== activeStrategyStatusFilter) return;
+                    }
+
+                    finalStatus = normalizeStrategyStatus(finalStatus);
+
+                    let ownerName = ev.owner || 'Unassigned';
+                    if (allUsersMap && ev.owner) {
+                        const u = allUsersMap.get(ev.owner.toLowerCase());
+                        if (u && u.name) ownerName = u.name;
+                    }
+
+                    items.push({
+                        id: id,
+                        title: ev.title || 'Untitled Event',
+                        client: ev.client || 'General',
+                        date: ev.date,
+                        duedate: ev.duedate || calculateDueDate4DaysBefore(ev.date) || '',
+                        status: finalStatus,
+                        statusCategory: getStrategyStatusCategory(finalStatus),
+                        owner: ev.owner || '',
+                        ownerName: ownerName,
+                        desc: ev.desc || '',
+                        format: ev.format || 'Video',
+                        videosCount: parseInt(ev.videosCount) || 0,
+                        postersCount: parseInt(ev.postersCount) || 0,
+                        jiraId: ev.jiraId || ev.jiraTaskId || '',
+                        folderPath: ev.folderPath || ev.sourceFolder || '',
+                        isStrategyEvent: true
+                    });
+                });
+
+                // 2. Process Jira tasks
+                if (tasks && tasks.length > 0) {
+                    tasks.forEach(task => {
+                        if (task.manual || isInternalTask(task)) return;
+                        if (!isMatchingStrategyClient(task.client, activeStrategyClientFilter)) return;
+
+                        const targetPostDate = task.postDate || calculatePostDate4DaysAfter(task.duedate);
+                        if (!targetPostDate) return;
+
+                        const [ty, tm, td] = targetPostDate.split('-').map(Number);
+                        if (tm - 1 !== month || ty !== year) return;
+
+                        const lowerTaskId = task.id.toLowerCase().trim();
+                        if (strategyJiraIds.has(lowerTaskId)) return;
+                        if (!task.id.toUpperCase().startsWith('SEP-')) return;
+
+                        const matchesTitleClient = items.some(item =>
+                            item.title && task.desc &&
+                            item.title.toLowerCase().trim() === task.desc.toLowerCase().trim() &&
+                            (item.client || '').toLowerCase().trim() === (task.client || '').toLowerCase().trim()
+                        );
+                        if (matchesTitleClient) return;
+
+                        let finalStatus = task.status || 'To Do';
+                        if (activeStrategyStatusFilter !== 'All') {
+                            const cat = getStrategyStatusCategory(finalStatus);
+                            if (cat !== activeStrategyStatusFilter) return;
+                        }
+
+                        finalStatus = normalizeStrategyStatus(finalStatus);
+
+                        let ownerName = task.assignee || 'Unassigned';
+                        if (allUsersMap && task.assignee) {
+                            const u = allUsersMap.get(task.assignee.toLowerCase());
+                            if (u && u.name) ownerName = u.name;
+                        }
+
+                        items.push({
+                            id: task.id,
+                            title: task.desc || task.id,
+                            client: task.client || 'Others',
+                            date: targetPostDate,
+                            duedate: task.duedate || '',
+                            status: finalStatus,
+                            statusCategory: getStrategyStatusCategory(finalStatus),
+                            owner: task.assignee || '',
+                            ownerName: ownerName,
+                            desc: `Jira: ${task.id}`,
+                            format: 'Video',
+                            videosCount: 0,
+                            postersCount: 0,
+                            jiraId: task.id,
+                            isJiraTask: true
+                        });
+                    });
+                }
+
+                return items;
+            }
+            window.getFilteredStrategyItems = getFilteredStrategyItems;
+
+            function handleStrategyListSearch(query) {
+                strategyListSearchQuery = (query || '').toLowerCase().trim();
+                syncStrategyFilterDropdowns();
+                renderStrategyListView();
+            }
+            window.handleStrategyListSearch = handleStrategyListSearch;
+
+            function handleStrategyListSort(sortBy) {
+                strategyListSortBy = sortBy;
+                renderStrategyListView();
+            }
+            window.handleStrategyListSort = handleStrategyListSort;
+
+            function renderStrategyListView() {
+                const tableContainer = document.getElementById('strategy-list-table-container');
+                const badge = document.getElementById('strategy-list-count-badge');
+                if (!tableContainer) return;
+
+                let allItems = getFilteredStrategyItems();
+                populateStrategyFilterOptions(allItems);
+
+                let items = allItems.filter(matchesStrategyFilters);
+
+                if (strategyListSearchQuery) {
+                    items = items.filter(it =>
+                        (it.title && it.title.toLowerCase().includes(strategyListSearchQuery)) ||
+                        (it.client && it.client.toLowerCase().includes(strategyListSearchQuery)) ||
+                        (it.ownerName && it.ownerName.toLowerCase().includes(strategyListSearchQuery)) ||
+                        (it.jiraId && it.jiraId.toLowerCase().includes(strategyListSearchQuery)) ||
+                        (it.status && it.status.toLowerCase().includes(strategyListSearchQuery)) ||
+                        (it.format && it.format.toLowerCase().includes(strategyListSearchQuery))
+                    );
+                }
+
+                items.sort((a, b) => {
+                    if (strategyListSortBy === 'date-asc') return (a.date || '').localeCompare(b.date || '');
+                    if (strategyListSortBy === 'date-desc') return (b.date || '').localeCompare(a.date || '');
+                    if (strategyListSortBy === 'client-asc') return (a.client || '').localeCompare(b.client || '');
+                    if (strategyListSortBy === 'status-asc') return (a.status || '').localeCompare(b.status || '');
+                    if (strategyListSortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
+                    return 0;
+                });
+
+                if (badge) {
+                    if (items.length !== allItems.length) {
+                        badge.innerHTML = `<iconify-icon icon="solar:layers-bold-duotone" width="14" class="text-indigo-600"></iconify-icon> <span class="font-extrabold text-indigo-700">${items.length}</span><span class="text-slate-400 font-semibold text-[10px]"> / ${allItems.length}</span> <span class="text-slate-500 font-medium">items</span>`;
+                    } else {
+                        badge.innerHTML = `<iconify-icon icon="solar:layers-bold-duotone" width="14" class="text-indigo-600"></iconify-icon> <span class="font-extrabold text-indigo-700">${items.length}</span> <span class="text-slate-500 font-medium">item${items.length === 1 ? '' : 's'}</span>`;
+                    }
+                }
+
+                if (items.length === 0) {
+                    const hasActiveFilter = (strategySharedFilters.deliverable && strategySharedFilters.deliverable !== 'All') ||
+                                            (strategySharedFilters.jira && strategySharedFilters.jira !== 'All') ||
+                                            (strategySharedFilters.assignee && strategySharedFilters.assignee !== 'All') ||
+                                            (strategySharedFilters.status && strategySharedFilters.status !== 'All') ||
+                                            Boolean(strategyListSearchQuery);
+
+                    tableContainer.innerHTML = `
+                        <div class="text-center py-16 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                            <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3">
+                                <iconify-icon icon="solar:folder-open-line-duotone" width="30"></iconify-icon>
+                            </div>
+                            <h4 class="text-sm font-black text-slate-800">No strategy items found</h4>
+                            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                ${hasActiveFilter ? 'No results match your active filters or search. Try clearing the filter.' : 'No campaigns or tasks scheduled for this month and filter selection.'}
+                            </p>
+                            ${hasActiveFilter ? `
+                                <button onclick="clearStrategySharedFilters()" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all inline-flex items-center gap-2">
+                                    <iconify-icon icon="solar:restart-bold" width="16"></iconify-icon> Reset Filters
+                                </button>
+                            ` : (canViewStrategyCalendar() ? `
+                                <button onclick="openAddStrategyEventModal()" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all inline-flex items-center gap-2">
+                                    <iconify-icon icon="solar:calendar-add-bold" width="16"></iconify-icon> Add Campaign
+                                </button>
+                            ` : '')}
+                        </div>
+                    `;
+                    return;
+                }
+
+                const rowsHtml = items.map((it) => {
+                    const clientPill = getStrategyClientColor(it.client, 'pill');
+                    const statusPill = getStrategyStatusColor(it.status, 'pill');
+
+                    let postDateFormatted = it.date;
+                    if (it.date) {
+                        const [py, pm, pd] = it.date.split('-').map(Number);
+                        postDateFormatted = new Date(py, pm - 1, pd).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                    }
+                    let dueDateFormatted = '';
+                    if (it.duedate) {
+                        const [dy, dm, dd] = it.duedate.split('-').map(Number);
+                        dueDateFormatted = new Date(dy, dm - 1, dd).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                    }
+
+                    const counts = [];
+                    if (it.videosCount > 0) counts.push(`${it.videosCount} Video${it.videosCount > 1 ? 's' : ''}`);
+                    if (it.postersCount > 0) counts.push(`${it.postersCount} Poster${it.postersCount > 1 ? 's' : ''}`);
+                    const deliverableStr = counts.length > 0 ? counts.join(', ') : (it.format || 'Standard');
+
+                    const formatIcon = getStrategyFormatIconHtml(it.format);
+
+                    const jiraBadge = it.jiraId ? `
+                        <span class="inline-flex items-center gap-1 font-mono font-bold text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-md hover:bg-indigo-100 transition-colors">
+                            <iconify-icon icon="solar:hashtag-bold" width="10"></iconify-icon>
+                            ${escapeHtml(it.jiraId)}
+                        </span>
+                    ` : `<span class="text-slate-300 text-xs">—</span>`;
+
+                    return `
+                        <tr onclick="openEditStrategyEventModal('${it.id}')" 
+                            class="border-b border-slate-100 hover:bg-indigo-50/30 transition-colors cursor-pointer group">
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                                        <iconify-icon icon="solar:calendar-date-bold-duotone" width="16"></iconify-icon>
+                                    </div>
+                                    <div>
+                                        <span class="text-xs font-black text-slate-900 block">${postDateFormatted}</span>
+                                        ${dueDateFormatted ? `<span class="text-[10px] text-slate-400 font-semibold">Due: ${dueDateFormatted}</span>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <span class="${clientPill} px-2.5 py-1 rounded-xl text-[10px] font-black inline-block shadow-sm">
+                                    ${escapeHtml(it.client)}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3.5 max-w-xs">
+                                <div class="flex items-start gap-2.5">
+                                    ${formatIcon}
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors" title="${escapeHtml(it.title)}">
+                                            ${escapeHtml(it.title)}
+                                        </p>
+                                        ${it.desc ? `<p class="text-[10px] text-slate-400 truncate mt-0.5" title="${escapeHtml(it.desc)}">${escapeHtml(it.desc)}</p>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap text-xs font-bold text-slate-700">
+                                <span class="bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1">
+                                    ${escapeHtml(deliverableStr)}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                ${jiraBadge}
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-black text-[10px] uppercase shrink-0">
+                                        ${escapeHtml((it.ownerName || 'U').charAt(0))}
+                                    </div>
+                                    <span class="text-xs font-semibold text-slate-700 truncate max-w-[120px]">${escapeHtml(it.ownerName)}</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <span class="${statusPill} px-2.5 py-1 rounded-full text-[10px] font-black inline-block">
+                                    ${escapeHtml(it.status)}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap text-right" onclick="event.stopPropagation()">
+                                <button onclick="openEditStrategyEventModal('${it.id}')"
+                                    class="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                    title="View / Edit Details">
+                                    <iconify-icon icon="solar:pen-bold" width="16"></iconify-icon>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tableContainer.innerHTML = `
+                    <table class="w-full text-left border-collapse min-w-[780px]">
+                        <thead>
+                            <tr class="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                <th class="px-4 py-3">Publish Date</th>
+                                <th class="px-4 py-3">Client</th>
+                                <th class="px-4 py-3">Campaign / Deliverable</th>
+                                <th class="px-4 py-3">Deliverables</th>
+                                <th class="px-4 py-3">Jira Task</th>
+                                <th class="px-4 py-3">Assignee</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50 text-xs">
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                `;
+            }
+            window.renderStrategyListView = renderStrategyListView;
+
+            function handleStrategyBoardSearch(query) {
+                strategyBoardSearchQuery = (query || '').toLowerCase().trim();
+                syncStrategyFilterDropdowns();
+                renderStrategyBoardView();
+            }
+            window.handleStrategyBoardSearch = handleStrategyBoardSearch;
+
+            function getStrategyBoardColumns() {
+                return [
+                    {
+                        key: 'todo',
+                        label: 'To Do / Backlog',
+                        defaultStatus: 'To Do',
+                        icon: 'solar:clipboard-list-bold-duotone',
+                        headerBg: 'bg-slate-100 text-slate-800 border-slate-200',
+                        columnBg: 'bg-slate-50/60 border-slate-200/70',
+                        statuses: ['to do', 'todo', 'planned', 'backlog', 'open']
+                    },
+                    {
+                        key: 'in_progress',
+                        label: 'In Progress / Production',
+                        defaultStatus: 'In Progress',
+                        icon: 'solar:play-circle-bold-duotone',
+                        headerBg: 'bg-amber-50 text-amber-800 border-amber-200',
+                        columnBg: 'bg-amber-50/30 border-amber-200/60',
+                        statuses: [
+                            'in progress', 'inprogress', 'in-progress', 'shoot needed', 'shoot planned', 'shoot in progress',
+                            'content in progress', 'design to do', 'design', 'design in progress',
+                            'rework designs', 'rework', 'rework design', 'thumbnail waiting', 'thumbnail',
+                            'thumbnail to do', 'thumbnail pending', 'thumbnail in progress', 'design hold', 'on hold', 'hold', 'blocked'
+                        ]
+                    },
+                    {
+                        key: 'review',
+                        label: 'In Review / Approval',
+                        defaultStatus: 'In Review',
+                        icon: 'solar:eye-bold-duotone',
+                        headerBg: 'bg-purple-50 text-purple-800 border-purple-200',
+                        columnBg: 'bg-purple-50/30 border-purple-200/60',
+                        statuses: ['in review', 'review', 'code review', 'client content approval', 'quality check', 'qc']
+                    },
+                    {
+                        key: 'completed',
+                        label: 'Completed / Sent',
+                        defaultStatus: 'Completed',
+                        icon: 'solar:check-circle-bold-duotone',
+                        headerBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                        columnBg: 'bg-emerald-50/30 border-emerald-200/60',
+                        statuses: [
+                            'design completed', 'design done', 'thumbnail completed', 'thumbnail done',
+                            'thumbnail approved', 'thumbnail ready', 'client sent', 'client send',
+                            'client approved', 'approved', 'completed'
+                        ]
+                    },
+                    {
+                        key: 'posted',
+                        label: 'Posted / Done',
+                        defaultStatus: 'Posted',
+                        icon: 'solar:rocket-bold-duotone',
+                        headerBg: 'bg-blue-50 text-blue-800 border-blue-200',
+                        columnBg: 'bg-blue-50/30 border-blue-200/60',
+                        statuses: ['posted', 'analytics', 'done', 'closed', 'resolved']
+                    }
+                ];
+            }
+            window.getStrategyBoardColumns = getStrategyBoardColumns;
+
+            function renderStrategyBoardView() {
+                const container = document.getElementById('strategy-board-columns-container');
+                const badge = document.getElementById('strategy-board-count-badge');
+                if (!container) return;
+
+                let allItems = getFilteredStrategyItems();
+                populateStrategyFilterOptions(allItems);
+
+                let items = allItems.filter(matchesStrategyFilters);
+
+                if (strategyBoardSearchQuery) {
+                    items = items.filter(it =>
+                        (it.title && it.title.toLowerCase().includes(strategyBoardSearchQuery)) ||
+                        (it.client && it.client.toLowerCase().includes(strategyBoardSearchQuery)) ||
+                        (it.ownerName && it.ownerName.toLowerCase().includes(strategyBoardSearchQuery)) ||
+                        (it.jiraId && it.jiraId.toLowerCase().includes(strategyBoardSearchQuery)) ||
+                        (it.status && it.status.toLowerCase().includes(strategyBoardSearchQuery))
+                    );
+                }
+
+                if (badge) {
+                    if (items.length !== allItems.length) {
+                        badge.innerHTML = `<iconify-icon icon="solar:widget-2-bold-duotone" width="14" class="text-indigo-600"></iconify-icon> <span class="font-extrabold text-indigo-700">${items.length}</span><span class="text-slate-400 font-semibold text-[10px]"> / ${allItems.length}</span> <span class="text-slate-500 font-medium">items</span>`;
+                    } else {
+                        badge.innerHTML = `<iconify-icon icon="solar:widget-2-bold-duotone" width="14" class="text-indigo-600"></iconify-icon> <span class="font-extrabold text-indigo-700">${items.length}</span> <span class="text-slate-500 font-medium">item${items.length === 1 ? '' : 's'}</span>`;
+                    }
+                }
+
+                const isFiltered = (strategySharedFilters.deliverable && strategySharedFilters.deliverable !== 'All') ||
+                                   (strategySharedFilters.jira && strategySharedFilters.jira !== 'All') ||
+                                   (strategySharedFilters.assignee && strategySharedFilters.assignee !== 'All') ||
+                                   (strategySharedFilters.status && strategySharedFilters.status !== 'All') ||
+                                   Boolean(strategyBoardSearchQuery);
+
+                const columns = getStrategyBoardColumns();
+                const columnBuckets = {};
+                columns.forEach(col => {
+                    columnBuckets[col.key] = [];
+                });
+
+                items.forEach(it => {
+                    const rawStatus = (it.status || '').toLowerCase().trim();
+                    let matchedCol = columns.find(col => col.statuses.includes(rawStatus));
+                    if (!matchedCol) {
+                        const cat = it.statusCategory;
+                        if (cat === 'posted') matchedCol = columns.find(c => c.key === 'posted');
+                        else if (cat === 'completed') matchedCol = columns.find(c => c.key === 'completed');
+                        else matchedCol = columns.find(c => c.key === 'todo');
+                    }
+                    if (matchedCol) {
+                        columnBuckets[matchedCol.key].push(it);
+                    } else {
+                        columnBuckets['todo'].push(it);
+                    }
+                });
+
+                container.innerHTML = columns.map(col => {
+                    const colItems = columnBuckets[col.key] || [];
+
+                    const cardsHtml = colItems.length === 0 ? `
+                        <div class="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200/80 rounded-2xl bg-white/40">
+                            <iconify-icon icon="solar:inbox-line-duotone" width="24" class="text-slate-300 mb-1"></iconify-icon>
+                            <p class="text-[10px] text-slate-400 font-medium">${isFiltered ? 'No items matching filter' : 'No items in this stage'}</p>
+                        </div>
+                    ` : colItems.map(it => {
+                        const clientPill = getStrategyClientColor(it.client, 'pill');
+                        const statusPill = getStrategyStatusColor(it.status, 'pill');
+                        const formatIcon = getStrategyFormatIconHtml(it.format);
+
+                        let postDateFormatted = it.date;
+                        if (it.date) {
+                            const [py, pm, pd] = it.date.split('-').map(Number);
+                            postDateFormatted = new Date(py, pm - 1, pd).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                        }
+
+                        return `
+                            <div draggable="true"
+                                 ondragstart="handleStrategyDragStart(event, '${it.id}')"
+                                 onclick="openEditStrategyEventModal('${it.id}')"
+                                 class="group bg-white rounded-2xl p-3.5 shadow-sm hover:shadow-md border border-slate-200/80 hover:border-indigo-300 cursor-grab active:cursor-grabbing transition-all space-y-2.5 relative">
+                                
+                                <div class="flex items-center justify-between gap-1">
+                                    <span class="${clientPill} px-2 py-0.5 rounded-lg text-[9px] font-black truncate max-w-[120px]">
+                                        ${escapeHtml(it.client)}
+                                    </span>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        ${formatIcon}
+                                        ${it.jiraId ? `<span class="text-[9px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(it.jiraId)}</span>` : ''}
+                                    </div>
+                                </div>
+
+                                <h5 class="text-xs font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
+                                    ${escapeHtml(it.title)}
+                                </h5>
+
+                                <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-50">
+                                    <div class="flex items-center gap-1">
+                                        <iconify-icon icon="solar:calendar-linear" width="12" class="text-indigo-500"></iconify-icon>
+                                        <span class="font-bold text-slate-700">${postDateFormatted}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <div class="w-4 h-4 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[8px] uppercase">
+                                            ${escapeHtml((it.ownerName || 'U').charAt(0))}
+                                        </div>
+                                        <span class="truncate max-w-[80px] font-medium">${escapeHtml(it.ownerName)}</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="${statusPill} px-2 py-0.5 rounded-full text-[9px] font-bold">
+                                        ${escapeHtml(it.status)}
+                                    </span>
+                                    ${canViewStrategyCalendar() ? `
+                                        <select onclick="event.stopPropagation()" 
+                                                onchange="event.stopPropagation(); updateStrategyItemStatusFromSelect('${it.id}', this.value)"
+                                                class="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[9px] font-bold rounded-lg px-1.5 py-0.5 outline-none cursor-pointer">
+                                            <option value="" disabled selected>Move...</option>
+                                            <option value="To Do">To Do</option>
+                                            <option value="In Progress">In Progress</option>
+                                            <option value="In Review">In Review</option>
+                                            <option value="Completed">Completed</option>
+                                            <option value="Posted">Posted</option>
+                                        </select>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    return `
+                        <div ondragover="handleStrategyDragOver(event)"
+                             ondragleave="handleStrategyDragLeave(event)"
+                             ondrop="handleStrategyDrop(event, '${col.key}')"
+                             data-column-key="${col.key}"
+                             class="${col.columnBg} rounded-3xl p-3.5 border space-y-3 min-h-[500px] flex flex-col transition-all">
+                            
+                            <div class="flex items-center justify-between p-2.5 rounded-2xl ${col.headerBg} border shadow-sm">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <iconify-icon icon="${col.icon}" width="16" class="shrink-0"></iconify-icon>
+                                    <h4 class="text-xs font-black tracking-tight truncate">${col.label}</h4>
+                                </div>
+                                <span class="bg-white text-slate-800 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm shrink-0">
+                                    ${colItems.length}
+                                </span>
+                            </div>
+
+                            <div class="space-y-2.5 flex-1 overflow-y-auto max-h-[620px] pr-0.5">
+                                ${cardsHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            window.renderStrategyBoardView = renderStrategyBoardView;
+
+            function handleStrategyDragStart(e, itemId) {
+                draggedStrategyItemId = itemId;
+                e.dataTransfer.setData('text/plain', itemId);
+                e.dataTransfer.effectAllowed = 'move';
+            }
+            window.handleStrategyDragStart = handleStrategyDragStart;
+
+            function handleStrategyDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const colEl = e.currentTarget;
+                if (colEl && !colEl.classList.contains('ring-2')) {
+                    colEl.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-50/40');
+                }
+            }
+            window.handleStrategyDragOver = handleStrategyDragOver;
+
+            function handleStrategyDragLeave(e) {
+                const colEl = e.currentTarget;
+                if (colEl) {
+                    colEl.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-50/40');
+                }
+            }
+            window.handleStrategyDragLeave = handleStrategyDragLeave;
+
+            async function handleStrategyDrop(e, targetColKey) {
+                e.preventDefault();
+                const colEl = e.currentTarget;
+                if (colEl) {
+                    colEl.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-50/40');
+                }
+
+                const itemId = e.dataTransfer.getData('text/plain') || draggedStrategyItemId;
+                draggedStrategyItemId = null;
+                if (!itemId) return;
+
+                const columns = getStrategyBoardColumns();
+                const targetCol = columns.find(c => c.key === targetColKey);
+                if (!targetCol) return;
+
+                await updateStrategyWorkspaceItemStatus(itemId, targetCol.defaultStatus);
+            }
+            window.handleStrategyDrop = handleStrategyDrop;
+
+            async function updateStrategyItemStatusFromSelect(itemId, newStatus) {
+                if (!itemId || !newStatus) return;
+                await updateStrategyWorkspaceItemStatus(itemId, newStatus);
+            }
+            window.updateStrategyItemStatusFromSelect = updateStrategyItemStatusFromSelect;
+
+            async function updateStrategyWorkspaceItemStatus(id, newStatus) {
+                if (!canViewStrategyCalendar()) {
+                    return toast('Access Denied: You do not have permission to update Strategy events', 'error');
+                }
+
+                let ev = strategyEvents ? strategyEvents[id] : null;
+                let realEventId = id;
+                if (!ev && strategyEvents) {
+                    const found = Object.entries(strategyEvents).find(([k, e]) =>
+                        k === id || (e.jiraId && e.jiraId.toLowerCase() === id.toLowerCase()) ||
+                        (e.jiraTaskId && e.jiraTaskId.toLowerCase() === id.toLowerCase())
+                    );
+                    if (found) {
+                        realEventId = found[0];
+                        ev = found[1];
+                    }
+                }
+
+                if (ev && realEventId) {
+                    try {
+                        await update(ref(db, `worksync/strategy_events/${realEventId}`), {
+                            status: newStatus,
+                            updatedBy: currentUser?.email || 'user',
+                            updatedAt: Date.now()
+                        });
+                        if (strategyEvents && strategyEvents[realEventId]) {
+                            strategyEvents[realEventId].status = newStatus;
+                        }
+                        toast(`Status updated to "${newStatus}"`, 'success');
+
+                        const targetJiraId = ev.jiraId || ev.jiraTaskId;
+                        if (targetJiraId && typeof tasks !== 'undefined' && tasks) {
+                            const jt = tasks.find(t => t.id.toLowerCase() === targetJiraId.toLowerCase());
+                            if (jt) jt.status = newStatus;
+                        }
+                        renderStrategyActiveView();
+                    } catch (err) {
+                        console.error('[updateStrategyWorkspaceItemStatus] Error:', err);
+                        toast('Failed to update status: ' + err.message, 'error');
+                    }
+                } else if (typeof tasks !== 'undefined' && tasks) {
+                    const jt = tasks.find(t => t.id.toLowerCase() === id.toLowerCase());
+                    if (jt) {
+                        jt.status = newStatus;
+                        toast(`Task ${jt.id} status updated to "${newStatus}"`, 'success');
+                        renderStrategyActiveView();
+                    } else {
+                        toast('Event not found', 'error');
+                    }
+                }
+            }
+            window.updateStrategyWorkspaceItemStatus = updateStrategyWorkspaceItemStatus;
+
 
             function renderStrategySidebar() {
                 const listEl = document.getElementById('strategy-sidebar-list');
