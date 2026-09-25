@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.30">
+    <meta name="app-version" content="1.0.31">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -4621,38 +4621,45 @@
                     </div><!-- /tasks-tab-internal -->
 
                     <!-- ── Daily Plan Tab ── -->
-                    <div id="tasks-tab-dailyplan" class="hidden space-y-8">
-                        <!-- DP Minimal Dashboard -->
-                        <div id="dp-stats-dashboard" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                        </div>
+                    <div id="tasks-tab-dailyplan" class="hidden space-y-6">
+                        <!-- Top Header: Title, Date, User Filter, Actions -->
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Daily Plan</h2>
+                                <p class="text-xs text-slate-400 mt-1 font-medium">Plan, track and deliver your daily tasks efficiently.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <!-- Date Selector Pill -->
+                                <div class="relative">
+                                    <button type="button" onclick="document.getElementById('dp-date')?.showPicker ? document.getElementById('dp-date').showPicker() : document.getElementById('dp-date').click()"
+                                        class="bg-white border border-slate-200/90 hover:border-slate-300 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 shadow-2xs flex items-center gap-2.5 transition-all cursor-pointer">
+                                        <iconify-icon icon="solar:calendar-bold" width="16" class="text-slate-700"></iconify-icon>
+                                        <span id="dp-date-display">25 Sep 2026</span>
+                                        <iconify-icon icon="solar:alt-arrow-down-linear" width="14" class="text-slate-400"></iconify-icon>
+                                    </button>
+                                    <input type="date" id="dp-date"
+                                        onchange="handleDpDateChange(this.value)"
+                                        class="sr-only">
+                                </div>
 
-                        <div
-                            class="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div class="flex items-center gap-4">
-                                <input type="date" id="dp-date" onchange="PerfOptimizer.debounce('dpDateChange', () => PerfOptimizer.queueRender(() => renderDailyPlan(), 'high'), 200)" onclick="this.showPicker()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+                                <!-- User Filter Pill -->
                                 <div id="dp-user-filter-container" class="hidden relative">
                                     <button type="button" id="dp-user-filter-btn" onclick="toggleDpUserDropdown()"
-                                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 flex items-center gap-2">
+                                        class="bg-white border border-slate-200/90 hover:border-slate-300 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 shadow-2xs flex items-center gap-2.5 transition-all cursor-pointer">
+                                        <iconify-icon icon="solar:users-group-two-rounded-bold" width="16" class="text-slate-700"></iconify-icon>
                                         <span>All Users</span>
-                                        <iconify-icon icon="solar:alt-arrow-down-linear" width="16"
-                                            class="transition-transform" id="dp-user-filter-arrow"></iconify-icon>
+                                        <iconify-icon icon="solar:alt-arrow-down-linear" width="14" class="text-slate-400 transition-transform" id="dp-user-filter-arrow"></iconify-icon>
                                     </button>
                                     <div id="dp-user-dropdown"
-                                        class="hidden absolute left-0 top-full mt-2 w-72 bg-white border border-slate-100 rounded-3xl shadow-2xl z-50 p-4">
-                                        <div
-                                            class="flex justify-between items-center pb-2.5 mb-2.5 border-b border-slate-50">
-                                            <span
-                                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter
-                                                Users</span>
+                                        class="hidden absolute left-0 top-full mt-2 w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4">
+                                        <div class="flex justify-between items-center pb-2.5 mb-2.5 border-b border-slate-50">
+                                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter Users</span>
                                             <div class="flex gap-2">
                                                 <button type="button" onclick="selectAllDpUsers(true)"
-                                                    class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wider">Select
-                                                    All</button>
+                                                    class="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wider">Select All</button>
                                                 <span class="text-slate-200">|</span>
                                                 <button type="button" onclick="selectAllDpUsers(false)"
-                                                    class="text-[10px] font-black text-rose-600 hover:text-rose-800 transition-colors uppercase tracking-wider">Clear
-                                                    All</button>
+                                                    class="text-[10px] font-black text-rose-600 hover:text-rose-800 transition-colors uppercase tracking-wider">Clear All</button>
                                             </div>
                                         </div>
                                         <div id="dp-user-checkboxes" class="max-h-60 overflow-y-auto space-y-1 pr-1">
@@ -4660,57 +4667,64 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2">
+
+                                <!-- View Text Report Button -->
                                 <button type="button" onclick="openDailyPlanTextReport()"
-                                    class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
-                                    <iconify-icon icon="solar:document-text-bold" width="17"></iconify-icon>
-                                    View Text Report
+                                    class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/90 text-xs font-bold rounded-xl px-4 py-2.5 shadow-2xs transition-all cursor-pointer">
+                                    <iconify-icon icon="solar:document-text-bold" width="16" class="text-slate-800"></iconify-icon>
+                                    <span>View Text Report</span>
                                 </button>
+
+                                <!-- Assign Task to Plan Button -->
                                 <button onclick="openAssignPlanModal()"
-                                    class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all">
+                                    class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-4 py-2.5 shadow-md shadow-indigo-100 transition-all cursor-pointer">
                                     <iconify-icon icon="solar:add-circle-bold" width="18"></iconify-icon>
-                                    Assign Task to Plan
+                                    <span>Assign Task to Plan</span>
                                 </button>
                             </div>
                         </div>
 
-                        <div
-                            class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                            <div
-                                class="p-6 border-b border-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <!-- DP Stats Dashboard (8 KPI Cards in a row) -->
+                        <div id="dp-stats-dashboard" class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3.5">
+                        </div>
+
+                        <!-- Planned Tasks Table Card -->
+                        <div class="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
+                            <div class="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div class="flex flex-wrap items-center gap-3">
                                     <h3 class="text-lg font-black text-slate-900 tracking-tight">Planned Tasks</h3>
-                                    <button type="button" onclick="refreshDailyPlanWithJiraSync()" title="Refresh task list" id="dp-refresh-btn"
-                                        class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-indigo-600 disabled:opacity-50 transition-all">
-                                        <iconify-icon icon="solar:refresh-circle-bold" id="dp-refresh-icon" width="20"></iconify-icon>
+                                    <span id="dp-task-count" class="bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-1 rounded-full">0 tasks</span>
+                                    <button type="button" onclick="refreshDailyPlanWithJiraSync()"
+                                        title="Refresh task list" id="dp-refresh-btn"
+                                        class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-indigo-600 disabled:opacity-50">
+                                        <iconify-icon icon="solar:refresh-circle-bold" id="dp-refresh-icon" width="18"></iconify-icon>
                                     </button>
-                                    <div class="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
+                                    <div class="hidden sm:flex bg-slate-50 p-0.5 rounded-lg border border-slate-100">
                                         <button type="button" onclick="setDailyPlanView('table')" id="dp-view-table"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-indigo-600 shadow-sm transition-all">Table</button>
+                                            class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-white text-indigo-600 shadow-2xs transition-all">Table</button>
                                         <button type="button" onclick="setDailyPlanView('text')" id="dp-view-text"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Text
-                                            Report</button>
+                                            class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md text-slate-400 hover:text-slate-600 transition-all">Text</button>
                                     </div>
-                                    <div
-                                        class="flex bg-slate-50 p-1 rounded-xl border border-slate-100 flex-wrap gap-1">
-                                        <button onclick="filterDailyPlan('all')" id="dp-filter-all"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white text-indigo-600 shadow-sm transition-all">All
-                                            Tasks</button>
-                                        <button onclick="filterDailyPlan('carryover')" id="dp-filter-carry"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Carry
-                                            Forward Only</button>
-                                        <button onclick="filterDailyPlan('thumbnails')" id="dp-filter-thumbnails"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Thumbnails</button>
-                                        <button onclick="filterDailyPlan('posters')" id="dp-filter-posters"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Posters</button>
-                                        <button onclick="filterDailyPlan('completed')" id="dp-filter-completed"
-                                            class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all">Completed</button>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <button type="button" onclick="filterDailyPlan('all')" id="dp-filter-all"
+                                            class="text-xs font-bold px-3.5 py-1.5 rounded-full bg-indigo-50 text-indigo-600 transition-all cursor-pointer">All Tasks</button>
+                                        <button type="button" onclick="filterDailyPlan('carryover')" id="dp-filter-carry"
+                                            class="text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer">Carry Forward</button>
+                                        <button type="button" onclick="filterDailyPlan('thumbnails')" id="dp-filter-thumbnails"
+                                            class="text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer">Thumbnails</button>
+                                        <button type="button" onclick="filterDailyPlan('posters')" id="dp-filter-posters"
+                                            class="text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer">Posters</button>
+                                        <button type="button" onclick="filterDailyPlan('completed')" id="dp-filter-completed"
+                                            class="text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer">Completed</button>
                                     </div>
                                 </div>
-                                <span id="dp-task-count"
-                                    class="text-[10px] font-bold uppercase tracking-widest text-slate-400">0
-                                    Tasks</span>
+                                
+                                <!-- Search Input Matching Mockup -->
+                                <div class="relative w-full lg:w-64">
+                                    <iconify-icon icon="solar:magnifer-linear" width="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                                    <input type="text" id="dp-search-input" placeholder="Search tasks..." oninput="handleDpSearch(this.value)"
+                                        class="w-full bg-slate-50/80 border border-slate-200/90 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
+                                </div>
                             </div>
                             <div id="dp-text-view" class="hidden p-6 border-b border-slate-50">
                                 <p id="dp-text-report-meta" class="text-sm text-slate-600 mb-3"></p>
@@ -4720,54 +4734,51 @@
                                         class="text-xs font-mono text-slate-800 whitespace-pre-wrap"></pre>
                                 </div>
                                 <button type="button" onclick="copyDailyPlanReport()"
-                                    class="mt-4 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all">
+                                    class="mt-4 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all cursor-pointer">
                                     <iconify-icon icon="solar:copy-bold" width="16"></iconify-icon>
                                     Copy Report
                                 </button>
                             </div>
                             <div id="dp-table-view" class="overflow-x-auto">
                                 <table class="w-full text-left">
-                                    <thead class="bg-slate-50/50 border-b border-slate-100">
+                                    <thead class="bg-slate-50/60 border-b border-slate-100">
                                         <tr>
                                             <th onclick="handleDpSort('desc')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Task <iconify-icon
                                                         id="sort-dp-desc" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('status')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Status <iconify-icon
                                                         id="sort-dp-status" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('duedate')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Due Date <iconify-icon
                                                         id="sort-dp-duedate" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('assignee')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Assignee <iconify-icon
                                                         id="sort-dp-assignee" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th onclick="handleDpSort('client')"
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors group">
                                                 <div class="flex items-center gap-1">Client <iconify-icon
                                                         id="sort-dp-client" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
                                             <th
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden xl:table-cell">
-                                                Learnings</th>
-                                            <th
-                                                class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
+                                                class="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
                                                 Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="dp-tasks-tbody" class="divide-y divide-slate-50">
+                                    <tbody id="dp-tasks-tbody" class="divide-y divide-slate-100/70">
                                         <!-- Populated by JS -->
                                     </tbody>
                                 </table>
@@ -45064,11 +45075,52 @@ function isStrategyTask(t) {
             }
 
             // DAILY PLAN
+            let dpSearchQuery = '';
+
+            function updateDpDateDisplay(dateStr) {
+                const displayEl = document.getElementById('dp-date-display');
+                if (!displayEl) return;
+                if (!dateStr) dateStr = todayIso();
+                try {
+                    const parts = dateStr.split('-');
+                    if (parts.length === 3) {
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        const day = parseInt(parts[2], 10);
+                        const m = months[parseInt(parts[1], 10) - 1];
+                        const y = parts[0];
+                        displayEl.textContent = `${day} ${m} ${y}`;
+                        return;
+                    }
+                } catch (e) {}
+                displayEl.textContent = dateStr;
+            }
+            window.updateDpDateDisplay = updateDpDateDisplay;
+
+            function handleDpDateChange(val) {
+                updateDpDateDisplay(val);
+                PerfOptimizer.debounce('dpDateChange', () => PerfOptimizer.queueRender(() => renderDailyPlan(), 'high'), 200);
+            }
+            window.handleDpDateChange = handleDpDateChange;
+
+            function handleDpSearch(query) {
+                dpSearchQuery = (query || '').trim().toLowerCase();
+                renderDailyPlan();
+            }
+            window.handleDpSearch = handleDpSearch;
+
             function initDailyPlan() {
                 if (!db || !currentUser) return;
 
                 const dateInput = document.getElementById('dp-date');
                 if (dateInput && !dateInput.value) dateInput.value = todayIso();
+                updateDpDateDisplay(dateInput?.value || todayIso());
+
+                if (!dailyPlans || Object.keys(dailyPlans).length === 0) {
+                    try {
+                        const cachedDp = localStorage.getItem('worksync_daily_plans');
+                        if (cachedDp) dailyPlans = JSON.parse(cachedDp);
+                    } catch (e) {}
+                }
 
                 if (canViewDailyPlanTeamAccess()) {
                     document.getElementById('dp-user-filter-container').classList.remove('hidden');
@@ -45078,21 +45130,47 @@ function isStrategyTask(t) {
                 if (dailyPlansUnsub) dailyPlansUnsub();
                 dailyPlansUnsub = onValue(ref(db, 'worksync/daily_plans'), snap => {
                     dailyPlans = snap.val() || {};
+                    try { localStorage.setItem('worksync_daily_plans', JSON.stringify(dailyPlans)); } catch (e) {}
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                 });
             }
+
+            function getDpUserInitialStyle(name, email) {
+                const norm = (email || name || '').toLowerCase();
+                if (norm.includes('barath')) return { bg: '#F97316', text: '#FFFFFF', initial: 'B' };
+                if (norm.includes('immanuel')) return { bg: '#6366F1', text: '#FFFFFF', initial: 'I' };
+                if (norm.includes('murugesh')) return { bg: '#0F172A', text: '#FFFFFF', initial: 'M' };
+                if (norm.includes('ajith')) return { bg: '#0284C7', text: '#FFFFFF', initial: 'A' };
+                if (norm.includes('alex')) return { bg: '#4F46E5', text: '#FFFFFF', initial: 'A' };
+                if (norm.includes('karthika')) return { bg: '#DB2777', text: '#FFFFFF', initial: 'K' };
+                if (norm.includes('sneha')) return { bg: '#8B5CF6', text: '#FFFFFF', initial: 'S' };
+                if (norm.includes('muthu')) return { bg: '#D97706', text: '#FFFFFF', initial: 'M' };
+                if (norm.includes('palanirajan')) return { bg: '#0D9488', text: '#FFFFFF', initial: 'P' };
+                if (norm.includes('nanjil')) return { bg: '#2563EB', text: '#FFFFFF', initial: 'N' };
+                
+                const palettes = [
+                    { bg: '#F97316', text: '#FFFFFF' },
+                    { bg: '#6366F1', text: '#FFFFFF' },
+                    { bg: '#0F172A', text: '#FFFFFF' },
+                    { bg: '#0284C7', text: '#FFFFFF' },
+                    { bg: '#DB2777', text: '#FFFFFF' },
+                    { bg: '#8B5CF6', text: '#FFFFFF' },
+                    { bg: '#0D9488', text: '#FFFFFF' }
+                ];
+                let hash = 0;
+                for (let i = 0; i < norm.length; i++) hash = norm.charCodeAt(i) + ((hash << 5) - hash);
+                const p = palettes[Math.abs(hash) % palettes.length];
+                const initial = (name || email || 'U').trim().charAt(0).toUpperCase();
+                return { bg: p.bg, text: p.text, initial };
+            }
+            window.getDpUserInitialStyle = getDpUserInitialStyle;
 
             function populateDpUserFilter() {
                 const container = document.getElementById('dp-user-checkboxes');
                 if (!container) return;
 
-                // Save current check state of existing checkboxes to preserve selection
-                const checkedStates = {};
                 const existingInputs = container.querySelectorAll('input[name="dp_user_select"]');
                 const hasExisting = existingInputs.length > 0;
-                existingInputs.forEach(input => {
-                    checkedStates[input.value.toLowerCase()] = input.checked;
-                });
 
                 const merged = new Map();
                 USERS.forEach(u => merged.set(u.email.toLowerCase(), { ...u }));
@@ -45114,73 +45192,209 @@ function isStrategyTask(t) {
                     }
                 });
                 usersList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                window.dpUsersCacheList = usersList;
+
+                if (hasExisting && existingInputs.length === usersList.length) {
+                    updateDpAvatarBar();
+                    updateDpUserLabel();
+                    return; // Already populated, avoid expensive DOM reflow
+                }
+
+                // Save current check state of existing checkboxes to preserve selection
+                const checkedStates = {};
+                existingInputs.forEach(input => {
+                    checkedStates[input.value.toLowerCase()] = input.checked;
+                });
 
                 container.innerHTML = usersList.map(u => {
                     const email = u.email.toLowerCase();
                     const isChecked = hasExisting ? (checkedStates[email] !== false) : true;
                     const name = u.name || email;
-                    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                    const photo = u.profilePicture || (typeof allUsersMap !== 'undefined' && allUsersMap.get(email)?.profilePicture);
+                    const initialStyle = getDpUserInitialStyle(name, email);
+
+                    const avatarInner = photo
+                        ? `<img src="${photo}" alt="${escapeHtml(name)}" class="w-full h-full object-cover rounded-full">`
+                        : `<span class="leading-none select-none">${escapeHtml(initialStyle.initial)}</span>`;
+
+                    const avatarStyleAttr = !photo && !isChecked ? `style="background-color: #f1f5f9; color: #64748b;"` : (!photo && isChecked ? `style="background-color: #4f46e5; color: #ffffff;"` : '');
+
                     return `
-                        <label class="dp-user-item flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-all duration-200 border border-transparent select-none ${isChecked ? 'bg-indigo-50/50 border-indigo-100/50' : ''}">
-                            <div class="flex items-center gap-3">
+                        <label class="dp-user-item flex items-center justify-between px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-150 select-none ${isChecked ? 'bg-indigo-50/70 border border-indigo-100/70' : 'border border-transparent hover:bg-slate-50'}">
+                            <div class="flex items-center gap-3 min-w-0">
                                 <input type="checkbox" name="dp_user_select" value="${email}" ${isChecked ? 'checked' : ''}
-                                    onchange="updateDpUserLabel(); handleDpUserCheckChange(this)"
+                                    onchange="handleDpUserCheckChange(this)"
                                     class="sr-only">
                                 
-                                <div class="dp-user-avatar w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isChecked ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'} transition-all duration-200">
-                                    ${initials}
+                                <div class="dp-user-avatar w-9 h-9 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${isChecked ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-500'} transition-all duration-150 overflow-hidden"
+                                    ${avatarStyleAttr}>
+                                    ${avatarInner}
                                 </div>
                                 
-                                <div class="flex flex-col">
-                                    <span class="dp-user-name text-xs font-bold text-slate-800 transition-colors duration-200 ${isChecked ? 'text-indigo-900' : ''}">${escapeHtml(name)}</span>
-                                    <span class="text-[9px] text-slate-400 font-semibold truncate max-w-[130px]">${escapeHtml(email)}</span>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="dp-user-name text-xs font-bold truncate transition-colors duration-150 ${isChecked ? 'text-indigo-950' : 'text-slate-800'}">${escapeHtml(name)}</span>
+                                    <span class="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">${escapeHtml(email)}</span>
                                 </div>
                             </div>
                             
-                            <div class="flex items-center">
-                                <iconify-icon 
-                                    icon="${isChecked ? 'solar:check-circle-bold' : 'solar:circle-linear'}" 
-                                    class="${isChecked ? 'text-indigo-600' : 'text-slate-300'} transition-all duration-200" 
-                                    width="20">
-                                </iconify-icon>
+                            <div class="dp-user-check flex items-center shrink-0">
+                                <div class="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-150 ${isChecked ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-slate-200 text-white'}">
+                                    <iconify-icon icon="solar:check-read-bold" width="13"></iconify-icon>
+                                </div>
                             </div>
                         </label>`;
                 }).join('');
 
+                updateDpAvatarBar();
                 updateDpUserLabel();
             }
 
-            function handleDpUserCheckChange(cb) {
+            function handleDpUserCheckDom(cb) {
                 const label = cb.closest('label');
                 if (!label) return;
                 const avatar = label.querySelector('.dp-user-avatar');
                 const nameSpan = label.querySelector('.dp-user-name');
-                const icon = label.querySelector('iconify-icon');
+                const checkBadge = label.querySelector('.dp-user-check > div');
 
                 if (cb.checked) {
-                    label.classList.add('bg-indigo-50/50', 'border-indigo-100/50');
-                    if (avatar) {
-                        avatar.classList.remove('bg-slate-100', 'text-slate-600');
-                        avatar.classList.add('bg-indigo-600', 'text-white');
+                    label.classList.add('bg-indigo-50/70', 'border-indigo-100/70');
+                    label.classList.remove('border-transparent');
+                    if (avatar && !avatar.querySelector('img')) {
+                        avatar.classList.remove('bg-slate-100', 'text-slate-500');
+                        avatar.classList.add('bg-indigo-600', 'text-white', 'shadow-2xs');
+                        avatar.style.backgroundColor = '#4f46e5';
+                        avatar.style.color = '#ffffff';
                     }
-                    if (nameSpan) nameSpan.classList.add('text-indigo-900');
-                    if (icon) {
-                        icon.setAttribute('icon', 'solar:check-circle-bold');
-                        icon.className = 'text-indigo-600 transition-all duration-200';
+                    if (nameSpan) {
+                        nameSpan.classList.add('text-indigo-950');
+                        nameSpan.classList.remove('text-slate-800');
+                    }
+                    if (checkBadge) {
+                        checkBadge.className = 'w-5 h-5 rounded-full flex items-center justify-center transition-all duration-150 bg-indigo-600 text-white shadow-2xs';
                     }
                 } else {
-                    label.classList.remove('bg-indigo-50/50', 'border-indigo-100/50');
-                    if (avatar) {
-                        avatar.classList.remove('bg-indigo-600', 'text-white');
-                        avatar.classList.add('bg-slate-100', 'text-slate-600');
+                    label.classList.remove('bg-indigo-50/70', 'border-indigo-100/70');
+                    label.classList.add('border-transparent');
+                    if (avatar && !avatar.querySelector('img')) {
+                        avatar.classList.remove('bg-indigo-600', 'text-white', 'shadow-2xs');
+                        avatar.classList.add('bg-slate-100', 'text-slate-500');
+                        avatar.style.backgroundColor = '#f1f5f9';
+                        avatar.style.color = '#64748b';
                     }
-                    if (nameSpan) nameSpan.classList.remove('text-indigo-900');
-                    if (icon) {
-                        icon.setAttribute('icon', 'solar:circle-linear');
-                        icon.className = 'text-slate-300 transition-all duration-200';
+                    if (nameSpan) {
+                        nameSpan.classList.remove('text-indigo-950');
+                        nameSpan.classList.add('text-slate-800');
+                    }
+                    if (checkBadge) {
+                        checkBadge.className = 'w-5 h-5 rounded-full flex items-center justify-center transition-all duration-150 bg-slate-200 text-white';
                     }
                 }
             }
+
+            function handleDpUserCheckChange(cb) {
+                handleDpUserCheckDom(cb);
+                updateDpUserLabel();
+                updateDpAvatarBar();
+                renderDailyPlan();
+            }
+
+            function updateDpAvatarBar() {
+                const bar = document.getElementById('dp-user-avatar-bar');
+                if (!bar) return;
+
+                const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
+                if (!checkboxes.length) return;
+
+                const checkedEmails = new Set(Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value.toLowerCase()));
+                const totalCount = checkboxes.length;
+                const isAllSelected = (checkedEmails.size === totalCount) || (checkedEmails.size === 0);
+
+                const users = window.dpUsersCacheList || [];
+                if (!users.length) return;
+
+                // "All Users" icon avatar (Image 1)
+                const allAvatarHtml = `
+                    <div class="relative group">
+                        <button type="button" onclick="selectAllDpUsers(true)"
+                            class="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center cursor-pointer transition-all duration-150 shadow-2xs ${isAllSelected ? 'bg-slate-800 text-white ring-2 ring-slate-800 ring-offset-1 ring-offset-white z-10 scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:scale-110 hover:z-20 hover:ring-2 hover:ring-slate-700 hover:ring-offset-1'}"
+                            title="All Users">
+                            <iconify-icon icon="solar:user-bold" width="14"></iconify-icon>
+                        </button>
+                        <div class="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-30 shadow-lg">
+                            All Users
+                        </div>
+                    </div>
+                `;
+
+                // Each user avatar (Image 1 & Image 3)
+                const userAvatarsHtml = users.map(u => {
+                    const email = (u.email || '').toLowerCase();
+                    const isChecked = checkedEmails.has(email);
+                    const name = u.name || email;
+                    const firstName = name.split(' ')[0] || name;
+                    const photo = u.profilePicture || (typeof allUsersMap !== 'undefined' && allUsersMap.get(email)?.profilePicture);
+                    const initialStyle = getDpUserInitialStyle(name, email);
+
+                    // Styling based on selection state
+                    let ringClasses = '';
+                    if (!isAllSelected) {
+                        if (isChecked) {
+                            ringClasses = 'ring-2 ring-slate-800 ring-offset-1 ring-offset-white scale-105 z-10 opacity-100 shadow-xs';
+                        } else {
+                            ringClasses = 'opacity-35 grayscale hover:opacity-100 hover:grayscale-0 hover:scale-110 hover:z-20';
+                        }
+                    } else {
+                        ringClasses = 'opacity-100 hover:scale-110 hover:z-20 hover:ring-2 hover:ring-slate-700 hover:ring-offset-1';
+                    }
+
+                    const avatarInner = photo
+                        ? `<img src="${photo}" alt="${escapeHtml(firstName)}" class="w-full h-full rounded-full object-cover">`
+                        : `<span class="text-xs font-bold leading-none select-none">${escapeHtml(initialStyle.initial)}</span>`;
+
+                    const styleAttr = !photo ? `style="background-color: ${initialStyle.bg}; color: ${initialStyle.text};"` : '';
+
+                    return `
+                        <div class="relative group">
+                            <button type="button" onclick="toggleDpUserFromAvatar('${email}')"
+                                class="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center cursor-pointer transition-all duration-150 shadow-2xs overflow-hidden ${ringClasses}"
+                                ${styleAttr}
+                                title="${escapeHtml(name)}">
+                                ${avatarInner}
+                            </button>
+                            <div class="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-30 shadow-lg">
+                                ${escapeHtml(firstName)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                bar.innerHTML = allAvatarHtml + userAvatarsHtml;
+            }
+            window.updateDpAvatarBar = updateDpAvatarBar;
+
+            function toggleDpUserFromAvatar(email) {
+                const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
+                const checked = Array.from(checkboxes).filter(cb => cb.checked);
+                const targetEmail = (email || '').toLowerCase();
+
+                // If this email is already the only one selected, selecting it again restores all
+                if (checked.length === 1 && checked[0].value.toLowerCase() === targetEmail) {
+                    checkboxes.forEach(cb => {
+                        cb.checked = true;
+                        handleDpUserCheckDom(cb);
+                    });
+                } else {
+                    // Focus solely on this user
+                    checkboxes.forEach(cb => {
+                        cb.checked = (cb.value.toLowerCase() === targetEmail);
+                        handleDpUserCheckDom(cb);
+                    });
+                }
+                updateDpUserLabel();
+                updateDpAvatarBar();
+                renderDailyPlan();
+            }
+            window.toggleDpUserFromAvatar = toggleDpUserFromAvatar;
 
             function getDpSelectedUsers() {
                 return Array.from(document.querySelectorAll('input[name="dp_user_select"]:checked')).map(cb => cb.value.toLowerCase());
@@ -45188,7 +45402,7 @@ function isStrategyTask(t) {
 
             function updateDpUserLabel() {
                 const btn = document.getElementById('dp-user-filter-btn');
-                const labelEl = btn?.querySelector('span');
+                const labelEl = document.getElementById('dp-user-filter-label') || btn?.querySelector('span');
                 if (!labelEl) return;
                 const checkboxes = document.querySelectorAll('input[name="dp_user_select"]');
                 const checked = Array.from(checkboxes).filter(cb => cb.checked);
@@ -45249,9 +45463,11 @@ function isStrategyTask(t) {
             function selectAllDpUsers(selectAll) {
                 document.querySelectorAll('input[name="dp_user_select"]').forEach(cb => {
                     cb.checked = selectAll;
-                    handleDpUserCheckChange(cb);
+                    handleDpUserCheckDom(cb);
                 });
                 updateDpUserLabel();
+                updateDpAvatarBar();
+                renderDailyPlan();
             }
 
             function filterDailyPlan(type) {
@@ -45262,9 +45478,8 @@ function isStrategyTask(t) {
                 const posterBtn = document.getElementById('dp-filter-posters');
                 const completedBtn = document.getElementById('dp-filter-completed');
 
-                // Reset all buttons to inactive state
-                const inactiveClass = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all';
-                const activeClass = 'text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white shadow-sm transition-all';
+                const inactiveClass = 'text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer';
+                const activeClass = 'text-xs font-bold px-3.5 py-1.5 rounded-full transition-all cursor-pointer';
 
                 if (allBtn) allBtn.className = inactiveClass;
                 if (carryBtn) carryBtn.className = inactiveClass;
@@ -45272,17 +45487,16 @@ function isStrategyTask(t) {
                 if (posterBtn) posterBtn.className = inactiveClass;
                 if (completedBtn) completedBtn.className = inactiveClass;
 
-                // Set active button with appropriate color
                 if (type === 'all') {
-                    if (allBtn) allBtn.className = activeClass + ' text-indigo-600';
+                    if (allBtn) allBtn.className = activeClass + ' bg-indigo-50 text-indigo-600';
                 } else if (type === 'carryover') {
-                    if (carryBtn) carryBtn.className = activeClass + ' text-amber-600';
+                    if (carryBtn) carryBtn.className = activeClass + ' bg-amber-50 text-amber-600';
                 } else if (type === 'thumbnails') {
-                    if (thumbnailBtn) thumbnailBtn.className = activeClass + ' text-purple-600';
+                    if (thumbnailBtn) thumbnailBtn.className = activeClass + ' bg-purple-50 text-purple-600';
                 } else if (type === 'posters') {
-                    if (posterBtn) posterBtn.className = activeClass + ' text-blue-600';
+                    if (posterBtn) posterBtn.className = activeClass + ' bg-blue-50 text-blue-600';
                 } else if (type === 'completed') {
-                    if (completedBtn) completedBtn.className = activeClass + ' text-emerald-600';
+                    if (completedBtn) completedBtn.className = activeClass + ' bg-emerald-50 text-emerald-600';
                 }
 
                 renderDailyPlan();
@@ -45864,6 +46078,102 @@ function isStrategyTask(t) {
             }
             window.batchDeleteFromDailyPlan = batchDeleteFromDailyPlan;
 
+            function getDpStatusDotColor(status) {
+                const s = (status || '').toLowerCase().trim();
+                if (isDailyPlanCompletedTask(status) || s.includes('done') || s.includes('completed')) return 'bg-emerald-500';
+                if (s.includes('hold')) return 'bg-rose-500';
+                if (s.includes('rework')) return 'bg-orange-500';
+                if (s.includes('thumbnail')) return 'bg-purple-500';
+                if (s.includes('quality') || s.includes('qc') || s.includes('review')) return 'bg-cyan-500';
+                if (s.includes('progress') || s.includes('working') || s.includes('active') || s.includes('shoot')) return 'bg-amber-500';
+                return 'bg-slate-400';
+            }
+            window.getDpStatusDotColor = getDpStatusDotColor;
+
+            function updateDpStatusDot(selectEl, taskId) {
+                const dot = selectEl.parentElement?.querySelector('.dp-status-dot');
+                if (dot) {
+                    dot.className = `dp-status-dot w-2 h-2 rounded-full shrink-0 ${getDpStatusDotColor(selectEl.value)}`;
+                }
+                updateTaskStatus(taskId, selectEl.value);
+            }
+            window.updateDpStatusDot = updateDpStatusDot;
+
+            function formatDpDueDateHtml(dateStr, status) {
+                if (!dateStr) return `<span class="text-xs text-slate-400 font-medium">—</span>`;
+                const isTaskDone = isDone(status) || isInternalDone(status) || isDailyPlanCompletedTask(status);
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return `<span class="text-xs text-slate-600 font-medium">${escapeHtml(dateStr)}</span>`;
+
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const formattedDate = `${d.getDate()} ${months[d.getMonth()]}`;
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dueMidnight = new Date(d);
+                dueMidnight.setHours(0, 0, 0, 0);
+
+                const diffDays = Math.round((dueMidnight.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (isTaskDone) {
+                    return `<span class="text-xs text-slate-500 font-medium">${formattedDate}</span>`;
+                }
+
+                if (diffDays < 0) {
+                    return `<span class="text-xs font-bold text-rose-500 flex items-center gap-1.5"><iconify-icon icon="solar:danger-circle-bold" width="13"></iconify-icon> Overdue · ${formattedDate}</span>`;
+                }
+                if (diffDays === 0) {
+                    return `<span class="text-xs font-bold text-amber-600 flex items-center gap-1.5"><iconify-icon icon="solar:clock-circle-bold" width="13"></iconify-icon> Today</span>`;
+                }
+                if (diffDays === 1) {
+                    return `<span class="text-xs font-semibold text-slate-700">Tomorrow</span>`;
+                }
+                return `<span class="text-xs text-slate-700 font-medium">${formattedDate}</span>`;
+            }
+            window.formatDpDueDateHtml = formatDpDueDateHtml;
+
+            function formatDpAssigneeHtml(userEmail) {
+                if (!userEmail) return `<span class="text-xs text-slate-400 font-medium">—</span>`;
+                const email = userEmail.toLowerCase();
+                const userObj = (typeof allUsersMap !== 'undefined' && allUsersMap.get(email)) || { name: email, email };
+                const name = userObj.name || email;
+                const photo = userObj.profilePicture;
+                const initialStyle = getDpUserInitialStyle(name, email);
+
+                const avatarInner = photo
+                    ? `<img src="${photo}" alt="${escapeHtml(name)}" class="w-full h-full object-cover rounded-full" style="width: 26px; height: 26px; min-width: 26px; min-height: 26px; object-fit: cover;">`
+                    : `<span class="text-[11px] font-bold leading-none select-none">${escapeHtml(initialStyle.initial)}</span>`;
+
+                const avatarStyle = !photo ? `style="background-color: ${initialStyle.bg}; color: ${initialStyle.text}; width: 26px; height: 26px;"` : `style="width: 26px; height: 26px;"`;
+
+                return `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-[26px] h-[26px] min-w-[26px] min-h-[26px] max-w-[26px] max-h-[26px] rounded-full flex items-center justify-center shrink-0 overflow-hidden shadow-2xs" ${avatarStyle}>
+                            ${avatarInner}
+                        </div>
+                        <span class="text-xs font-bold text-slate-800 truncate max-w-[130px]" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                    </div>
+                `;
+            }
+            window.formatDpAssigneeHtml = formatDpAssigneeHtml;
+
+            function toggleDpRowMenu(e, taskId) {
+                e.stopPropagation();
+                const menu = document.getElementById(`dp-row-menu-${taskId}`);
+                const isHidden = menu?.classList.contains('hidden');
+                closeAllDpRowMenus();
+                if (isHidden && menu) {
+                    menu.classList.remove('hidden');
+                }
+            }
+            window.toggleDpRowMenu = toggleDpRowMenu;
+
+            function closeAllDpRowMenus() {
+                document.querySelectorAll('[id^="dp-row-menu-"]').forEach(m => m.classList.add('hidden'));
+            }
+            window.closeAllDpRowMenus = closeAllDpRowMenus;
+            document.addEventListener('click', closeAllDpRowMenus);
+
             function renderDailyPlan() {
                 const tbody = document.getElementById('dp-tasks-tbody');
                 const countEl = document.getElementById('dp-task-count');
@@ -45889,12 +46199,24 @@ function isStrategyTask(t) {
                     seen.add(k);
                     return true;
                 });
-                
+
                 // Render stats from ALL tasks (including completed)
                 renderDailyPlanStats(allPlans);
-                
+
                 // Pass pre-collected allPlans to avoid re-scanning all users and tasks
-                const uniquePlans = collectDailyPlanRowsForView(allPlans);
+                let uniquePlans = collectDailyPlanRowsForView(allPlans);
+
+                // Search query filter
+                if (dpSearchQuery) {
+                    uniquePlans = uniquePlans.filter(t => {
+                        const desc = (t.desc || '').toLowerCase();
+                        const id = (t.id || '').toLowerCase();
+                        const client = (t.client || '').toLowerCase();
+                        const assignee = (allUsersMap.get((t.plannedForUser || '').toLowerCase())?.name || t.plannedForUser || '').toLowerCase();
+                        return desc.includes(dpSearchQuery) || id.includes(dpSearchQuery) || client.includes(dpSearchQuery) || assignee.includes(dpSearchQuery);
+                    });
+                }
+
                 countEl.textContent = `${uniquePlans.length} Task${uniquePlans.length !== 1 ? 's' : ''}`;
 
                 if (dpViewMode === 'text') {
@@ -45910,7 +46232,7 @@ function isStrategyTask(t) {
                 updateDailyPlanViewButtons();
 
                 if (!uniquePlans.length) {
-                    tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-10 text-center text-xs text-slate-400 italic">No tasks planned for this date.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-xs text-slate-400 italic">No tasks found matching your filters.</td></tr>`;
                     return;
                 }
 
@@ -45936,72 +46258,100 @@ function isStrategyTask(t) {
                 tbody.innerHTML = uniquePlans.map(t => {
                     const isInternal = isInternalTask(t);
                     const taskKeyHtml = (t.manual || isInternal)
-                        ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${t.id}</button>`
-                        : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+                        ? `<button onclick="openEditTaskModal('${t.id}')" class="text-xs font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline transition-colors text-left">${t.id}</button>`
+                        : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="text-xs font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="11"></iconify-icon></a>`;
+                    
                     const baseStatuses = isInternal ? INTERNAL_TASK_STATUSES : MANUAL_TASK_STATUSES;
                     const currentStatus = t.status ? t.status.trim() : '';
                     const statusOptions = (currentStatus && !baseStatuses.some(s => s.toLowerCase() === currentStatus.toLowerCase()))
                         ? [...baseStatuses, currentStatus]
                         : [...baseStatuses];
-                    const statusSelectHtml = `
-                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 w-full max-w-[180px]">
-                        ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === currentStatus.toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
-                    </select>
-                `;
-                    const userLive = liveUserByEmail.get((t.plannedForUser || '').toLowerCase());
-                    const assigneeNameStr = userLive?.name || t.plannedForUser;
 
+                    const statusDotColor = getDpStatusDotColor(currentStatus);
+                    const statusSelectHtml = `
+                        <div class="inline-flex items-center gap-2 bg-white border border-slate-200/90 rounded-xl px-2.5 py-1.5 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span class="dp-status-dot w-2 h-2 rounded-full shrink-0 ${statusDotColor}"></span>
+                            <select onchange="updateDpStatusDot(this, '${t.id}')"
+                                class="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer pr-1">
+                                ${statusOptions.map(s => `<option value="${s}" ${s.trim().toLowerCase() === currentStatus.toLowerCase() ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </div>
+                    `;
+
+                    const userLive = liveUserByEmail.get((t.plannedForUser || '').toLowerCase());
                     const isWorkingOnThis = userLive?.currentTask?.taskId === t.id;
                     const taskState = userLive?.currentTask?.state;
                     const liveTimerHtml = isMorningLearningTask(t)
-                        ? `<span class="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:sun-2-bold" width="10"></iconify-icon> ${escapeHtml(t.timeSlot || getMorningLearningSlot(t.userId || t.assigneeEmail))}</span>`
+                        ? `<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:sun-2-bold" width="10"></iconify-icon> ${escapeHtml(t.timeSlot || getMorningLearningSlot(t.userId || t.assigneeEmail))}</span>`
                         : (isWorkingOnThis && taskState === 'working'
-                        ? `<span class="live-task-timer ml-2 text-[10px] font-black text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 animate-pulse inline-flex items-center gap-1 shrink-0" data-started="${userLive.currentTask.startedAt}" data-state="working"><iconify-icon icon="solar:play-circle-bold" width="10"></iconify-icon> ${formatTime(Math.max(0, Math.floor((Date.now() - userLive.currentTask.startedAt) / 1000)))}</span>`
-                        : (isWorkingOnThis && taskState === 'on_hold' ? `<span class="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:pause-circle-bold" width="10"></iconify-icon> ON HOLD</span>` : ''));
+                            ? `<span class="live-task-timer text-[10px] font-black text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 animate-pulse inline-flex items-center gap-1 shrink-0" data-started="${userLive.currentTask.startedAt}" data-state="working"><iconify-icon icon="solar:play-circle-bold" width="10"></iconify-icon> ${formatTime(Math.max(0, Math.floor((Date.now() - userLive.currentTask.startedAt) / 1000)))}</span>`
+                            : (isWorkingOnThis && taskState === 'on_hold' ? `<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 inline-flex items-center gap-1 shrink-0"><iconify-icon icon="solar:pause-circle-bold" width="10"></iconify-icon> ON HOLD</span>` : ''));
+
+                    const hasDoc = !!(t.docUrl || t.attachmentUrl || t.designLink);
+                    const dueDateHtml = formatDpDueDateHtml(t.duedate, t.status);
+                    const assigneeHtml = formatDpAssigneeHtml(t.plannedForUser);
 
                     return `
-                <tr class="hover:bg-slate-50 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''} ${dailyPlanRowClass(t.status, t)}">
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</span>
-                            ${isInternal ? `<span class="bg-violet-100 text-violet-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">Internal</span>` : ''}
-                            ${t.isCarryOver ? `<span class="bg-amber-100 text-amber-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase" title="Carried over from ${t.planData.date}">Carry Over</span>` : ''}
-                            ${t.isAutoIncluded ? `<span class="bg-indigo-100 text-indigo-700 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase" title="Auto included by status">Auto</span>` : ''}
-                            ${liveTimerHtml}
-                        </div>
-                        ${renderTaskNameHtml(t, 'mt-1 max-w-xs whitespace-normal break-words leading-snug')}
-                    </td>
-                    <td class="px-6 py-4">${statusSelectHtml}</td>
-                    <td class="px-6 py-4">${formatTaskDueDateHtml(t.duedate, t.status)}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(assigneeNameStr)}</td>
-                    <td class="px-6 py-4 text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
-                    <td class="px-6 py-4 hidden xl:table-cell text-xs text-slate-500 font-medium max-w-[200px] truncate" title="${escapeHtml(t.notes || t.description || '')}">${escapeHtml(t.notes || t.description || '—')}</td>
-                    <td class="px-6 py-4 text-right">
-                        <div class="flex items-center justify-end gap-1">
-                            ${activeTaskId === t.id ? `
-                                <div class="flex items-center justify-end gap-2">
-                                    <button onclick="${taskOnHold ? 'resumeTaskTimer()' : 'holdTask()'}" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
-                                        <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="16"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
-                                    </button>
-                                    <button onclick="endTask()" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-rose-600 hover:bg-rose-700 text-white shadow-lg">
-                                        <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End
-                                    </button>
+                    <tr class="hover:bg-slate-50/70 transition-colors ${activeTaskId === t.id ? 'bg-indigo-50/30' : ''}">
+                        <td class="px-6 py-3.5">
+                            <div class="flex flex-col gap-0.5 max-w-sm">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    ${taskKeyHtml}
+                                    ${t.isCarryOver ? `<span class="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">CARRY OVER</span>` : ''}
+                                    ${isInternal ? `<span class="bg-violet-100 text-violet-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Internal</span>` : ''}
+                                    ${hasDoc ? `<iconify-icon icon="solar:document-text-bold" class="text-indigo-400" width="13"></iconify-icon>` : ''}
+                                    ${liveTimerHtml}
                                 </div>
-                            ` : `
-                                <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600">
-                                    <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Start
+                                ${renderTaskNameHtml(t, 'mt-0.5 text-xs font-semibold text-slate-800 line-clamp-2 leading-snug')}
+                            </div>
+                        </td>
+                        <td class="px-6 py-3.5">${statusSelectHtml}</td>
+                        <td class="px-6 py-3.5">${dueDateHtml}</td>
+                        <td class="px-6 py-3.5">${assigneeHtml}</td>
+                        <td class="px-6 py-3.5 text-xs text-slate-700 font-medium">${escapeHtml(t.client || '—')}</td>
+                        <td class="px-6 py-3.5 text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                ${activeTaskId === t.id ? `
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="${taskOnHold ? 'resumeTaskTimer()' : 'holdTask()'}" class="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
+                                            <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="14"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
+                                        </button>
+                                        <button onclick="endTask()" class="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all bg-rose-600 hover:bg-rose-700 text-white shadow-2xs">
+                                            <iconify-icon icon="solar:stop-circle-bold" width="14"></iconify-icon> End
+                                        </button>
+                                    </div>
+                                ` : `
+                                    <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all bg-slate-50 hover:bg-indigo-50 border border-slate-200/80 text-slate-700 hover:text-indigo-600 shadow-2xs">
+                                        <iconify-icon icon="solar:play-circle-bold" width="14"></iconify-icon> Start
+                                    </button>
+                                `}
+                                <button onclick="${(t.manual || isInternal) ? `openEditTaskModal('${t.id}')` : `openDpEditModal('${t.id}','${t.plannedForUser}','${(t.planData?.date || todayIso())}')`}" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors" title="Edit">
+                                    <iconify-icon icon="solar:pen-2-linear" width="16"></iconify-icon>
                                 </button>
-                            `}
-                            ${isAdmin() ? `
-                            <button onclick="openDpEditModal('${t.id}','${t.plannedForUser}','${(t.planData?.date || todayIso())}')" class="p-2 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors" title="Edit plan entry">
-                                <iconify-icon icon="solar:pen-2-bold" width="16"></iconify-icon>
-                            </button>
-                            <button onclick="removeFromDailyPlan('${t.id}', '${t.plannedForUser}')" class="p-2 text-slate-400 hover:text-rose-500 rounded-lg transition-colors" title="Remove from plan">
-                                <iconify-icon icon="solar:trash-bin-trash-bold" width="16"></iconify-icon>
-                            </button>` : ''}
-                        </div>
-                    </td>
-                </tr>`;
+                                <button onclick="removeFromDailyPlan('${t.id}', '${t.plannedForUser}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete from plan">
+                                    <iconify-icon icon="solar:trash-bin-trash-linear" width="16"></iconify-icon>
+                                </button>
+                                <div class="relative inline-block text-left">
+                                    <button onclick="toggleDpRowMenu(event, '${t.id}')" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="More options">
+                                        <iconify-icon icon="solar:menu-dots-bold" width="16"></iconify-icon>
+                                    </button>
+                                    <div id="dp-row-menu-${t.id}" class="hidden absolute right-0 top-full mt-1 w-44 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1 text-xs font-medium text-slate-700 text-left">
+                                        ${(!t.manual && !isInternal) ? `
+                                            <a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                                                <iconify-icon icon="solar:external-link-linear" width="14"></iconify-icon> Open in Jira
+                                            </a>
+                                        ` : ''}
+                                        <button type="button" onclick="navigator.clipboard.writeText('${t.id}'); toast('Task ID copied', 'success'); closeAllDpRowMenus();" class="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                                            <iconify-icon icon="solar:copy-linear" width="14"></iconify-icon> Copy Task ID
+                                        </button>
+                                        <button type="button" onclick="openDpEditModal('${t.id}','${t.plannedForUser}','${(t.planData?.date || todayIso())}'); closeAllDpRowMenus();" class="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                                            <iconify-icon icon="solar:calendar-date-linear" width="14"></iconify-icon> Change Plan Date
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
                 }).join('');
             }
 
