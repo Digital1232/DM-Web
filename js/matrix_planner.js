@@ -1893,21 +1893,24 @@ async function submitAssignMonthlyPlan() {
         }
     });
 
-    try {
-        await Promise.all(promises);
-        document.getElementById('amp-task-search').value = '';
-        document.getElementById('assignMonthlyPlanModal')?.close();
-        if (typeof window.toast === 'function') {
-            window.toast(`Successfully assigned ${ampSelectedTasks.size} tasks to Monthly Plan`, 'success');
-        }
-        ampSelectedTasks.clear();
-        renderAmpSelectedTasks();
+    const count = ampSelectedTasks.size;
+    document.getElementById('amp-task-search').value = '';
+    document.getElementById('assignMonthlyPlanModal')?.close();
+    ampSelectedTasks.clear();
+    renderAmpSelectedTasks();
+    if (typeof window.renderDailyPlan === 'function') window.renderDailyPlan();
+    renderMatrixPlanner();
 
-        if (typeof window.renderDailyPlan === 'function') window.renderDailyPlan();
-        renderMatrixPlanner();
-    } catch (err) {
+    Promise.all(promises).then(() => {
+        if (typeof window.toast === 'function') {
+            window.toast(`Successfully assigned ${count} tasks to Monthly Plan`, 'success');
+        }
+    }).catch(err => {
         console.error('[MatrixEngine] Error during bulk assignment:', err);
-    }
+        if (typeof window.toast === 'function') {
+            window.toast('Error saving some monthly plan tasks: ' + err.message, 'error');
+        }
+    });
 }
 
 function escapeHtml(str) {

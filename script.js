@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="0.0.1">
+    <meta name="app-version" content="1.0.30">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -3307,12 +3307,13 @@
             if (owner) updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
             if (format) updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
 
+            document.getElementById('weeklyTaskAssigneeModal')?.close();
+            syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: sEvents[selectedTaskId].status || 'To Do' });
+
             if (activeDb && activeRef && activeUpdate) {
                 activeUpdate(activeRef(activeDb), updates)
                     .then(() => {
                         toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
-                        document.getElementById('weeklyTaskAssigneeModal')?.close();
-                        syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: sEvents[selectedTaskId].status || 'To Do' });
                     })
                     .catch(err => {
                         toastFn('Failed to assign task: ' + err.message, 'error');
@@ -3337,12 +3338,13 @@
             newEvent.jiraId = selectedTaskId;
         }
 
+        document.getElementById('weeklyTaskAssigneeModal')?.close();
+        syncToMatrixState(newId, newEvent);
+
         if (activeDb && activeRef && activeSet) {
             activeSet(activeRef(activeDb, 'worksync/strategy_events/' + newId), newEvent)
                 .then(() => {
                     toastFn(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
-                    document.getElementById('weeklyTaskAssigneeModal')?.close();
-                    syncToMatrixState(newId, newEvent);
                 })
                 .catch(err => {
                     toastFn('Failed to create task: ' + err.message, 'error');
@@ -11512,7 +11514,7 @@
                         <input id="ap-task-search" type="search" placeholder="Search tasks..." autocomplete="off"
                             autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true"
                             data-1p-ignore="true" data-form-type="other" name="assign-plan-task-search-field"
-                            oninput="filterAssignPlanTasks()"
+                            oninput="window.handleApSearchInput ? window.handleApSearchInput() : filterAssignPlanTasks()"
                             class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
                     </div>
                     <div class="grid grid-cols-2 gap-2 mb-2">
@@ -22754,12 +22756,13 @@ function isStrategyTask(t) {
             if (owner) updates[`worksync/strategy_events/${selectedTaskId}/owner`] = owner;
             if (format) updates[`worksync/strategy_events/${selectedTaskId}/format`] = format;
 
+            document.getElementById('weeklyTaskAssigneeModal')?.close();
+            syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: strategyEvents[selectedTaskId].status || 'To Do' });
+
             if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof update === 'function') {
                 update(ref(db), updates)
                     .then(() => {
                         if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
-                        document.getElementById('weeklyTaskAssigneeModal')?.close();
-                        syncToMatrixState(selectedTaskId, { title, client, date: dateStr, owner, format, status: strategyEvents[selectedTaskId].status || 'To Do' });
                     })
                     .catch(err => {
                         if (typeof toast === 'function') toast('Failed to assign task: ' + err.message, 'error');
@@ -22784,12 +22787,13 @@ function isStrategyTask(t) {
             newEvent.jiraId = selectedTaskId;
         }
 
+        document.getElementById('weeklyTaskAssigneeModal')?.close();
+        syncToMatrixState(newId, newEvent);
+
         if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
             set(ref(db, 'worksync/strategy_events/' + newId), newEvent)
                 .then(() => {
                     if (typeof toast === 'function') toast(`✓ Assigned "${title}" to weekly plan (${dateStr})`, 'success');
-                    document.getElementById('weeklyTaskAssigneeModal')?.close();
-                    syncToMatrixState(newId, newEvent);
                 })
                 .catch(err => {
                     if (typeof toast === 'function') toast('Failed to create task: ' + err.message, 'error');
@@ -25333,7 +25337,18 @@ function isStrategyTask(t) {
                     .filter(Boolean))];
             }
 
+            const jiraAccountIdCache = (typeof window !== 'undefined' && window.jiraAccountIdCache) || new Map();
+            if (typeof window !== 'undefined') window.jiraAccountIdCache = jiraAccountIdCache;
+
             async function findJiraAccountId(user) {
+                const emailKey = (user?.email || '').toLowerCase().trim();
+                if (emailKey && jiraAccountIdCache.has(emailKey)) {
+                    return jiraAccountIdCache.get(emailKey);
+                }
+                const nameKey = (user?.name || '').toLowerCase().trim();
+                if (nameKey && jiraAccountIdCache.has(nameKey)) {
+                    return jiraAccountIdCache.get(nameKey);
+                }
                 const terms = jiraIdentityTerms(user);
                 for (const term of terms) {
                     try {
@@ -25347,7 +25362,11 @@ function isStrategyTask(t) {
                             const displayMatch = displayName && (displayName.includes(normalizedTerm) || normalizedTerm.includes(displayName));
                             return emailMatch || displayMatch;
                         }) || res.data[0];
-                        if (match?.accountId) return match.accountId;
+                        if (match?.accountId) {
+                            if (emailKey) jiraAccountIdCache.set(emailKey, match.accountId);
+                            if (nameKey) jiraAccountIdCache.set(nameKey, match.accountId);
+                            return match.accountId;
+                        }
                     } catch (e) {
                         console.warn('Jira account lookup failed for', term, e);
                     }
@@ -25372,11 +25391,13 @@ function isStrategyTask(t) {
                 };
             }
 
-            async function assignJiraIssueToUser(issueKey, userEmail) {
-                const user = allUsersMap.get((userEmail || '').toLowerCase()) || knownUserByEmail(userEmail) || { email: userEmail, name: userEmail };
-                const accountId = await findJiraAccountId(user);
+            async function assignJiraIssueToUser(issueKey, userEmail, preferredAccountId = '') {
+                const accountId = preferredAccountId || await (async () => {
+                    const user = allUsersMap.get((userEmail || '').toLowerCase()) || knownUserByEmail(userEmail) || { email: userEmail, name: userEmail };
+                    return await findJiraAccountId(user);
+                })();
                 if (!accountId) {
-                    throw new Error(`No Jira account found for ${user.name || userEmail}`);
+                    throw new Error(`No Jira account found for ${userEmail}`);
                 }
                 const url = `https://${JIRA.domain}/rest/api/3/issue/${encodeURIComponent(issueKey)}`;
                 const res = await jiraRequest(url, 'put', { fields: { assignee: { accountId } } });
@@ -48511,6 +48532,15 @@ function isStrategyTask(t) {
             }
             window.renderApSelectedTasks = renderApSelectedTasks;
 
+            let apSearchTimeout = null;
+            function handleApSearchInput() {
+                if (apSearchTimeout) clearTimeout(apSearchTimeout);
+                apSearchTimeout = setTimeout(() => {
+                    filterAssignPlanTasks();
+                }, 120);
+            }
+            window.handleApSearchInput = handleApSearchInput;
+
             function filterAssignPlanTasks() {
                 const list = document.getElementById('ap-task-list');
                 const userEmail = document.getElementById('ap-user').value;
@@ -48521,16 +48551,21 @@ function isStrategyTask(t) {
                 const dueDateFrom = document.getElementById('ap-due-from')?.value || '';
                 const dueDateTo = document.getElementById('ap-due-to')?.value || '';
 
-                // Pool all tasks including Strategy Events
+                // Pool all tasks including Strategy Events with fast Set lookup
                 let allTaskPool = [...tasks];
                 if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const existingTaskIds = new Set();
+                    const existingTaskDescs = new Set();
+                    for (let i = 0; i < allTaskPool.length; i++) {
+                        const t = allTaskPool[i];
+                        if (t && t.id) existingTaskIds.add(t.id.toLowerCase());
+                        if (t && t.desc) existingTaskDescs.add(t.desc.toLowerCase());
+                    }
                     Object.entries(strategyEvents).forEach(([id, ev]) => {
                         if (!ev || !ev.title) return;
-                        const existingInTasks = allTaskPool.some(t =>
-                            (ev.jiraId && t.id && t.id.toLowerCase() === ev.jiraId.toLowerCase()) ||
-                            (t.desc && ev.title && t.desc.toLowerCase() === ev.title.toLowerCase())
-                        );
-                        if (!existingInTasks) {
+                        const hasJiraMatch = ev.jiraId && existingTaskIds.has(ev.jiraId.toLowerCase());
+                        const hasDescMatch = ev.title && existingTaskDescs.has(ev.title.toLowerCase());
+                        if (!hasJiraMatch && !hasDescMatch) {
                             const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
                             allTaskPool.push({
                                 id: ev.jiraId || id,
@@ -48656,135 +48691,170 @@ function isStrategyTask(t) {
                     btn.textContent = 'Assigning...';
                 }
 
-                try {
-                    const updates = {};
-                    const targetUserKey = eKey((userEmail || '').toLowerCase());
-                    if (!dailyPlans[targetUserKey]) dailyPlans[targetUserKey] = {};
+                const targetUserKey = eKey((userEmail || '').toLowerCase());
+                if (!dailyPlans[targetUserKey]) dailyPlans[targetUserKey] = {};
 
-                    selectedTaskIds.forEach(taskId => {
-                        const planEntry = {
-                            date,
-                            assignedBy: currentUser?.email || 'System',
-                            assignedAt: Date.now()
-                        };
-                        updates[`worksync/daily_plans/${targetUserKey}/${taskId}`] = planEntry;
-                        dailyPlans[targetUserKey][taskId] = planEntry;
-                    });
-                    await update(ref(db), updates);
+                const assignedBy = currentUser?.email || 'System';
+                const assignedAt = Date.now();
+                const updates = {};
 
-                    let jiraAssigned = 0;
-                    let jiraFailed = 0;
-                    const jiraErrors = [];
+                selectedTaskIds.forEach(taskId => {
+                    const planEntry = {
+                        date,
+                        assignedBy,
+                        assignedAt
+                    };
+                    updates[`worksync/daily_plans/${targetUserKey}/${taskId}`] = planEntry;
+                    dailyPlans[targetUserKey][taskId] = planEntry;
+                    applyLocalTaskAssignee(taskId, userEmail);
+                });
 
-                    for (const taskId of selectedTaskIds) {
-                        let task = tasks.find(t => t && t.id && t.id.trim().toLowerCase() === taskId.trim().toLowerCase());
-                        if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
-                            const ev = strategyEvents[taskId];
-                            if (ev) {
-                                const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
-                                task = {
-                                    id: ev.jiraId || taskId,
-                                    desc: ev.title,
-                                    summary: ev.title,
-                                    status: ev.status || 'To Do',
-                                    client: ev.client || '',
-                                    assignee: ev.owner || '',
-                                    owner: ev.owner || '',
-                                    duedate: calculatedDue,
-                                    postDate: ev.date,
-                                    isStrategyEvent: true,
-                                    eventId: taskId
-                                };
-                            }
-                        }
-                        if (!task) continue;
-
-                        // Trigger thumbnail subtask auto assign to Karthika if assigned to a video editor
-                        if (userEmail && userEmail !== task.assigneeEmail) {
-                            await checkAndCreateThumbnailSubTask(task, userEmail);
-                        }
-
-                        if (isJiraCloudTask(task)) {
-                            try {
-                                const accountId = await assignJiraIssueToUser(taskId, userEmail);
-                                applyLocalTaskAssignee(taskId, userEmail, accountId);
-                                jiraAssigned++;
-                            } catch (err) {
-                                console.warn('Jira assignee update failed:', taskId, err);
-                                jiraFailed++;
-                                jiraErrors.push(`${taskId}: ${err.message}`);
-                                applyLocalTaskAssignee(taskId, userEmail);
-                            }
-                        } else {
-                            const oldUserEmail = task.assigneeEmail || task.userId || task.owner || currentUser.email;
-                            applyLocalTaskAssignee(taskId, userEmail);
-                            if (task.isStrategyEvent) {
-                                try {
-                                    const eventRef = ref(db, `worksync/strategy_events/${taskId}`);
-                                    await update(eventRef, { owner: userEmail });
-                                } catch (e) {
-                                    console.error('Failed to update strategy event owner:', e);
-                                }
-                            } else if (task.manual) {
-                                const oldUserKey = eKey(oldUserEmail);
-                                const newUserKey = eKey(userEmail);
-                                if (oldUserKey !== newUserKey) {
-                                    const manualTaskUpdate = { ...task, assigneeEmail: userEmail, userId: userEmail };
-                                    const user = allUsersMap.get(userEmail.toLowerCase()) || knownUserByEmail(userEmail);
-                                    manualTaskUpdate.assignee = user?.name || userEmail.split('@')[0];
-
-                                    const manualUpdates = {};
-                                    manualUpdates[`worksync/manual_tasks/${newUserKey}/${taskId}`] = manualTaskUpdate;
-                                    manualUpdates[`worksync/manual_tasks/${oldUserKey}/${taskId}`] = null;
-                                    await update(ref(db), manualUpdates);
-                                }
-                            }
-                        }
-                    }
-
-                    // Auto-select assigned user in Daily Plan team filter so their tasks show immediately
-                    const assignedCb = document.querySelector(`input[name="dp_user_select"][value="${userEmail.toLowerCase()}"]`);
-                    if (assignedCb && !assignedCb.checked) {
-                        assignedCb.checked = true;
-                        if (typeof handleDpUserCheckChange === 'function') handleDpUserCheckChange(assignedCb);
-                        if (typeof updateDpUserLabel === 'function') updateDpUserLabel();
-                    }
-
-                    // Set daily plan date to assigned date if different
-                    const dpDateInput = document.getElementById('dp-date');
-                    if (dpDateInput && date && dpDateInput.value !== date) {
-                        dpDateInput.value = date;
-                    }
-
-                    if (window.apSelectedTasks instanceof Set) {
-                        window.apSelectedTasks.clear();
-                    }
-                    if (typeof renderApSelectedTasks === 'function') renderApSelectedTasks();
-
-                    renderTasks();
-                    renderDailyPlan();
-                    if (isInternalTabActive()) renderInternalTasks();
-                    updateStats();
-                    populateAssigneeFilter();
-
-                    document.getElementById('assignPlanModal').close();
-
-                    if (jiraFailed === 0) {
-                        const jiraNote = jiraAssigned > 0 ? ` (${jiraAssigned} updated in Jira)` : '';
-                        toast(`Assigned ${selectedTaskIds.length} task(s) to daily plan${jiraNote}`, 'success');
-                    } else if (jiraAssigned > 0) {
-                        toast(`Plan saved. Jira: ${jiraAssigned} assigned, ${jiraFailed} failed. ${jiraErrors[0] || ''}`, 'error');
-                    } else {
-                        toast(`Daily plan saved but Jira assign failed: ${jiraErrors[0] || 'Unknown error'}`, 'error');
-                    }
-                } catch (err) {
-                    toast('Failed to assign task: ' + err.message, 'error');
-                } finally {
-                    if (btn) {
-                        btn.disabled = false;
-                        if (btnLabel) btn.textContent = btnLabel;
-                    }
+                // Auto-select assigned user in Daily Plan team filter so their tasks show immediately
+                const assignedCb = document.querySelector(`input[name="dp_user_select"][value="${userEmail.toLowerCase()}"]`);
+                if (assignedCb && !assignedCb.checked) {
+                    assignedCb.checked = true;
+                    if (typeof handleDpUserCheckChange === 'function') handleDpUserCheckChange(assignedCb);
+                    if (typeof updateDpUserLabel === 'function') updateDpUserLabel();
                 }
+
+                // Set daily plan date to assigned date if different
+                const dpDateInput = document.getElementById('dp-date');
+                if (dpDateInput && date && dpDateInput.value !== date) {
+                    dpDateInput.value = date;
+                }
+
+                if (window.apSelectedTasks instanceof Set) {
+                    window.apSelectedTasks.clear();
+                }
+                if (typeof renderApSelectedTasks === 'function') renderApSelectedTasks();
+
+                // Close modal immediately so the user doesn't wait
+                document.getElementById('assignPlanModal')?.close();
+                if (btn) {
+                    btn.disabled = false;
+                    if (btnLabel) btn.textContent = btnLabel;
+                }
+
+                // Render immediately with optimistic local updates
+                renderTasks();
+                renderDailyPlan();
+                if (isInternalTabActive()) renderInternalTasks();
+                updateStats();
+                populateAssigneeFilter();
+
+                // Process Firebase update and background task assignments in parallel
+                (async () => {
+                    try {
+                        await update(ref(db), updates);
+
+                        // Pre-fetch shared Jira accountId once for this user if needed
+                        let sharedAccountId = '';
+                        const hasJiraTasks = selectedTaskIds.some(id => {
+                            const t = tasks.find(x => x && x.id && x.id.trim().toLowerCase() === id.trim().toLowerCase());
+                            return t && isJiraCloudTask(t);
+                        });
+                        if (hasJiraTasks) {
+                            try {
+                                const user = allUsersMap.get((userEmail || '').toLowerCase()) || knownUserByEmail(userEmail) || { email: userEmail, name: userEmail };
+                                sharedAccountId = await findJiraAccountId(user);
+                            } catch (e) {
+                                console.warn('Could not pre-fetch Jira accountId for', userEmail, e);
+                            }
+                        }
+
+                        let jiraAssigned = 0;
+                        let jiraFailed = 0;
+                        const jiraErrors = [];
+
+                        await Promise.all(selectedTaskIds.map(async taskId => {
+                            let task = tasks.find(t => t && t.id && t.id.trim().toLowerCase() === taskId.trim().toLowerCase());
+                            if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
+                                const ev = strategyEvents[taskId];
+                                if (ev) {
+                                    const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                                    task = {
+                                        id: ev.jiraId || taskId,
+                                        desc: ev.title,
+                                        summary: ev.title,
+                                        status: ev.status || 'To Do',
+                                        client: ev.client || '',
+                                        assignee: ev.owner || '',
+                                        owner: ev.owner || '',
+                                        duedate: calculatedDue,
+                                        postDate: ev.date,
+                                        isStrategyEvent: true,
+                                        eventId: taskId
+                                    };
+                                }
+                            }
+                            if (!task) return;
+
+                            // Trigger thumbnail subtask auto assign to Karthika if assigned to a video editor
+                            if (userEmail && userEmail !== task.assigneeEmail) {
+                                await checkAndCreateThumbnailSubTask(task, userEmail, true);
+                            }
+
+                            if (isJiraCloudTask(task)) {
+                                try {
+                                    const accountId = await assignJiraIssueToUser(taskId, userEmail, sharedAccountId);
+                                    applyLocalTaskAssignee(taskId, userEmail, accountId);
+                                    jiraAssigned++;
+                                } catch (err) {
+                                    console.warn('Jira assignee update failed:', taskId, err);
+                                    jiraFailed++;
+                                    jiraErrors.push(`${taskId}: ${err.message}`);
+                                    applyLocalTaskAssignee(taskId, userEmail);
+                                }
+                            } else {
+                                const oldUserEmail = task.assigneeEmail || task.userId || task.owner || currentUser.email;
+                                applyLocalTaskAssignee(taskId, userEmail);
+                                if (task.isStrategyEvent) {
+                                    try {
+                                        const eventRef = ref(db, `worksync/strategy_events/${taskId}`);
+                                        await update(eventRef, { owner: userEmail });
+                                    } catch (e) {
+                                        console.error('Failed to update strategy event owner:', e);
+                                    }
+                                } else if (task.manual) {
+                                    const oldUserKey = eKey(oldUserEmail);
+                                    const newUserKey = eKey(userEmail);
+                                    if (oldUserKey !== newUserKey) {
+                                        const manualTaskUpdate = { ...task, assigneeEmail: userEmail, userId: userEmail };
+                                        const user = allUsersMap.get(userEmail.toLowerCase()) || knownUserByEmail(userEmail);
+                                        manualTaskUpdate.assignee = user?.name || userEmail.split('@')[0];
+
+                                        const manualUpdates = {};
+                                        manualUpdates[`worksync/manual_tasks/${newUserKey}/${taskId}`] = manualTaskUpdate;
+                                        manualUpdates[`worksync/manual_tasks/${oldUserKey}/${taskId}`] = null;
+                                        await update(ref(db), manualUpdates);
+                                    }
+                                }
+                            }
+                        }));
+
+                        renderTasks();
+                        renderDailyPlan();
+                        if (isInternalTabActive()) renderInternalTasks();
+                        updateStats();
+
+                        if (jiraFailed === 0) {
+                            const jiraNote = jiraAssigned > 0 ? ` (${jiraAssigned} updated in Jira)` : '';
+                            toast(`✓ Assigned ${selectedTaskIds.length} task(s) to daily plan${jiraNote}`, 'success');
+                        } else if (jiraAssigned > 0) {
+                            toast(`Plan saved. Jira: ${jiraAssigned} assigned, ${jiraFailed} failed. ${jiraErrors[0] || ''}`, 'warning');
+                        } else {
+                            toast(`Daily plan saved but Jira assign failed: ${jiraErrors[0] || 'Unknown error'}`, 'warning');
+                        }
+                    } catch (bgErr) {
+                        console.error('Background plan sync error:', bgErr);
+                        toast('Failed to save plan: ' + bgErr.message, 'error');
+                        selectedTaskIds.forEach(id => {
+                            if (dailyPlans[targetUserKey]) delete dailyPlans[targetUserKey][id];
+                        });
+                        renderDailyPlan();
+                        updateStats();
+                    }
+                })();
             }
 
             async function removeFromDailyPlan(taskId, userEmail) {
@@ -48806,7 +48876,7 @@ function isStrategyTask(t) {
                 }
             }
 
-            async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail) {
+            async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail, skipRender = false) {
                 if (!task || !newAssigneeEmail) return;
                 const videoEditors = [
                     'barathvilpower@gmail.com',
@@ -48847,10 +48917,12 @@ function isStrategyTask(t) {
                         assignedAt: Date.now()
                     });
 
-                    if (typeof activeView !== 'undefined' && (activeView === 'dailyplan' || (typeof isDailyPlanTabActive === 'function' && isDailyPlanTabActive()))) {
-                        if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                    if (!skipRender) {
+                        if (typeof activeView !== 'undefined' && (activeView === 'dailyplan' || (typeof isDailyPlanTabActive === 'function' && isDailyPlanTabActive()))) {
+                            if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                        }
+                        if (typeof updateStats === 'function') updateStats();
                     }
-                    if (typeof updateStats === 'function') updateStats();
                     if (typeof toast === 'function') {
                         toast(`Auto-assigned Jira thumbnail task to Karthika's Daily Plan for ${task.id}`, 'success');
                     }
