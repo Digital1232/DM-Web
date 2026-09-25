@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.31">
+    <meta name="app-version" content="1.0.32">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -49982,7 +49982,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const posterBtn = document.getElementById('dp-filter-posters');
                 const completedBtn = document.getElementById('dp-filter-completed');
 
-                const inactiveClass = 'text-xs font-semibold px-3 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer';
+                const inactiveClass = 'text-xs font-semibold px-3.5 py-1.5 rounded-full text-slate-500 hover:text-slate-800 transition-all cursor-pointer';
                 const activeClass = 'text-xs font-bold px-3.5 py-1.5 rounded-full transition-all cursor-pointer';
 
                 if (allBtn) allBtn.className = inactiveClass;
@@ -50002,6 +50002,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else if (type === 'completed') {
                     if (completedBtn) completedBtn.className = activeClass + ' bg-emerald-50 text-emerald-600';
                 }
+
+                renderDailyPlan();
             }
 
             function getDailyPlanTargetUserEmails() {
@@ -50071,17 +50073,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
-                        const desc = (t.desc || '').toLowerCase();
-                        return (status.includes('thumbnail') || desc.includes('thumbnail')) && isDailyPlanBeforeQcStatus(t.status);
+                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''}`.toLowerCase();
+                        const isThumb = status.includes('thumbnail') || desc.includes('thumbnail') || desc.includes('thumb');
+                        return isThumb && isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else if (dpFilter === 'posters') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
-                        const desc = (t.desc || '').toLowerCase();
-                        return (status.includes('poster') || desc.includes('poster') ||
-                            (!status.includes('thumbnail') && !status.includes('video') &&
-                                !desc.includes('thumbnail') && !desc.includes('video') &&
-                                !desc.includes('reel') && desc.includes('design'))) && isDailyPlanBeforeQcStatus(t.status);
+                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''}`.toLowerCase();
+                        const isThumb = status.includes('thumbnail') || desc.includes('thumbnail') || desc.includes('thumb');
+                        const isVideo = status.includes('video') || status.includes('reel') || status.includes('shoot') ||
+                                        desc.includes('video') || desc.includes('reel') || desc.includes('shoot') || desc.includes('editing');
+                        const isPoster = !isThumb && (
+                            status.includes('poster') || desc.includes('poster') ||
+                            status.includes('design') || desc.includes('design') ||
+                            desc.includes('cover') || desc.includes('banner') || desc.includes('creative') ||
+                            desc.includes('flyer') || desc.includes('brochure') || desc.includes('carousel') ||
+                            !isVideo
+                        );
+                        return isPoster && isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else {
                     // Default / 'all' view: Only show active tasks before Quality Check (Pre-QC)
@@ -50108,6 +50118,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     filterLabel = 'Thumbnails Only';
                 } else if (dpFilter === 'posters') {
                     filterLabel = 'Posters Only';
+                } else if (dpFilter === 'completed') {
+                    filterLabel = 'Completed Only';
                 }
                 const scopeLabel = getDailyPlanScopeLabel();
                 const allRows = collectDailyPlanRowsForView();
@@ -50239,6 +50251,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     filterLabel = 'Thumbnails only';
                 } else if (dpFilter === 'posters') {
                     filterLabel = 'Posters only';
+                } else if (dpFilter === 'completed') {
+                    filterLabel = 'Completed only';
                 }
                 if (meta) {
                     meta.textContent = `${dateLabel} · ${getDailyPlanScopeLabel()} · ${filterLabel}`;
