@@ -8,11 +8,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.34">
+    <meta name="app-version" content="1.0.35">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
-    <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
-    <link rel="apple-touch-icon" href="img/favicon.svg">
+    <link rel="shortcut icon" href="img/Mobile app fav Icon.jpg">
+    <link rel="apple-touch-icon" sizes="180x180" href="img/Mobile app fav Icon.jpg">
+    <link rel="apple-touch-icon-precomposed" href="img/Mobile app fav Icon.jpg">
     <link rel="preload" as="image" href="img/loading_logo.gif" type="image/gif">
     <title>One Desk Endless Productivity</title>
     <link rel="stylesheet" href="dist/output.css">
@@ -31154,7 +31156,7 @@ function isStrategyTask(t) {
 
                 if (avatarEl) {
                     const senderUser = msg.senderEmail ? (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get ? allUsersMap.get(msg.senderEmail.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(msg.senderEmail) : null)) : null;
-                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/Fav-Icon.png'));
+                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/Mobile app fav Icon.jpg'));
                     avatarEl.src = avatarSrc;
                 }
 
