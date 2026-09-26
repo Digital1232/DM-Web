@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.32">
+    <meta name="app-version" content="1.0.34">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -18864,6 +18864,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
 
                 activeView = view;
+                if (view !== 'chat' && panelId !== 'chat') { document.documentElement.classList.remove('in-active-chat'); }
                 localStorage.setItem('worksync_activeView', view);
 
                 // Update URL hash for direct quick link sharing and navigation
@@ -31126,10 +31127,109 @@ function isStrategyTask(t) {
                 badge.classList.toggle('hidden', total === 0);
             }
 
+            
+            let mobilePushTimer = null;
+            let currentMobilePushTarget = null;
+
+            function showInAppChatNotification(msg, conv, convId, openAction) {
+                const banner = document.getElementById('mobile-push-notification');
+                if (!banner) {
+                    const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'Team Member');
+                    toast(`New message from ${title}: ${msg.text ? msg.text.substring(0, 45) : 'Attachment'}`, 'info', openAction, 4500);
+                    return;
+                }
+
+                const titleEl = document.getElementById('mobile-push-title');
+                const msgEl = document.getElementById('mobile-push-msg');
+                const avatarEl = document.getElementById('mobile-push-avatar');
+                const progressBar = document.getElementById('mobile-push-progress-bar');
+                const timeEl = document.getElementById('mobile-push-time');
+
+                const title = conv?.type === 'group' && conv?.name ? `${conv.name} (${msg.senderName})` : (msg.senderName || 'Team Member');
+                const textPreview = msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : (msg.attachments && msg.attachments.length ? `📎 ${msg.attachments.length} attachment(s)` : 'New message'));
+
+                if (titleEl) titleEl.textContent = title;
+                if (msgEl) msgEl.textContent = textPreview;
+                if (timeEl) timeEl.textContent = 'now';
+
+                if (avatarEl) {
+                    const senderUser = msg.senderEmail ? (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get ? allUsersMap.get(msg.senderEmail.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(msg.senderEmail) : null)) : null;
+                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/Fav-Icon.png'));
+                    avatarEl.src = avatarSrc;
+                }
+
+                currentMobilePushTarget = { msg, conv, convId, openAction };
+
+                clearTimeout(mobilePushTimer);
+                banner.classList.remove('show');
+                if (progressBar) {
+                    progressBar.style.transition = 'none';
+                    progressBar.style.width = '100%';
+                }
+
+                requestAnimationFrame(() => {
+                    banner.classList.add('show');
+                    if (progressBar) {
+                        requestAnimationFrame(() => {
+                            progressBar.style.transition = 'width 4.5s linear';
+                            progressBar.style.width = '0%';
+                        });
+                    }
+                });
+
+                mobilePushTimer = setTimeout(() => {
+                    dismissMobilePushNotification();
+                }, 4500);
+            }
+            window.showInAppChatNotification = showInAppChatNotification;
+
+            function dismissMobilePushNotification(e) {
+                if (e) e.stopPropagation();
+                clearTimeout(mobilePushTimer);
+                const banner = document.getElementById('mobile-push-notification');
+                if (banner) {
+                    banner.classList.remove('show');
+                }
+                currentMobilePushTarget = null;
+            }
+            window.dismissMobilePushNotification = dismissMobilePushNotification;
+
+            function handleMobilePushClick(e) {
+                if (!currentMobilePushTarget) return;
+                const { openAction, convId, conv, msg } = currentMobilePushTarget;
+                dismissMobilePushNotification();
+                if (typeof openAction === 'function') {
+                    openAction();
+                } else {
+                    if (typeof switchView === 'function') switchView('chat');
+                    if (conv?.type === 'dm' || (convId && convId.startsWith('dm_'))) {
+                        if (typeof openDm === 'function') openDm(msg.senderEmail);
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                        }
+                    }
+                }
+            }
+            window.handleMobilePushClick = handleMobilePushClick;
+
             function notifyIncomingMessage(msg, conv, convId) {
                 if (chatNotificationsMuted) return;
                 const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : msg.senderName;
-                toast(`New message from ${title}`, 'info');
+                const openAction = () => {
+                    window.focus();
+                    if (typeof switchView === 'function') switchView('chat');
+                    const welcomeEl = document.getElementById('chat-welcome');
+                    if (welcomeEl) welcomeEl.classList.add('hidden');
+                    if (conv?.type === 'dm' || (convId && convId.startsWith('dm_'))) {
+                        if (typeof openDm === 'function') openDm(msg.senderEmail);
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                        }
+                    }
+                };
+                showInAppChatNotification(msg, conv, convId, openAction);
 
                 // Play notification sound via Web Audio API
                 if (typeof playNotificationSound === 'function') {
@@ -31339,6 +31439,7 @@ function isStrategyTask(t) {
                 if (chatPanel) {
                     chatPanel.classList.add('no-active-chat');
                     chatPanel.classList.remove('active-chat');
+                    document.documentElement.classList.remove('in-active-chat');
                 }
             }
             window.closeChat = closeChat;
@@ -31425,6 +31526,7 @@ function isStrategyTask(t) {
                 if (chatPanel) {
                     chatPanel.classList.remove('no-active-chat');
                     chatPanel.classList.add('active-chat');
+                    document.documentElement.classList.add('in-active-chat');
                 }
 
                 const nameEl = document.getElementById('chat-conv-name');

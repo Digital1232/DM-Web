@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.32">
+    <meta name="app-version" content="1.0.34">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="shortcut icon" type="image/svg+xml" href="img/favicon.svg">
@@ -3656,6 +3656,42 @@
             title="Dismiss notification">
             <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
         </button>
+    </div>
+
+    <!-- Native Mobile Push Notification Banner (iOS Dynamic Island / Android Heads-Up Style) -->
+    <div id="mobile-push-notification" class="mobile-push-banner" onclick="handleMobilePushClick(event)">
+        <div class="mobile-push-inner">
+            <div class="mobile-push-header">
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="w-4 h-4 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                        <iconify-icon icon="solar:chat-round-dots-bold" width="10" class="text-white"></iconify-icon>
+                    </span>
+                    <span class="mobile-push-app-name">One Desk • Chat</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span id="mobile-push-time" class="mobile-push-time">now</span>
+                    <button type="button" class="mobile-push-close" onclick="dismissMobilePushNotification(event)" title="Dismiss">
+                        <iconify-icon icon="solar:close-circle-bold" width="16"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+            <div class="mobile-push-body">
+                <div class="mobile-push-avatar-wrap">
+                    <img id="mobile-push-avatar" src="img/Fav-Icon.png" alt="Sender avatar" class="mobile-push-avatar">
+                    <span class="mobile-push-dot"></span>
+                </div>
+                <div class="mobile-push-text">
+                    <p id="mobile-push-title" class="mobile-push-title">Team Member</p>
+                    <p id="mobile-push-msg" class="mobile-push-msg">Sent a message</p>
+                </div>
+                <button type="button" class="mobile-push-action-btn" title="Open chat">
+                    <iconify-icon icon="solar:reply-bold" width="14"></iconify-icon>
+                </button>
+            </div>
+            <div class="mobile-push-progress">
+                <div id="mobile-push-progress-bar" class="mobile-push-progress-bar"></div>
+            </div>
+        </div>
     </div>
 
     <!-- ══════════════════════════════════════════
@@ -20606,6 +20642,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const prevView = activeView;
                 activeView = view;
+                if (view !== 'chat' && panelId !== 'chat') { document.documentElement.classList.remove('in-active-chat'); }
                 localStorage.setItem('worksync_activeView', view);
 
                 // Update URL hash for direct quick link sharing and navigation
@@ -33464,6 +33501,92 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.showBrowserNotification = showBrowserNotification;
 
+            
+            let mobilePushTimer = null;
+            let currentMobilePushTarget = null;
+
+            function showInAppChatNotification(msg, conv, convId, openAction) {
+                const banner = document.getElementById('mobile-push-notification');
+                if (!banner) {
+                    const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'Team Member');
+                    showInAppChatNotification(msg, conv, convId, openAction);
+                    return;
+                }
+
+                const titleEl = document.getElementById('mobile-push-title');
+                const msgEl = document.getElementById('mobile-push-msg');
+                const avatarEl = document.getElementById('mobile-push-avatar');
+                const progressBar = document.getElementById('mobile-push-progress-bar');
+                const timeEl = document.getElementById('mobile-push-time');
+
+                const title = conv?.type === 'group' && conv?.name ? `${conv.name} (${msg.senderName})` : (msg.senderName || 'Team Member');
+                const textPreview = msg.text || (msg.attachmentName ? `📎 ${msg.attachmentName}` : (msg.attachments && msg.attachments.length ? `📎 ${msg.attachments.length} attachment(s)` : 'New message'));
+
+                if (titleEl) titleEl.textContent = title;
+                if (msgEl) msgEl.textContent = textPreview;
+                if (timeEl) timeEl.textContent = 'now';
+
+                if (avatarEl) {
+                    const senderUser = msg.senderEmail ? (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get ? allUsersMap.get(msg.senderEmail.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(msg.senderEmail) : null)) : null;
+                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/Fav-Icon.png'));
+                    avatarEl.src = avatarSrc;
+                }
+
+                currentMobilePushTarget = { msg, conv, convId, openAction };
+
+                clearTimeout(mobilePushTimer);
+                banner.classList.remove('show');
+                if (progressBar) {
+                    progressBar.style.transition = 'none';
+                    progressBar.style.width = '100%';
+                }
+
+                requestAnimationFrame(() => {
+                    banner.classList.add('show');
+                    if (progressBar) {
+                        requestAnimationFrame(() => {
+                            progressBar.style.transition = 'width 4.5s linear';
+                            progressBar.style.width = '0%';
+                        });
+                    }
+                });
+
+                mobilePushTimer = setTimeout(() => {
+                    dismissMobilePushNotification();
+                }, 4500);
+            }
+            window.showInAppChatNotification = showInAppChatNotification;
+
+            function dismissMobilePushNotification(e) {
+                if (e) e.stopPropagation();
+                clearTimeout(mobilePushTimer);
+                const banner = document.getElementById('mobile-push-notification');
+                if (banner) {
+                    banner.classList.remove('show');
+                }
+                currentMobilePushTarget = null;
+            }
+            window.dismissMobilePushNotification = dismissMobilePushNotification;
+
+            function handleMobilePushClick(e) {
+                if (!currentMobilePushTarget) return;
+                const { openAction, convId, conv, msg } = currentMobilePushTarget;
+                dismissMobilePushNotification();
+                if (typeof openAction === 'function') {
+                    openAction();
+                } else {
+                    if (typeof switchView === 'function') switchView('chat');
+                    if (conv?.type === 'dm' || (convId && convId.startsWith('dm_'))) {
+                        if (typeof openDm === 'function') openDm(msg.senderEmail);
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(convId, conv?.name || 'Group', 'group', conv?.profilePicture || '');
+                        }
+                    }
+                }
+            }
+            window.handleMobilePushClick = handleMobilePushClick;
+
             function notifyIncomingMessage(msg, conv, convId) {
                 if (chatNotificationsMuted) return;
                 if (currentUser && currentUser.email && convId) {
@@ -34227,6 +34350,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (chatPanel) {
                     chatPanel.classList.add('no-active-chat');
                     chatPanel.classList.remove('active-chat');
+                    document.documentElement.classList.remove('in-active-chat');
                 }
 
                 try {
@@ -34342,6 +34466,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (chatPanel) {
                     chatPanel.classList.remove('no-active-chat');
                     chatPanel.classList.add('active-chat');
+                    document.documentElement.classList.add('in-active-chat');
                 }
 
                 const nameEl = document.getElementById('chat-conv-name');
