@@ -4346,8 +4346,9 @@
                                         <iconify-icon icon="solar:add-circle-bold"></iconify-icon>
                                         Add Task
                                     </button>
-                                    <button onclick="syncTasks()" id="sync-btn"
-                                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all">
+                                    <button onclick="syncTasks(false, event.shiftKey)" id="sync-btn"
+                                        title="Sync from Jira (Shift+Click for full rebuild)"
+                                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all cursor-pointer">
                                         <iconify-icon icon="solar:refresh-circle-bold" id="sync-icon"></iconify-icon>
                                         Sync from Jira
                                     </button>
@@ -25840,7 +25841,7 @@ function isStrategyTask(t) {
                 return Array.from(map.values());
             }
 
-            async function syncTasks(isAuto = false) {
+            async function syncTasks(isAuto = false, forceFull = false) {
                 const btn = document.getElementById('sync-btn'), icon = document.getElementById('sync-icon');
                 if (!isAuto) {
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
@@ -25850,34 +25851,24 @@ function isStrategyTask(t) {
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
-                    // TEST 1: Verify token works with a simple endpoint
-                    const testUrl = `https://${JIRA.domain}/rest/api/3/myself`;
-                    console.log('🧪 Testing token with /myself endpoint...');
-                    const testRes = await jiraRequest(testUrl);
+                    // High-Performance Sync:
+                    // If tasks are already loaded in memory/storage and full sync wasn't explicitly forced,
+                    // do a quick incremental sync fetching only recently updated issues (last 24 hours).
+                    // This completes in 1 fast roundtrip (~2-3s) instead of 5-page crawl (50-70s).
+                    const hasCachedTasks = Array.isArray(tasks) && tasks.filter(t => !t.manual).length > 0;
+                    const isIncremental = !forceFull && hasCachedTasks && !isAuto;
 
-                    if (!testRes.success || testRes.data?.errorMessages) {
-                        const err = jiraErrorMessage(testRes);
-                        console.error('❌ Jira auth test failed:', err);
-                        if (!isAuto) {
-                            toast('Jira auth failed: ' + err, 'error');
-                        } else {
-                            updateSystemStatus(false, 'Jira Auth Failed', true);
-                        }
-                        return;
-                    }
-                    console.log('✅ Token is VALID - user:', testRes.data?.emailAddress);
-
-                    // Fetch all issues using REST API v3 JQL search
-                    const lastSync = localStorage.getItem('worksync_lastSync');
                     let jql = `project in (${projectKeysQuery})`;
-                    if (isAuto) { // For background syncs, get very recent changes.
-                        jql += ` AND updated >= -5m ORDER BY updated DESC`;
+                    if (isAuto) { // For background syncs, get recent changes.
+                        jql += ` AND updated >= -15m ORDER BY updated DESC`;
+                    } else if (isIncremental) { // Quick manual sync: capture updates from last 24h
+                        jql += ` AND updated >= -24h ORDER BY updated DESC`;
                     } else { // For a full sync, fetch every issue in the project.
                         jql += ` ORDER BY updated DESC`;
                     }
 
                     const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent,components');
-                    console.log(`📡 Fetched ${issues.length} Jira issues across pages.`);
+                    console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'quick-sync' : (isAuto ? 'auto-sync' : 'full-sync')}).`);
 
                     const copyParentFieldsToSubtask = (sub, p) => {
                         if (!sub || !p) return;
@@ -25921,7 +25912,7 @@ function isStrategyTask(t) {
 
                     const subtaskCount = jiraTasks.filter(t => t.parentId).length;
                     console.log(`📌 Imported ${subtaskCount} Jira subtasks among ${jiraTasks.length} total tasks.`);
-                    console.log(`📊 Mapped ${jiraTasks.length} tasks from Jira for ${isAuto ? 'auto-sync' : 'full-sync'}`);
+                    console.log(`📊 Mapped ${jiraTasks.length} tasks from Jira for ${isAuto ? 'auto-sync' : (isIncremental ? 'quick-sync' : 'full-sync')}`);
 
                     const taskMap = new Map(tasks.map(t => [t.id, t]));
                     jiraTasks.forEach(jiraTask => {
@@ -25948,19 +25939,19 @@ function isStrategyTask(t) {
                             if (jiraTask.department) existingTask.department = jiraTask.department;
 
                             if (jiraTask.assigneeEmail && jiraTask.assigneeEmail !== oldAssigneeEmail) {
-                                checkAndCreateThumbnailSubTask(existingTask, jiraTask.assigneeEmail);
+                                checkAndCreateThumbnailSubTask(existingTask, jiraTask.assigneeEmail, true);
                             }
                         } else {
                             // New task from Jira
                             taskMap.set(jiraTask.id, jiraTask);
                             if (jiraTask.assigneeEmail) {
-                                checkAndCreateThumbnailSubTask(jiraTask, jiraTask.assigneeEmail);
+                                checkAndCreateThumbnailSubTask(jiraTask, jiraTask.assigneeEmail, true);
                             }
                         }
                     });
 
-                    // For a full sync (not auto), remove old Jira tasks that are no longer present
-                    if (!isAuto) {
+                    // For a full sync (not auto or incremental), remove old Jira tasks that are no longer present
+                    if (!isAuto && !isIncremental) {
                         const newJiraIds = new Set(jiraTasks.map(t => t.id));
                         tasks.forEach(oldTask => {
                             if (!oldTask.manual && !newJiraIds.has(oldTask.id)) {
@@ -25990,16 +25981,19 @@ function isStrategyTask(t) {
                         checkReworkAndQcTaskPopups();
                     }
                     if (!isAuto) {
-                        toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}`, jiraTasks.length ? 'success' : 'info');
+                        const syncTypeLabel = isIncremental ? ' (Quick Sync)' : ' (Full Rebuild)';
+                        toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}${syncTypeLabel}`, jiraTasks.length ? 'success' : 'info');
                     } else {
                         updateSystemStatus(true, `Synced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, true);
                     }
                 } catch (e) {
                     console.error('🔴 Sync exception:', e);
+                    const errMsg = e.message || String(e);
+                    const isAuthError = errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('credentials');
                     if (!isAuto) {
-                        toast('Sync failed: ' + e.message, 'error');
+                        toast((isAuthError ? 'Jira auth failed: ' : 'Sync failed: ') + errMsg, 'error');
                     } else {
-                        updateSystemStatus(false, 'Sync Error', true);
+                        updateSystemStatus(false, isAuthError ? 'Jira Auth Failed' : 'Sync Error', true);
                     }
                 }
                 finally {
