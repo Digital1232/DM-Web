@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.35">
+    <meta name="app-version" content="1.0.36">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -34590,7 +34590,7 @@ function isStrategyTask(t) {
                 if (attendanceUnsub) return; // Only load once
 
                 const dbRef = ref(db, 'worksync/attendance_events');
-                const q = isAdmin() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+                const q = (canViewReports() || isAdmin() || isManager()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
                 attendanceUnsub = onValue(q, snap => {
                     attendanceEvents = snap.val() ? Object.entries(snap.val()).map(([id, evt]) => ({ id, ...evt })) : [];
@@ -34601,17 +34601,6 @@ function isStrategyTask(t) {
             async function switchReportTab(tab) {
                 if (!canViewReports()) return;
 
-                // Permission checks for restricted tabs
-                if ((tab === 'performance' || tab === 'indiv-perf') && !isAdmin() && !isManager()) {
-                    // Non-admin, non-manager users cannot access employee performance reports
-                    // Redirect to summary or detailed tab
-                    tab = 'summary';
-                }
-
-                const managerAllowedTabs = ['client', 'client-wide', 'client-wise-timing', 'client-timing', 'client-perf', 'client-delivery', 'performance', 'indiv-perf'];
-                if (isManager() && !isAdmin() && !managerAllowedTabs.includes(tab)) {
-                    tab = 'client';
-                }
                 const allTabs = ['timing', 'task', 'weekly', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide', 'client-wise-timing', 'indiv-perf', 'client-perf', 'client-delivery'];
                 allTabs.forEach(t => {
                     document.getElementById(`report-panel-${t}`)?.classList.add('hidden');
@@ -36940,7 +36929,6 @@ function isStrategyTask(t) {
             }
 
             function exportAttendanceReport() {
-                if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (!reportDateFrom || !reportDateTo) {
                     return toast('Please select a date range to export.', 'error');
                 }
@@ -39067,7 +39055,7 @@ function isStrategyTask(t) {
                 if (allTimeLogsUnsub) allTimeLogsUnsub();
 
                 const dbRef = ref(db, 'worksync/timelogs');
-                const q = (isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+                const q = (canViewReports() || isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
                 allTimeLogsUnsub = onValue(q, snap => {
                     allTimeLogs = snap.val() ? Object.values(snap.val()) : [];
@@ -39100,8 +39088,6 @@ function isStrategyTask(t) {
             }
 
             function renderPerformanceReport() {
-                if (!isAdmin()) return;
-
                 const list = document.getElementById('performance-report-list');
                 if (!list) return;
 
@@ -40062,7 +40048,6 @@ function isStrategyTask(t) {
             }
 
             function renderIndivPerfReport() {
-                if (!isAdmin()) return;
                 const container = document.getElementById('indiv-perf-report-content');
                 const userSelect = document.getElementById('indiv-perf-user-select');
                 if (!container || !userSelect) return;

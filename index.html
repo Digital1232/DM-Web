@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.35">
+    <meta name="app-version" content="1.0.36">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -15718,7 +15718,7 @@
                 Object.values(LEAVE_APPROVAL_CHAINS).flat().map(e => e.toLowerCase())
             )];
 
-            const REPORT_TABS = ['timing', 'task', 'analytics', 'summary', 'detailed', 'client-wide', 'performance', 'client'];
+            const REPORT_TABS = ['timing', 'task', 'analytics', 'summary', 'weekly', 'detailed', 'performance', 'indiv-perf', 'client', 'client-wide', 'client-wise-timing', 'client-perf', 'client-delivery', 'operation-eta'];
             const TEAM_REPORT_ACCESS = {
                 Default: REPORT_TABS,
                 All: REPORT_TABS,
@@ -18556,16 +18556,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('user-name').textContent = currentUser.name;
                 document.getElementById('user-role').textContent = currentUser.role;
 
-                // Team-based report tab access
-                const teamAccess = TEAM_REPORT_ACCESS[currentUser.team] || TEAM_REPORT_ACCESS['Default'];
-                ['timing', 'task', 'analytics', 'summary', 'detailed', 'client-wide', 'performance', 'client'].forEach(tab => {
+                // Full report access for all users
+                const allReportTabs = ['timing', 'task', 'weekly', 'detailed', 'analytics', 'summary', 'performance', 'indiv-perf', 'client', 'client-wide', 'client-wise-timing', 'client-perf', 'client-delivery', 'operation-eta'];
+                allReportTabs.forEach(tab => {
                     const btn = document.getElementById(`report-tab-${tab}`);
-                    if (btn) btn.classList.toggle('hidden', !teamAccess.includes(tab));
+                    if (btn) btn.classList.remove('hidden');
                 });
-
-                if (!teamAccess.includes(currentReportTab)) {
-                    currentReportTab = teamAccess[0];
-                }
 
                 document.getElementById('nav-projects')?.classList.toggle('hidden', !canViewProjects());
                 document.getElementById('nav-reports')?.classList.toggle('hidden', !canViewReports());
@@ -18579,33 +18575,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
                 document.getElementById('nav-dailyplan')?.classList.toggle('hidden', !canViewDailyPlanTeamAccess());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
-                document.getElementById('report-export-btn')?.classList.toggle('hidden', isManager() && !isAdmin());
+                document.getElementById('report-export-btn')?.classList.remove('hidden');
                 document.getElementById('report-group-client')?.classList.remove('hidden');
-                if (hasClientWideAccess() && !isAdmin() && !isManager()) {
-                    // Client-wide only access
-                    document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
-                    document.getElementById('report-tab-client-wide')?.classList.remove('hidden');
-                    currentReportTab = 'client-wide';
-                } else if (isManager() && !isAdmin()) {
-                    document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
-                    const managerTabs = ['client', 'client-wide', 'client-wise-timing', 'client-timing', 'client-perf', 'client-delivery', 'performance', 'indiv-perf'];
-                    managerTabs.forEach(t => document.getElementById(`report-tab-${t}`)?.classList.remove('hidden'));
-                    if (!managerTabs.includes(currentReportTab)) currentReportTab = 'client';
-                } else if (isAdmin()) {
-                    ['timing', 'task', 'analytics', 'summary', 'detailed', 'client', 'client-wide', 'client-wise-timing', 'client-timing', 'client-perf', 'client-delivery', 'performance', 'indiv-perf'].forEach(tab => {
-                        document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
-                    });
-                } else {
-                    // Non-admin / non-manager / regular users
-                    document.getElementById('report-group-client')?.classList.add('hidden');
-                    document.querySelectorAll('.report-tab-btn').forEach(btn => btn.classList.add('hidden'));
-                    ['summary', 'detailed', 'task'].forEach(tab => {
-                        document.getElementById(`report-tab-${tab}`)?.classList.remove('hidden');
-                    });
-                    if (currentReportTab !== 'summary' && currentReportTab !== 'detailed' && currentReportTab !== 'task') {
-                        currentReportTab = 'summary';
-                    }
-                }
+                document.getElementById('report-group-team')?.classList.remove('hidden');
                 if (canApproveLeaves()) {
                     document.getElementById('hr-tab-approvals')?.classList.remove('hidden');
                 } else {
@@ -18642,8 +18614,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     document.getElementById('group-create-btn')?.classList.add('hidden');
                     document.getElementById('announcement-compose-card')?.classList.add('hidden');
                     document.getElementById('dpr-tab-team')?.classList.add('hidden');
-                    document.getElementById('report-tab-performance')?.classList.add('hidden');
-                    document.getElementById('report-tab-indiv-perf')?.classList.add('hidden');
+                    document.getElementById('report-tab-performance')?.classList.remove('hidden');
+                    document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
                 }
                 // Daily summary cards and data loading - available to admins AND managers
                 if (canViewDailySummary()) {
@@ -37287,13 +37259,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const userWrapper = document.getElementById('report-user-filter-wrapper');
                 if (userWrapper) {
-                    if (isAdmin() || isManager()) {
-                        userWrapper.classList.remove('hidden');
-                        populateReportUserFilter();
-                    } else {
-                        userWrapper.classList.add('hidden');
-                        reportSelectedUser = currentUser ? currentUser.email : '';
-                    }
+                    userWrapper.classList.remove('hidden');
+                    populateReportUserFilter();
                 }
 
                 const datePickerEl = document.getElementById('report-datepicker');
@@ -37389,11 +37356,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     weeklyUserInput.value = userInput.value;
                 }
 
-                if (isAdmin() || isManager()) {
-                    reportSelectedUser = userInput ? userInput.value : (weeklyUserInput ? weeklyUserInput.value : 'all');
-                } else {
-                    reportSelectedUser = currentUser ? currentUser.email : 'all';
-                }
+                reportSelectedUser = userInput ? userInput.value : (weeklyUserInput ? weeklyUserInput.value : 'all');
 
                 // Update period badges on all panels
                 if (reportDateFrom && reportDateTo) {
@@ -38234,7 +38197,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (attendanceUnsub) return; // Only load once
 
                 const dbRef = ref(db, 'worksync/attendance_events');
-                const q = isAdmin() ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+                const q = (canViewReports() || isAdmin() || isManager()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
                 attendanceUnsub = onValue(q, snap => {
                     attendanceEvents = snap.val() ? Object.entries(snap.val()).map(([id, evt]) => ({ id, ...evt })) : [];
@@ -38245,17 +38208,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function switchReportTab(tab) {
                 if (!canViewReports()) return;
 
-                // Permission checks for restricted tabs
-                if ((tab === 'performance' || tab === 'indiv-perf') && !isAdmin() && !isManager()) {
-                    // Non-admin, non-manager users cannot access employee performance reports
-                    // Redirect to summary or detailed tab
-                    tab = 'summary';
-                }
-
-                const managerAllowedTabs = ['client', 'client-wide', 'client-wise-timing', 'client-timing', 'client-perf', 'client-delivery', 'operation-eta', 'performance', 'indiv-perf'];
-                if (isManager() && !isAdmin() && !managerAllowedTabs.includes(tab)) {
-                    tab = 'client';
-                }
                 const allTabs = ['timing', 'task', 'weekly', 'detailed', 'analytics', 'summary', 'performance', 'client', 'client-wide', 'client-wise-timing', 'indiv-perf', 'client-perf', 'client-delivery', 'operation-eta'];
                 allTabs.forEach(t => {
                     document.getElementById(`report-panel-${t}`)?.classList.add('hidden');
@@ -41185,7 +41137,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function exportAttendanceReport() {
-                if (!isAdmin()) return toast('Only admins can export reports', 'error');
                 if (!reportDateFrom || !reportDateTo) {
                     return toast('Please select a date range to export.', 'error');
                 }
@@ -43312,7 +43263,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (allTimeLogsUnsub) allTimeLogsUnsub();
 
                 const dbRef = ref(db, 'worksync/timelogs');
-                const q = (isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
+                const q = (canViewReports() || isAdmin() || isManager() || hasClientWideAccess()) ? dbRef : query(dbRef, orderByChild('userId'), equalTo(currentUser.email));
 
                 allTimeLogsUnsub = onValue(q, snap => {
                     allTimeLogs = snap.val() ? Object.values(snap.val()) : [];
@@ -43345,8 +43296,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderPerformanceReport() {
-                if (!isAdmin()) return;
-
                 const list = document.getElementById('performance-report-list');
                 if (!list) return;
 
@@ -44307,7 +44256,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderIndivPerfReport() {
-                if (!isAdmin()) return;
                 const container = document.getElementById('indiv-perf-report-content');
                 const userSelect = document.getElementById('indiv-perf-user-select');
                 if (!container || !userSelect) return;
