@@ -30513,13 +30513,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     task.lastStartedDate = today;
                     task.startedAt = Date.now();
                     task.status = 'In Progress';
+                    task.lastCompletedDate = null;
+                    task.completedAt = null;
                     const ownerKey = eKey(task.userId || currentUser.email);
                     try {
                         await update(ref(db, `worksync/manual_tasks/${ownerKey}/${id}`), {
                             startedToday: today,
                             lastStartedDate: today,
                             startedAt: Date.now(),
-                            status: 'In Progress'
+                            status: 'In Progress',
+                            lastCompletedDate: null,
+                            completedAt: null
                         });
                     } catch (e) {
                         console.warn('[MorningLearning] Failed to update start status in Firebase:', e);
@@ -32131,8 +32135,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (isDoneState) {
                     task.lastCompletedDate = todayIso();
                     task.completedAt = Date.now();
-                } else if (isRecurring) {
+                } else {
                     task.lastCompletedDate = null;
+                    task.completedAt = null;
                 }
 
                 renderInternalTasks();
@@ -32149,8 +32154,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (isDoneState) {
                             updates.lastCompletedDate = todayIso();
                             updates.completedAt = Date.now();
-                        } else if (isRecurring) {
+                        } else {
                             updates.lastCompletedDate = null;
+                            updates.completedAt = null;
                         }
                         await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {

@@ -30221,8 +30221,9 @@ function isStrategyTask(t) {
                 if (isDoneState) {
                     task.lastCompletedDate = todayIso();
                     task.completedAt = Date.now();
-                } else if (isRecurring) {
+                } else {
                     task.lastCompletedDate = null;
+                    task.completedAt = null;
                 }
 
                 renderInternalTasks();
@@ -30239,8 +30240,9 @@ function isStrategyTask(t) {
                         if (isDoneState) {
                             updates.lastCompletedDate = todayIso();
                             updates.completedAt = Date.now();
-                        } else if (isRecurring) {
+                        } else {
                             updates.lastCompletedDate = null;
+                            updates.completedAt = null;
                         }
                         await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
