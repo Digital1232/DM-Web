@@ -4346,8 +4346,8 @@
                                         <iconify-icon icon="solar:add-circle-bold"></iconify-icon>
                                         Add Task
                                     </button>
-                                    <button onclick="syncTasks(false, event.shiftKey)" id="sync-btn"
-                                        title="Sync from Jira (Shift+Click for full rebuild)"
+                                    <button onclick="syncTasks(false, true)" id="sync-btn"
+                                        title="Sync all tasks from Jira"
                                         class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all cursor-pointer">
                                         <iconify-icon icon="solar:refresh-circle-bold" id="sync-icon"></iconify-icon>
                                         Sync from Jira
@@ -16473,7 +16473,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     // PERFORMANCE: Load only CRITICAL data synchronously
                     // Other data loads in background after view appears
-                    await new Promise(resolve => setTimeout(() => { syncTasks(); resolve(); }, 50));
+                    await new Promise(resolve => setTimeout(() => { syncTasks(false, true); resolve(); }, 50));
 
                     // Initialize Jira date picker
                     initJiraDatePicker();
@@ -25851,24 +25851,20 @@ function isStrategyTask(t) {
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
-                    // High-Performance Sync:
-                    // If tasks are already loaded in memory/storage and full sync wasn't explicitly forced,
-                    // do a quick incremental sync fetching only recently updated issues (last 24 hours).
-                    // This completes in 1 fast roundtrip (~2-3s) instead of 5-page crawl (50-70s).
-                    const hasCachedTasks = Array.isArray(tasks) && tasks.filter(t => !t.manual).length > 0;
-                    const isIncremental = !forceFull && hasCachedTasks && !isAuto;
+                    // Sync strategy:
+                    // - Background auto-sync (isAuto): fast incremental sync for recent changes (-30m)
+                    // - Manual click or startup (not isAuto or forceFull): FULL sync to ensure all statuses (Posted, Done, etc.) are 100% accurate
+                    const isIncremental = isAuto && !forceFull;
 
                     let jql = `project in (${projectKeysQuery})`;
-                    if (isAuto) { // For background syncs, get recent changes.
-                        jql += ` AND updated >= -15m ORDER BY updated DESC`;
-                    } else if (isIncremental) { // Quick manual sync: capture updates from last 24h
-                        jql += ` AND updated >= -24h ORDER BY updated DESC`;
-                    } else { // For a full sync, fetch every issue in the project.
+                    if (isIncremental) {
+                        jql += ` AND updated >= -30m ORDER BY updated DESC`;
+                    } else {
                         jql += ` ORDER BY updated DESC`;
                     }
 
                     const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent,components');
-                    console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'quick-sync' : (isAuto ? 'auto-sync' : 'full-sync')}).`);
+                    console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'auto-incremental' : 'full-sync'}).`);
 
                     const copyParentFieldsToSubtask = (sub, p) => {
                         if (!sub || !p) return;
