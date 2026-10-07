@@ -28330,7 +28330,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         });
                     } else if (currentInternalDueDateFilter === 'today') {
                         const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-                        filtered = filtered.filter(t => t.duedate === todayStr);
+                        filtered = filtered.filter(t => {
+                            if (t.duedate !== todayStr) return false;
+                            if (currentInternalStatusFilter === 'all') {
+                                if (activeTaskId && t.id === activeTaskId) return true;
+                                const s = (t.status || '').toLowerCase().trim();
+                                if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
+                            }
+                            return true;
+                        });
                     } else if (currentInternalDueDateFilter === 'yesterday') {
                         const yesterday = new Date(today);
                         yesterday.setDate(today.getDate() - 1);
@@ -28417,6 +28425,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     if (!t.duedate || new Date(t.duedate) >= todayF || isInternalDone(t.status) || isDone(t.status)) return false;
                                 } else if (currentInternalDueDateFilter === 'today') {
                                     if (t.duedate !== todayF.toISOString().slice(0, 10)) return false;
+                                    if (currentInternalStatusFilter === 'all') {
+                                        if (activeTaskId && t.id === activeTaskId) return true;
+                                        const s = (t.status || '').toLowerCase().trim();
+                                        if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
+                                    }
                                 } else if (currentInternalDueDateFilter === 'this_week') {
                                     const sow = new Date(todayF); sow.setDate(todayF.getDate() - todayF.getDay() + (todayF.getDay() === 0 ? -6 : 1));
                                     const eow = new Date(sow); eow.setDate(sow.getDate() + 6); eow.setHours(23, 59, 59, 999);
@@ -50211,9 +50224,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     });
                 } else {
                     // Default / 'all' view: Only show active tasks before Quality Check (Pre-QC)
-                    // Tasks moved to Quality Check or Completed are accessible under the 'Completed' tab
+                    // Tasks moved to Quality Check, Done, or Completed are hidden from default view (accessible under 'Completed' tab)
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
+                        const s = (t.status || '').toLowerCase().trim();
+                        if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status) || isDailyPlanCompletedTask(t.status)) {
+                            return false;
+                        }
                         return isDailyPlanBeforeQcStatus(t.status);
                     });
                 }
