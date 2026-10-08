@@ -122,7 +122,8 @@ function renderEmployeeClientTimingReport() {
             
             // Status filter
             if (filters.status !== 'all') {
-                const task = (window.tasks || []).find(t => t.id === log.taskId);
+                const allT = (window.allTasks && window.allTasks.length ? window.allTasks : (window.tasks || []));
+                const task = allT.find(t => String(t.id).toLowerCase() === String(log.taskId).toLowerCase());
                 const taskStatus = task?.status || 'Unknown';
                 if (taskStatus !== filters.status) return false;
             }
@@ -137,6 +138,7 @@ function renderEmployeeClientTimingReport() {
 
         // Aggregate by client and task
         const clientData = {};
+        const allAvailableTasks = (window.allTasks && window.allTasks.length ? window.allTasks : (window.tasks || []));
         filteredLogs.forEach(log => {
             const client = log.client || taskClientMap[log.taskId] || 'Other';
 
@@ -149,7 +151,7 @@ function renderEmployeeClientTimingReport() {
                 };
             }
 
-            const task = (window.tasks || []).find(t => t.id === log.taskId);
+            const task = allAvailableTasks.find(t => String(t.id).toLowerCase() === String(log.taskId).toLowerCase());
             const taskKey = log.taskId || 'Unknown';
             
             if (!clientData[client].taskMap[taskKey]) {
@@ -212,7 +214,9 @@ function calculateProductivityMetrics(logs, clientData, filters, employee) {
         Object.values(client.taskMap).forEach(task => {
             totalTasks++;
             taskTimes.push(task.totalSeconds);
-            if (task.status && ['Completed', 'Done', 'Closed'].includes(task.status)) {
+            const st = (task.status || '').trim().toLowerCase();
+            const isDone = ['completed', 'done', 'closed', 'posted', 'design completed', 'client sent', 'client approved', 'post done', 'published', 'analytics'].includes(st);
+            if (isDone) {
                 completedTasks++;
             }
         });
@@ -312,7 +316,8 @@ function renderEcttClientBreakdown(clientData, metrics) {
     
     sortedClients.forEach(client => {
         const tasks = Object.values(client.taskMap).sort((a, b) => b.totalSeconds - a.totalSeconds);
-        const completedCount = tasks.filter(t => t.status && ['Completed', 'Done', 'Closed'].includes(t.status)).length;
+        const isDoneStatus = (s) => ['completed', 'done', 'closed', 'posted', 'design completed', 'client sent', 'client approved', 'post done', 'published', 'analytics'].includes((s || '').trim().toLowerCase());
+        const completedCount = tasks.filter(t => isDoneStatus(t.status)).length;
         const completionPct = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
         html += `
@@ -339,7 +344,7 @@ function renderEcttClientBreakdown(clientData, metrics) {
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-2 mb-1">
                                         <span class="font-mono font-bold text-indigo-600 text-xs">${escapeHtml(task.id)}</span>
-                                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${task.status && ['Completed', 'Done', 'Closed'].includes(task.status) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${task.status || 'Unknown'}</span>
+                                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${isDoneStatus(task.status) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${task.status || 'Unknown'}</span>
                                     </div>
                                     <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(task.name)}</p>
                                     <p class="text-xs text-slate-400 mt-1">Type: ${task.type} • Priority: ${task.priority}</p>

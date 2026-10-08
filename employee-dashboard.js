@@ -101,9 +101,10 @@ function getEmployeeDashboardData(employee, daysBack = 30) {
 
     // Build task info map
     const taskMap = {};
-    (window.tasks || []).forEach(t => {
+    const taskList = (window.allTasks && window.allTasks.length ? window.allTasks : (window.tasks || []));
+    taskList.forEach(t => {
         if (t.id) {
-            taskMap[t.id] = {
+            const taskObj = {
                 id: t.id,
                 desc: t.desc || 'Unknown',
                 client: t.client || 'Unassigned',
@@ -113,6 +114,9 @@ function getEmployeeDashboardData(employee, daysBack = 30) {
                 createdDate: t.createdDate || null,
                 dueDate: t.dueDate || null
             };
+            taskMap[t.id] = taskObj;
+            taskMap[String(t.id).toLowerCase()] = taskObj;
+            taskMap[String(t.id).toUpperCase()] = taskObj;
         }
     });
 
@@ -132,7 +136,7 @@ function getEmployeeDashboardData(employee, daysBack = 30) {
 
     logs.forEach(log => {
         const taskId = log.taskId || 'Unknown';
-        const task = taskMap[taskId] || { 
+        const task = taskMap[taskId] || taskMap[String(taskId).toLowerCase()] || taskMap[String(taskId).toUpperCase()] || { 
             desc: log.taskDesc || 'Unknown Task',
             client: 'Unknown',
             status: 'Unknown',
@@ -185,9 +189,12 @@ function getEmployeeDashboardData(employee, daysBack = 30) {
         hourlyData[hour] = (hourlyData[hour] || 0) + seconds;
 
         // Count completion status
-        if (task.status && ['Completed', 'Done', 'Closed'].includes(task.status)) {
+        const normStatus = (task.status || '').trim().toLowerCase();
+        const isDone = ['completed', 'done', 'closed', 'posted', 'design completed', 'client sent', 'client approved', 'post done', 'published', 'analytics'].includes(normStatus);
+        const isPending = ['pending', 'to do', 'in progress', 'design in progress', 'review', 'internal qc', 'client review'].includes(normStatus);
+        if (isDone) {
             completedCount += 1;
-        } else if (task.status === 'Pending') {
+        } else if (isPending) {
             pendingCount += 1;
         }
     });
@@ -476,9 +483,12 @@ function renderEmployeeDashboardTaskPerformance(data) {
     `;
 
     sortedTasks.forEach(task => {
-        const statusColor = task.status && ['Completed', 'Done', 'Closed'].includes(task.status) 
+        const normTaskStatus = (task.status || '').trim().toLowerCase();
+        const isDone = ['completed', 'done', 'closed', 'posted', 'design completed', 'client sent', 'client approved', 'post done', 'published', 'analytics'].includes(normTaskStatus);
+        const isPending = ['pending', 'to do', 'in progress', 'design in progress', 'review', 'internal qc', 'client review'].includes(normTaskStatus);
+        const statusColor = isDone 
             ? 'bg-emerald-50 text-emerald-700' 
-            : task.status === 'Pending' 
+            : isPending 
             ? 'bg-amber-50 text-amber-700'
             : 'bg-slate-50 text-slate-700';
 

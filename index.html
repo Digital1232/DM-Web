@@ -16013,7 +16013,7 @@
                         'design completed', 'posted', 'done', 'analytics',
                         'client sent', 'client approved', 'completed', 'shoot completed',
                         'resolved', 'closed', 'approved', 'shoot cancelled',
-                        'skipped', 'missed'
+                        'skipped', 'missed', 'published', 'post completed', 'post done'
                     ]
                 }
             };
@@ -16091,13 +16091,19 @@
                 'shoot completed',
                 'shoot cancelled',
                 'skipped',
-                'missed'
+                'missed',
+                'published',
+                'post completed',
+                'post done'
             ]);
 
             function isDailyPlanCompletedTask(status) {
                 if (!status) return false;
                 const s = String(status).trim().toLowerCase();
-                return DAILY_PLAN_COMPLETED_STATUS_SET.has(s);
+                return DAILY_PLAN_COMPLETED_STATUS_SET.has(s) ||
+                    s.startsWith('done') ||
+                    s.startsWith('posted') ||
+                    s.startsWith('completed');
             }
 
             function isDailyPlanBeforeQcStatus(status) {
@@ -17836,8 +17842,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function taskEligibleForDailyPlanAllocation(task) {
                 if (!task) return false;
                 if (typeof isLearningTask === 'function' && isLearningTask(task)) return false;
+                if (isDailyPlanCompletedTask(task.status)) return false;
                 const s = (task.status || '').trim().toLowerCase();
-                if (s === 'done' || s === 'completed' || s === 'closed' || s === 'resolved' || s === 'cancelled') return false;
+                if (s === 'cancelled' || s === 'wont do' || s === "won't do") return false;
                 return true;
             }
 
@@ -17849,21 +17856,32 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const seenIds = new Set();
 
                 // 1. Daily Plan entries (including completed if exact date is today)
+                const allTodayTasksList = window.allTasks || tasks || [];
+                const allTodayTaskMap = new Map();
+                for (let i = 0; i < allTodayTasksList.length; i++) {
+                    const t = allTodayTasksList[i];
+                    if (t && t.id) allTodayTaskMap.set(t.id.trim().toLowerCase(), t);
+                }
+
                 Object.entries(userPlans).forEach(([taskId, planData]) => {
-                    let task = tasks.find(t => t.id === taskId);
+                    const cleanTaskId = taskId.trim().toLowerCase();
+                    let task = allTodayTaskMap.get(cleanTaskId);
                     if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
-                        const ev = strategyEvents[taskId];
+                        const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && ((e.jiraId && String(e.jiraId).toLowerCase() === cleanTaskId) || e.id === taskId));
                         if (ev) {
                             const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                            const evJiraKey = (ev.jiraId || ev.jiraTaskId || '').trim().toLowerCase();
+                            const liveJiraTask = evJiraKey ? allTodayTaskMap.get(evJiraKey) : null;
                             task = {
                                 id: ev.jiraId || taskId,
+                                jiraId: ev.jiraId || '',
                                 desc: ev.title,
                                 summary: ev.title,
-                                status: ev.status || 'To Do',
-                                client: ev.client || '',
-                                assignee: ev.owner || '',
-                                owner: ev.owner || '',
-                                duedate: calculatedDue,
+                                status: (liveJiraTask && liveJiraTask.status) || ev.status || 'To Do',
+                                client: (liveJiraTask && liveJiraTask.client) || ev.client || '',
+                                assignee: (liveJiraTask && liveJiraTask.assignee) || ev.owner || '',
+                                owner: (liveJiraTask && liveJiraTask.assignee) || ev.owner || '',
+                                duedate: (liveJiraTask && liveJiraTask.duedate) || calculatedDue,
                                 postDate: ev.date,
                                 isStrategyEvent: true,
                                 eventId: taskId
@@ -17872,16 +17890,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (!task) return;
 
+                    const effectiveTask = { ...task };
+                    const linkedJiraId = (effectiveTask.jiraId || (effectiveTask.isStrategyEvent && effectiveTask.id) || '').trim().toLowerCase();
+                    if (linkedJiraId && allTodayTaskMap.has(linkedJiraId)) {
+                        const liveJira = allTodayTaskMap.get(linkedJiraId);
+                        if (liveJira && liveJira.status) {
+                            effectiveTask.status = liveJira.status;
+                            if (liveJira.duedate) effectiveTask.duedate = liveJira.duedate;
+                            if (liveJira.client && !effectiveTask.client) effectiveTask.client = liveJira.client;
+                        }
+                    }
+
                     const planDate = new Date(planData.date);
                     planDate.setHours(0, 0, 0, 0);
 
                     const isExactDate = planDate.getTime() === selectedDate.getTime();
-                    const isCompleted = isDone(task.status) || isInternalDone(task.status) || isTaskCompletedStatus(task.status);
-                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && dailyPlanCarryStatuses(task).includes(task.status);
+                    const isCompleted = isDailyPlanCompletedTask(effectiveTask.status);
+                    const isCarryOver = planDate.getTime() < selectedDate.getTime() && isDailyPlanBeforeQcStatus(effectiveTask.status);
 
                     if (isExactDate || (isCarryOver && !isCompleted)) {
-                        plannedTasks.push(task);
-                        seenIds.add(task.id);
+                        plannedTasks.push(effectiveTask);
+                        seenIds.add(effectiveTask.id);
                     }
                 });
 
@@ -17938,18 +17967,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const cleanTaskId = taskId.trim().toLowerCase();
                     let task = taskMap.get(cleanTaskId);
                     if (!task && typeof strategyEvents !== 'undefined' && strategyEvents) {
-                        const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && (e.jiraId === taskId || e.id === taskId));
+                        const ev = strategyEvents[taskId] || Object.values(strategyEvents).find(e => e && ((e.jiraId && String(e.jiraId).toLowerCase() === cleanTaskId) || e.id === taskId));
                         if (ev) {
                             const calculatedDue = ev.duedate || calculateDueDate4DaysBefore(ev.date);
+                            const evJiraKey = (ev.jiraId || ev.jiraTaskId || '').trim().toLowerCase();
+                            const liveJiraTask = evJiraKey ? taskMap.get(evJiraKey) : null;
                             task = {
                                 id: ev.jiraId || taskId,
+                                jiraId: ev.jiraId || '',
                                 desc: ev.title,
                                 summary: ev.title,
-                                status: ev.status || 'To Do',
-                                client: ev.client || '',
-                                assignee: ev.owner || '',
-                                owner: ev.owner || '',
-                                duedate: calculatedDue,
+                                status: (liveJiraTask && liveJiraTask.status) || ev.status || 'To Do',
+                                client: (liveJiraTask && liveJiraTask.client) || ev.client || '',
+                                assignee: (liveJiraTask && liveJiraTask.assignee) || ev.owner || '',
+                                owner: (liveJiraTask && liveJiraTask.assignee) || ev.owner || '',
+                                duedate: (liveJiraTask && liveJiraTask.duedate) || calculatedDue,
                                 postDate: ev.date,
                                 isStrategyEvent: true,
                                 eventId: taskId
@@ -17965,6 +17997,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Use the actual task status from Jira, not local overrides
                     // Always display the current status synced from Jira
                     const effectiveTask = { ...task };
+                    const linkedJiraId = (effectiveTask.jiraId || (effectiveTask.isStrategyEvent && effectiveTask.id) || '').trim().toLowerCase();
+                    if (linkedJiraId && taskMap.has(linkedJiraId)) {
+                        const liveJira = taskMap.get(linkedJiraId);
+                        if (liveJira && liveJira.status) {
+                            effectiveTask.status = liveJira.status;
+                            if (liveJira.duedate) effectiveTask.duedate = liveJira.duedate;
+                            if (liveJira.client && !effectiveTask.client) effectiveTask.client = liveJira.client;
+                        }
+                    } else if (effectiveTask.isStrategyEvent && effectiveTask.eventId && typeof strategyEvents !== 'undefined') {
+                        const ev = strategyEvents[effectiveTask.eventId];
+                        const evJira = (ev?.jiraId || ev?.jiraTaskId || '').trim().toLowerCase();
+                        if (evJira && taskMap.has(evJira)) {
+                            const liveJira = taskMap.get(evJira);
+                            if (liveJira && liveJira.status) {
+                                effectiveTask.status = liveJira.status;
+                                if (liveJira.duedate) effectiveTask.duedate = liveJira.duedate;
+                            }
+                        }
+                    }
 
                     const isExactDate = (planDateTime === selectedTime) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
                     const isCarryOver = planDateTime < selectedTime && isDailyPlanBeforeQcStatus(effectiveTask.status);
@@ -20856,9 +20907,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // CENTRALIZED TASK STATUS HELPERS - Single source of truth
             // ═══════════════════════════════════════════════════════════════════
 
-            // JIRA Completed Statuses: Design Completed, Thumbnail Waiting, Quality Check, Client Sent, Client Approved, Posted, Analytics, Done
-            // INTERNAL Completed Statuses: Completed, Shoot Completed
             function isCompletedTask(status) {
+                if (!status) return false;
+                const s = String(status).trim().toLowerCase();
+                if (DAILY_PLAN_COMPLETED_STATUS_SET.has(s) ||
+                    s.startsWith('done') ||
+                    s.startsWith('posted') ||
+                    s.startsWith('completed')) {
+                    return true;
+                }
                 const style = getStatusStyle(status);
                 return style.bg.includes('emerald');
             }
@@ -21714,6 +21771,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (matchedJiraTask && matchedJiraTask.status) {
                             rawStatus = matchedJiraTask.status;
                         }
+                    } else {
+                        const matchedJiraTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(ev) : null;
+                        if (matchedJiraTask && matchedJiraTask.status) {
+                            rawStatus = matchedJiraTask.status;
+                        }
                     }
                     const statusCat = getStrategyStatusCategory(rawStatus);
                     const format = getStrategyItemFormat(ev);
@@ -22252,7 +22314,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (s === 'in review' || s === 'review' || s === 'code review') return 'In Review';
                 if (s === 'done' || s === 'closed' || s === 'resolved') return 'Completed';
                 if (s === 'completed') return 'Completed';
+                if (s === 'posted' || s === 'post completed' || s === 'post done' || s === 'published') return 'Posted';
+                if (s === 'design completed') return 'Design Completed';
                 if (s === 'client sent' || s === 'client send') return 'Client Sent';
+                if (s === 'client approved') return 'Client Approved';
+                if (s === 'quality check' || s === 'qc' || s === 'qc started' || s === 'qc completed') return 'Quality Check';
                 if (s === 'on hold' || s === 'hold' || s === 'blocked') return 'On Hold';
                 if (s === 'cancelled' || s === 'canceled' || s === 'wont do' || s === "won't do") return 'Cancelled';
                 if (s === 'design to do' || s === 'design') return 'Design To Do';
@@ -22397,10 +22463,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         // For Jira tasks, use task.status directly (already synced from Jira)
                         // For strategy events, try to find matching Jira task
                         let finalStatus = task.status || 'To Do';
-                        if (task.isStrategyEvent && task.jiraId) {
-                            const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(task.jiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(task.jiraId).toLowerCase()));
-                            if (matchedJiraTask && matchedJiraTask.status) {
-                                finalStatus = matchedJiraTask.status;
+                        if (task.isStrategyEvent) {
+                            if (task.jiraId) {
+                                const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(task.jiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(task.jiraId).toLowerCase()));
+                                if (matchedJiraTask && matchedJiraTask.status) {
+                                    finalStatus = matchedJiraTask.status;
+                                }
+                            } else {
+                                const matchedJiraTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(task) : null;
+                                if (matchedJiraTask && matchedJiraTask.status) {
+                                    finalStatus = matchedJiraTask.status;
+                                }
                             }
                         }
 
@@ -22842,6 +22915,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             String(t.id).toLowerCase() === String(evJiraId).toLowerCase() ||
                             (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase())
                         );
+                        if (matchedJiraTask && matchedJiraTask.status) {
+                            finalStatus = matchedJiraTask.status;
+                        }
+                    } else {
+                        const matchedJiraTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(ev) : null;
                         if (matchedJiraTask && matchedJiraTask.status) {
                             finalStatus = matchedJiraTask.status;
                         }
@@ -23494,6 +23572,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const evJiraId = ev.jiraId || ev.jiraTaskId;
                         if (evJiraId) {
                             const matchedJiraTask = (window.allTasks || tasks)?.find(t => String(t.id).toLowerCase() === String(evJiraId).toLowerCase() || (t.key && String(t.key).toLowerCase() === String(evJiraId).toLowerCase()));
+                            if (matchedJiraTask && matchedJiraTask.status) {
+                                finalStatus = matchedJiraTask.status;
+                            }
+                        } else {
+                            const matchedJiraTask = typeof findMatchedStrategyTask === 'function' ? findMatchedStrategyTask(ev) : null;
                             if (matchedJiraTask && matchedJiraTask.status) {
                                 finalStatus = matchedJiraTask.status;
                             }
@@ -27131,25 +27214,50 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return (text === undefined ? String(value) : text).substring(0, length) + '...';
             }
 
-            async function fetchAllJiraIssues(jql, fields = 'summary,status,priority,labels,assignee,duedate') {
+            async function fetchAllJiraIssues(jql, fields = 'summary,status,priority,labels,assignee,duedate', onPage = null) {
                 const issues = [];
                 const maxResults = 100;
                 let nextPageToken = null;
                 let isLast = false;
+                let pageIndex = 0;
 
                 while (!isLast) {
                     let url = `https://${JIRA.domain}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=${fields}`;
                     if (nextPageToken) {
                         url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
                     }
-                    console.log(`📡 Fetching Jira issues: nextPageToken=${nextPageToken}`);
-                    const res = await jiraRequest(url);
-                    if (!res.success || res.data?.errorMessages || res.data?.message) {
+                    console.log(`📡 Fetching Jira issues (page ${pageIndex + 1}): nextPageToken=${nextPageToken || 'start'}`);
+                    let res;
+                    try {
+                        res = await jiraRequest(url);
+                    } catch (fetchErr) {
+                        if (issues.length > 0) {
+                            console.warn(`[fetchAllJiraIssues] Warning: failed fetching subsequent page, keeping ${issues.length} issues collected so far:`, fetchErr);
+                            break;
+                        }
+                        throw fetchErr;
+                    }
+
+                    if (!res || !res.success || res.data?.errorMessages || res.data?.message) {
+                        if (issues.length > 0) {
+                            console.warn(`[fetchAllJiraIssues] Proxy error on subsequent page, keeping ${issues.length} issues collected so far:`, jiraErrorMessage(res));
+                            break;
+                        }
                         throw new Error(jiraErrorMessage(res));
                     }
 
                     const pageIssues = res.data?.issues || [];
                     issues.push(...pageIssues);
+                    pageIndex++;
+
+                    if (typeof onPage === 'function' && pageIssues.length > 0) {
+                        try {
+                            onPage(pageIssues, issues);
+                        } catch (onPageErr) {
+                            console.warn('[fetchAllJiraIssues] onPage callback error:', onPageErr);
+                        }
+                    }
+
                     nextPageToken = res.data?.nextPageToken;
                     isLast = res.data?.isLast ?? (pageIssues.length < maxResults);
 
@@ -27599,7 +27707,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         assigneeAccountId: i.fields.assignee?.accountId || '',
                         duedate: i.fields.duedate,
                         issueType: i.fields.issuetype?.name || '',
-                        parentId: i.fields.parent?.key || ''
+                        parentId: i.fields.parent?.key || '',
+                        manual: false,
+                        taskType: 'jira'
                     };
                 });
             }
@@ -27652,19 +27762,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const manualTasks = tasks.filter(t => t.manual);
 
                     // Sync strategy:
-                    // - Background auto-sync (isAuto): fast incremental sync for recent changes (-30m)
+                    // - Calculate lookback dynamically from lastSync timestamp so no updates are missed
+                    // - Background auto-sync (isAuto): fast incremental sync using dynamic lookback
                     // - Manual click or startup (not isAuto or forceFull): FULL sync to ensure all statuses (Posted, Done, etc.) are 100% accurate
-                    const isIncremental = isAuto && !forceFull;
+                    const lastSyncMs = parseInt(safeGetLocalStorage('worksync_lastSync') || '0', 10);
+                    let lookbackMinutes = 120;
+                    if (lastSyncMs > 0) {
+                        const elapsedMinutes = Math.ceil((Date.now() - lastSyncMs) / 60000);
+                        lookbackMinutes = Math.max(60, Math.min(2880, elapsedMinutes + 30));
+                    }
+                    const isIncremental = isAuto && !forceFull && (lastSyncMs > 0 && (Date.now() - lastSyncMs) < 86400000);
 
                     let jql = `project in (${projectKeysQuery})`;
                     if (isIncremental) {
-                        jql += ` AND updated >= -30m ORDER BY updated DESC`;
+                        jql += ` AND updated >= -${lookbackMinutes}m ORDER BY updated DESC`;
                     } else {
                         jql += ` ORDER BY updated DESC`;
                     }
-
-                    const issues = await fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent,components');
-                    console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'auto-incremental' : 'full-sync'}).`);
 
                     const copyParentFieldsToSubtask = (sub, p) => {
                         if (!sub || !p) return;
@@ -27694,71 +27808,106 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (p.strategyEventId) sub.strategyEventId = p.strategyEventId;
                     };
 
-                    let jiraTasks = mapJiraIssues(issues);
+                    const applyJiraBatch = (batchIssues, isFinal = false) => {
+                        let jiraTasks = mapJiraIssues(batchIssues);
 
-                    // Post-process to inherit parent fields for subtasks
-                    jiraTasks.forEach(t => {
-                        if (t.parentId) {
-                            const parent = jiraTasks.find(p => p.id === t.parentId) || tasks.find(p => p.id === t.parentId);
-                            if (parent) {
-                                copyParentFieldsToSubtask(t, parent);
-                            }
-                        }
-                    });
-
-                    const subtaskCount = jiraTasks.filter(t => t.parentId).length;
-                    console.log(`📌 Imported ${subtaskCount} Jira subtasks among ${jiraTasks.length} total tasks.`);
-                    console.log(`📊 Mapped ${jiraTasks.length} tasks from Jira for ${isAuto ? 'auto-sync' : (isIncremental ? 'quick-sync' : 'full-sync')}`);
-
-                    const taskMap = new Map(tasks.map(t => [t.id, t]));
-                    jiraTasks.forEach(jiraTask => {
-                        const existingTask = taskMap.get(jiraTask.id);
-                        if (existingTask) {
-                            const oldAssigneeEmail = existingTask.assigneeEmail;
-                            // Preserve runtime state by manually updating properties from Jira
-                            existingTask.desc = jiraTask.desc;
-                            existingTask.status = jiraTask.status;
-                            existingTask.priority = jiraTask.priority;
-                            existingTask.clientLabels = jiraTask.clientLabels;
-                            existingTask.clientComponents = jiraTask.clientComponents;
-                            existingTask.client = jiraTask.client;
-                            existingTask.assignee = jiraTask.assignee;
-                            existingTask.assigneeEmail = jiraTask.assigneeEmail;
-                            existingTask.duedate = jiraTask.duedate;
-                            existingTask.parentId = jiraTask.parentId || '';
-                            existingTask.project = jiraTask.project || '';
-                            existingTask.category = jiraTask.category || '';
-                            existingTask.taskType = jiraTask.taskType || '';
-                            if (jiraTask.postDate) existingTask.postDate = jiraTask.postDate;
-                            if (jiraTask.referenceLinks) existingTask.referenceLinks = jiraTask.referenceLinks;
-                            if (jiraTask.campaign) existingTask.campaign = jiraTask.campaign;
-                            if (jiraTask.department) existingTask.department = jiraTask.department;
-
-                            if (jiraTask.assigneeEmail && jiraTask.assigneeEmail !== oldAssigneeEmail) {
-                                checkAndCreateThumbnailSubTask(existingTask, jiraTask.assigneeEmail, true);
-                            }
-                        } else {
-                            // New task from Jira
-                            taskMap.set(jiraTask.id, jiraTask);
-                            if (jiraTask.assigneeEmail) {
-                                checkAndCreateThumbnailSubTask(jiraTask, jiraTask.assigneeEmail, true);
-                            }
-                        }
-                    });
-
-                    // For a full sync (not auto or incremental), remove old Jira tasks that are no longer present
-                    if (!isAuto && !isIncremental) {
-                        const newJiraIds = new Set(jiraTasks.map(t => t.id));
-                        tasks.forEach(oldTask => {
-                            if (!oldTask.manual && !newJiraIds.has(oldTask.id)) {
-                                taskMap.delete(oldTask.id);
+                        // Inherit parent fields for subtasks
+                        jiraTasks.forEach(t => {
+                            if (t.parentId) {
+                                const parent = jiraTasks.find(p => p.id === t.parentId) || tasks.find(p => p.id === t.parentId);
+                                if (parent) {
+                                    copyParentFieldsToSubtask(t, parent);
+                                }
                             }
                         });
-                    }
 
-                    tasks = mergeTasksById(Array.from(taskMap.values()));
+                        // Build case-insensitive lookup map
+                        const taskMap = new Map();
+                        tasks.forEach(t => {
+                            if (t && t.id) {
+                                taskMap.set(t.id, t);
+                                taskMap.set(t.id.toUpperCase(), t);
+                                taskMap.set(t.id.toLowerCase(), t);
+                            }
+                        });
 
-                    safeSetLocalStorage('worksync_tasks', JSON.stringify(tasks));
+                        jiraTasks.forEach(jiraTask => {
+                            const existingTask = taskMap.get(jiraTask.id) ||
+                                taskMap.get(jiraTask.id.toUpperCase()) ||
+                                taskMap.get(jiraTask.id.toLowerCase());
+
+                            if (existingTask) {
+                                const oldAssigneeEmail = existingTask.assigneeEmail;
+                                existingTask.desc = jiraTask.desc;
+                                existingTask.status = jiraTask.status;
+                                existingTask.priority = jiraTask.priority;
+                                existingTask.clientLabels = jiraTask.clientLabels;
+                                existingTask.clientComponents = jiraTask.clientComponents;
+                                existingTask.client = jiraTask.client;
+                                existingTask.assignee = jiraTask.assignee;
+                                existingTask.assigneeEmail = jiraTask.assigneeEmail;
+                                existingTask.duedate = jiraTask.duedate;
+                                existingTask.parentId = jiraTask.parentId || '';
+                                existingTask.project = jiraTask.project || '';
+                                existingTask.category = jiraTask.category || '';
+                                existingTask.taskType = jiraTask.taskType || '';
+                                existingTask.manual = false;
+                                if (jiraTask.postDate) existingTask.postDate = jiraTask.postDate;
+                                if (jiraTask.referenceLinks) existingTask.referenceLinks = jiraTask.referenceLinks;
+                                if (jiraTask.campaign) existingTask.campaign = jiraTask.campaign;
+                                if (jiraTask.department) existingTask.department = jiraTask.department;
+
+                                if (jiraTask.assigneeEmail && jiraTask.assigneeEmail !== oldAssigneeEmail) {
+                                    checkAndCreateThumbnailSubTask(existingTask, jiraTask.assigneeEmail, true);
+                                }
+                            } else {
+                                taskMap.set(jiraTask.id, jiraTask);
+                                if (jiraTask.assigneeEmail) {
+                                    checkAndCreateThumbnailSubTask(jiraTask, jiraTask.assigneeEmail, true);
+                                }
+                            }
+
+                            // Keep matching strategyEvents synchronized with live Jira status
+                            if (strategyEvents && typeof strategyEvents === 'object') {
+                                Object.values(strategyEvents).forEach(ev => {
+                                    const evJiraId = (ev.jiraId || ev.jiraTaskId || '').toString().trim().toLowerCase();
+                                    const tIdLower = (jiraTask.id || '').toString().trim().toLowerCase();
+                                    if (evJiraId && evJiraId === tIdLower) {
+                                        ev.status = jiraTask.status;
+                                    }
+                                });
+                            }
+                        });
+
+                        // For a full sync on final page, clean up removed Jira tasks
+                        if (isFinal && !isAuto && !isIncremental) {
+                            const newJiraIds = new Set(jiraTasks.map(t => (t.id || '').toLowerCase()));
+                            tasks.forEach(oldTask => {
+                                if (!oldTask.manual && oldTask.taskType !== 'internal' && !newJiraIds.has((oldTask.id || '').toLowerCase())) {
+                                    taskMap.delete(oldTask.id);
+                                    taskMap.delete(oldTask.id.toUpperCase());
+                                    taskMap.delete(oldTask.id.toLowerCase());
+                                }
+                            });
+                        }
+
+                        tasks = mergeTasksById(Array.from(new Set(taskMap.values())));
+                        safeSetLocalStorage('worksync_tasks', JSON.stringify(tasks));
+                    };
+
+                    const issues = await fetchAllJiraIssues(
+                        jql,
+                        'summary,status,priority,labels,assignee,duedate,issuetype,parent,components',
+                        (pageIssues, allSoFar) => {
+                            // Apply progressive batch so recent issues are updated immediately
+                            applyJiraBatch(allSoFar, false);
+                            PerfOptimizer.queueRender(() => renderTasks(), 'high');
+                        }
+                    );
+                    console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'auto-incremental' : 'full-sync'}).`);
+
+                    applyJiraBatch(issues, true);
+
                     safeSetLocalStorage('worksync_lastSync', Date.now().toString());
                     populateAssigneeFilter();
                     PerfOptimizer.queueRender(() => renderTasks(), 'high');
@@ -27778,7 +27927,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (!isAuto) {
                         const syncTypeLabel = isIncremental ? ' (Quick Sync)' : ' (Full Rebuild)';
-                        toast(`Synced ${jiraTasks.length} Jira task${jiraTasks.length === 1 ? '' : 's'}${syncTypeLabel}`, jiraTasks.length ? 'success' : 'info');
+                        toast(`Synced ${issues.length} Jira task${issues.length === 1 ? '' : 's'}${syncTypeLabel}`, issues.length ? 'success' : 'info');
                     } else {
                         updateSystemStatus(true, `Synced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, true);
                     }
