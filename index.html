@@ -27149,7 +27149,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         return res;
                     } catch (err) {
                         const errStr = err.message || '';
-                        const isTransient = errStr.includes('Address unavailable') || errStr.includes('Failed to fetch') || errStr.includes('NetworkError');
+                        const isTransient = errStr.includes('Address unavailable') || errStr.includes('Failed to fetch') || errStr.includes('NetworkError') ||
+                            errStr.includes('Cannot reach Jira proxy') || /HTTP 5\d\d/.test(errStr);
                         if (isTransient && attempt < retries) {
                             console.warn(`[jiraRequest] Network error ("${errStr}"). Retrying attempt ${attempt + 1}/${retries}...`);
                             await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
@@ -27229,10 +27230,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.log(`📡 Fetching Jira issues (page ${pageIndex + 1}): nextPageToken=${nextPageToken || 'start'}`);
                     let res;
                     try {
-                        res = await jiraRequest(url);
+                        res = await jiraRequest(url, 'get', null, 4);
                     } catch (fetchErr) {
                         if (issues.length > 0) {
                             console.warn(`[fetchAllJiraIssues] Warning: failed fetching subsequent page, keeping ${issues.length} issues collected so far:`, fetchErr);
+                            issues.partial = true;
                             break;
                         }
                         throw fetchErr;
@@ -27241,6 +27243,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!res || !res.success || res.data?.errorMessages || res.data?.message) {
                         if (issues.length > 0) {
                             console.warn(`[fetchAllJiraIssues] Proxy error on subsequent page, keeping ${issues.length} issues collected so far:`, jiraErrorMessage(res));
+                            issues.partial = true;
                             break;
                         }
                         throw new Error(jiraErrorMessage(res));
@@ -27906,9 +27909,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     );
                     console.log(`📡 Fetched ${issues.length} Jira issues (${isIncremental ? 'auto-incremental' : 'full-sync'}).`);
 
-                    applyJiraBatch(issues, true);
+                    // Incomplete fetch: update what we got, but never prune tasks missing from a partial list
+                    applyJiraBatch(issues, !issues.partial);
+                    if (issues.partial) {
+                        toast(`Jira sync incomplete (${issues.length} tasks loaded). Existing tasks kept - please sync again.`, 'warning');
+                    }
 
-                    safeSetLocalStorage('worksync_lastSync', Date.now().toString());
+                    if (!issues.partial) safeSetLocalStorage('worksync_lastSync', Date.now().toString());
                     populateAssigneeFilter();
                     PerfOptimizer.queueRender(() => renderTasks(), 'high');
                     PerfOptimizer.queueRender(() => updateStats(), 'normal');
@@ -27925,7 +27932,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (typeof checkReworkAndQcTaskPopups === 'function') {
                         checkReworkAndQcTaskPopups();
                     }
-                    if (!isAuto) {
+                    if (!isAuto && !issues.partial) {
                         const syncTypeLabel = isIncremental ? ' (Quick Sync)' : ' (Full Rebuild)';
                         toast(`Synced ${issues.length} Jira task${issues.length === 1 ? '' : 's'}${syncTypeLabel}`, issues.length ? 'success' : 'info');
                     } else {
