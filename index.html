@@ -22203,6 +22203,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function findMatchedStrategyTask(eventTitle, eventDesc, eventJiraId, debugMode = false) {
+                // Some callers pass the whole event/task object instead of (title, desc, jiraId)
+                if (eventTitle && typeof eventTitle === 'object') {
+                    const evObj = eventTitle;
+                    eventTitle = evObj.title || evObj.desc || '';
+                    eventDesc = evObj.desc || evObj.description || '';
+                    eventJiraId = evObj.jiraId || evObj.jiraTaskId || '';
+                }
                 if (!tasks || tasks.length === 0) {
                     if (debugMode) console.log(`[findMatchedStrategyTask] ❌ No tasks available (tasks.length = ${tasks?.length})`);
                     return null;
