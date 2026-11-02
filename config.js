@@ -27,10 +27,19 @@ export const USERS = [
 
 export function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
 
+export const DEFAULT_JIRA_PROJECT_MAPPINGS = [
+    { id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: 'all', isActive: true },
+    { id: 'map-sep', projectKey: 'SEP', month: 9, monthName: 'September', year: 'all', isActive: false },
+    { id: 'map-aug', projectKey: 'AUG', month: 8, monthName: 'August', year: 'all', isActive: false },
+    { id: 'map-july', projectKey: 'JULY', month: 7, monthName: 'July', year: 'all', isActive: false },
+    { id: 'map-jun', projectKey: 'JUN', month: 6, monthName: 'June', year: 'all', isActive: false },
+    { id: 'map-may', projectKey: 'MAY', month: 5, monthName: 'May', year: 'all', isActive: false }
+];
+
 export const JIRA = {
     domain: 'vilpowerdigitalmarketing.atlassian.net',
     projectKey: 'OCT',
-    projectKeys: ['OCT', 'SEP'],
+    projectKeys: ['OCT', 'SEP', 'NOV'],
     apiUrl: '/api/jira',
     gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
     useLocalApi: false

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.37">
+    <meta name="app-version" content="1.0.45">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -3034,6 +3034,9 @@
 
                     // 3. Jira key prefix check (e.g., SEP- for September)
                     const itemId = String(item.id || item.jiraId || item.jiraTaskId || '').trim().toUpperCase();
+                    if (typeof isMatchingStrategyProjectKey === 'function' && isMatchingStrategyProjectKey(itemId, targetMonth, targetYear)) {
+                        return true;
+                    }
                     if (targetPrefix && (itemId.startsWith(targetPrefix + '-') || (targetPrefix === 'JUL' && itemId.startsWith('JULY-')))) {
                         return true;
                     }
@@ -12097,27 +12100,111 @@
     </dialog>
 
     <!-- Modal: Settings -->
-    <dialog id="settingsModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden">
-        <div class="p-8">
-            <div class="flex justify-between items-center mb-8">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight">Configuration</h3>
+    <dialog id="settingsModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-2xl border-none overflow-hidden max-h-[92vh] my-auto">
+        <div class="p-6 md:p-8 flex flex-col max-h-[92vh]">
+            <div class="flex justify-between items-center mb-6 shrink-0">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 tracking-tight">Configuration</h3>
+                    <p class="text-xs text-slate-500">Enterprise Jira integrations, project key month mappings & preferences</p>
+                </div>
                 <button onclick="this.closest('dialog').close()"
-                    class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    class="p-2 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-xl transition-all cursor-pointer">
                     <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
                 </button>
             </div>
-            <div class="space-y-6">
-                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Enterprise JIRA</p>
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-slate-200">
-                            <iconify-icon icon="logos:jira" width="20"></iconify-icon>
-                        </div>
+            <div class="space-y-6 overflow-y-auto pr-1 flex-1">
+                <!-- Enterprise JIRA & Month Project Key Linking -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <p id="cfg-domain" class="text-sm font-bold text-slate-900">vilpower.atlassian.net</p>
-                            <p id="cfg-project"
-                                class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Active: VPR</p>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enterprise JIRA & Project Keys</p>
+                            <div class="flex items-center gap-3 mt-1.5">
+                                <div class="w-9 h-9 bg-white rounded-xl flex items-center justify-center border border-slate-200 shrink-0">
+                                    <iconify-icon icon="logos:jira" width="18"></iconify-icon>
+                                </div>
+                                <div>
+                                    <p id="cfg-domain" class="text-sm font-bold text-slate-900">vilpowerdigitalmarketing.atlassian.net</p>
+                                    <p id="cfg-project" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Active: OCT</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" onclick="triggerManualJiraSync()" id="btn-cfg-sync"
+                            class="px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            title="Force sync Jira tasks across all configured project keys">
+                            <iconify-icon icon="solar:restart-linear" width="14" id="cfg-sync-icon"></iconify-icon>
+                            <span>Sync Jira</span>
+                        </button>
+                    </div>
+
+                    <!-- Project Key & Strategy Calendar Month Linker -->
+                    <div class="pt-3 border-t border-slate-200/80">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-slate-800">Strategy Calendar Month Mappings</span>
+                                <p class="text-[11px] text-slate-500">Link Jira project keys to Strategy Calendar months for task creation and sync.</p>
+                            </div>
+                        </div>
+
+                        <!-- Existing Mappings List -->
+                        <div id="cfg-project-mappings-list" class="space-y-2 mb-4 max-h-48 overflow-y-auto pr-1">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+
+                        <!-- Add New Project Key Form -->
+                        <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                            <p class="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                                <iconify-icon icon="solar:add-circle-bold" class="text-indigo-600" width="15"></iconify-icon>
+                                Add & Link Project Key
+                            </p>
+                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                                <div class="sm:col-span-4">
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Key</label>
+                                    <input type="text" id="cfg-new-project-key" placeholder="e.g. NOV"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold uppercase text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                        oninput="this.value = this.value.toUpperCase()">
+                                </div>
+                                <div class="sm:col-span-5">
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Calendar Month</label>
+                                    <select id="cfg-new-project-month"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="1">January (01)</option>
+                                        <option value="2">February (02)</option>
+                                        <option value="3">March (03)</option>
+                                        <option value="4">April (04)</option>
+                                        <option value="5">May (05)</option>
+                                        <option value="6">June (06)</option>
+                                        <option value="7">July (07)</option>
+                                        <option value="8">August (08)</option>
+                                        <option value="9">September (09)</option>
+                                        <option value="10">October (10)</option>
+                                        <option value="11" selected>November (11)</option>
+                                        <option value="12">December (12)</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-3">
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Year</label>
+                                    <select id="cfg-new-project-year"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="all">Any Year</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2026" selected>2026</option>
+                                        <option value="2027">2027</option>
+                                        <option value="2028">2028</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between pt-1">
+                                <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-600 font-medium">
+                                    <input type="checkbox" id="cfg-new-project-active" class="rounded text-indigo-600 focus:ring-indigo-500">
+                                    <span>Set as active Jira project</span>
+                                </label>
+                                <button type="button" onclick="addNewJiraProjectMapping()"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg shadow transition-all flex items-center gap-1.5 cursor-pointer">
+                                    <iconify-icon icon="solar:link-bold" width="14"></iconify-icon>
+                                    <span>Link Project Key</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -12169,9 +12256,11 @@
                     </div>
                 </div>
             </div>
-            <button onclick="this.closest('dialog').close()"
-                class="w-full mt-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold transition-all">Close
-                Panel</button>
+            <div class="pt-4 border-t border-slate-100 shrink-0">
+                <button onclick="this.closest('dialog').close()"
+                    class="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3 text-sm font-bold transition-all cursor-pointer">Close
+                    Panel</button>
+            </div>
         </div>
     </dialog>
 
@@ -15583,58 +15672,189 @@
                 return result;
             }
 
+            const MONTH_NAMES = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+
+            const DEFAULT_JIRA_PROJECT_MAPPINGS = [
+                { id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: 'all', isActive: true },
+                { id: 'map-sep', projectKey: 'SEP', month: 9, monthName: 'September', year: 'all', isActive: false },
+                { id: 'map-aug', projectKey: 'AUG', month: 8, monthName: 'August', year: 'all', isActive: false },
+                { id: 'map-july', projectKey: 'JULY', month: 7, monthName: 'July', year: 'all', isActive: false },
+                { id: 'map-jun', projectKey: 'JUN', month: 6, monthName: 'June', year: 'all', isActive: false },
+                { id: 'map-may', projectKey: 'MAY', month: 5, monthName: 'May', year: 'all', isActive: false }
+            ];
+
+            let jiraProjectMappings = (function () {
+                try {
+                    const cached = localStorage.getItem('worksync_jira_project_mappings');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                    }
+                } catch (e) { }
+                return JSON.parse(JSON.stringify(DEFAULT_JIRA_PROJECT_MAPPINGS));
+            })();
+
             const JIRA = {
                 domain: 'vilpowerdigitalmarketing.atlassian.net',
-                projectKey: 'OCT',
-                projectKeys: ['OCT', 'SEP'],
+                projectKey: (function () {
+                    try {
+                        const cached = localStorage.getItem('worksync_jira_active_project_key');
+                        if (cached) return cached;
+                    } catch (e) { }
+                    const activeMap = (jiraProjectMappings || []).find(m => m.isActive);
+                    return activeMap ? activeMap.projectKey : 'OCT';
+                })(),
+                projectKeys: ['OCT', 'SEP', 'NOV'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
             };
 
+            function getRegisteredProjectKeys() {
+                const keys = new Set();
+                if (JIRA && JIRA.projectKey) keys.add(String(JIRA.projectKey).trim().toUpperCase());
+                if (JIRA && Array.isArray(JIRA.projectKeys)) {
+                    JIRA.projectKeys.forEach(k => k && keys.add(String(k).trim().toUpperCase()));
+                }
+                if (Array.isArray(jiraProjectMappings)) {
+                    jiraProjectMappings.forEach(m => {
+                        if (m && m.projectKey) keys.add(String(m.projectKey).trim().toUpperCase());
+                    });
+                }
+                return Array.from(keys);
+            }
+            window.getRegisteredProjectKeys = getRegisteredProjectKeys;
+
+            function applyJiraProjectMappings(mappings, activeKey) {
+                if (Array.isArray(mappings) && mappings.length > 0) {
+                    jiraProjectMappings = mappings;
+                }
+                let chosenKey = activeKey;
+                if (!chosenKey) {
+                    const activeMap = (jiraProjectMappings || []).find(m => m.isActive);
+                    chosenKey = activeMap ? activeMap.projectKey : (JIRA?.projectKey || 'OCT');
+                }
+                if (JIRA) {
+                    JIRA.projectKey = chosenKey.toUpperCase();
+                    JIRA.projectKeys = getRegisteredProjectKeys();
+                }
+                const cfgProj = document.getElementById('cfg-project');
+                if (cfgProj) cfgProj.textContent = 'Active: ' + (JIRA?.projectKey || 'OCT');
+                const jiraOpt = document.querySelector('#mt-platform option[value="jira"]');
+                if (jiraOpt) jiraOpt.textContent = `Jira Cloud (${JIRA?.projectKey || 'OCT'})`;
+            }
+            window.applyJiraProjectMappings = applyJiraProjectMappings;
+
+            // Initialize registered keys on startup
+            JIRA.projectKeys = getRegisteredProjectKeys();
+
+            function isMatchingStrategyProjectKey(taskId, targetMonth, targetYear) {
+                if (!taskId || typeof taskId !== 'string') return false;
+                const upperId = taskId.toUpperCase().trim();
+                const dashIdx = upperId.indexOf('-');
+                if (dashIdx === -1) return false;
+                const taskKey = upperId.substring(0, dashIdx);
+
+                if (targetMonth && Array.isArray(jiraProjectMappings) && jiraProjectMappings.length > 0) {
+                    const matchingForMonth = jiraProjectMappings.filter(m =>
+                        m && m.projectKey && parseInt(m.month, 10) === targetMonth &&
+                        (m.year === 'all' || !m.year || !targetYear || parseInt(m.year, 10) === targetYear)
+                    );
+                    if (matchingForMonth.length > 0) {
+                        return matchingForMonth.some(m => m.projectKey.toUpperCase() === taskKey);
+                    }
+                }
+
+                const builtInMonthKeys = {
+                    1: ['JAN'], 2: ['FEB'], 3: ['MAR'], 4: ['APR'],
+                    5: ['MAY'], 6: ['JUN'], 7: ['JUL', 'JULY'],
+                    8: ['AUG'], 9: ['SEP'], 10: ['OCT'],
+                    11: ['NOV'], 12: ['DEC']
+                };
+                if (targetMonth && builtInMonthKeys[targetMonth]) {
+                    if (builtInMonthKeys[targetMonth].includes(taskKey)) return true;
+                }
+
+                const allKeys = typeof getRegisteredProjectKeys === 'function' ? getRegisteredProjectKeys() : (JIRA?.projectKeys || ['OCT', 'SEP']);
+                return allKeys.includes(taskKey);
+            }
+            window.isMatchingStrategyProjectKey = isMatchingStrategyProjectKey;
+
             function getJiraProjectKeyForDate(dateStr) {
+                let targetMonth = null;
+                let targetYear = null;
+
                 if (!dateStr) {
                     if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
-                        const m = strategyCurrentDate.getMonth() + 1;
-                        if (m === 10) return 'OCT';
-                        if (m === 9) return 'SEP';
-                        if (m === 8) return 'AUG';
-                        if (m === 7) return 'JULY';
-                        if (m === 6) return 'JUN';
-                        if (m === 5) return 'MAY';
+                        targetMonth = strategyCurrentDate.getMonth() + 1;
+                        targetYear = strategyCurrentDate.getFullYear();
+                    } else {
+                        const now = new Date();
+                        targetMonth = now.getMonth() + 1;
+                        targetYear = now.getFullYear();
                     }
-                    return JIRA.projectKey || 'OCT';
-                }
-                if (dateStr instanceof Date) {
-                    const m = dateStr.getMonth() + 1;
-                    if (m === 10) return 'OCT';
-                    if (m === 9) return 'SEP';
-                    if (m === 8) return 'AUG';
-                    if (m === 7) return 'JULY';
-                    if (m === 6) return 'JUN';
-                    if (m === 5) return 'MAY';
-                    return JIRA.projectKey || 'OCT';
-                }
-                const str = String(dateStr).trim();
-                let m = str.match(/^\d{4}[-/](\d{1,2})/);
-                let monthNum = m ? parseInt(m[1], 10) : null;
-                if (!monthNum) {
-                    const m2 = str.match(/^\d{1,2}[-/](\d{1,2})[-/]\d{4}/);
-                    if (m2) monthNum = parseInt(m2[1], 10);
-                }
-                if (!monthNum) {
-                    const parsed = new Date(str);
-                    if (!isNaN(parsed.getTime())) {
-                        monthNum = parsed.getMonth() + 1;
+                } else if (dateStr instanceof Date) {
+                    targetMonth = dateStr.getMonth() + 1;
+                    targetYear = dateStr.getFullYear();
+                } else {
+                    const str = String(dateStr).trim();
+                    let m = str.match(/^(\d{4})[-/](\d{1,2})/);
+                    if (m) {
+                        targetYear = parseInt(m[1], 10);
+                        targetMonth = parseInt(m[2], 10);
+                    } else {
+                        let m2 = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+                        if (m2) {
+                            targetMonth = parseInt(m2[1], 10);
+                            targetYear = parseInt(m2[3], 10);
+                        } else {
+                            const parsed = new Date(str);
+                            if (!isNaN(parsed.getTime())) {
+                                targetMonth = parsed.getMonth() + 1;
+                                targetYear = parsed.getFullYear();
+                            }
+                        }
                     }
                 }
-                if (monthNum === 10) return 'OCT';
-                if (monthNum === 9) return 'SEP';
-                if (monthNum === 8) return 'AUG';
-                if (monthNum === 7) return 'JULY';
-                if (monthNum === 6) return 'JUN';
-                if (monthNum === 5) return 'MAY';
-                return JIRA.projectKey || 'OCT';
+
+                if (targetMonth && Array.isArray(jiraProjectMappings)) {
+                    if (targetYear) {
+                        const exactMatch = jiraProjectMappings.find(map =>
+                            map && map.projectKey &&
+                            parseInt(map.month, 10) === targetMonth &&
+                            parseInt(map.year, 10) === targetYear
+                        );
+                        if (exactMatch && exactMatch.projectKey) {
+                            return exactMatch.projectKey.toUpperCase();
+                        }
+                    }
+                    const monthMatch = jiraProjectMappings.find(map =>
+                        map && map.projectKey &&
+                        parseInt(map.month, 10) === targetMonth &&
+                        (!map.year || map.year === 'all')
+                    );
+                    if (monthMatch && monthMatch.projectKey) {
+                        return monthMatch.projectKey.toUpperCase();
+                    }
+                }
+
+                if (targetMonth === 10) return 'OCT';
+                if (targetMonth === 9) return 'SEP';
+                if (targetMonth === 8) return 'AUG';
+                if (targetMonth === 7) return 'JULY';
+                if (targetMonth === 6) return 'JUN';
+                if (targetMonth === 5) return 'MAY';
+                if (targetMonth === 11) return 'NOV';
+                if (targetMonth === 12) return 'DEC';
+                if (targetMonth === 1) return 'JAN';
+                if (targetMonth === 2) return 'FEB';
+                if (targetMonth === 3) return 'MAR';
+                if (targetMonth === 4) return 'APR';
+
+                return (JIRA && JIRA.projectKey) || 'OCT';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
@@ -19564,10 +19784,238 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function openSettings() {
                 document.getElementById('cfg-domain').textContent = JIRA.domain;
-                document.getElementById('cfg-project').textContent = 'Active: ' + JIRA.projectKey;
+                document.getElementById('cfg-project').textContent = 'Active: ' + (JIRA?.projectKey || 'OCT');
                 renderChatMuteToggle();
                 document.getElementById('setting-shift').value = localStorage.getItem('worksync_shift') || '18:00';
+                renderJiraProjectMappingsSettings();
                 document.getElementById('settingsModal').showModal();
+            }
+
+            function renderJiraProjectMappingsSettings() {
+                const container = document.getElementById('cfg-project-mappings-list');
+                if (!container) return;
+
+                const sorted = [...(jiraProjectMappings || [])].sort((a, b) => {
+                    const mA = parseInt(a.month, 10) || 0;
+                    const mB = parseInt(b.month, 10) || 0;
+                    if (mA !== mB) return mA - mB;
+                    return String(a.year || '').localeCompare(String(b.year || ''));
+                });
+
+                if (sorted.length === 0) {
+                    container.innerHTML = `
+                        <div class="p-3 text-center text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+                            No project key mappings configured yet. Add one below to link a Jira project key to a calendar month.
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = sorted.map(item => {
+                    const mNum = parseInt(item.month, 10) || 1;
+                    const mName = MONTH_NAMES[mNum - 1] || 'Month ' + mNum;
+                    const yearLabel = (item.year && item.year !== 'all') ? item.year : 'Any Year';
+                    const isCurrentActive = item.isActive || (JIRA && JIRA.projectKey === item.projectKey);
+                    const itemId = item.id || `${item.projectKey}-${item.month}-${item.year || 'all'}`;
+
+                    return `
+                        <div class="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition-all">
+                            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                <span class="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-bold text-xs rounded-lg uppercase">
+                                    ${escapeHtml(item.projectKey)}
+                                </span>
+                                <iconify-icon icon="solar:arrow-right-linear" class="text-slate-400" width="14"></iconify-icon>
+                                <span class="text-xs font-bold text-slate-800">
+                                    ${escapeHtml(mName)}
+                                </span>
+                                <span class="px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 bg-slate-100 rounded-md">
+                                    ${escapeHtml(yearLabel)}
+                                </span>
+                                ${isCurrentActive ? `
+                                    <span class="px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        Active
+                                    </span>
+                                ` : ''}
+                            </div>
+                            <div class="flex items-center gap-1">
+                                ${!isCurrentActive ? `
+                                    <button type="button" onclick="setActiveJiraProjectKey('${escapeHtml(item.projectKey)}')"
+                                        class="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Set as default active project">
+                                        Set Active
+                                    </button>
+                                ` : ''}
+                                <button type="button" onclick="deleteJiraProjectMapping('${escapeHtml(itemId)}')"
+                                    class="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Remove link">
+                                    <iconify-icon icon="solar:trash-bin-trash-bold" width="14"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            async function addNewJiraProjectMapping() {
+                const keyInput = document.getElementById('cfg-new-project-key');
+                const monthInput = document.getElementById('cfg-new-project-month');
+                const yearInput = document.getElementById('cfg-new-project-year');
+                const activeInput = document.getElementById('cfg-new-project-active');
+
+                if (!keyInput || !monthInput) return;
+
+                const rawKey = (keyInput.value || '').trim().toUpperCase();
+                if (!rawKey) {
+                    toast('Please enter a Jira project key (e.g. NOV)', 'error');
+                    keyInput.focus();
+                    return;
+                }
+
+                const cleanKey = rawKey.replace(/[^A-Z0-9_-]/g, '');
+                if (!cleanKey) {
+                    toast('Invalid project key characters', 'error');
+                    return;
+                }
+
+                const monthNum = parseInt(monthInput.value, 10);
+                const yearVal = (yearInput?.value || 'all').trim();
+                const makeActive = activeInput?.checked || false;
+                const mName = MONTH_NAMES[monthNum - 1] || 'Month ' + monthNum;
+
+                const mappingId = `map-${cleanKey}-${monthNum}-${yearVal}`;
+                const newMapping = {
+                    id: mappingId,
+                    projectKey: cleanKey,
+                    month: monthNum,
+                    monthName: mName,
+                    year: yearVal,
+                    isActive: makeActive,
+                    updatedAt: Date.now()
+                };
+
+                let updatedList = (jiraProjectMappings || []).filter(m =>
+                    !(m.projectKey === cleanKey && parseInt(m.month, 10) === monthNum && String(m.year || 'all') === yearVal)
+                );
+
+                if (makeActive) {
+                    updatedList.forEach(m => m.isActive = false);
+                }
+
+                updatedList.push(newMapping);
+                jiraProjectMappings = updatedList;
+
+                const activeProjectKey = makeActive ? cleanKey : (JIRA?.projectKey || cleanKey);
+
+                try {
+                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(jiraProjectMappings));
+                    if (makeActive) localStorage.setItem('worksync_jira_active_project_key', activeProjectKey);
+                } catch (e) {
+                    console.warn('localStorage error saving jira mappings:', e);
+                }
+
+                if (typeof db !== 'undefined' && db && typeof ref === 'function') {
+                    try {
+                        if (typeof set === 'function') {
+                            await set(ref(db, 'worksync/settings/jira_project_mappings'), jiraProjectMappings);
+                            if (makeActive) {
+                                await set(ref(db, 'worksync/settings/jira_active_project_key'), activeProjectKey);
+                            }
+                        }
+                    } catch (dbErr) {
+                        console.error('Firebase error saving jira mappings:', dbErr);
+                    }
+                }
+
+                applyJiraProjectMappings(jiraProjectMappings, activeProjectKey);
+                keyInput.value = '';
+                if (activeInput) activeInput.checked = false;
+                renderJiraProjectMappingsSettings();
+                toast(`Linked project key ${cleanKey} to ${mName}!`, 'success');
+
+                if (typeof syncTasks === 'function') {
+                    toast(`Fetching Jira issues for ${cleanKey}...`, 'info');
+                    syncTasks(false, true).catch(e => console.warn('Sync error:', e));
+                }
+            }
+
+            async function setActiveJiraProjectKey(projectKey) {
+                if (!projectKey) return;
+                const key = projectKey.toUpperCase();
+                (jiraProjectMappings || []).forEach(m => {
+                    m.isActive = (m.projectKey === key);
+                });
+
+                try {
+                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(jiraProjectMappings));
+                    localStorage.setItem('worksync_jira_active_project_key', key);
+                } catch (e) { }
+
+                if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
+                    try {
+                        await set(ref(db, 'worksync/settings/jira_project_mappings'), jiraProjectMappings);
+                        await set(ref(db, 'worksync/settings/jira_active_project_key'), key);
+                    } catch (e) {
+                        console.error('Firebase error updating active project key:', e);
+                    }
+                }
+
+                applyJiraProjectMappings(jiraProjectMappings, key);
+                renderJiraProjectMappingsSettings();
+                toast(`Active Jira project set to ${key}`, 'success');
+            }
+
+            async function deleteJiraProjectMapping(idOrKey) {
+                if (!idOrKey) return;
+                jiraProjectMappings = (jiraProjectMappings || []).filter(m =>
+                    m.id !== idOrKey && m.projectKey !== idOrKey
+                );
+
+                try {
+                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(jiraProjectMappings));
+                } catch (e) { }
+
+                if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
+                    try {
+                        await set(ref(db, 'worksync/settings/jira_project_mappings'), jiraProjectMappings);
+                    } catch (e) {
+                        console.error('Firebase error removing jira mapping:', e);
+                    }
+                }
+
+                applyJiraProjectMappings(jiraProjectMappings);
+                renderJiraProjectMappingsSettings();
+                toast('Project key mapping removed', 'info');
+            }
+
+            async function triggerManualJiraSync() {
+                const icon = document.getElementById('cfg-sync-icon');
+                if (icon) icon.classList.add('animate-spin');
+                toast('Syncing Jira tasks across all project keys...', 'info');
+                try {
+                    if (typeof syncTasks === 'function') {
+                        await syncTasks(false, true);
+                    }
+                    toast('Jira tasks synced successfully!', 'success');
+                } catch (err) {
+                    toast('Jira sync failed: ' + (err.message || 'Unknown error'), 'error');
+                } finally {
+                    if (icon) icon.classList.remove('animate-spin');
+                }
+            }
+
+            async function saveSetting(key, val) {
+                try {
+                    if (key === 'shift') {
+                        localStorage.setItem('worksync_shift', val);
+                        if (typeof db !== 'undefined' && db && typeof ref === 'function' && typeof set === 'function') {
+                            await set(ref(db, 'worksync/settings/shift'), val);
+                        }
+                        toast('Shift timing updated', 'success');
+                    }
+                } catch (e) {
+                    console.error('saveSetting error:', e);
+                }
             }
 
             function renderChatMuteToggle() {
@@ -21795,7 +22243,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         const lowerTaskId = String(task.id).toLowerCase().trim();
                         if (strategyJiraIds.has(lowerTaskId)) return;
-                        if (!task.id.toUpperCase().startsWith('OCT-') && !task.id.toUpperCase().startsWith('SEP-')) return;
+                        if (!isMatchingStrategyProjectKey(task.id, month + 1, year)) return;
 
                         const statusCat = getStrategyStatusCategory(task.status);
                         const format = getStrategyItemFormat(task);
@@ -22427,8 +22875,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     return; // Already rendered as Strategy Event
                                 }
 
-                                // Filter non-OCT/SEP Jira tasks from grid unless linked to a Strategy Event
-                                if (!task.id.toUpperCase().startsWith('OCT-') && !task.id.toUpperCase().startsWith('SEP-')) {
+                                // Filter non-matching Jira tasks from grid unless linked to a Strategy Event
+                                if (!isMatchingStrategyProjectKey(task.id, month + 1, year)) {
                                     return;
                                 }
 
@@ -22979,7 +23427,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         const lowerTaskId = task.id.toLowerCase().trim();
                         if (strategyJiraIds.has(lowerTaskId)) return;
-                        if (!task.id.toUpperCase().startsWith('OCT-') && !task.id.toUpperCase().startsWith('SEP-')) return;
+                        if (!isMatchingStrategyProjectKey(task.id, month + 1, year)) return;
 
                         const matchesTitleClient = items.some(item =>
                             item.title && task.desc &&
@@ -24161,6 +24609,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     // 3. Jira key prefix check (e.g., SEP- for September)
                     const itemId = String(item.id || item.jiraId || item.jiraTaskId || '').trim().toUpperCase();
+                    if (typeof isMatchingStrategyProjectKey === 'function' && isMatchingStrategyProjectKey(itemId, targetMonth, targetYear)) {
+                        return true;
+                    }
                     if (targetPrefix && (itemId.startsWith(targetPrefix + '-') || (targetPrefix === 'JUL' && itemId.startsWith('JULY-')))) {
                         return true;
                     }
@@ -27504,6 +27955,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (Array.isArray(settings.custom_clients) && settings.custom_clients.length) {
                         customClients = settings.custom_clients;
                     }
+                    if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
+                        applyJiraProjectMappings(settings.jira_project_mappings, settings.jira_active_project_key);
+                        safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(jiraProjectMappings));
+                        if (document.getElementById('cfg-project-mappings-list')) {
+                            renderJiraProjectMappingsSettings();
+                        }
+                    }
+                    if (settings.jira_active_project_key) {
+                        safeSetLocalStorage('worksync_jira_active_project_key', settings.jira_active_project_key);
+                    }
                     console.log('[ClientSettings] Loaded:', customClients.length, 'clients');
 
                     // CRITICAL: Re-render strategy calendar tabs if it's already initialized
@@ -27776,7 +28237,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (btn) btn.disabled = true; if (icon) icon.classList.add('animate-spin');
                 }
                 try {
-                    const projectKeys = JIRA.projectKeys || ['OCT', 'SEP'];
+                    const projectKeys = (typeof getRegisteredProjectKeys === 'function' ? getRegisteredProjectKeys() : JIRA.projectKeys) || ['OCT', 'SEP'];
                     const projectKeysQuery = projectKeys.map(k => `'${k}'`).join(',');
                     const manualTasks = tasks.filter(t => t.manual);
 
@@ -55784,6 +56245,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.handleInternalTaskSort = handleInternalTaskSort;
             window.handleDpSort = handleDpSort;
             window.openSettings = openSettings; window.toggleChatMute = toggleChatMute; window.openProfile = openProfile; window.uploadPhoto = uploadPhoto; window.saveProfile = saveProfile;
+            window.addNewJiraProjectMapping = addNewJiraProjectMapping; window.deleteJiraProjectMapping = deleteJiraProjectMapping; window.setActiveJiraProjectKey = setActiveJiraProjectKey;
+            window.renderJiraProjectMappingsSettings = renderJiraProjectMappingsSettings; window.triggerManualJiraSync = triggerManualJiraSync; window.saveSetting = saveSetting;
+            window.jiraProjectMappings = jiraProjectMappings; window.MONTH_NAMES = MONTH_NAMES;
             window.switchHrTab = switchHrTab; window.setReqType = setReqType; window.submitHrRequest = submitHrRequest;
             window.openEmergencyLeaveModal = openEmergencyLeaveModal; window.submitEmergencyLeave = submitEmergencyLeave;
             window.snehaAddCustomItem = snehaAddCustomItem;
