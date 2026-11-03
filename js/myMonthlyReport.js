@@ -377,7 +377,18 @@
         });
 
         // Map Tasks with Time Logs & Sessions
-        const allLogs = Array.isArray(window.allTimeLogs) ? window.allTimeLogs : ((typeof allTimeLogs !== 'undefined' && Array.isArray(allTimeLogs)) ? allTimeLogs : []);
+        let allLogs = Array.isArray(window.allTimeLogs) && window.allTimeLogs.length > 0
+            ? window.allTimeLogs
+            : ((typeof allTimeLogs !== 'undefined' && Array.isArray(allTimeLogs) && allTimeLogs.length > 0)
+                ? allTimeLogs
+                : (typeof window.timeLogs !== 'undefined' && Array.isArray(window.timeLogs) && window.timeLogs.length > 0 ? window.timeLogs : []));
+
+        if (allLogs.length === 0 && typeof localStorage !== 'undefined') {
+            try {
+                const cached = localStorage.getItem('worksync_all_timelogs') || localStorage.getItem('worksync_timelogs');
+                if (cached) allLogs = JSON.parse(cached);
+            } catch (e) { }
+        }
         const userLogs = isAll ? allLogs : allLogs.filter(l => {
             if (typeof window.OneDeskReportingEngine !== 'undefined') {
                 return window.OneDeskReportingEngine.matchesUser(l, normalizedTarget);
@@ -1425,7 +1436,7 @@
         } else if (tab === 'timing') {
             renderTimingTab(data);
         } else if (tab === 'client-timing') {
-            setTimeout(() => renderClientTimingTab(data), 20);
+            renderClientTimingTab(data);
         } else if (tab === 'qc') {
             renderQcTab(data);
         } else if (tab === 'rework') {
@@ -2111,54 +2122,172 @@
         `;
     }
 
+    function detectClientFromText(text) {
+        if (!text || typeof text !== 'string') return '';
+        const txtLower = text.toLowerCase();
+        const catalog = (typeof window !== 'undefined' && Array.isArray(window.CLIENTS))
+            ? window.CLIENTS
+            : ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Vilpower DM', 'Quade', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'Ramachandran', 'Ashmithasree', 'Porsche'];
+
+        const sorted = [...catalog].sort((a, b) => b.length - a.length);
+        for (const c of sorted) {
+            if (!c) continue;
+            const cLower = c.toLowerCase();
+            if (['others', 'client', 'discussion', 'learning', 'general'].includes(cLower)) continue;
+            if (txtLower.includes(cLower)) {
+                return c;
+            }
+        }
+        return '';
+    }
+
+    function resolveClientName(log, task) {
+        let client = '';
+        const genericValues = new Set(['', 'general', 'undefined', 'null', 'other', 'others', 'n/a', 'none', '-', 'client']);
+
+        // 1. Direct client on log
+        if (log && typeof log.client === 'string' && log.client.trim()) {
+            const raw = log.client.trim();
+            if (!genericValues.has(raw.toLowerCase())) client = raw;
+        }
+
+        // 2. Direct client on task
+        if (!client && task && typeof task.client === 'string' && task.client.trim()) {
+            const raw = task.client.trim();
+            if (!genericValues.has(raw.toLowerCase())) client = raw;
+        }
+
+        // 3. Task client alias on log
+        if (!client && log && typeof log.taskClient === 'string' && log.taskClient.trim()) {
+            const raw = log.taskClient.trim();
+            if (!genericValues.has(raw.toLowerCase())) client = raw;
+        }
+
+        // 4. Labels / Components on task
+        if (!client && task) {
+            const labels = Array.isArray(task.clientLabels) ? task.clientLabels : (Array.isArray(task.labels) ? task.labels : []);
+            for (const lbl of labels) {
+                if (lbl && !genericValues.has(String(lbl).trim().toLowerCase())) {
+                    client = String(lbl).trim();
+                    break;
+                }
+            }
+            if (!client && Array.isArray(task.clientComponents)) {
+                for (const cmp of task.clientComponents) {
+                    if (cmp && !genericValues.has(String(cmp).trim().toLowerCase())) {
+                        client = String(cmp).trim();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 5. Detect from summary/description
+        if (!client) {
+            const textToScan = (log?.taskDesc || log?.taskTitle || log?.title || task?.desc || task?.summary || task?.title || '').trim();
+            if (textToScan) {
+                if (typeof window !== 'undefined' && typeof window.detectClientFromSummary === 'function') {
+                    const detected = window.detectClientFromSummary(textToScan);
+                    if (detected && !genericValues.has(detected.toLowerCase())) client = detected;
+                }
+                if (!client) {
+                    const detected = detectClientFromText(textToScan);
+                    if (detected) client = detected;
+                }
+            }
+        }
+
+        // 6. Internal / Operations classification
+        if (!client) {
+            const tId = String(log?.taskId || task?.id || '').trim().toUpperCase();
+            const isInternal = tId.startsWith('M-') || tId.startsWith('LEARN-') || log?.taskType === 'internal' || task?.manual || task?.taskType === 'internal';
+            if (isInternal) {
+                client = 'Internal / Operations';
+            } else {
+                client = 'General / Internal';
+            }
+        }
+
+        return client.trim();
+    }
+
     function renderClientTimingTab(data) {
+        if (!data) {
+            if (MMR.cachedReportData) data = MMR.cachedReportData;
+            else return;
+        }
+
+        const taskMap = new Map();
+        (data.allTasks || []).forEach(t => {
+            if (t && t.id) taskMap.set(String(t.id).trim().toLowerCase(), t);
+        });
+        const globalTasks = (typeof window !== 'undefined' && Array.isArray(window.tasks)) ? window.tasks : [];
+        globalTasks.forEach(t => {
+            if (t && t.id) {
+                const key = String(t.id).trim().toLowerCase();
+                if (!taskMap.has(key)) taskMap.set(key, t);
+            }
+        });
+
         const clientMap = new Map();
         let totalClientSeconds = 0;
-        const processedTaskIds = new Set();
 
-        (data.allTasks || []).forEach(task => {
-            const client = (task.client || 'General / Internal').trim() || 'General / Internal';
-            if (!clientMap.has(client)) {
-                clientMap.set(client, {
-                    name: client,
+        function getClientEntry(cName) {
+            const key = cName.toLowerCase();
+            if (!clientMap.has(key)) {
+                clientMap.set(key, {
+                    name: cName,
                     tasks: [],
+                    taskIds: new Set(),
                     totalSeconds: 0,
                     sessionsCount: 0,
                     completedCount: 0
                 });
             }
-            const cObj = clientMap.get(client);
-            cObj.tasks.push(task);
-            cObj.totalSeconds += (task.workingTimeSec || 0);
-            cObj.sessionsCount += (task.workSessionsCount || 0);
-            if (task.isCompleted) cObj.completedCount++;
-            totalClientSeconds += (task.workingTimeSec || 0);
-            if (task.id) processedTaskIds.add(String(task.id).trim().toLowerCase());
-        });
+            return clientMap.get(key);
+        }
 
-        // Also incorporate any unmapped period logs directly (e.g. general logs or logs without task entry)
-        if (Array.isArray(data.periodLogs)) {
+        // 1. Process time logs (source of truth for hours worked during the reporting period)
+        if (Array.isArray(data.periodLogs) && data.periodLogs.length > 0) {
             data.periodLogs.forEach(log => {
-                const tId = String(log.taskId || '').trim().toLowerCase();
-                if (tId && processedTaskIds.has(tId)) return;
                 const dur = getLogDurationSec(log);
                 if (dur <= 0) return;
-                const client = (log.client || log.taskClient || 'General / Internal').trim() || 'General / Internal';
-                if (!clientMap.has(client)) {
-                    clientMap.set(client, {
-                        name: client,
-                        tasks: [],
-                        totalSeconds: 0,
-                        sessionsCount: 0,
-                        completedCount: 0
-                    });
-                }
-                const cObj = clientMap.get(client);
+                const tId = String(log.taskId || '').trim();
+                const task = tId ? taskMap.get(tId.toLowerCase()) : null;
+                const cName = resolveClientName(log, task);
+                const cObj = getClientEntry(cName);
+
                 cObj.totalSeconds += dur;
                 cObj.sessionsCount += 1;
                 totalClientSeconds += dur;
+
+                if (task && task.id && !cObj.taskIds.has(task.id)) {
+                    cObj.taskIds.add(task.id);
+                    cObj.tasks.push(task);
+                    if (task.isCompleted) cObj.completedCount++;
+                }
             });
         }
+
+        // 2. Incorporate tasks from allTasks (so clients with assigned tasks also appear and counts match)
+        (data.allTasks || []).forEach(task => {
+            if (!task) return;
+            const cName = resolveClientName(null, task);
+            const cObj = getClientEntry(cName);
+
+            if (task.id && !cObj.taskIds.has(task.id)) {
+                cObj.taskIds.add(task.id);
+                cObj.tasks.push(task);
+                if (task.isCompleted) cObj.completedCount++;
+            }
+
+            // Fallback for periods without raw log streams (e.g. pre-calculated or synthetic tasks)
+            if ((!data.periodLogs || data.periodLogs.length === 0) && (task.workingTimeSec || 0) > 0) {
+                cObj.totalSeconds += task.workingTimeSec;
+                cObj.sessionsCount += (task.workSessionsCount || 1);
+                totalClientSeconds += task.workingTimeSec;
+            }
+        });
 
         const clientsList = Array.from(clientMap.values()).sort((a, b) => b.totalSeconds - a.totalSeconds);
 
@@ -2259,19 +2388,22 @@
         }
 
         // 3. Chart
-        const chartCtx = getEl('mmr-chart-client-hours')?.getContext('2d');
-        if (chartCtx && typeof Chart !== 'undefined') {
-            try {
+        const chartCanvas = getEl('mmr-chart-client-hours');
+        if (chartCanvas && typeof Chart !== 'undefined') {
+            const chartCtx = chartCanvas.getContext('2d');
+            if (chartCtx) {
                 if (MMR.charts.clientTiming) {
                     try { MMR.charts.clientTiming.destroy(); } catch (e) { }
                 }
-                const top5 = clientsList.slice(0, 5);
-                const otherSeconds = clientsList.slice(5).reduce((acc, c) => acc + c.totalSeconds, 0);
+                const topWithTime = clientsList.filter(c => c.totalSeconds > 0);
+                const listToChart = topWithTime.length > 0 ? topWithTime : clientsList.filter(c => c.tasks.length > 0);
+                const top5 = listToChart.slice(0, 5);
+                const otherVal = listToChart.slice(5).reduce((acc, c) => acc + (topWithTime.length > 0 ? c.totalSeconds : c.tasks.length), 0);
                 const labels = top5.map(c => c.name);
-                const dataHours = top5.map(c => Number((c.totalSeconds / 3600).toFixed(1)));
-                if (otherSeconds > 0) {
+                const dataVals = top5.map(c => topWithTime.length > 0 ? Number((c.totalSeconds / 3600).toFixed(1)) : c.tasks.length);
+                if (otherVal > 0) {
                     labels.push('Other Clients');
-                    dataHours.push(Number((otherSeconds / 3600).toFixed(1)));
+                    dataVals.push(topWithTime.length > 0 ? Number((otherVal / 3600).toFixed(1)) : otherVal);
                 }
 
                 MMR.charts.clientTiming = new Chart(chartCtx, {
@@ -2279,8 +2411,8 @@
                     data: {
                         labels: labels.length > 0 ? labels : ['No Data'],
                         datasets: [{
-                            data: dataHours.length > 0 ? dataHours : [1],
-                            backgroundColor: ['#7c3aed', '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#cbd5e1'],
+                            data: dataVals.length > 0 ? dataVals : [1],
+                            backgroundColor: ['#7c3aed', '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#cbd5e1'],
                             borderWidth: 2,
                             borderColor: '#ffffff'
                         }]
@@ -2294,8 +2426,6 @@
                         cutout: '65%'
                     }
                 });
-            } catch (err) {
-                console.warn('[MyMonthlyReport] Client timing chart render error:', err);
             }
         }
     }
@@ -2311,7 +2441,7 @@
 
         // Dynamically populate historical and future years in the Year Dropdown
         const yearSelect = getEl('mmr-custom-year-select');
-        if (yearSelect && (yearSelect.options.length <= 1 || !yearSelect.querySelector(`option[value="${MMR.selectedYear}"]`))) {
+        if (yearSelect && ((yearSelect.options ? yearSelect.options.length : 0) <= 1 || !(typeof yearSelect.querySelector === 'function' && yearSelect.querySelector(`option[value="${MMR.selectedYear}"]`)))) {
             const curY = new Date().getFullYear();
             const years = [];
             for (let y = curY - 3; y <= curY + 2; y++) years.push(y);

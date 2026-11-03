@@ -352,13 +352,34 @@ describe('MyMonthlyReport Module Verification', () => {
         mockWindow.currentUser = { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Admin' };
         mockWindow.isAdmin = () => true;
 
-        mockWindow.MyMonthlyReport.handleUserChange('all');
-        const data = mockWindow.MyMonthlyReportState.cachedReportData;
+        const mockDom: Record<string, any> = {
+            'mmr-client-timing-kpis': { innerHTML: '' },
+            'mmr-client-total-badge': { textContent: '' },
+            'mmr-client-timing-tbody': { innerHTML: '' },
+            'mmr-chart-client-hours': { getContext: () => null },
+            'mmr-tab-client-timing': { classList: { add: () => {}, remove: () => {} } },
+            'mmr-subtab-btn-client-timing': { classList: { add: () => {}, remove: () => {} } }
+        };
+        mockWindow.document = {
+            getElementById: (id: string) => mockDom[id] || { value: '', classList: { add: () => {}, remove: () => {} } }
+        };
 
-        // Verify clients exist in tasks
-        const clients = [...new Set(data.allTasks.map((t: any) => t.client))];
-        expect(clients).toContain('SKM');
-        expect(clients).toContain('Mopower');
-        expect(clients).toContain('Vilpower');
+        // 1. Test for individual user (Karthika)
+        mockWindow.MyMonthlyReport.handleUserChange('karthikavilpower@gmail.com');
+        mockWindow.MyMonthlyReport.switchSubTab('client-timing');
+        let data = mockWindow.MyMonthlyReportState.cachedReportData;
+
+        expect(mockDom['mmr-client-timing-kpis'].innerHTML).toContain('Active Clients');
+        expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('SKM');
+        expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('5h 30m'); // NOV-101 (3.5h + 2h)
+
+        // 2. Test for All Employees
+        mockWindow.MyMonthlyReport.handleUserChange('all');
+        mockWindow.MyMonthlyReport.switchSubTab('client-timing');
+        data = mockWindow.MyMonthlyReportState.cachedReportData;
+
+        // Verify clients exist in tasks and table
+        expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('SKM');
+        expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('Vilpower');
     });
 });
