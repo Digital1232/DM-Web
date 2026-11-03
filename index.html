@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="auth-pending">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -2923,7 +2923,17 @@
         }
     </style>
     <script>
-        document.documentElement.classList.add('auth-pending');
+        try {
+            const cachedUser = localStorage.getItem('worksync_user');
+            if (cachedUser) {
+                document.documentElement.classList.add('has-user');
+                document.documentElement.classList.remove('auth-pending');
+            } else {
+                document.documentElement.classList.add('auth-pending');
+            }
+        } catch (e) {
+            document.documentElement.classList.add('auth-pending');
+        }
         window.apSelectedTasks = window.apSelectedTasks || new Set();
     </script>
 
@@ -15999,7 +16009,7 @@
         let getStorage, sRef, uploadBytes, getDownloadURL;
 
         // Helper: import with timeout to prevent indefinite hanging on slow/blocked CDN
-        function importWithTimeout(url, timeoutMs = 12000) {
+        function importWithTimeout(url, timeoutMs = 4000) {
             return Promise.race([
                 import(url),
                 new Promise((_, reject) => setTimeout(() => reject(new Error(`Import timed out after ${timeoutMs}ms: ${url}`)), timeoutMs))
@@ -19771,17 +19781,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 return (d === 'hello' || d === 'testing task 1' || d === 'testing task 1 - thumbnail');
                             };
                             loaded = (parsed || []).filter(t => t && !isDeletedTaskItem(t));
-                            ['worksync_tasks', 'worksync_manual_tasks', 'worksync_cached_tasks'].forEach(k => {
-                                try {
-                                    const s = localStorage.getItem(k);
-                                    if (s) {
-                                        const arr = JSON.parse(s);
-                                        if (Array.isArray(arr)) {
-                                            localStorage.setItem(k, JSON.stringify(arr.filter(t => !isDeletedTaskItem(t))));
+                            if (!window._worksyncTargetTasksCleaned) {
+                                window._worksyncTargetTasksCleaned = true;
+                                ['worksync_tasks', 'worksync_manual_tasks', 'worksync_cached_tasks'].forEach(k => {
+                                    try {
+                                        const s = localStorage.getItem(k);
+                                        if (s) {
+                                            const arr = JSON.parse(s);
+                                            if (Array.isArray(arr)) {
+                                                localStorage.setItem(k, JSON.stringify(arr.filter(t => !isDeletedTaskItem(t))));
+                                            }
                                         }
-                                    }
-                                } catch(e){}
-                            });
+                                    } catch(e){}
+                                });
+                            }
                         } catch (te) { }
                     }
                     if (cachedManual) {
@@ -29014,7 +29027,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (novOnly.length === 0) {
                             novOnly.push({ id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true });
                         }
-                        if (settings.jira_project_mappings.length !== novOnly.length && typeof set === 'function') {
+                        if (!window._novSettingsSynced && settings.jira_project_mappings.length !== novOnly.length && typeof isAdmin === 'function' && isAdmin() && typeof set === 'function') {
+                            window._novSettingsSynced = true;
                             set(ref(db, 'worksync/settings/jira_project_mappings'), novOnly).catch(() => {});
                             set(ref(db, 'worksync/settings/jira_active_project_key'), 'NOV').catch(() => {});
                         }
