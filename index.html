@@ -16610,25 +16610,29 @@
             ];
 
             let jiraProjectMappings = (function () {
+                const novMapping = { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true };
                 try {
                     const cached = localStorage.getItem('worksync_jira_project_mappings');
                     if (cached) {
                         const parsed = JSON.parse(cached);
                         if (Array.isArray(parsed) && parsed.length > 0) {
-                            // Ensure migration to NOV-only if old obsolete keys remain
-                            if (!localStorage.getItem('worksync_nov_only_migrated_v4')) {
-                                localStorage.setItem('worksync_nov_only_migrated_v4', 'true');
-                                const novMapping = { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true };
-                                const filtered = [novMapping];
-                                localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(filtered));
+                            // Enforce NOV only: filter out any mappings that are not NOV
+                            const novOnly = parsed.filter(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
+                            if (novOnly.length > 0) {
+                                novOnly[0].isActive = true;
+                                localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(novOnly));
                                 localStorage.setItem('worksync_jira_active_project_key', 'NOV');
-                                return filtered;
+                                return novOnly;
                             }
-                            return parsed;
                         }
                     }
                 } catch (e) { }
-                return JSON.parse(JSON.stringify(DEFAULT_JIRA_PROJECT_MAPPINGS));
+                const filtered = [novMapping];
+                try {
+                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(filtered));
+                    localStorage.setItem('worksync_jira_active_project_key', 'NOV');
+                } catch (e) { }
+                return filtered;
             })();
 
             const JIRA = {
@@ -16819,7 +16823,7 @@
                 if (targetMonth === 3) return 'MAR';
                 if (targetMonth === 4) return 'APR';
 
-                return (JIRA && JIRA.projectKey) || 'OCT';
+                return (JIRA && JIRA.projectKey) || 'NOV';
             }
             window.getJiraProjectKeyForDate = getJiraProjectKeyForDate;
 
@@ -19759,8 +19763,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (cachedTasks) {
                         try {
                             const parsed = JSON.parse(cachedTasks);
-                            const targetIds = ['M-1779279416802', 'M-1777551877624'];
-                            loaded = (parsed || []).filter(t => t && !targetIds.includes(t.id));
+                            const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
+                            const isDeletedTaskItem = (t) => {
+                                if (!t) return false;
+                                if (targetIds.includes(t.id)) return true;
+                                const d = (t.desc || t.summary || t.title || '').trim().toLowerCase();
+                                return (d === 'hello' || d === 'testing task 1' || d === 'testing task 1 - thumbnail');
+                            };
+                            loaded = (parsed || []).filter(t => t && !isDeletedTaskItem(t));
+                            ['worksync_tasks', 'worksync_manual_tasks', 'worksync_cached_tasks'].forEach(k => {
+                                try {
+                                    const s = localStorage.getItem(k);
+                                    if (s) {
+                                        const arr = JSON.parse(s);
+                                        if (Array.isArray(arr)) {
+                                            localStorage.setItem(k, JSON.stringify(arr.filter(t => !isDeletedTaskItem(t))));
+                                        }
+                                    }
+                                } catch(e){}
+                            });
                         } catch (te) { }
                     }
                     if (cachedManual) {
@@ -20778,7 +20799,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function openSettings() {
                 document.getElementById('cfg-domain').textContent = JIRA.domain;
-                document.getElementById('cfg-project').textContent = 'Active: ' + (JIRA?.projectKey || 'OCT');
+                document.getElementById('cfg-project').textContent = 'Active: ' + (JIRA?.projectKey || 'NOV');
                 renderChatMuteToggle();
                 document.getElementById('setting-shift').value = localStorage.getItem('worksync_shift') || '18:00';
                 renderJiraProjectMappingsSettings();
@@ -28988,8 +29009,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         customClients = settings.custom_clients;
                     }
                     if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
-                        applyJiraProjectMappings(settings.jira_project_mappings, settings.jira_active_project_key);
-                        safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(jiraProjectMappings));
+                        // Enforce NOV only
+                        const novOnly = settings.jira_project_mappings.filter(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
+                        if (novOnly.length === 0) {
+                            novOnly.push({ id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true });
+                        }
+                        if (settings.jira_project_mappings.length !== novOnly.length && typeof set === 'function') {
+                            set(ref(db, 'worksync/settings/jira_project_mappings'), novOnly).catch(() => {});
+                            set(ref(db, 'worksync/settings/jira_active_project_key'), 'NOV').catch(() => {});
+                        }
+                        applyJiraProjectMappings(novOnly, 'NOV');
+                        safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(novOnly));
+                        safeSetLocalStorage('worksync_jira_active_project_key', 'NOV');
                         if (document.getElementById('cfg-project-mappings-list')) {
                             renderJiraProjectMappingsSettings();
                         }
@@ -29227,12 +29258,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function mergeTasksById(taskList) {
-                const targetIds = ['M-1779279416802', 'M-1777551877624'];
+                const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                 const map = new Map();
                 const contentDedupMap = new Map();
 
                 (taskList || []).forEach(task => {
                     if (!task?.id || targetIds.includes(task.id)) return;
+                    const descCheck = (task.desc || task.summary || task.title || '').trim().toLowerCase();
+                    if (descCheck === 'hello' || descCheck === 'testing task 1' || descCheck === 'testing task 1 - thumbnail') return;
 
                     // Manual / Internal task deduplication guard
                     if (task.manual || task.taskType === 'internal') {
@@ -50009,7 +50042,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Admins and Murugesh load all manual tasks from all users
                     onValue(ref(db, `worksync/manual_tasks`), snap => {
                         // Cleanup target tasks requested by user
-                        const targetIds = ['M-1779279416802', 'M-1777551877624'];
+                        const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                         snap.forEach(userTasksSnap => {
                             const userKey = userTasksSnap.key;
                             const tasksMap = userTasksSnap.val() || {};
@@ -50048,7 +50081,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     ajithKeys.forEach(userKey => {
                         onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
                             if (!currentUser || !currentUser.email) return;
-                            ajithTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const ajithMap = snap.val() || {};
+                            Object.keys(ajithMap).forEach(tId => {
+                                const t = ajithMap[tId];
+                                const d = (t?.desc || t?.summary || t?.title || '').trim().toLowerCase();
+                                if (targetIds.includes(tId) || d === 'hello' || d === 'testing task 1' || d === 'testing task 1 - thumbnail') {
+                                    remove(ref(db, `worksync/manual_tasks/${userKey}/${tId}`)).catch(() => {});
+                                }
+                            });
+                            ajithTasksByOwner[userKey] = Object.values(ajithMap);
                             const allAjithTasks = Object.values(ajithTasksByOwner).flat();
                             tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAjithTasks]);
                             try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAjithTasks)); } catch (e) { }
@@ -50073,7 +50114,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     alexKeys.forEach(userKey => {
                         onValue(ref(db, `worksync/manual_tasks/${userKey}`), snap => {
                             if (!currentUser || !currentUser.email) return;
-                            alexTasksByOwner[userKey] = Object.values(snap.val() || {});
+                            const alexMap = snap.val() || {};
+                            Object.keys(alexMap).forEach(tId => {
+                                const t = alexMap[tId];
+                                const d = (t?.desc || t?.summary || t?.title || '').trim().toLowerCase();
+                                if (targetIds.includes(tId) || d === 'hello' || d === 'testing task 1' || d === 'testing task 1 - thumbnail') {
+                                    remove(ref(db, `worksync/manual_tasks/${userKey}/${tId}`)).catch(() => {});
+                                }
+                            });
+                            alexTasksByOwner[userKey] = Object.values(alexMap);
                             const allAlexTasks = Object.values(alexTasksByOwner).flat();
                             tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...allAlexTasks]);
                             try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(allAlexTasks)); } catch (e) { }
@@ -50096,7 +50145,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     onValue(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}`), snap => {
                         if (!currentUser || !currentUser.email) return;
                         // Cleanup target tasks if owned by this user
-                        const targetIds = ['M-1779279416802', 'M-1777551877624'];
+                        const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                         const userTasksMap = snap.val() || {};
                         Object.keys(userTasksMap).forEach(taskId => {
                             if (targetIds.includes(taskId)) {
