@@ -16903,10 +16903,7 @@
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
                 ],
-                'alex@vilpower.com': [
-                    'digitalmarketing@vilpower.com',
-                    'nanjil@vilpower.com'
-                ],
+
                 'alexvilpower@gmail.com': [
                     'digitalmarketing@vilpower.com',
                     'nanjil@vilpower.com'
@@ -22515,11 +22512,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
                     }
                 });
-                // Ensure aliases are accessible via either key in merged map
+                // Ensure canonical single Alex email only (alexvilpower@gmail.com)
                 const alexCanonical = merged.get('alexvilpower@gmail.com') || merged.get('alex@vilpower.com');
                 if (alexCanonical) {
-                    if (!merged.has('alexvilpower@gmail.com')) merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
-                    if (!merged.has('alex@vilpower.com')) merged.set('alex@vilpower.com', { ...alexCanonical, email: 'alex@vilpower.com' });
+                    merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
+                }
+                // Strip duplicate alex@vilpower.com and thanush from allUsersMap
+                merged.delete('alex@vilpower.com');
+                merged.delete('thanushvilpower@gmail.com');
+                merged.delete('thanush@vilpower.com');
+
+                // Auto-cleanup from Firebase database if authenticated
+                if (typeof remove === 'function' && typeof ref === 'function' && typeof db !== 'undefined' && db) {
+                    remove(ref(db, 'worksync/users/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/users/alex_vilpower_com')).catch(() => {});
+                    remove(ref(db, 'worksync/daily_plans/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/daily_plans/alex_vilpower_com')).catch(() => {});
+                    remove(ref(db, 'worksync/manual_tasks/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/manual_tasks/alex_vilpower_com')).catch(() => {});
                 }
                 return merged; // Return the map directly
             }
@@ -30445,7 +30455,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function isInternalTask(t) {
-                return t?.manual === true || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true;
+                if (!t) return false;
+                const tId = String(t.id || t.taskId || '').toUpperCase().trim();
+                if (tId.startsWith('M-') || tId.startsWith('LEARN-')) return true;
+                return t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true';
             }
 
             function morningLearningTaskId(email) {
@@ -34335,8 +34348,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const isInternalOnlyUser = [
                         'alexvilpower@gmail.com',
-                        'alex@vilpower.com',
-                        'snehavilpower@gmail.com'
+                                                'snehavilpower@gmail.com'
                     ].includes(email.toLowerCase());
 
                     const isDailyPlanUser = [
@@ -45258,8 +45270,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                             const isInternalOnlyUser = [
                                 'alexvilpower@gmail.com',
-                                'alex@vilpower.com',
-                                'snehavilpower@gmail.com'
+                                                                'snehavilpower@gmail.com'
                             ].includes(email.toLowerCase());
 
                             const filteredTasks = tasks.filter(t => {
@@ -46422,8 +46433,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         const isInternalOnlyUser = [
                             'alexvilpower@gmail.com',
-                            'alex@vilpower.com',
-                            'snehavilpower@gmail.com'
+                                                        'snehavilpower@gmail.com'
                         ].includes(usrEmail.toLowerCase());
 
                         // Ajith recurring tasks to exclude from his analytics

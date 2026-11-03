@@ -61,7 +61,7 @@ export const LEAVE_APPROVAL_CHAINS = {
         'digitalmarketing@vilpower.com',
         'nanjil@vilpower.com'
     ],
-    'alex@vilpower.com': [
+    'alexvilpower@gmail.com': [
         'digitalmarketing@vilpower.com',
         'nanjil@vilpower.com'
     ],

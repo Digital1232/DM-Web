@@ -239,6 +239,7 @@
             const addUser = (emailRaw, nameRaw, roleRaw, picRaw) => {
                 const email = this.normalizeEmail(emailRaw);
                 if (!email || seen.has(email)) return;
+                if (email === 'alex@vilpower.com' || email.includes('thanush')) return;
                 seen.add(email);
                 users.push({
                     email,

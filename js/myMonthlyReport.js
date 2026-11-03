@@ -68,6 +68,10 @@
         return `${h}h ${m}m`;
     }
 
+    function formatDurationHM(seconds) {
+        return formatHoursMinutes(seconds);
+    }
+
     function formatDurationHMS(seconds) {
         const sec = Math.max(0, Math.floor(seconds || 0));
         const h = Math.floor(sec / 3600);
@@ -353,7 +357,12 @@
 
         // 2. Tasks Segregation (Jira vs Internal)
         const allTasks = Array.isArray(window.tasks) ? window.tasks : ((typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : []);
-        const isInternalFn = typeof window.isInternalTask === 'function' ? window.isInternalTask : (t => t.manual === true || t.taskType === 'internal');
+        const isInternalFn = typeof window.isInternalTask === 'function' ? window.isInternalTask : (t => {
+            if (!t) return false;
+            const tId = String(t.id || t.taskId || '').toUpperCase().trim();
+            if (tId.startsWith('M-') || tId.startsWith('LEARN-')) return true;
+            return t.manual === true || t.manual === 'true' || t.taskType === 'internal';
+        });
 
         const userTasks = isAll ? allTasks : allTasks.filter(t => {
             if (typeof window.OneDeskReportingEngine !== 'undefined') {
@@ -1416,7 +1425,7 @@
         } else if (tab === 'timing') {
             renderTimingTab(data);
         } else if (tab === 'client-timing') {
-            renderClientTimingTab(data);
+            setTimeout(() => renderClientTimingTab(data), 20);
         } else if (tab === 'qc') {
             renderQcTab(data);
         } else if (tab === 'rework') {
@@ -2105,9 +2114,10 @@
     function renderClientTimingTab(data) {
         const clientMap = new Map();
         let totalClientSeconds = 0;
+        const processedTaskIds = new Set();
 
-        data.allTasks.forEach(task => {
-            const client = (task.client || 'General / Internal').trim();
+        (data.allTasks || []).forEach(task => {
+            const client = (task.client || 'General / Internal').trim() || 'General / Internal';
             if (!clientMap.has(client)) {
                 clientMap.set(client, {
                     name: client,
@@ -2123,7 +2133,32 @@
             cObj.sessionsCount += (task.workSessionsCount || 0);
             if (task.isCompleted) cObj.completedCount++;
             totalClientSeconds += (task.workingTimeSec || 0);
+            if (task.id) processedTaskIds.add(String(task.id).trim().toLowerCase());
         });
+
+        // Also incorporate any unmapped period logs directly (e.g. general logs or logs without task entry)
+        if (Array.isArray(data.periodLogs)) {
+            data.periodLogs.forEach(log => {
+                const tId = String(log.taskId || '').trim().toLowerCase();
+                if (tId && processedTaskIds.has(tId)) return;
+                const dur = getLogDurationSec(log);
+                if (dur <= 0) return;
+                const client = (log.client || log.taskClient || 'General / Internal').trim() || 'General / Internal';
+                if (!clientMap.has(client)) {
+                    clientMap.set(client, {
+                        name: client,
+                        tasks: [],
+                        totalSeconds: 0,
+                        sessionsCount: 0,
+                        completedCount: 0
+                    });
+                }
+                const cObj = clientMap.get(client);
+                cObj.totalSeconds += dur;
+                cObj.sessionsCount += 1;
+                totalClientSeconds += dur;
+            });
+        }
 
         const clientsList = Array.from(clientMap.values()).sort((a, b) => b.totalSeconds - a.totalSeconds);
 
@@ -2213,7 +2248,7 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${c.completedCount === c.tasks.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${c.completedCount === c.tasks.length && c.tasks.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
                                     ${c.completedCount} / ${c.tasks.length}
                                 </span>
                             </td>
@@ -2225,39 +2260,43 @@
 
         // 3. Chart
         const chartCtx = getEl('mmr-chart-client-hours')?.getContext('2d');
-        if (chartCtx) {
-            if (MMR.charts.clientTiming) {
-                try { MMR.charts.clientTiming.destroy(); } catch (e) { }
-            }
-            const top5 = clientsList.slice(0, 5);
-            const otherSeconds = clientsList.slice(5).reduce((acc, c) => acc + c.totalSeconds, 0);
-            const labels = top5.map(c => c.name);
-            const dataHours = top5.map(c => Number((c.totalSeconds / 3600).toFixed(1)));
-            if (otherSeconds > 0) {
-                labels.push('Other Clients');
-                dataHours.push(Number((otherSeconds / 3600).toFixed(1)));
-            }
-
-            MMR.charts.clientTiming = new Chart(chartCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels.length > 0 ? labels : ['No Data'],
-                    datasets: [{
-                        data: dataHours.length > 0 ? dataHours : [1],
-                        backgroundColor: ['#7c3aed', '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#cbd5e1'],
-                        borderWidth: 2,
-                        borderColor: '#ffffff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
-                    },
-                    cutout: '65%'
+        if (chartCtx && typeof Chart !== 'undefined') {
+            try {
+                if (MMR.charts.clientTiming) {
+                    try { MMR.charts.clientTiming.destroy(); } catch (e) { }
                 }
-            });
+                const top5 = clientsList.slice(0, 5);
+                const otherSeconds = clientsList.slice(5).reduce((acc, c) => acc + c.totalSeconds, 0);
+                const labels = top5.map(c => c.name);
+                const dataHours = top5.map(c => Number((c.totalSeconds / 3600).toFixed(1)));
+                if (otherSeconds > 0) {
+                    labels.push('Other Clients');
+                    dataHours.push(Number((otherSeconds / 3600).toFixed(1)));
+                }
+
+                MMR.charts.clientTiming = new Chart(chartCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels.length > 0 ? labels : ['No Data'],
+                        datasets: [{
+                            data: dataHours.length > 0 ? dataHours : [1],
+                            backgroundColor: ['#7c3aed', '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#cbd5e1'],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                        },
+                        cutout: '65%'
+                    }
+                });
+            } catch (err) {
+                console.warn('[MyMonthlyReport] Client timing chart render error:', err);
+            }
         }
     }
 
