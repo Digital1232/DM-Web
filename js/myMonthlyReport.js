@@ -376,17 +376,26 @@
         }
 
         // Filter tasks that are relevant to this month:
-        // Either part of active month project key, due in month, created/updated/completed in month, or worked on in month
+        // For Jira tasks: MUST match the space key mapped to the reporting month.
+        // Date-range (inRange) is only a fallback when no space key mapping covers the reporting month.
         const repMonth = period.fromDate.getMonth() + 1; // 1-12
         const repYear = period.fromDate.getFullYear();
         const mappings = (typeof window.getRegisteredProjectKeys === 'function' ? window.jiraProjectMappings : null) || [];
+
+        // Determine if there is at least one space-key mapping registered for the reporting month.
+        // If yes, Jira tasks MUST belong to that space key (date-range is irrelevant for cross-key tasks).
+        const hasMappingForMonth = mappings.some(m => {
+            const matchesMonth = Number(m.month) === repMonth;
+            const matchesYear = m.year === 'all' || !m.year || Number(m.year) === repYear;
+            return matchesMonth && matchesYear;
+        }) || (repMonth === 11 && repYear === 2026); // fallback: NOV is always mapped to November 2026
 
         const relevantTasks = userTasks.filter(t => {
             const tId = String(t.id || '').toUpperCase().trim();
             const dashIdx = tId.indexOf('-');
             const pKey = t.project ? String(t.project).toUpperCase().trim() : (dashIdx !== -1 ? tId.substring(0, dashIdx) : '');
 
-            // 1. Is Jira task space key mapped to this reporting month? (e.g. NOV for November 2026)
+            // 1. Is this task's space key mapped to the reporting month?
             let isSpaceKeyMonth = false;
             if (pKey) {
                 const mapEntry = mappings.find(m => String(m.projectKey).toUpperCase() === pKey);
@@ -395,6 +404,7 @@
                     const matchesYear = mapEntry.year === 'all' || !mapEntry.year || Number(mapEntry.year) === repYear;
                     isSpaceKeyMonth = matchesMonth && matchesYear;
                 } else if (pKey === 'NOV' && repMonth === 11 && repYear === 2026) {
+                    // Hardcoded fallback: NOV → November 2026 when no mapping entry found
                     isSpaceKeyMonth = true;
                 }
             }
@@ -438,7 +448,15 @@
             }
 
             // Jira Tasks:
-            return isSpaceKeyMonth || inRange || hasLogsInPeriod;
+            // PRIMARY: If a space key is mapped to the reporting month, the task MUST come from that space key.
+            // A NOV task with an October due date is a November task — it must NOT appear in the October report.
+            if (hasMappingForMonth) {
+                // Space-key match is required. Date-range / logs are secondary signals only when space key matches.
+                return isSpaceKeyMonth;
+            }
+
+            // FALLBACK: No space key mapping for this month — use date-range + work logs as the signal.
+            return inRange || hasLogsInPeriod;
         });
 
         // Separate Jira and Internal
