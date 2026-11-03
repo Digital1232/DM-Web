@@ -290,6 +290,46 @@
     // 3. CORE METRIC EXTRACTION & CALCULATION ENGINE
     // ─────────────────────────────────────────────────────────────
 
+    // Auto-fetch historical Jira space key if not yet loaded in window.tasks
+    const _fetchingKeys = new Set();
+    function maybeFetchHistoricalSpaceKey(projectKey) {
+        if (!projectKey || _fetchingKeys.has(projectKey)) return;
+        const allTasks = Array.isArray(window.tasks) ? window.tasks : ((typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : []);
+        const hasTasks = allTasks.some(t => String(t.id || '').toUpperCase().startsWith(projectKey.toUpperCase() + '-'));
+        if (hasTasks) return;
+
+        _fetchingKeys.add(projectKey);
+        console.log(`[MyMonthlyReport] Historical tasks for space key ${projectKey} missing in memory. Fetching from Jira Cloud...`);
+
+        if (typeof window.fetchAllJiraIssues === 'function') {
+            const jql = `project = '${projectKey}' ORDER BY updated DESC`;
+            window.fetchAllJiraIssues(jql, 'summary,status,priority,labels,assignee,duedate,issuetype,parent,components')
+                .then(issues => {
+                    if (issues && issues.length > 0 && typeof window.mapJiraIssues === 'function') {
+                        const newTasks = window.mapJiraIssues(issues);
+                        const existingMap = new Map();
+                        (window.tasks || []).forEach(t => existingMap.set(t.id, t));
+                        newTasks.forEach(t => existingMap.set(t.id, t));
+                        window.tasks = Array.from(existingMap.values());
+                        if (typeof tasks !== 'undefined') tasks = window.tasks;
+                        if (typeof safeSetLocalStorage === 'function') {
+                            safeSetLocalStorage('worksync_tasks', JSON.stringify(window.tasks));
+                        }
+                        console.log(`[MyMonthlyReport] Successfully fetched and cached ${newTasks.length} ${projectKey} tasks.`);
+                        if (window.MyMonthlyReport && typeof window.MyMonthlyReport.refresh === 'function') {
+                            window.MyMonthlyReport.refresh();
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.warn(`[MyMonthlyReport] Failed to fetch historical tasks for ${projectKey}:`, err);
+                })
+                .finally(() => {
+                    _fetchingKeys.delete(projectKey);
+                });
+        }
+    }
+
     function computeMyMonthlyReportData(targetEmail) {
         if (!targetEmail) return null;
         const period = resolveReportPeriod();
@@ -354,6 +394,57 @@
             taskLogsMap.get(tId).push(log);
         });
 
+        // Auto-fetch missing historical space key (e.g. OCT) in the background if tasks not in memory
+        const repMonth = period.fromDate.getMonth() + 1; // 1-12
+        const repYear = period.fromDate.getFullYear();
+        if (repMonth === 10 && repYear === 2026 && typeof maybeFetchHistoricalSpaceKey === 'function') {
+            maybeFetchHistoricalSpaceKey('OCT');
+        }
+
+        // UNIFIED TASK CANDIDATE POOL:
+        // 1. Tasks assigned to or matched with the employee in allTasks
+        // 2. PLUS any task the employee worked on during this period (from periodLogs)!
+        // If a task was worked on by this employee, IT MUST BE INCLUDED IN THE REPORT.
+        // If the Jira task is not in memory, we synthesize a complete task record from the logged session.
+        const taskByIdMap = new Map();
+        allTasks.forEach(t => {
+            if (t && t.id) taskByIdMap.set(String(t.id).trim().toLowerCase(), t);
+        });
+
+        const candidateUserTasks = [...userTasks];
+        const candidateTaskIds = new Set(candidateUserTasks.map(t => String(t.id).trim().toLowerCase()));
+
+        periodLogs.forEach(log => {
+            const tId = String(log.taskId || '').trim();
+            if (!tId || tId.toLowerCase() === 'general' || tId.toLowerCase() === 'undefined' || tId.toLowerCase() === 'null') return;
+            const tIdLower = tId.toLowerCase();
+            if (!candidateTaskIds.has(tIdLower)) {
+                if (taskByIdMap.has(tIdLower)) {
+                    candidateUserTasks.push(taskByIdMap.get(tIdLower));
+                    candidateTaskIds.add(tIdLower);
+                } else {
+                    const isInternal = tId.startsWith('M-') || log.taskType === 'internal';
+                    const dashIdx = tId.indexOf('-');
+                    const pKey = dashIdx !== -1 ? tId.substring(0, dashIdx).toUpperCase() : '';
+                    const syntheticTask = {
+                        id: tId,
+                        desc: log.taskDesc || log.taskTitle || log.title || tId,
+                        client: log.client || 'Client',
+                        status: log.status || 'Done',
+                        priority: log.priority || 'Medium',
+                        assignee: employeeProfile.name,
+                        assigneeEmail: employeeProfile.email,
+                        manual: isInternal,
+                        taskType: isInternal ? 'internal' : 'jira',
+                        project: pKey || (repMonth === 10 ? 'OCT' : (repMonth === 11 ? 'NOV' : '')),
+                        isSyntheticFromLog: true
+                    };
+                    candidateUserTasks.push(syntheticTask);
+                    candidateTaskIds.add(tIdLower);
+                }
+            }
+        });
+
         // Include live timer if logged-in user is viewing their own current month report
         const isCurrentPeriod = (period.fromTs <= Date.now() && Date.now() <= period.toTs);
         const isSelf = window.currentUser && String(window.currentUser.email || '').toLowerCase() === normalizedTarget;
@@ -376,21 +467,16 @@
         }
 
         // Filter tasks that are relevant to this month:
-        // For Jira tasks: MUST match the space key mapped to the reporting month.
-        // Date-range (inRange) is only a fallback when no space key mapping covers the reporting month.
-        const repMonth = period.fromDate.getMonth() + 1; // 1-12
-        const repYear = period.fromDate.getFullYear();
         const mappings = (typeof window.getRegisteredProjectKeys === 'function' ? window.jiraProjectMappings : null) || [];
 
         // Determine if there is at least one space-key mapping registered for the reporting month.
-        // If yes, Jira tasks MUST belong to that space key (date-range is irrelevant for cross-key tasks).
         const hasMappingForMonth = mappings.some(m => {
             const matchesMonth = Number(m.month) === repMonth;
             const matchesYear = m.year === 'all' || !m.year || Number(m.year) === repYear;
             return matchesMonth && matchesYear;
-        }) || (repMonth === 11 && repYear === 2026); // fallback: NOV is always mapped to November 2026
+        }) || (repMonth === 11 && repYear === 2026) || (repMonth === 10 && repYear === 2026);
 
-        const relevantTasks = userTasks.filter(t => {
+        const relevantTasks = candidateUserTasks.filter(t => {
             const tId = String(t.id || '').toUpperCase().trim();
             const dashIdx = tId.indexOf('-');
             const pKey = t.project ? String(t.project).toUpperCase().trim() : (dashIdx !== -1 ? tId.substring(0, dashIdx) : '');
@@ -404,7 +490,8 @@
                     const matchesYear = mapEntry.year === 'all' || !mapEntry.year || Number(mapEntry.year) === repYear;
                     isSpaceKeyMonth = matchesMonth && matchesYear;
                 } else if (pKey === 'NOV' && repMonth === 11 && repYear === 2026) {
-                    // Hardcoded fallback: NOV → November 2026 when no mapping entry found
+                    isSpaceKeyMonth = true;
+                } else if (pKey === 'OCT' && repMonth === 10 && repYear === 2026) {
                     isSpaceKeyMonth = true;
                 }
             }
@@ -435,28 +522,33 @@
             const isInternal = isInternalFn(t);
 
             if (isInternal) {
-                // If internal task was completed, it belongs to this month only if completed, due, or worked on in this month
+                // If the employee logged time on this internal task in this month, it belongs to this report!
+                if (hasLogsInPeriod) return true;
                 if (isDone) {
                     return (compTs >= period.fromTs && compTs <= period.toTs) ||
-                        (dTs >= period.fromTs && dTs <= period.toTs) ||
-                        hasLogsInPeriod;
+                        (dTs >= period.fromTs && dTs <= period.toTs);
                 }
-                // If internal task is active/in-progress, it belongs if created on or before this month end and not yet done
                 const createdBeforeOrInPeriod = (!cTs || cTs <= period.toTs);
                 const dueInOrBeforePeriod = (!dTs || dTs <= period.toTs);
-                return (createdBeforeOrInPeriod && dueInOrBeforePeriod) || inRange || hasLogsInPeriod;
+                return (createdBeforeOrInPeriod && dueInOrBeforePeriod) || inRange;
             }
 
             // Jira Tasks:
-            // PRIMARY: If a space key is mapped to the reporting month, the task MUST come from that space key.
-            // A NOV task with an October due date is a November task — it must NOT appear in the October report.
+            // 1. If the employee worked on this task during this period (has logs in period):
+            // Include it, unless it explicitly belongs to another calendar month's space key (e.g. NOV task when viewing OCT)
+            if (hasLogsInPeriod) {
+                if (pKey === 'NOV' && repMonth !== 11) return false;
+                if (pKey === 'OCT' && repMonth !== 10) return false;
+                return true;
+            }
+
+            // 2. Otherwise, if space-key mapping exists for this month, require the space key
             if (hasMappingForMonth) {
-                // Space-key match is required. Date-range / logs are secondary signals only when space key matches.
                 return isSpaceKeyMonth;
             }
 
-            // FALLBACK: No space key mapping for this month — use date-range + work logs as the signal.
-            return inRange || hasLogsInPeriod;
+            // Fallback: date range
+            return inRange;
         });
 
         // Separate Jira and Internal

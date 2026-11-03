@@ -29365,7 +29365,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const elapsedMinutes = Math.ceil((Date.now() - lastSyncMs) / 60000);
                         lookbackMinutes = Math.max(60, Math.min(2880, elapsedMinutes + 30));
                     }
-                    const isIncremental = isAuto && !forceFull && (lastSyncMs > 0 && (Date.now() - lastSyncMs) < 86400000);
+                    const hasTasksForAllKeys = projectKeys.every(k => tasks.some(t => String(t.id || '').toUpperCase().startsWith(k + '-')));
+                    const isIncremental = isAuto && !forceFull && (lastSyncMs > 0 && (Date.now() - lastSyncMs) < 86400000) && hasTasksForAllKeys;
 
                     let jql = `project in (${projectKeysQuery})`;
                     if (isIncremental) {
@@ -29473,14 +29474,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             }
                         });
 
-                        // For a full sync on final page, clean up removed Jira tasks
+                        // For a full sync on final page, clean up removed Jira tasks ONLY for the active project key (never purge historical keys like OCT)
                         if (isFinal && !isAuto && !isIncremental) {
+                            const activeKey = (JIRA?.projectKey || 'NOV').toUpperCase();
                             const newJiraIds = new Set(jiraTasks.map(t => (t.id || '').toLowerCase()));
                             tasks.forEach(oldTask => {
-                                if (!oldTask.manual && oldTask.taskType !== 'internal' && !newJiraIds.has((oldTask.id || '').toLowerCase())) {
-                                    taskMap.delete(oldTask.id);
-                                    taskMap.delete(oldTask.id.toUpperCase());
-                                    taskMap.delete(oldTask.id.toLowerCase());
+                                if (!oldTask.manual && oldTask.taskType !== 'internal') {
+                                    const tIdUp = String(oldTask.id || '').toUpperCase();
+                                    if (tIdUp.startsWith(activeKey + '-') && !newJiraIds.has((oldTask.id || '').toLowerCase())) {
+                                        taskMap.delete(oldTask.id);
+                                        taskMap.delete(oldTask.id.toUpperCase());
+                                        taskMap.delete(oldTask.id.toLowerCase());
+                                    }
                                 }
                             });
                         }
