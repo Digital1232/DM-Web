@@ -28,13 +28,14 @@ export const USERS = [
 export function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
 
 export const DEFAULT_JIRA_PROJECT_MAPPINGS = [
-    { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true }
+    { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true },
+    { id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: '2026', isActive: false, forReportingOnly: true }
 ];
 
 export const JIRA = {
     domain: 'vilpowerdigitalmarketing.atlassian.net',
     projectKey: 'NOV',
-    projectKeys: ['NOV'],
+    projectKeys: ['NOV', 'OCT'],
     apiUrl: '/api/jira',
     gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
     useLocalApi: false

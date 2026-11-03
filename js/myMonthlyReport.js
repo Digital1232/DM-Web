@@ -1986,7 +1986,7 @@
                 </span>
                 <span class="flex items-center gap-1.5 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/80">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Jira Synced: NOV
+                    Jira Synced: ${esc((typeof window !== 'undefined' && window.JIRA && window.JIRA.projectKey) ? window.JIRA.projectKey : 'NOV')}
                 </span>
             </div>
         `;

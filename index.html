@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -16616,33 +16616,36 @@
             ];
 
             const DEFAULT_JIRA_PROJECT_MAPPINGS = [
-                { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true }
+                { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true },
+                { id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: '2026', isActive: false, forReportingOnly: true }
             ];
 
             let jiraProjectMappings = (function () {
                 const novMapping = { id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true };
+                const octMapping = { id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: '2026', isActive: false, forReportingOnly: true };
+                const defaultMappings = [novMapping, octMapping];
                 try {
                     const cached = localStorage.getItem('worksync_jira_project_mappings');
                     if (cached) {
                         const parsed = JSON.parse(cached);
                         if (Array.isArray(parsed) && parsed.length > 0) {
-                            // Enforce NOV only: filter out any mappings that are not NOV
-                            const novOnly = parsed.filter(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
-                            if (novOnly.length > 0) {
-                                novOnly[0].isActive = true;
-                                localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(novOnly));
-                                localStorage.setItem('worksync_jira_active_project_key', 'NOV');
-                                return novOnly;
-                            }
+                            // Keep NOV (active) + OCT (reporting-only), remove any other stale keys
+                            const novEntry = parsed.find(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
+                            const octEntry = parsed.find(m => String(m.projectKey || '').toUpperCase().trim() === 'OCT');
+                            const merged = [];
+                            if (novEntry) { novEntry.isActive = true; merged.push(novEntry); } else { merged.push(novMapping); }
+                            if (octEntry) { octEntry.isActive = false; octEntry.forReportingOnly = true; merged.push(octEntry); } else { merged.push(octMapping); }
+                            localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(merged));
+                            localStorage.setItem('worksync_jira_active_project_key', 'NOV');
+                            return merged;
                         }
                     }
                 } catch (e) { }
-                const filtered = [novMapping];
                 try {
-                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(filtered));
+                    localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(defaultMappings));
                     localStorage.setItem('worksync_jira_active_project_key', 'NOV');
                 } catch (e) { }
-                return filtered;
+                return defaultMappings;
             })();
 
             const JIRA = {
@@ -16655,7 +16658,7 @@
                     const activeMap = (jiraProjectMappings || []).find(m => m.isActive);
                     return activeMap ? activeMap.projectKey : 'NOV';
                 })(),
-                projectKeys: ['NOV'],
+                projectKeys: ['NOV', 'OCT'],
                 apiUrl: '/api/jira',
                 gsUrl: 'https://script.google.com/macros/s/AKfycbwk85wuNOnEYt675Rf-6IMwPJFxmLHW2ONQYigtni6AxU-gIdiNY497wxJHDtmd_XD-/exec',
                 useLocalApi: false
@@ -19159,6 +19162,34 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const userPlans = dailyPlans[eKey(normalizedEmail)] || dailyPlans[eKey(userEmail)] || {};
                 let plannedTasks = [];
 
+                // Current-month boundary: only show tasks belonging to the viewed month
+                // e.g. if viewing a November date, curMonthKey = '2026-11'
+                const curMonthKey = (dateStr || todayIso()).slice(0, 7); // 'YYYY-MM'
+                const curMonthStart = new Date(curMonthKey + '-01T00:00:00').getTime();
+
+                // Helper: determine whether a Jira task id belongs to a past-month project key
+                function _isCurrentMonthJiraTask(t) {
+                    if (!t || !t.id) return true; // internal/manual – always allow
+                    if (t.manual || t.taskType === 'internal') return true;
+                    const tIdUp = String(t.id).toUpperCase().trim();
+                    const dash = tIdUp.indexOf('-');
+                    if (dash === -1) return true;
+                    const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
+                    // If we have project mappings, check whether this key maps to the current viewed month
+                    const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
+                    if (mappings.length > 0) {
+                        const entry = mappings.find(m => String(m.projectKey || '').toUpperCase() === pKey);
+                        if (entry) {
+                            // Allow only if the mapped month matches the currently viewed month
+                            const entryYM = String(entry.year || '').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
+                            return entryYM === curMonthKey;
+                        }
+                    }
+                    // Fallback: allow the active project key regardless
+                    const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
+                    return pKey === activeKey;
+                }
+
                 // Fast O(1) task lookup map
                 const allTasksList = window.allTasks || tasks || [];
                 const taskMap = new Map();
@@ -19194,9 +19225,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (!task) return;
 
+                    // Daily Plan: skip tasks from past-month Jira project keys
+                    if (!_isCurrentMonthJiraTask(task)) return;
+
                     const planDate = new Date(planData.date);
                     planDate.setHours(0, 0, 0, 0);
                     const planDateTime = planDate.getTime();
+
+                    // Block carry-overs that originated before the current month started
+                    if (planDateTime < curMonthStart) return;
 
                     // Use the actual task status from Jira, not local overrides
                     // Always display the current status synced from Jira
@@ -19250,8 +19287,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (completedOnDate) shouldAutoInclude = true;
                     }
 
-                    // Condition B: DAILY_PLAN_AUTO_INCLUDE_STATUSES
-                    if (!shouldAutoInclude && DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status)) {
+                    // Condition B: DAILY_PLAN_AUTO_INCLUDE_STATUSES (current-month Jira tasks only)
+                    if (!shouldAutoInclude && DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && _isCurrentMonthJiraTask(task)) {
                         if (!task.duedate) {
                             shouldAutoInclude = true;
                         } else {
@@ -29022,18 +29059,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         customClients = settings.custom_clients;
                     }
                     if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
-                        // Enforce NOV only
-                        const novOnly = settings.jira_project_mappings.filter(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
-                        if (novOnly.length === 0) {
-                            novOnly.push({ id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true });
-                        }
-                        if (!window._novSettingsSynced && settings.jira_project_mappings.length !== novOnly.length && typeof isAdmin === 'function' && isAdmin() && typeof set === 'function') {
-                            window._novSettingsSynced = true;
-                            set(ref(db, 'worksync/settings/jira_project_mappings'), novOnly).catch(() => {});
-                            set(ref(db, 'worksync/settings/jira_active_project_key'), 'NOV').catch(() => {});
-                        }
-                        applyJiraProjectMappings(novOnly, 'NOV');
-                        safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(novOnly));
+                        // Keep NOV (active) + OCT (reporting-only); strip any other stale keys
+                        const novEntry = settings.jira_project_mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
+                        const octEntry = settings.jira_project_mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === 'OCT');
+                        const merged = [];
+                        if (novEntry) { novEntry.isActive = true; merged.push(novEntry); }
+                        else { merged.push({ id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true }); }
+                        if (octEntry) { octEntry.isActive = false; octEntry.forReportingOnly = true; merged.push(octEntry); }
+                        else { merged.push({ id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: '2026', isActive: false, forReportingOnly: true }); }
+                        applyJiraProjectMappings(merged, 'NOV');
+                        safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(merged));
                         safeSetLocalStorage('worksync_jira_active_project_key', 'NOV');
                         if (document.getElementById('cfg-project-mappings-list')) {
                             renderJiraProjectMappingsSettings();
@@ -29704,6 +29739,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const tbody = document.getElementById('tasks-tbody');
                 const kanban = document.getElementById('task-kanban-container');
                 let filtered = tasks.filter(t => !isInternalTask(t));
+                // Tasks Hub only shows active project key tasks (e.g. NOV); OCT is reporting-only
+                filtered = filtered.filter(t => {
+                    if (t.manual) return true;
+                    const tIdUp = String(t.id || '').toUpperCase().trim();
+                    const dash = tIdUp.indexOf('-');
+                    if (dash === -1) return true;
+                    const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
+                    const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
+                    return pKey === activePKey || !pKey;
+                });
                 if (currentStatusFilter !== 'all') {
                     if (currentStatusFilter.length > 0) {
                         filtered = filtered.filter(t => currentStatusFilter.includes(t.status) || (activeTaskId && t.id === activeTaskId));
