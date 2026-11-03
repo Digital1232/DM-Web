@@ -2387,46 +2387,10 @@
             }
         }
 
-        // 3. Chart
-        const chartCanvas = getEl('mmr-chart-client-hours');
-        if (chartCanvas && typeof Chart !== 'undefined') {
-            const chartCtx = chartCanvas.getContext('2d');
-            if (chartCtx) {
-                if (MMR.charts.clientTiming) {
-                    try { MMR.charts.clientTiming.destroy(); } catch (e) { }
-                }
-                const topWithTime = clientsList.filter(c => c.totalSeconds > 0);
-                const listToChart = topWithTime.length > 0 ? topWithTime : clientsList.filter(c => c.tasks.length > 0);
-                const top5 = listToChart.slice(0, 5);
-                const otherVal = listToChart.slice(5).reduce((acc, c) => acc + (topWithTime.length > 0 ? c.totalSeconds : c.tasks.length), 0);
-                const labels = top5.map(c => c.name);
-                const dataVals = top5.map(c => topWithTime.length > 0 ? Number((c.totalSeconds / 3600).toFixed(1)) : c.tasks.length);
-                if (otherVal > 0) {
-                    labels.push('Other Clients');
-                    dataVals.push(topWithTime.length > 0 ? Number((otherVal / 3600).toFixed(1)) : otherVal);
-                }
-
-                MMR.charts.clientTiming = new Chart(chartCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels.length > 0 ? labels : ['No Data'],
-                        datasets: [{
-                            data: dataVals.length > 0 ? dataVals : [1],
-                            backgroundColor: ['#7c3aed', '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#cbd5e1'],
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
-                        },
-                        cutout: '65%'
-                    }
-                });
-            }
+        // Clean up any existing chart instance
+        if (MMR.charts.clientTiming) {
+            try { MMR.charts.clientTiming.destroy(); } catch (e) { }
+            MMR.charts.clientTiming = null;
         }
     }
 
