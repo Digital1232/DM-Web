@@ -341,19 +341,79 @@
         const isAll = (normalizedTarget === 'all' || normalizedTarget === 'all_employees');
 
         // 1. Employee Profile Lookup
-        const userObj = isAll
+        const catalogUser = (typeof window.USERS !== 'undefined' && Array.isArray(window.USERS))
+            ? window.USERS.find(u => u && u.email && u.email.toLowerCase() === normalizedTarget)
+            : null;
+
+        const rawUserObj = isAll
             ? { name: 'All Employees', role: 'Enterprise Team Overview', department: 'Organization Wide' }
             : ((typeof window.allUsersMap !== 'undefined' && window.allUsersMap.get(normalizedTarget)) ||
+                catalogUser ||
                 (typeof window.knownUserByEmail === 'function' && window.knownUserByEmail(normalizedTarget)) ||
                 (window.currentUser && window.currentUser.email.toLowerCase() === normalizedTarget ? window.currentUser : { email: normalizedTarget, name: normalizedTarget }));
 
+        const canonicalName = (catalogUser && catalogUser.name) || rawUserObj.name || rawUserObj.displayName || normalizedTarget;
+
         const employeeProfile = {
             email: normalizedTarget,
-            name: userObj.name || userObj.displayName || normalizedTarget,
-            designation: userObj.role || userObj.designation || 'Team Member',
-            department: userObj.department || (userObj.role && userObj.role.includes('Designer') ? 'Visual Design' : (userObj.role && userObj.role.includes('Video') ? 'Video Production' : 'Operations & Creative Delivery')),
-            avatar: isAll ? 'img/favicon.svg' : (userObj.profilePicture || (typeof window.getUserAvatarSrc === 'function' ? window.getUserAvatarSrc(userObj) : ''))
+            name: canonicalName,
+            designation: (catalogUser && catalogUser.role) || rawUserObj.role || rawUserObj.designation || 'Team Member',
+            department: rawUserObj.department || (((catalogUser && catalogUser.role) || rawUserObj.role || '').includes('Designer') ? 'Visual Design' : (((catalogUser && catalogUser.role) || rawUserObj.role || '').includes('Video') ? 'Video Production' : 'Operations & Creative Delivery')),
+            avatar: isAll ? 'img/favicon.svg' : (rawUserObj.profilePicture || (typeof window.getUserAvatarSrc === 'function' ? window.getUserAvatarSrc(rawUserObj) : ''))
         };
+
+        const KNOWN_NAME_ALIASES = {
+            'barathvilpower@gmail.com': ['barath magesh m', 'barath magesh', 'barath'],
+            'karthikavilpower@gmail.com': ['karthika k', 'karthika soundarrajan', 'karthika'],
+            'immanuelvilpower@gmail.com': ['immanuel raja s', 'immanuel raja', 'immanuel'],
+            'muthuvilpower@gmail.com': ['muthu kumar', 'muthukumar', 'muthu'],
+            'murugeshvilpower@gmail.com': ['murugesh', 'murugesh kumar', 'murugesh k'],
+            'ajithvilpower@gmail.com': ['ajith', 'ajith kumar'],
+            'alexvilpower@gmail.com': ['alex', 'alexander', 'alex vilpower'],
+            'nanjilvilpower@gmail.com': ['nanjil', 'nanjil nathan'],
+            'palanivilpower@gmail.com': ['palani', 'palani bharathi'],
+            'digitalmarketing@vilpower.com': ['admin', 'digital marketing', 'vilpower admin']
+        };
+
+        const targetAliases = new Set([
+            normalizedTarget,
+            canonicalName.toLowerCase(),
+            (rawUserObj.name || '').toLowerCase(),
+            ...(KNOWN_NAME_ALIASES[normalizedTarget] || [])
+        ].filter(Boolean));
+
+        const targetFirstToken = canonicalName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/)[0];
+
+        function matchesTargetEmployee(entity) {
+            if (!entity) return false;
+            if (isAll) return true;
+
+            if (typeof window.OneDeskReportingEngine !== 'undefined' && typeof window.OneDeskReportingEngine.matchesUser === 'function') {
+                if (window.OneDeskReportingEngine.matchesUser(entity, normalizedTarget)) return true;
+            }
+            if (typeof window.assigneeMatches === 'function') {
+                try {
+                    if (window.assigneeMatches(entity, normalizedTarget)) return true;
+                } catch (e) { }
+            }
+
+            const em = (entity.assigneeEmail || entity.userId || entity.email || entity.userEmail || entity.authorEmail || '').toLowerCase().trim();
+            if (em && (em === normalizedTarget || targetAliases.has(em))) return true;
+
+            const nm = (entity.assignee || entity.assigneeName || entity.userName || entity.name || '').toLowerCase().trim();
+            if (nm) {
+                if (targetAliases.has(nm)) return true;
+                const cleanNm = nm.replace(/[^a-z0-9\s]/g, '').trim();
+                if (targetAliases.has(cleanNm)) return true;
+                const cleanTarget = canonicalName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+                if (cleanNm === cleanTarget || cleanNm.startsWith(cleanTarget) || cleanTarget.startsWith(cleanNm)) return true;
+                const first = cleanNm.split(/\s+/)[0];
+                if (targetFirstToken && targetFirstToken.length >= 3 && first && first.length >= 3) {
+                    if (targetFirstToken === first || targetFirstToken.startsWith(first) || first.startsWith(targetFirstToken)) return true;
+                }
+            }
+            return false;
+        }
 
         // 2. Tasks Segregation (Jira vs Internal)
         const allTasks = Array.isArray(window.tasks) ? window.tasks : ((typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : []);
@@ -364,17 +424,7 @@
             return t.manual === true || t.manual === 'true' || t.taskType === 'internal';
         });
 
-        const userTasks = isAll ? allTasks : allTasks.filter(t => {
-            if (typeof window.OneDeskReportingEngine !== 'undefined') {
-                return window.OneDeskReportingEngine.matchesUser(t, normalizedTarget);
-            }
-            if (typeof window.assigneeMatches === 'function') {
-                return window.assigneeMatches(t, normalizedTarget);
-            }
-            const ae = (t.assigneeEmail || t.userId || '').toLowerCase();
-            const an = (t.assignee || '').toLowerCase();
-            return ae === normalizedTarget || an === employeeProfile.name.toLowerCase();
-        });
+        const userTasks = isAll ? allTasks : allTasks.filter(matchesTargetEmployee);
 
         // Map Tasks with Time Logs & Sessions
         let allLogs = Array.isArray(window.allTimeLogs) && window.allTimeLogs.length > 0
@@ -389,14 +439,7 @@
                 if (cached) allLogs = JSON.parse(cached);
             } catch (e) { }
         }
-        const userLogs = isAll ? allLogs : allLogs.filter(l => {
-            if (typeof window.OneDeskReportingEngine !== 'undefined') {
-                return window.OneDeskReportingEngine.matchesUser(l, normalizedTarget);
-            }
-            const le = (l.userId || l.email || '').toLowerCase();
-            const ln = (l.userName || '').toLowerCase();
-            return le === normalizedTarget || ln === employeeProfile.name.toLowerCase();
-        });
+        const userLogs = isAll ? allLogs : allLogs.filter(matchesTargetEmployee);
 
         // Filter logs strictly within period
         const periodLogs = userLogs.filter(l => {
@@ -555,14 +598,17 @@
 
             // Jira Tasks:
             // 1. If the employee worked on this task during this period (has logs in period):
-            // Include it, unless it explicitly belongs to another calendar month's space key (e.g. NOV task when viewing OCT)
+            // It MUST be included in the report! Real work performed during this month must be represented.
             if (hasLogsInPeriod) {
-                if (pKey === 'NOV' && repMonth !== 11) return false;
-                if (pKey === 'OCT' && repMonth !== 10) return false;
                 return true;
             }
 
-            // 2. Otherwise, if space-key mapping exists for this month, require the space key
+            // 2. If the task was completed or due within this reporting period:
+            if ((compTs >= period.fromTs && compTs <= period.toTs) || (dTs >= period.fromTs && dTs <= period.toTs)) {
+                return true;
+            }
+
+            // 3. Otherwise, if space-key mapping exists for this month, require the space key
             if (hasMappingForMonth) {
                 return isSpaceKeyMonth;
             }
@@ -635,11 +681,8 @@
         // 3. Attendance & Breaks Evaluation
         const rawAttendance = Array.isArray(window.attendanceEvents) ? window.attendanceEvents : ((typeof attendanceEvents !== 'undefined' && Array.isArray(attendanceEvents)) ? attendanceEvents : []);
         const userAttendance = rawAttendance.filter(e => {
-            if (typeof window.OneDeskReportingEngine !== 'undefined') {
-                return window.OneDeskReportingEngine.matchesUser(e, normalizedTarget);
-            }
-            const ue = (e.userId || e.email || '').toLowerCase();
-            return ue === normalizedTarget;
+            if (isAll) return true;
+            return matchesTargetEmployee(e);
         });
 
         const periodAttendance = userAttendance.filter(e => {
@@ -789,11 +832,10 @@
             if (ts && (ts < period.fromTs || ts > period.toTs)) return false;
 
             if (typeof window.isQcReportForUser === 'function') {
-                return window.isQcReportForUser(r, normalizedTarget, userTaskIds);
+                if (window.isQcReportForUser(r, normalizedTarget, userTaskIds)) return true;
             }
             const rId = String(r.taskId || '').toLowerCase();
-            return (r.assigneeEmail || '').toLowerCase() === normalizedTarget ||
-                (rId && userTaskIds.has(rId));
+            return matchesTargetEmployee(r) || (rId && userTaskIds.has(rId));
         });
 
         const qcFailed = userQcSubmissions.filter(isQcReportFailed);
@@ -1883,6 +1925,92 @@
     // 8. EXPORTING CAPABILITIES (PDF & EXCEL)
     // ─────────────────────────────────────────────────────────────
 
+    function computeClientTimingSummary(data) {
+        if (!data) return { clients: [], totalSeconds: 0 };
+        const taskMap = new Map();
+        (data.allTasks || []).forEach(t => {
+            if (t && t.id) taskMap.set(String(t.id).trim().toLowerCase(), t);
+        });
+        const globalTasks = (typeof window !== 'undefined' && Array.isArray(window.tasks)) ? window.tasks : [];
+        globalTasks.forEach(t => {
+            if (t && t.id) {
+                const key = String(t.id).trim().toLowerCase();
+                if (!taskMap.has(key)) taskMap.set(key, t);
+            }
+        });
+
+        const clientMap = new Map();
+        let totalClientSeconds = 0;
+
+        function getClientEntry(cName) {
+            const key = cName.toLowerCase();
+            if (!clientMap.has(key)) {
+                clientMap.set(key, {
+                    name: cName,
+                    tasks: [],
+                    taskIds: new Set(),
+                    totalSeconds: 0,
+                    sessionsCount: 0,
+                    completedCount: 0
+                });
+            }
+            return clientMap.get(key);
+        }
+
+        if (Array.isArray(data.periodLogs) && data.periodLogs.length > 0) {
+            data.periodLogs.forEach(log => {
+                const dur = getLogDurationSec(log);
+                if (dur <= 0) return;
+                const tId = String(log.taskId || '').trim();
+                const task = tId ? taskMap.get(tId.toLowerCase()) : null;
+                const cName = resolveClientName(log, task);
+                const cObj = getClientEntry(cName);
+
+                cObj.totalSeconds += dur;
+                cObj.sessionsCount += 1;
+                totalClientSeconds += dur;
+
+                if (task && task.id && !cObj.taskIds.has(task.id)) {
+                    cObj.taskIds.add(task.id);
+                    cObj.tasks.push(task);
+                    if (task.isCompleted) cObj.completedCount++;
+                }
+            });
+        }
+
+        // 2. Incorporate tasks from allTasks (so clients with assigned tasks also appear and counts match)
+        (data.allTasks || []).forEach(task => {
+            if (!task) return;
+            const cName = resolveClientName(null, task);
+            const cObj = getClientEntry(cName);
+
+            if (task.id && !cObj.taskIds.has(task.id)) {
+                cObj.taskIds.add(task.id);
+                cObj.tasks.push(task);
+                if (task.isCompleted) cObj.completedCount++;
+            }
+
+            // Fallback for periods without raw log streams
+            if ((!data.periodLogs || data.periodLogs.length === 0) && (task.workingTimeSec || 0) > 0) {
+                cObj.totalSeconds += task.workingTimeSec;
+                cObj.sessionsCount += (task.workSessionsCount || 1);
+                totalClientSeconds += task.workingTimeSec;
+            }
+        });
+
+        const list = Array.from(clientMap.values()).map(c => {
+            const pct = totalClientSeconds > 0 ? Math.round((c.totalSeconds / totalClientSeconds) * 100) : 0;
+            return {
+                ...c,
+                pct,
+                formattedTime: formatDurationHM(c.totalSeconds),
+                tasksCount: c.tasks.length
+            };
+        });
+        list.sort((a, b) => b.totalSeconds - a.totalSeconds);
+        return { clients: list, totalSeconds: totalClientSeconds };
+    }
+
     function exportReportAsPdf() {
         const data = MMR.cachedReportData;
         if (!data) return;
@@ -1894,99 +2022,778 @@
         }
 
         const k = data.kpis;
-        printWin.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Monthly Performance Report - ${esc(data.employee.name)} - ${esc(data.period.periodLabel)}</title>
-                <script src="https://cdn.tailwindcss.com"></script>
-                <style>
-                    @media print {
-                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                        .no-print { display: none !important; }
-                    }
-                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-                </style>
-            </head>
-            <body class="p-8 bg-white text-slate-900">
-                <div class="max-w-4xl mx-auto space-y-6">
-                    <div class="flex justify-between items-center border-b pb-6">
-                        <div>
-                            <h1 class="text-2xl font-black text-purple-700">OneDesk Monthly Report</h1>
-                            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Employee Self-Service Monthly Performance Statement</p>
-                        </div>
-                        <div class="text-right">
-                            <h2 class="text-base font-extrabold text-slate-800">${esc(data.employee.name)}</h2>
-                            <p class="text-xs text-slate-500">${esc(data.employee.designation)} • ${esc(data.employee.department)}</p>
-                            <p class="text-xs font-bold text-purple-600 mt-1">${esc(data.period.periodLabel)}</p>
-                        </div>
-                    </div>
+        const clientSummary = computeClientTimingSummary(data);
+        const insights = generatePersonalAiInsights(data);
+        const taskTimingList = [...data.allTasks].sort((a, b) => (b.workingTimeSec || 0) - (a.workingTimeSec || 0));
+        const totalTaskSec = k.totalWorkedSeconds || 1;
+        const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
-                    <!-- KPI Grid -->
-                    <div class="grid grid-cols-4 gap-4 py-4">
-                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">Assigned Tasks</span>
-                            <p class="text-xl font-black text-slate-900">${k.totalAssigned}</p>
-                            <span class="text-[9px] text-slate-500">${k.jiraAssigned} Jira | ${k.internalAssigned} Internal</span>
-                        </div>
-                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">Completed</span>
-                            <p class="text-xl font-black text-emerald-600">${k.completed}</p>
-                            <span class="text-[9px] text-slate-500">${k.deliveryScore}% On-time</span>
-                        </div>
-                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">Working Hours</span>
-                            <p class="text-xl font-black text-purple-600">${k.totalWorkingHours}h</p>
-                            <span class="text-[9px] text-slate-500">${k.utilizationPct}% Utilization</span>
-                        </div>
-                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">QC Quality Score</span>
-                            <p class="text-xl font-black text-indigo-600">${k.qcScore !== null ? `${k.qcScore}%` : 'N/A'}</p>
-                            <span class="text-[9px] text-slate-500">${data.qc.totalSubmissions} submissions</span>
-                        </div>
-                    </div>
+        // Generate initials for avatar fallback
+        const nameParts = (data.employee.name || 'User').trim().split(/\s+/);
+        const initials = (nameParts[0][0] + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase();
 
-                    <!-- Tasks Table Summary -->
-                    <div>
-                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider mb-3">Key Completed Deliverables</h3>
-                        <table class="w-full text-left text-xs border border-slate-200 rounded-lg">
-                            <thead class="bg-slate-100 text-slate-700 font-bold border-b">
-                                <tr>
-                                    <th class="p-2.5">Task ID</th>
-                                    <th class="p-2.5">Title</th>
-                                    <th class="p-2.5">Source</th>
-                                    <th class="p-2.5">Status</th>
-                                    <th class="p-2.5">Logged Time</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.allTasks.slice(0, 15).map(t => `
-                                    <tr class="border-b">
-                                        <td class="p-2.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
-                                        <td class="p-2.5 font-medium">${esc(t.desc || t.title)}</td>
-                                        <td class="p-2.5">${t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira'}</td>
-                                        <td class="p-2.5">${esc(t.status)}</td>
-                                        <td class="p-2.5 font-mono">${formatDurationHMS(t.workingTimeSec)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+        function renderHeader(pageNum, sectionName) {
+            return `
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block"></span>
+                        <span class="text-[11px] font-black tracking-wider uppercase text-slate-800">VilPower OneDesk</span>
+                        <span class="text-[11px] text-slate-300 font-bold">•</span>
+                        <span class="text-[11px] font-bold text-purple-700 uppercase tracking-wide">Monthly Performance Statement</span>
+                        <span class="text-[11px] text-slate-300 font-bold">•</span>
+                        <span class="text-[11px] font-medium text-slate-500">${esc(sectionName)}</span>
                     </div>
-
-                    <div class="text-center text-[10px] text-slate-400 pt-8 border-t">
-                        Generated by OneDesk Reporting Engine • Vilpower Digital Operations
+                    <div class="text-[10px] font-bold text-slate-500">
+                        ${esc(data.employee.name)} • ${esc(data.period.periodLabel)}
                     </div>
                 </div>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
+            `;
+        }
+
+        function renderFooter(pageNum) {
+            return `
+                <div class="flex items-center justify-between border-t border-slate-200 pt-2.5 mt-4 text-[9px] text-slate-400 font-medium">
+                    <span>Generated on ${nowStr} • OneDesk Reporting Engine</span>
+                    <span class="tracking-wide uppercase font-semibold text-slate-500">VilPower Digital Operations • Confidential</span>
+                    <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">Page ${pageNum} of 7</span>
+                </div>
+            `;
+        }
+
+        printWin.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Monthly Performance Report - ${esc(data.employee.name)} - ${esc(data.period.periodLabel)}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 10mm 12mm 12mm 12mm;
+        }
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .page-break {
+                page-break-after: always !important;
+                break-after: page !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            thead {
+                display: table-header-group;
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            background: #ffffff;
+            -webkit-font-smoothing: antialiased;
+        }
+        .print-page {
+            min-height: 268mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            padding: 4px 0;
+        }
+        .print-page:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-900 p-2">
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 1: EXECUTIVE OVERVIEW & SCORECARD (SUBTAB 1)            -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(1, 'Executive Overview & Scorecard')}
+
+            <!-- Profile Banner Card -->
+            <div class="p-4 bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-slate-50 border border-purple-100 rounded-xl mb-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3.5">
+                        ${data.employee.avatar ? `
+                            <img src="${esc(data.employee.avatar)}" alt="${esc(data.employee.name)}" class="w-13 h-13 rounded-xl object-cover ring-2 ring-purple-300">
+                        ` : `
+                            <div class="w-13 h-13 rounded-xl bg-purple-600 text-white font-black text-lg flex items-center justify-center ring-2 ring-purple-300">
+                                ${initials}
+                            </div>
+                        `}
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-lg font-black text-slate-900">${esc(data.employee.name)}</h1>
+                                <span class="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-purple-100 text-purple-700 tracking-wider">${esc(data.employee.department)}</span>
+                            </div>
+                            <p class="text-xs text-slate-600 font-semibold mt-0.5">${esc(data.employee.designation)}</p>
+                            <p class="text-[11px] text-slate-400 font-mono">${esc(data.employee.email)}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="inline-block px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-emerald-100 text-emerald-800 tracking-wide uppercase">${esc(data.period.statusText)}</span>
+                        <p class="text-xs font-black text-purple-700 mt-1">${esc(data.period.periodLabel)}</p>
+                        <p class="text-[10px] text-slate-500 font-medium">Reporting Range: ${Engine.formatLocalDate(data.period.fromDate)} to ${Engine.formatLocalDate(data.period.toDate)}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 12 Executive KPI Cards Grid (4x3) -->
+            <div class="mb-4">
+                <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                    <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                    Monthly Executive Performance Scorecard (12 Key Indicators)
+                </h2>
+                <div class="grid grid-cols-4 gap-2.5">
+                    <!-- KPI 1 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total Assigned Tasks</span>
+                        <div class="text-xl font-black text-slate-900 mt-0.5">${k.totalAssigned}</div>
+                        <span class="text-[9px] font-medium text-slate-500">${k.jiraAssigned} Jira + ${k.internalAssigned} Internal</span>
+                    </div>
+                    <!-- KPI 2 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block">Jira Deliverables</span>
+                        <div class="text-xl font-black text-indigo-700 mt-0.5">${k.jiraAssigned}</div>
+                        <span class="text-[9px] font-medium text-slate-500">Client deliverables</span>
+                    </div>
+                    <!-- KPI 3 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-fuchsia-400 uppercase tracking-wider block">Internal Tasks</span>
+                        <div class="text-xl font-black text-fuchsia-700 mt-0.5">${k.internalAssigned}</div>
+                        <span class="text-[9px] font-medium text-slate-500">Learning, admin, meetings</span>
+                    </div>
+                    <!-- KPI 4 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">Completed Tasks</span>
+                        <div class="text-xl font-black text-emerald-600 mt-0.5">${k.completed}</div>
+                        <span class="text-[9px] font-medium text-emerald-700">${k.deliveryScore}% on-time completion</span>
+                    </div>
+                    <!-- KPI 5 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-amber-500 uppercase tracking-wider block">Pending Tasks</span>
+                        <div class="text-xl font-black text-amber-600 mt-0.5">${k.pending}</div>
+                        <span class="text-[9px] font-medium text-slate-500">${k.inProgress} currently in-progress</span>
+                    </div>
+                    <!-- KPI 6 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-blue-500 uppercase tracking-wider block">In-Progress Tasks</span>
+                        <div class="text-xl font-black text-blue-600 mt-0.5">${k.inProgress}</div>
+                        <span class="text-[9px] font-medium text-slate-500">Active work in pipeline</span>
+                    </div>
+                    <!-- KPI 7 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Rework Deliverables</span>
+                        <div class="text-xl font-black text-rose-600 mt-0.5">${k.rework}</div>
+                        <span class="text-[9px] font-medium text-slate-500">${data.rework.totalOccurrences} total rework loops</span>
+                    </div>
+                    <!-- KPI 8 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-purple-500 uppercase tracking-wider block">Total Working Hours</span>
+                        <div class="text-xl font-black text-purple-700 mt-0.5">${k.totalWorkingHours}h</div>
+                        <span class="text-[9px] font-medium text-purple-700">${k.utilizationPct}% work utilization</span>
+                    </div>
+                    <!-- KPI 9 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-teal-500 uppercase tracking-wider block">Attendance Days</span>
+                        <div class="text-xl font-black text-teal-700 mt-0.5">${k.attendanceDays} / ${k.totalWorkingDays}</div>
+                        <span class="text-[9px] font-medium text-slate-500">${k.absentDays} absent, ${k.lateCheckIns} late</span>
+                    </div>
+                    <!-- KPI 10 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block">Total Break Time</span>
+                        <div class="text-xl font-black text-orange-600 mt-0.5">${k.totalBreakFormatted}</div>
+                        <span class="text-[9px] font-medium text-slate-500">Avg ${k.avgDailyBreakMins}m / present day</span>
+                    </div>
+                    <!-- KPI 11 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-violet-500 uppercase tracking-wider block">QC Quality Score</span>
+                        <div class="text-xl font-black text-violet-700 mt-0.5">${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</div>
+                        <span class="text-[9px] font-medium text-slate-500">Avg rating ${data.qc.avgRating || '5.0'}/5.0</span>
+                    </div>
+                    <!-- KPI 12 -->
+                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                        <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">On-Time Delivery</span>
+                        <div class="text-xl font-black text-emerald-700 mt-0.5">${k.deliveryScore}%</div>
+                        <span class="text-[9px] font-medium text-slate-500">Schedule adherence rate</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Executive Performance Highlights Summary -->
+            <div>
+                <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
+                    Monthly Executive Performance Highlights
+                </h2>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="text-[11px] font-black text-slate-800">Operational Velocity</span>
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-relaxed">
+                            Completed <strong>${k.completed}</strong> assignments out of <strong>${k.totalAssigned}</strong> assigned deliverables with an active working investment of <strong>${k.totalWorkingHours} hours</strong>.
+                        </p>
+                    </div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                            <span class="text-[11px] font-black text-slate-800">Quality Benchmark</span>
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-relaxed">
+                            Maintained a <strong>${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</strong> checklist review score across <strong>${data.qc.totalSubmissions}</strong> formal inspections, upholding deliverable standards.
+                        </p>
+                    </div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            <span class="text-[11px] font-black text-slate-800">Punctuality & Presence</span>
+                        </div>
+                        <p class="text-[10px] text-slate-600 leading-relaxed">
+                            Reported present for <strong>${k.attendanceDays}</strong> days with <strong>${k.lateCheckIns}</strong> late log-ins and an average daily working focus of <strong>${k.avgDailyWorkHours} hours</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ${renderFooter(1)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 2: JIRA CLIENT DELIVERABLES (SUBTAB 2)                  -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(2, 'Jira Tasks')}
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Jira Client Deliverables</h2>
+                    <p class="text-[10px] text-slate-500">Client-facing production assignments, external deliverables, deadlines, and working times</p>
+                </div>
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    ${data.jiraTasks.length} Deliverables
+                </span>
+            </div>
+
+            <table class="w-full text-left text-[10px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-2 w-20">Issue ID</th>
+                        <th class="p-2">Task Title & Client</th>
+                        <th class="p-2 w-16 text-center">Priority</th>
+                        <th class="p-2 w-20 text-center">Due Date</th>
+                        <th class="p-2 w-24 text-center">Status</th>
+                        <th class="p-2 w-20 text-right">Logged Time</th>
+                        <th class="p-2 w-14 text-center">Sessions</th>
+                        <th class="p-2 w-14 text-center">Rework</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${data.jiraTasks.length === 0 ? `
+                        <tr><td colspan="8" class="p-6 text-center text-slate-400 font-medium">No Jira client tasks recorded for this period.</td></tr>
+                    ` : data.jiraTasks.map((t, idx) => `
+                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                            <td class="p-2 font-mono font-bold text-indigo-700">${esc(t.id)}</td>
+                            <td class="p-2">
+                                <div class="font-bold text-slate-900 leading-tight">${esc(t.desc || t.title)}</div>
+                                <div class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">${esc(t.client || 'Client Deliverable')}</div>
+                            </td>
+                            <td class="p-2 text-center">
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${String(t.priority).toLowerCase() === 'high' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">
+                                    ${esc(t.priority || 'Medium')}
+                                </span>
+                            </td>
+                            <td class="p-2 text-center text-slate-600 font-mono text-[9px]">${formatDateStr(t.dueDate || t.duedate)}</td>
+                            <td class="p-2 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${t.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}">
+                                    ${esc(t.status || 'Active')}
+                                </span>
+                            </td>
+                            <td class="p-2 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                            <td class="p-2 text-center text-slate-600 font-semibold">${t.workSessionsCount || 0}</td>
+                            <td class="p-2 text-center font-bold ${t.reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">${t.reworkCount || 0}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${renderFooter(2)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3: INTERNAL & OPERATIONAL TASKS (SUBTAB 3)              -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(3, 'Internal Tasks')}
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Internal & Learning Tasks</h2>
+                    <p class="text-[10px] text-slate-500">Organizational workflows, design system upgrades, learning tasks, and department meetings</p>
+                </div>
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100">
+                    ${data.internalTasks.length} Internal Tasks
+                </span>
+            </div>
+
+            <table class="w-full text-left text-[10px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-2 w-28">Task ID</th>
+                        <th class="p-2">Task Title & Category</th>
+                        <th class="p-2 w-20 text-center">Priority</th>
+                        <th class="p-2 w-28 text-center">Status</th>
+                        <th class="p-2 w-24 text-right">Working Time</th>
+                        <th class="p-2 w-16 text-center">Sessions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${data.internalTasks.length === 0 ? `
+                        <tr><td colspan="6" class="p-6 text-center text-slate-400 font-medium">No internal tasks recorded for this period.</td></tr>
+                    ` : data.internalTasks.map((t, idx) => `
+                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                            <td class="p-2 font-mono font-bold text-fuchsia-700">${esc(t.id)}</td>
+                            <td class="p-2">
+                                <div class="font-bold text-slate-900 leading-tight">${esc(t.desc || t.title)}</div>
+                                <div class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">${esc(t.client || 'Internal Operations')}</div>
+                            </td>
+                            <td class="p-2 text-center">
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${String(t.priority).toLowerCase() === 'high' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">
+                                    ${esc(t.priority || 'Medium')}
+                                </span>
+                            </td>
+                            <td class="p-2 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${t.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}">
+                                    ${esc(t.status || 'Active')}
+                                </span>
+                            </td>
+                            <td class="p-2 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                            <td class="p-2 text-center text-slate-600 font-semibold">${t.workSessionsCount || 0}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${renderFooter(3)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 4: TASK & CLIENT TIMING BREAKDOWN (SUBTABS 4 & 5)       -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(4, 'Timing Breakdown')}
+
+            <!-- Subtab 4: Task-Wise Timing -->
+            <div class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                            Task-Wise Timing Distribution (Top Tasks Ranked by Working Time)
+                        </h2>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-medium">Total: ${k.totalWorkingHours} Hours</span>
+                </div>
+                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-2">Task Title & ID</th>
+                            <th class="p-2 w-16 text-center">Type</th>
+                            <th class="p-2 w-14 text-center">Sessions</th>
+                            <th class="p-2 w-20 text-right">Logged Time</th>
+                            <th class="p-2 w-16 text-right">Time Share</th>
+                            <th class="p-2 w-20 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${taskTimingList.slice(0, 10).map((t, idx) => {
+                            const isInternal = t.manual || t.taskType === 'internal';
+                            const sharePct = Math.round(((t.workingTimeSec || 0) / totalTaskSec) * 100);
+                            return `
+                                <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                    <td class="p-1.5">
+                                        <div class="font-bold text-slate-900 truncate max-w-xs">${esc(t.desc || t.title)}</div>
+                                        <div class="font-mono text-[8px] text-purple-700">${esc(t.id)}</div>
+                                    </td>
+                                    <td class="p-1.5 text-center">
+                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold ${isInternal ? 'bg-fuchsia-50 text-fuchsia-700' : 'bg-indigo-50 text-indigo-700'}">
+                                            ${isInternal ? 'Internal' : 'Jira'}
+                                        </span>
+                                    </td>
+                                    <td class="p-1.5 text-center font-semibold text-slate-600">${t.workSessionsCount || 0}</td>
+                                    <td class="p-1.5 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                                    <td class="p-1.5 text-right font-bold text-purple-700">${sharePct}%</td>
+                                    <td class="p-1.5 text-center">
+                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Subtab 5: Client-Wise Timing -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
+                            Client-Wise Timing Breakdown (Account Allocation)
+                        </h2>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-medium">${clientSummary.clients.length} Client Accounts</span>
+                </div>
+                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-2">Client / Account Name</th>
+                            <th class="p-2 w-24 text-center">Deliverables</th>
+                            <th class="p-2 w-20 text-center">Sessions</th>
+                            <th class="p-2 w-24 text-right">Logged Time</th>
+                            <th class="p-2 w-28 text-right">Allocation Share</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${clientSummary.clients.length === 0 ? `
+                            <tr><td colspan="5" class="p-4 text-center text-slate-400 font-medium">No client timing data recorded.</td></tr>
+                        ` : clientSummary.clients.map((c, idx) => `
+                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                <td class="p-1.5 font-bold text-slate-900">${esc(c.name)}</td>
+                                <td class="p-1.5 text-center font-semibold text-slate-600">${c.tasksCount} tasks</td>
+                                <td class="p-1.5 text-center text-slate-500">${c.sessionsCount} sessions</td>
+                                <td class="p-1.5 text-right font-mono font-bold text-slate-900">${c.formattedTime}</td>
+                                <td class="p-1.5 text-right">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">${c.pct}%</span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        ${renderFooter(4)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5: QC QUALITY & REWORK / REVISIONS (SUBTABS 6 & 7)       -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(5, 'QC Quality & Rework')}
+
+            <!-- Subtab 6: QC Quality -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <span class="w-1.5 h-3.5 bg-violet-600 rounded-sm inline-block"></span>
+                        Quality Control (QC) Performance Scorecard
+                    </h2>
+                </div>
+
+                <!-- Mini Scorecard -->
+                <div class="grid grid-cols-4 gap-2 mb-3">
+                    <div class="p-2.5 bg-violet-50/50 border border-violet-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-violet-500 uppercase block">Average QC Score</span>
+                        <span class="text-lg font-black text-violet-700">${data.qc.avgScore !== null ? `${data.qc.avgScore}%` : '100%'}</span>
+                    </div>
+                    <div class="p-2.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-emerald-500 uppercase block">First-Pass Rate</span>
+                        <span class="text-lg font-black text-emerald-700">${data.qc.passPct !== null ? `${data.qc.passPct}%` : '100%'}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-slate-500 uppercase block">Submissions</span>
+                        <span class="text-lg font-black text-slate-800">${data.qc.totalSubmissions}</span>
+                    </div>
+                    <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-indigo-500 uppercase block">Reviewer Rating</span>
+                        <span class="text-lg font-black text-indigo-700">${data.qc.avgRating || '5.0'} / 5.0</span>
+                    </div>
+                </div>
+
+                <!-- QC Submissions / Failures Log -->
+                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-1.5 w-18">Task ID</th>
+                            <th class="p-1.5">Deliverable Title</th>
+                            <th class="p-1.5 w-20">Date</th>
+                            <th class="p-1.5 w-24">Reviewer</th>
+                            <th class="p-1.5 w-24">Mistake Theme</th>
+                            <th class="p-1.5">Required Corrections</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${data.qc.failedDetails.length === 0 ? `
+                            <tr><td colspan="6" class="p-3 text-center text-slate-400 font-medium">Zero recorded QC rejections in this period. Outstanding quality standards maintained!</td></tr>
+                        ` : data.qc.failedDetails.slice(0, 5).map((f, idx) => `
+                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                <td class="p-1.5 font-mono font-bold text-purple-700">${esc(f.taskId)}</td>
+                                <td class="p-1.5 font-bold text-slate-900">${esc(f.taskName)}</td>
+                                <td class="p-1.5 text-slate-500 font-mono">${f.submissionDate}</td>
+                                <td class="p-1.5 text-slate-700 font-semibold">${esc(f.reviewer)}</td>
+                                <td class="p-1.5">
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-100">${esc(f.failureCategory)}</span>
+                                </td>
+                                <td class="p-1.5 text-slate-600">${esc(f.requiredCorrections)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Subtab 7: Rework & Revisions -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <span class="w-1.5 h-3.5 bg-rose-600 rounded-sm inline-block"></span>
+                        Rework & Revision Analysis
+                    </h2>
+                </div>
+
+                <div class="grid grid-cols-4 gap-2 mb-3">
+                    <div class="p-2.5 bg-rose-50/50 border border-rose-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-rose-500 uppercase block">Rework Tasks</span>
+                        <span class="text-lg font-black text-rose-700">${data.rework.totalTasks}</span>
+                    </div>
+                    <div class="p-2.5 bg-amber-50/50 border border-amber-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-amber-500 uppercase block">Total Rework Loops</span>
+                        <span class="text-lg font-black text-amber-700">${data.rework.totalOccurrences}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-slate-500 uppercase block">QC Internal Flags</span>
+                        <span class="text-lg font-black text-slate-800">${data.rework.internalQcRework}</span>
+                    </div>
+                    <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-indigo-500 uppercase block">Client Revisions</span>
+                        <span class="text-lg font-black text-indigo-700">${data.rework.clientRevisions}</span>
+                    </div>
+                </div>
+
+                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-1.5 w-20">Task ID</th>
+                            <th class="p-1.5">Deliverable Title</th>
+                            <th class="p-1.5 w-20 text-center">Rework Loops</th>
+                            <th class="p-1.5 w-24 text-center">Current Status</th>
+                            <th class="p-1.5 w-24 text-right">Logged Effort</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${data.rework.reworkTaskList.length === 0 ? `
+                            <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">Zero rework loops recorded during this period.</td></tr>
+                        ` : data.rework.reworkTaskList.slice(0, 5).map((t, idx) => `
+                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                <td class="p-1.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
+                                <td class="p-1.5 font-bold text-slate-900">${esc(t.desc || t.title)}</td>
+                                <td class="p-1.5 text-center font-bold text-rose-600">${t.reworkCount || 1} loops</td>
+                                <td class="p-1.5 text-center">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
+                                </td>
+                                <td class="p-1.5 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        ${renderFooter(5)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 6: ATTENDANCE, SHIFTS & BREAKS (SUBTABS 8 & 9)           -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        <div>
+            ${renderHeader(6, 'Attendance & Breaks')}
+            <div class="mb-3">
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                    <span class="w-1.5 h-3.5 bg-teal-600 rounded-sm inline-block"></span>
+                    Attendance, Working Hours & Shift Distribution
+                </h2>
+
+                <!-- Metrics Grid -->
+                <div class="grid grid-cols-6 gap-2 mb-3">
+                    <div class="p-2 bg-teal-50 border border-teal-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-teal-600 uppercase block">Present Days</span>
+                        <span class="text-base font-black text-teal-800">${k.attendanceDays} / ${k.totalWorkingDays}</span>
+                    </div>
+                    <div class="p-2 bg-rose-50 border border-rose-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-rose-600 uppercase block">Absent Days</span>
+                        <span class="text-base font-black text-rose-800">${k.absentDays}</span>
+                    </div>
+                    <div class="p-2 bg-amber-50 border border-amber-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-amber-600 uppercase block">Late Log-ins</span>
+                        <span class="text-base font-black text-amber-800">${k.lateCheckIns}</span>
+                    </div>
+                    <div class="p-2 bg-purple-50 border border-purple-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-purple-600 uppercase block">Total Break</span>
+                        <span class="text-base font-black text-purple-800">${k.totalBreakFormatted}</span>
+                    </div>
+                    <div class="p-2 bg-blue-50 border border-blue-100 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-blue-600 uppercase block">Avg Daily Break</span>
+                        <span class="text-base font-black text-blue-800">${k.avgDailyBreakMins}m</span>
+                    </div>
+                    <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                        <span class="text-[8px] font-bold text-slate-500 uppercase block">Longest Break</span>
+                        <span class="text-base font-black text-slate-800">${Math.round(k.longestBreakSec / 60)}m</span>
+                    </div>
+                </div>
+
+                <!-- Attendance Day-by-Day Table -->
+                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-1.5 w-24">Date</th>
+                            <th class="p-1.5 w-20">Day</th>
+                            <th class="p-1.5 w-24 text-center">First In</th>
+                            <th class="p-1.5 w-24 text-center">Last Out</th>
+                            <th class="p-1.5 w-24 text-right">Working Time</th>
+                            <th class="p-1.5 w-24 text-right">Break Duration</th>
+                            <th class="p-1.5 w-24 text-center">Day Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${Object.values(data.dailyAttendanceMap).length === 0 ? `
+                            <tr><td colspan="7" class="p-4 text-center text-slate-400 font-medium">No attendance records found for this period.</td></tr>
+                        ` : Object.values(data.dailyAttendanceMap).slice(0, 18).map((day, idx) => {
+                            const dObj = new Date(day.date + 'T00:00:00');
+                            const dayName = isNaN(dObj.getTime()) ? '' : dObj.toLocaleDateString('en-US', { weekday: 'short' });
+                            const inTime = day.checkIns.length > 0 ? formatTimeStr(day.checkIns[0]) : '—';
+                            const outTime = day.checkOuts.length > 0 ? formatTimeStr(day.checkOuts[day.checkOuts.length - 1]) : '—';
+                            return `
+                                <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                    <td class="p-1 font-mono font-bold text-slate-800">${day.date}</td>
+                                    <td class="p-1 font-semibold text-slate-500">${dayName}</td>
+                                    <td class="p-1 text-center font-mono text-slate-700">${inTime}</td>
+                                    <td class="p-1 text-center font-mono text-slate-700">${outTime}</td>
+                                    <td class="p-1 text-right font-mono font-bold text-purple-700">${formatDurationHM(day.totalWorkSec)}</td>
+                                    <td class="p-1 text-right font-mono text-slate-600">${formatDurationHM(day.totalBreakSec)}</td>
+                                    <td class="p-1 text-center">
+                                        <span class="px-2 py-0.5 rounded text-[8px] font-bold ${day.isLate ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                                            ${day.isLate ? 'Late In' : 'Present'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        ${renderFooter(6)}
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 7: AI INSIGHTS, GOALS & APPRAISAL (SUBTABS 10 & 11)     -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page">
+        <div>
+            ${renderHeader(7, 'Insights & Assessment')}
+
+            <!-- Subtab 10: AI Performance Insights -->
+            <div class="mb-4">
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
+                    <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                    AI Personal Performance Insights (Data-Driven Evaluation)
+                </h2>
+                <div class="space-y-2">
+                    ${insights.map(item => `
+                        <div class="p-2.5 rounded-lg border ${item.type === 'win' ? 'bg-emerald-50/60 border-emerald-200' : (item.type === 'attention' ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200')}">
+                            <div class="flex items-center gap-1.5 mb-0.5">
+                                <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${item.type === 'win' ? 'bg-emerald-200 text-emerald-900' : (item.type === 'attention' ? 'bg-rose-200 text-rose-900' : 'bg-slate-200 text-slate-800')}">${esc(item.category)}</span>
+                                <h3 class="text-[11px] font-black text-slate-900">${esc(item.title)}</h3>
+                            </div>
+                            <p class="text-[10px] text-slate-600 leading-snug">${esc(item.message)}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- Subtab 11: Goals & Assessment -->
+            <div class="mb-5">
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                    <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
+                    Monthly Deliverables, OKRs & Professional Growth
+                </h2>
+                <div class="grid grid-cols-2 gap-3 text-[10px]">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-purple-700">Production Deliverables Target</div>
+                        <p class="text-slate-600 leading-relaxed">
+                            Completed <strong>${k.completed}</strong> client and internal deliverables with <strong>${k.deliveryScore}%</strong> on-time turnaround. Active backlog stands at <strong>${k.pending}</strong> deliverables in delivery pipeline.
+                        </p>
+                    </div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-indigo-700">Quality & Skill Development</div>
+                        <p class="text-slate-600 leading-relaxed">
+                            Logged <strong>${k.internalAssigned}</strong> skill acquisition and internal assignments with zero critical defects. First-pass QC score registered at <strong>${data.qc.passPct || 100}%</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formal Appraisal & Sign-off Section -->
+            <div class="border-t border-slate-200 pt-3">
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide mb-3">
+                    Formal Monthly Performance Review & Appraisal Sign-Off
+                </h2>
+                <div class="grid grid-cols-2 gap-6 pt-2">
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Employee Self-Acknowledgment</p>
+                        <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
+                            <div>
+                                <p class="text-[11px] font-black text-slate-800">${esc(data.employee.name)}</p>
+                                <p class="text-[9px] text-slate-400">${esc(data.employee.designation)}</p>
+                            </div>
+                            <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Reviewing Manager / Operations Admin</p>
+                        <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
+                            <div>
+                                <p class="text-[11px] font-black text-slate-800">VilPower Operations Reviewer</p>
+                                <p class="text-[9px] text-slate-400">Creative Delivery & Operations Management</p>
+                            </div>
+                            <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ${renderFooter(7)}
+    </div>
+
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                try {
+                    window.focus();
+                    window.print();
+                } catch(e) {
+                    console.warn('[OneDeskPrint] Print preview:', e);
+                }
+            }, 750);
+        };
+    </script>
+</body>
+</html>`);
         printWin.document.close();
     }
 

@@ -382,4 +382,62 @@ describe('MyMonthlyReport Module Verification', () => {
         expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('SKM');
         expect(mockDom['mmr-client-timing-tbody'].innerHTML).toContain('Vilpower');
     });
+
+    it('should produce identical task counts whether Admin views employee or employee views themselves', () => {
+        // 1. Employee Barath logs in and views their own report
+        mockWindow.currentUser = { email: 'barathvilpower@gmail.com', name: 'Barath Magesh', role: 'Team Member' };
+        mockWindow.isAdmin = () => false;
+        mockWindow.MyMonthlyReport.refresh();
+        const userViewData = mockWindow.MyMonthlyReportState.cachedReportData;
+
+        // 2. Admin logs in and views Barath's report
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'VilPower Admin', role: 'Admin' };
+        mockWindow.isAdmin = () => true;
+        mockWindow.MyMonthlyReport.handleUserChange('barathvilpower@gmail.com');
+        const adminViewData = mockWindow.MyMonthlyReportState.cachedReportData;
+
+        // 3. Compare counts
+        expect(adminViewData.kpis.totalAssigned).toBe(userViewData.kpis.totalAssigned);
+        expect(adminViewData.kpis.jiraAssigned).toBe(userViewData.kpis.jiraAssigned);
+        expect(adminViewData.kpis.internalAssigned).toBe(userViewData.kpis.internalAssigned);
+        expect(adminViewData.kpis.completed).toBe(userViewData.kpis.completed);
+        expect(adminViewData.jiraTasks.map((t: any) => t.id)).toEqual(userViewData.jiraTasks.map((t: any) => t.id));
+    });
+
+    it('should export a comprehensive 7-page PDF report covering all 11 subtab sections page-by-page', () => {
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'Admin', role: 'Admin' };
+        mockWindow.isAdmin = () => true;
+
+        let writtenHtml = '';
+        mockWindow.open = () => ({
+            document: {
+                write: (content: string) => { writtenHtml += content; },
+                close: () => {}
+            },
+            focus: () => {},
+            print: () => {}
+        });
+
+        mockWindow.MyMonthlyReport.handleUserChange('karthikavilpower@gmail.com');
+        mockWindow.MyMonthlyReport.exportPdf();
+
+        expect(writtenHtml).toContain('VilPower OneDesk');
+        expect(writtenHtml).toContain('Monthly Performance Statement');
+        // Check presence of all 7 pages and 11 subtabs
+        expect(writtenHtml).toContain('Page 1 of 7');
+        expect(writtenHtml).toContain('Executive Overview &amp; Scorecard');
+        expect(writtenHtml).toContain('Page 2 of 7');
+        expect(writtenHtml).toContain('Jira Tasks');
+        expect(writtenHtml).toContain('Page 3 of 7');
+        expect(writtenHtml).toContain('Internal Tasks');
+        expect(writtenHtml).toContain('Page 4 of 7');
+        expect(writtenHtml).toContain('Timing Breakdown');
+        expect(writtenHtml).toContain('Page 5 of 7');
+        expect(writtenHtml).toContain('QC Quality &amp; Rework');
+        expect(writtenHtml).toContain('Page 6 of 7');
+        expect(writtenHtml).toContain('Attendance &amp; Breaks');
+        expect(writtenHtml).toContain('Page 7 of 7');
+        expect(writtenHtml).toContain('Insights &amp; Assessment');
+        expect(writtenHtml).toContain('Formal Monthly Performance Review & Appraisal Sign-Off');
+    });
 });
