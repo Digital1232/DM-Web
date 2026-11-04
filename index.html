@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.61">
+    <meta name="app-version" content="1.0.62">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -31169,13 +31169,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             const AJITH_TASKS_CONFIG = [
                 { title: "Social Media Analysis and Updates", needsClient: true, client: null },
-                { title: "Daily Followers Updates", needsClient: true, client: null },
-                { title: "Ads Campaign Updates", needsClient: false, client: "Client" },
-                { title: "GMB Analysis and Updates", needsClient: true, client: null },
-                { title: "Competitor Analysis", needsClient: true, client: null },
-                { title: "Weekly Report Updates", needsClient: true, client: null },
-                { title: "Client's Monthly Report Updates", needsClient: true, client: null },
-                { title: "Overall Post Analysis and Updates", needsClient: true, client: null }
+                { title: "GMB Analysis and Uploads", needsClient: true, client: null },
+                { title: "Ads Campaign Analysis and Updates", needsClient: true, client: null },
+                { title: "Monthly Report Updates", needsClient: true, client: null },
+                { title: "Daily Followers Updates", needsClient: false, client: "Internal" },
+                { title: "Weekly Report Updates", needsClient: false, client: "Internal" },
+                { title: "IVN Amazon Order Tracking", needsClient: true, client: "IVN" },
+                { title: "Post Comments Replies", needsClient: false, client: "NTT" }
             ];
 
             let ajithTasksEnsureStarted = false;
@@ -31247,6 +31247,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const today = todayKey;
                     const assigneeName = 'Ajith';
 
+                    // Invalidate session cache if configuration changed
+                    const ajithConfigSig = 'v2_20261104_ajith_recurring';
+                    if (sessionStorage.getItem('ajithTasks_configSig') !== ajithConfigSig) {
+                        sessionStorage.removeItem('ajithTasks_lastRun');
+                        sessionStorage.setItem('ajithTasks_configSig', ajithConfigSig);
+                        ajithTasksEnsureStarted = false;
+                    }
+
                     // Clean up old recurring tasks that are no longer for Ajith
                     const oldTitles = [
                         'internal reporting',
@@ -31254,8 +31262,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         'social media commnts',
                         'client message',
                         'ads management',
-                        'social media upload'
+                        'social media upload',
+                        'competitor analysis',
+                        'overall post analysis and updates',
+                        'gmb analysis and updates',
+                        'ads campaign updates',
+                        "client's monthly report updates"
                     ];
+                    const activeAjithTitles = AJITH_TASKS_CONFIG.map(c => c.title.toLowerCase().trim());
                     for (const ownerKey of targetOwnerKeys) {
                         try {
                             const ajithTasksSnap = await get(ref(db, `worksync/manual_tasks/${ownerKey}`));
@@ -31263,7 +31277,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 const ajithTasksData = ajithTasksSnap.val();
                                 for (const taskId in ajithTasksData) {
                                     const t = ajithTasksData[taskId];
-                                    if (t && t.desc && oldTitles.includes(t.desc.toLowerCase().trim())) {
+                                    const tDesc = (t?.desc || '').toLowerCase().trim();
+                                    const isOldAjithTask = oldTitles.includes(tDesc) || (t && t.ajithTask && !activeAjithTitles.includes(tDesc));
+                                    if (t && (isOldAjithTask || (taskId.startsWith('A-') && oldTitles.includes(tDesc)))) {
                                         await remove(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`));
                                         tasks = tasks.filter(tk => tk.id !== taskId);
                                         console.log(`Removed old Ajith task from Firebase: ${taskId} (${t.desc}) from ${ownerKey}`);
@@ -32564,9 +32580,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         .slice().sort((a, b) => a.localeCompare(b));
 
                     const isGmbTask = task.desc && (task.desc.includes('GMB') || task.desc.toLowerCase().includes('gmb'));
+                    const isIvnTask = task.desc && (task.desc.includes('IVN') || task.desc.toLowerCase().includes('ivn'));
                     let optionsHtml = '<option value="" disabled selected>Select a client...</option>';
 
-                    if (isGmbTask) {
+                    if (isIvnTask) {
+                        // Task 7: IVN Amazon Order Tracking - Option to choose the IVN Client Only
+                        const ivnClients = baseClients.filter(c => c.toLowerCase().includes('ivn'));
+                        if (ivnClients.length === 0) ivnClients.push('IVN');
+                        optionsHtml = ivnClients.map((c, idx) => `<option value="${c}" ${idx === 0 ? 'selected' : ''}>${c}</option>`).join('');
+                    } else if (isGmbTask) {
                         const gmbDefaults = ['Einstein', 'NTT', 'Nivya'];
                         const matchedDefaults = gmbDefaults.map(def => {
                             const found = baseClients.find(c => c.toLowerCase() === def.toLowerCase());
@@ -46927,12 +46949,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         // Ajith recurring tasks to exclude from his analytics
                         const AJITH_RECURRING_TASK_KEYWORDS = [
                             'social media analysis and updates',
-                            'daily followers updates',
-                            'ads campaign updates',
+                            'gmb analysis and uploads',
                             'gmb analysis and updates',
-                            'competitor analysis',
-                            'weekly report updates',
+                            'ads campaign analysis and updates',
+                            'ads campaign updates',
+                            'monthly report updates',
                             "client's monthly report updates",
+                            'daily followers updates',
+                            'weekly report updates',
+                            'ivn amazon order tracking',
+                            'post comments replies',
+                            'competitor analysis',
                             'overall post analysis and updates'
                         ];
                         const isAjithRecurringTask = (t) => {
