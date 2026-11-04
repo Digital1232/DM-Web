@@ -87,9 +87,14 @@
     // Data
     // ─────────────────────────────────────────────────────────────
 
+    // Official staff list (index.html USERS) – the trusted source for display names.
+    function collectStaff() {
+        return (Array.isArray(window.USERS) ? window.USERS : []).filter(u => u && u.email);
+    }
+
+    // Login profiles from Firebase (names here can be account labels like "Digital Marketing").
     function collectUsers() {
         const list = [];
-        (Array.isArray(window.USERS) ? window.USERS : []).forEach(u => list.push(u));
         if (window.allUsersMap && typeof window.allUsersMap.values === 'function') {
             Array.from(window.allUsersMap.values()).forEach(u => u && u.email && list.push({ email: u.email, name: u.name, role: u.role || u.designation }));
         }
@@ -120,6 +125,7 @@
         const E = window.OneReportEngine;
         if (!E || !window.currentUser) return null;
         const ctx = {
+            staff: collectStaff(),
             users: collectUsers(),
             adminEmails: window.ADMIN_EMAILS || [],
             managerEmails: window.MANAGER_EMAILS || [],

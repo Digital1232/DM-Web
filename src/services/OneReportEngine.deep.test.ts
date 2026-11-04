@@ -390,6 +390,28 @@ describe('One Report – edge cases', () => {
         expect(build({ timeLogs }, 'boss@x.com', { client: 'Acme*' }).kpis.totalSec).toBe(3600);
     });
 
+    it('display names: staff list beats login-profile labels; email-like names are never shown when a real name exists', () => {
+        const s = new Date(2026, 9, 5, 10).getTime();
+        const m = E.build({
+            adminEmails: ['digitalmarketing@vilpower.com'],
+            staff: [{ email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'Senior Manager' }],
+            users: [
+                { email: 'digitalmarketing@vilpower.com', name: 'Digital Marketing', role: 'x' },
+                { email: 'prince@x.com', name: 'Prince Kirubakaran', role: 'Staff' }
+            ],
+            timeLogs: [
+                { taskId: 'J2-1', taskDesc: 'x', client: 'Acme', userId: 'digitalmarketing@vilpower.com', userName: 'Digital Marketing Team Account', startTime: s, endTime: s + 3600000, durationSeconds: 3600 },
+                { taskId: 'J2-2', taskDesc: 'x', client: 'Acme', userId: 'prince@x.com', userName: 'prince', startTime: s, endTime: s + 3600000, durationSeconds: 3600 },
+                { taskId: 'J2-3', taskDesc: 'x', client: 'Acme', userId: 'anithavilpower@gmail.com', userName: 'anithavilpower', startTime: s, endTime: s + 3600000, durationSeconds: 3600 }
+            ]
+        }, { viewer: { email: 'digitalmarketing@vilpower.com' }, period: { mode: 'month', month: '2026-10' }, now: NOW });
+        const names = Object.fromEntries(m.entries.map((l: any) => [l.email, l.employee]));
+        expect(names['digitalmarketing@vilpower.com']).toBe('Palanirajan R');
+        expect(names['prince@x.com']).toBe('Prince Kirubakaran');
+        expect(names['anithavilpower@gmail.com']).toBe('Anithavilpower'); // no real name anywhere → readable fallback
+        expect(m.team.find((r: any) => r.email === 'digitalmarketing@vilpower.com').role).toBe('Senior Manager');
+    });
+
     it('category and client classification follow the documented rules', () => {
         const cases: [string, string][] = [
             ['[QC] Diwali poster', 'QC Review'], ['Morning learning', 'Learning'], ['Sales proposal for lead', 'Business Development'],

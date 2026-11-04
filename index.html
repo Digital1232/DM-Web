@@ -21,6 +21,23 @@
     <link rel="stylesheet" href="dist/output.css">
     <link rel="stylesheet" href="mobile-app.css">
     <script>
+        // Quiet console in production: console.log/info/debug are muted for users.
+        // Warnings and errors always show. Enable full logs with ?debug=1 (remembered)
+        // and turn them off again with ?debug=0. Localhost always keeps logs.
+        (function () {
+            try {
+                var q = new URLSearchParams(location.search).get('debug');
+                if (q === '1') localStorage.setItem('onedesk_debug', '1');
+                if (q === '0') localStorage.removeItem('onedesk_debug');
+                var local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || location.protocol === 'file:';
+                if (!local && localStorage.getItem('onedesk_debug') !== '1') {
+                    var noop = function () {};
+                    console.log = noop; console.info = noop; console.debug = noop;
+                }
+            } catch (e) { /* storage blocked: keep default console */ }
+        })();
+    </script>
+    <script>
         // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -46,9 +63,9 @@
         }
     </script>
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/css/litepicker.css" />
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
     <!-- Social Analytics Import Module -->
     <script src="js/socialAnalyticsImport.js"></script>
     <script>
@@ -2015,15 +2032,34 @@
             pointer-events: none;
         }
 
-        html.auth-pending #login-view,
-        html.auth-pending #dashboard-view {
+        /* Flash of Unauthenticated Content (FOUC) prevention:
+           If user session is cached (has-user) or auth is pending (auth-pending),
+           strictly hide the login view and show the loading view immediately */
+        html.has-user #login-view,
+        html.auth-pending #login-view {
             display: none !important;
         }
 
-        html.auth-pending #loading-view {
+        html.auth-pending #dashboard-view,
+        html.has-user:not(.app-ready) #dashboard-view {
+            display: none !important;
+        }
+
+        html.auth-pending #loading-view,
+        html.has-user:not(.app-ready) #loading-view {
             display: flex !important;
             opacity: 1 !important;
             visibility: visible !important;
+        }
+
+        /* Show login view ONLY when explicitly unauthenticated */
+        html.no-user #login-view {
+            display: flex !important;
+        }
+
+        html.no-user #loading-view,
+        html.no-user #dashboard-view {
+            display: none !important;
         }
 
         /* Dynamic viewport height for mobile browsers */
@@ -2927,12 +2963,15 @@
             const cachedUser = localStorage.getItem('worksync_user');
             if (cachedUser) {
                 document.documentElement.classList.add('has-user');
+                document.documentElement.classList.remove('no-user');
                 document.documentElement.classList.remove('auth-pending');
             } else {
-                document.documentElement.classList.add('auth-pending');
+                document.documentElement.classList.add('no-user');
+                document.documentElement.classList.remove('has-user');
+                document.documentElement.classList.remove('auth-pending');
             }
         } catch (e) {
-            document.documentElement.classList.add('auth-pending');
+            document.documentElement.classList.add('no-user');
         }
         window.apSelectedTasks = window.apSelectedTasks || new Set();
     </script>
@@ -3717,7 +3756,7 @@
     <!-- ══════════════════════════════════════════
          LOGIN VIEW
     ══════════════════════════════════════════ -->
-    <div id="login-view" class="fixed inset-0 z-[60] bg-slate-50 flex items-center justify-center p-6">
+    <div id="login-view" class="fixed inset-0 z-[60] bg-slate-50 flex items-center justify-center p-6 hidden">
         <div class="w-full max-w-[400px]">
             <div class="flex flex-col items-center mb-10">
                 <img src="img/onedesk-logo.png" alt="One Desk Logo" class="w-48 mb-4">
@@ -15669,7 +15708,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js"></script>
     <!-- ══════════════════════════════════════════
          SCRIPTS
     ══════════════════════════════════════════ -->
@@ -16015,6 +16054,10 @@
             window.rtdb = { ref, onValue, update, remove, set, push };
             console.log('[Module] Firebase objects exposed to window.auth, window.db, window.storage, window.rtdb');
 
+            // Internal tasks removed from the whole app. Listed IDs are hidden everywhere and their
+            // Firebase records are deleted the next time an admin loads the app. Add IDs here only.
+            const REMOVED_TASK_IDS = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624', 'M-1779272466504'];
+            window.REMOVED_TASK_IDS = REMOVED_TASK_IDS;
             const ADMIN_ROLES = ['System Admin', 'Administrator'];
             const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
             const MANAGER_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
@@ -16644,6 +16687,8 @@
             window.calculateDueDate4DaysBefore = calculateDueDate4DaysBefore;
             window.calculatePostDate4DaysAfter = calculatePostDate4DaysAfter;
 
+            // Starting list only: the live client list is worksync/settings/custom_clients,
+            // managed from Admin > Client Names. Edit clients there, not here.
             const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree'];
             window.CLIENTS = CLIENTS;
 
@@ -19310,8 +19355,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 try {
                     // PERFORMANCE: Immediately remove blocking CSS classes and show dashboard
+                    document.documentElement.classList.add('app-ready');
                     document.documentElement.classList.remove('auth-pending');
-                    document.documentElement.classList.remove('has-user');
+                    document.documentElement.classList.remove('no-user');
                     document.getElementById('login-view')?.classList.add('hidden');
                     document.getElementById('dashboard-view')?.classList.remove('hidden');
                     hideLoadingScreen();
@@ -19639,7 +19685,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Switch views
                     appInitialized = false;
                     document.documentElement.classList.remove('has-user');
+                    document.documentElement.classList.remove('app-ready');
                     document.documentElement.classList.remove('auth-pending');
+                    document.documentElement.classList.add('no-user');
                     if (typeof hideInitialLoading === 'function') hideInitialLoading();
 
                     // Show login, hide dashboard and loading views
@@ -19686,7 +19734,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (cachedTasks) {
                         try {
                             const parsed = JSON.parse(cachedTasks);
-                            const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624', 'M-1779272466504'];
+                            const targetIds = REMOVED_TASK_IDS;
                             const isDeletedTaskItem = (t) => {
                                 if (!t) return false;
                                 if (targetIds.includes(t.id)) return true;
@@ -29233,7 +29281,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function mergeTasksById(taskList) {
-                const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624', 'M-1779272466504'];
+                const targetIds = REMOVED_TASK_IDS;
                 const map = new Map();
                 const contentDedupMap = new Map();
 
@@ -50133,7 +50181,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function loadManualTasks() {
                 if (!currentUser) return;
-                const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624', 'M-1779272466504'];
+                const targetIds = REMOVED_TASK_IDS;
                 const userEmail = (currentUser.email || '').toLowerCase().trim();
                 const isMurugesh = userEmail === 'murugeshvilpower@gmail.com' || userEmail === 'murugesh@vilpower.com' || userEmail.includes('murugesh');
                 const isAjith = userEmail === 'ajithvilpower@gmail.com' || userEmail === 'ajith@vilpower.com' || userEmail.includes('ajith');
@@ -57425,6 +57473,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (!currentUser) {
                         document.documentElement.classList.remove('has-user');
+                        document.documentElement.classList.remove('app-ready');
+                        document.documentElement.classList.add('no-user');
                         document.getElementById('login-view')?.classList.remove('hidden');
                         document.getElementById('dashboard-view')?.classList.add('hidden');
                     } else {
@@ -57504,7 +57554,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else {
                         localStorage.removeItem('worksync_user');
                         document.documentElement.classList.remove('has-user');
+                        document.documentElement.classList.remove('app-ready');
                         document.documentElement.classList.remove('auth-pending');
+                        document.documentElement.classList.add('no-user');
                         if (typeof hideInitialLoading === 'function') hideInitialLoading();
                         const loadingView = document.getElementById('loading-view');
                         if (loadingView) loadingView.classList.add('hidden');

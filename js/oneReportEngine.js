@@ -243,23 +243,46 @@
     // Employees directory
     // ─────────────────────────────────────────────────────────────
 
+    // A "name" that is really an email or email prefix (e.g. "anithavilpower") is not a display name.
+    function isEmailLikeName(name, email) {
+        const n = String(name || '').trim().toLowerCase();
+        if (!n) return true;
+        if (n.includes('@')) return true;
+        const prefix = String(email || '').split('@')[0].toLowerCase();
+        return n === prefix || n.replace(/[^a-z0-9]/g, '') === prefix.replace(/[^a-z0-9]/g, '');
+    }
+
+    // Readable fallback when no real name exists: "anithavilpower@gmail.com" → "Anithavilpower".
+    function nameFromEmail(email) {
+        const p = String(email || '').split('@')[0].replace(/[._-]+/g, ' ').trim();
+        return p ? p.replace(/\b\w/g, c => c.toUpperCase()) : email;
+    }
+
+    /**
+     * Display names, by trust: staff catalogue (rank 3) > login profile (2) > name saved on
+     * a time log (1). A lower-ranked source never overrides a higher one, and email-like
+     * names are only used when nothing better exists.
+     */
     function buildDirectory(ctx) {
         const map = new Map();
-        const add = (email, name, role, fromCatalog) => {
+        const add = (email, name, role, rank, fromCatalog) => {
             const e = normEmail(email);
             if (!e || e.startsWith('name:')) return;
-            const cur = map.get(e);
             const nm = String(name || '').trim();
+            const usable = nm && !isEmailLikeName(nm, e);
+            const cur = map.get(e);
             if (!cur) {
-                map.set(e, { email: e, name: nm || e, role: role || '', catalog: !!fromCatalog });
-            } else {
-                if (nm && (cur.name === e || nm.length > cur.name.length)) cur.name = nm;
-                if (role && !cur.role) cur.role = role;
-                if (fromCatalog) cur.catalog = true;
+                map.set(e, { email: e, name: usable ? nm : '', nameRank: usable ? rank : 0, role: role || '', roleRank: role ? rank : 0, catalog: !!fromCatalog });
+                return;
             }
+            if (usable && rank > cur.nameRank) { cur.name = nm; cur.nameRank = rank; }
+            if (role && rank > cur.roleRank) { cur.role = role; cur.roleRank = rank; }
+            if (fromCatalog) cur.catalog = true;
         };
-        (ctx.users || []).forEach(u => add(u.email, u.name, u.role || u.designation, true));
-        (ctx.timeLogs || []).forEach(l => add(l.userId || l.email, l.userName, '', false));
+        (ctx.staff || []).forEach(u => add(u.email, u.name, u.role || u.designation, 3, true));
+        (ctx.users || []).forEach(u => add(u.email, u.name, u.role || u.designation, 2, true));
+        (ctx.timeLogs || []).forEach(l => add(l.userId || l.email, l.userName, '', 1, false));
+        map.forEach(p => { if (!p.name) p.name = nameFromEmail(p.email); });
         return map;
     }
 
