@@ -579,32 +579,44 @@
     }
 
     // Renders charts on an off-screen canvas for the PDF, independent of the active tab.
-    function chartImages(m) {
+    // Charts are drawn at the size they print (in pt) with a high pixel ratio, so labels stay
+    // readable (~7 pt) and lines stay crisp.
+    function chartImages(m, opts) {
         if (typeof window.Chart !== 'function') return {};
+        opts = Object.assign({ w: 240, h: 136, font: 7, dpr: 4 }, opts || {});
         const cfgs = chartConfigs(m);
         const out = {};
-        // Larger text so labels stay readable when the chart is scaled down on the page.
-        const prevFont = window.Chart.defaults.font.size;
-        window.Chart.defaults.font.size = 16;
+        const D = window.Chart.defaults;
+        const prev = { size: D.font.size, family: D.font.family, color: D.color, border: D.borderColor };
+        D.font.size = opts.font;
+        D.font.family = 'Helvetica, Arial, sans-serif';
+        D.color = '#64748B';
+        D.borderColor = '#EEF2F7';
         const holder = document.createElement('div');
-        holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:400px;';
+        holder.style.cssText = `position:fixed;left:-10000px;top:0;width:${opts.w}px;height:${opts.h}px;`;
         document.body.appendChild(holder);
-        CHARTS.forEach(([id]) => {
-            if (!cfgs[id]) return;
-            const canvas = document.createElement('canvas');
-            canvas.width = 800; canvas.height = 400;
-            holder.appendChild(canvas);
-            const cfg = JSON.parse(JSON.stringify(cfgs[id]).replace(/"size":1[01]/g, '"size":15'));
-            cfg.options = Object.assign({}, cfg.options, { responsive: false, animation: false, devicePixelRatio: 1.5 });
-            const ch = new window.Chart(canvas.getContext('2d'), cfg);
-            // White background so the image is not transparent in the PDF
-            const ctx = canvas.getContext('2d');
-            ctx.save(); ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore();
-            out[id] = canvas.toDataURL('image/jpeg', 0.92); // JPEG keeps the PDF small
-            ch.destroy();
-        });
-        holder.remove();
-        window.Chart.defaults.font.size = prevFont;
+        try {
+            CHARTS.forEach(([id]) => {
+                if (!cfgs[id]) return;
+                const canvas = document.createElement('canvas');
+                canvas.width = opts.w; canvas.height = opts.h;
+                canvas.style.width = opts.w + 'px'; canvas.style.height = opts.h + 'px';
+                holder.appendChild(canvas);
+                const cfg = JSON.parse(JSON.stringify(cfgs[id])
+                    .replace(/"size":\d+(\.\d+)?/g, `"size":${opts.font}`)
+                    .replace(/"boxWidth":\d+/g, '"boxWidth":7'));
+                cfg.options = Object.assign({}, cfg.options, { responsive: false, maintainAspectRatio: false, animation: false, devicePixelRatio: opts.dpr });
+                const ch = new window.Chart(canvas.getContext('2d'), cfg);
+                // White background so the image is not transparent in the PDF
+                const ctx = canvas.getContext('2d');
+                ctx.save(); ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore();
+                out[id] = canvas.toDataURL('image/png'); // flat colours: PNG is small and keeps text sharp
+                ch.destroy();
+            });
+        } finally {
+            holder.remove();
+            D.font.size = prev.size; D.font.family = prev.family; D.color = prev.color; D.borderColor = prev.border;
+        }
         return out;
     }
 
@@ -1172,6 +1184,21 @@
         } catch (e) { return null; }
     }
 
+    // PDF design tokens (RGB). A4 portrait, units in pt.
+    const PDF = {
+        ink: [15, 23, 42],        // headings, values
+        body: [51, 65, 85],       // table text
+        muted: [100, 116, 139],   // labels, descriptions
+        faint: [148, 163, 184],   // footers, hints
+        line: [226, 232, 240],    // dividers, card borders
+        soft: [248, 250, 252],    // table header, info boxes
+        tint: [238, 242, 255],    // totals row
+        accent: [79, 70, 229],    // brand indigo, used sparingly
+        good: [5, 150, 105],
+        bad: [225, 29, 72],
+        white: [255, 255, 255]
+    };
+
     async function exportPdf() {
         const m = state.model || buildModel();
         if (!m) return;
@@ -1180,147 +1207,310 @@
             await loadScript(LIBS.jspdf);
             await loadScript(LIBS.autotable);
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4', compress: true });
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
             // Built-in PDF fonts only cover Latin-1, so swap dashes and drop other symbols.
             const pdfSafe = t => String(t === null || t === undefined ? '' : t).replace(/[–—]/g, '-').replace(/•/g, '-').replace(/[^\x00-\xFF]/g, '');
             const rawText = doc.text.bind(doc);
             doc.text = (t, ...rest) => rawText(Array.isArray(t) ? t.map(pdfSafe) : pdfSafe(t), ...rest);
-            const W = doc.internal.pageSize.getWidth();
-            const H = doc.internal.pageSize.getHeight();
-            const M = 36;
-            const primary = [79, 70, 229];
-            const logo = await imageToDataUrl('img/onedesk-logo.png');
 
-            // Cover header
-            doc.setFillColor(55, 48, 163);
-            doc.rect(0, 0, W, 78, 'F');
-            if (logo) { try { doc.addImage(logo, 'PNG', M, 16, 46, 46); } catch (e) { /* ignore bad image */ } }
-            doc.setTextColor(255, 255, 255);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(20);
-            doc.text(`${BRAND.name} – One Report`, logo ? M + 58 : M, 40);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(11);
-            doc.text(`${m.period.label}  ·  ${fmtDate(m.period.fromStr)} – ${fmtDate(m.period.toStr)}`, logo ? M + 58 : M, 60);
-            doc.setTextColor(30, 41, 59);
-
-            let y = 98;
-            doc.setFontSize(9);
-            const filters = filterSummary(m).slice(1).map(([k, v]) => `${k}: ${v}`).join('   ·   ');
-            doc.text(filters, M, y);
-            doc.text(`Generated ${new Date(m.generatedAt).toLocaleString('en-GB')} by ${(window.currentUser && (window.currentUser.name || window.currentUser.email)) || ''}`, M, y + 13);
-            y += 30;
-
-            // KPI tiles
+            const W = doc.internal.pageSize.getWidth();   // 595
+            const H = doc.internal.pageSize.getHeight();  // 842
+            const M = 44;                                  // side margin
+            const TOP = 66;                                // content top below the running header
+            const BOTTOM = H - 54;                         // content bottom above the footer
+            const CW = W - 2 * M;                          // content width
             const k = m.kpis;
-            const tiles = [
-                ['Total logged', fmtH(k.totalSec)], ['Client delivery', fmtH(k.clientSec)], ['Internal', fmtH(k.internalSec)], ['Business dev.', fmtH(k.bdSec)],
-                ['Team capacity', fmtH(k.capacitySec)], ['Utilization', fmtPct(k.utilization)], ['Employees', fmtNum(k.employeeCount)],
-                ['Active clients', fmtNum(k.activeClients)], ['Time entries', fmtNum(k.timeEntries)], ['Assigned tasks', fmtNum(k.assigned)],
-                ['Completed', fmtNum(k.completed)], ['Pending', fmtNum(k.pending)],
-                ['QC pass / fail', k.qcPassed === null ? 'N/A' : `${k.qcPassed} / ${k.qcFailed}`], ['Rework count', fmtNum(k.reworkCount)]
-            ];
-            const perRow = 7;
-            const gap = 8;
-            const tw = (W - 2 * M - gap * (perRow - 1)) / perRow;
-            tiles.forEach(([label, val], i) => {
-                const x = M + (i % perRow) * (tw + gap);
-                const ty = y + Math.floor(i / perRow) * 52;
-                doc.setFillColor(238, 242, 255);
-                doc.roundedRect(x, ty, tw, 44, 6, 6, 'F');
-                doc.setFontSize(7.5);
-                doc.setTextColor(100, 116, 139);
-                doc.text(label.toUpperCase(), x + 8, ty + 14);
-                doc.setFontSize(13);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(30, 41, 59);
-                doc.text(String(val), x + 8, ty + 34);
-                doc.setFont('helvetica', 'normal');
-            });
-            y += 2 * 52 + 6;
+            const viewer = (window.currentUser && (window.currentUser.name || window.currentUser.email)) || '';
+            const generated = new Date(m.generatedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const periodTitle = m.period.isFullMonth ? m.period.label : `${fmtDate(m.period.fromStr)} – ${fmtDate(m.period.toStr)}`;
+            const icon = await imageToDataUrl('img/favicon-192.png');
 
-            if (m.notes.length) {
-                doc.setFontSize(8);
-                doc.setTextColor(146, 64, 14);
-                m.notes.forEach(n => { doc.text('• ' + n, M, y); y += 11; });
-                doc.setTextColor(30, 41, 59);
-            }
+            // ── Drawing helpers
+            const setColor = (kind, c) => doc['set' + kind](c[0], c[1], c[2]);
+            const text = (str, x, y, o = {}) => {
+                doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
+                doc.setFontSize(o.size || 9);
+                setColor('TextColor', o.color || PDF.body);
+                const opt = {};
+                if (o.align) opt.align = o.align;
+                if (o.charSpace) opt.charSpace = o.charSpace;
+                doc.text(String(str), x, y, opt);
+            };
+            // Small letter-spaced caps. jsPDF mis-measures right-aligned text with charSpace,
+            // so right alignment is done by measuring the width ourselves.
+            const label = (str, x, y, o = {}) => {
+                const s = String(str).toUpperCase(), size = o.size || 6.5, cs = 0.6;
+                let lx = x;
+                if (o.align === 'right') {
+                    doc.setFont('helvetica', 'bold'); doc.setFontSize(size);
+                    lx = x - (doc.getTextWidth(s) + cs * (s.length - 1));
+                }
+                text(s, lx, y, { size, bold: true, color: o.color || PDF.muted, charSpace: cs });
+            };
+            const hline = (yy, c = PDF.line, w = 0.6, x1 = M, x2 = W - M) => { setColor('DrawColor', c); doc.setLineWidth(w); doc.line(x1, yy, x2, yy); };
+            const fit = (str, width, size, bold) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); const l = doc.splitTextToSize(pdfSafe(str), width); return l.length > 1 ? l[0].replace(/\s*\S{0,3}$/, '') + '…' : (l[0] || ''); };
+            const card = (x, yy, w, h, fill = PDF.white) => { setColor('FillColor', fill); setColor('DrawColor', PDF.line); doc.setLineWidth(0.7); doc.roundedRect(x, yy, w, h, 4, 4, fill === PDF.white ? 'FD' : 'F'); };
 
-            // Charts – two per row, four per page
-            const imgs = chartImages(m);
-            const chartList = CHARTS.filter(([id]) => imgs[id]);
-            if (chartList.length) {
-                doc.addPage();
-                y = M;
-                const cw = (W - 2 * M - 20) / 2;
-                const chh = cw / 2;
-                chartList.forEach(([id, titleText], i) => {
-                    if (i > 0 && i % 4 === 0) { doc.addPage(); y = M; }
-                    const slot = i % 4;
-                    const x = M + (slot % 2) * (cw + 20);
-                    const cy = y + Math.floor(slot / 2) * (chh + 34);
-                    doc.setFontSize(10);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text(titleText, x, cy + 10);
-                    doc.setFont('helvetica', 'normal');
-                    doc.addImage(imgs[id], 'JPEG', x, cy + 16, cw, chh, undefined, 'FAST');
-                });
-            }
+            let y = 0;
+            const newPage = () => { doc.addPage(); y = TOP; };
+            const ensure = need => { if (y + need > BOTTOM) newPage(); };
 
-            const tableOpts = (head, body, foot, startY) => ({
-                head: [head], body, foot: foot ? [foot] : undefined, startY: startY || M + 20, margin: { left: M, right: M, top: M + 10, bottom: 40 },
-                styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
-                headStyles: { fillColor: primary, textColor: 255, fontStyle: 'bold' },
-                footStyles: { fillColor: [224, 231, 255], textColor: [30, 41, 59], fontStyle: 'bold' },
-                alternateRowStyles: { fillColor: [248, 250, 252] },
-                didParseCell: d => { d.cell.text = (d.cell.text || []).map(pdfSafe); },
-                theme: 'grid'
-            });
-            const sectionTable = (heading, head, body, foot, emptyText) => {
-                doc.addPage();
-                doc.setFontSize(13);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(55, 48, 163);
-                doc.text(heading, M, M + 6);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(30, 41, 59);
-                if (!body.length) { doc.setFontSize(9); doc.text(emptyText || 'No data for the selected filters.', M, M + 28); return; }
-                doc.autoTable(tableOpts(head, body, foot));
+            const section = (title, desc) => {
+                ensure(110);
+                setColor('FillColor', PDF.accent);
+                doc.rect(M, y - 10, 3, 14, 'F');
+                text(title, M + 11, y + 1, { size: 12.5, bold: true, color: PDF.ink });
+                if (desc) text(desc, M + 11, y + 15, { size: 8, color: PDF.muted });
+                y += desc ? 28 : 18;
             };
 
-            const tt = m.team.reduce((a, r) => ({ av: a.av + r.availableSec, lg: a.lg + r.loggedSec, cl: a.cl + r.clientSec, in: a.in + r.internalSec, bd: a.bd + r.bdSec }), { av: 0, lg: 0, cl: 0, in: 0, bd: 0 });
-            sectionTable('Team Summary', ['Employee', 'Available', 'Logged', 'Client', 'Internal', 'Business dev.', 'Leave days', 'Utilization'],
-                m.team.map(r => [r.employee, fmtH(r.availableSec), fmtH(r.loggedSec), fmtH(r.clientSec), fmtH(r.internalSec), fmtH(r.bdSec), fmtNum(r.leaveDays), fmtPct(r.utilization)]),
-                ['Total', fmtH(tt.av), fmtH(tt.lg), fmtH(tt.cl), fmtH(tt.in), fmtH(tt.bd), '', fmtPct(k.utilization)]);
-            sectionTable('Client Summary', ['Client', 'Total hours', '% of team hours', 'Employees', 'Top task category'],
-                m.clients.map(c => [c.client, fmtH(c.seconds), fmtPct(c.share), c.employeeCount, c.topCategory]),
-                ['Total', fmtH(k.totalSec), k.totalSec ? '100.0%' : 'N/A', '', '']);
-            const cats = Object.entries(m.categoryTotals).sort((a, b) => b[1] - a[1]);
-            sectionTable('Task Category Distribution', ['Task category', 'Hours', '% of total'],
-                cats.map(([c, s]) => [c, fmtH(s), fmtPct(k.totalSec ? s / k.totalSec : null)]), ['Total', fmtH(k.totalSec), k.totalSec ? '100.0%' : 'N/A']);
-            const pt = m.performanceTotals;
-            sectionTable('Task Performance', ['Employee', 'Assigned', 'Completed', 'Pending', 'In progress', 'Overdue', 'Rework'],
-                m.performance.map(r => [r.employee, r.assigned, r.completed, r.pending, r.inProgress, r.overdue, r.rework]),
-                ['Total', pt.assigned, pt.completed, pt.pending, pt.inProgress, pt.overdue, pt.rework]);
-            sectionTable('QC Report', ['Creator', 'Reviewer', 'Submission', 'Client', 'Date', 'Result', 'Failure reason', 'Rounds', 'QC time'],
-                m.qc.rows.map(r => [r.creator, r.reviewer, r.submissionId, r.client, fmtDate(r.date), r.result, r.failureReason, r.reworkRounds, fmtH(r.qcSeconds)]),
-                m.qc.rows.length ? ['Total', '', `${m.qc.reviews} reviews`, '', '', `${m.qc.passed} pass / ${m.qc.failed} fail`, '', '', fmtH(m.qc.qcSeconds)] : null,
-                'No QC reviews recorded in this period.');
-            sectionTable('Shoot & Production', ['Shoot ID', 'Title', 'Client', 'Date', 'Assigned', 'Shoot duration', 'Production hours', 'Status'],
-                m.shoots.rows.map(r => [r.shootId, r.title, r.client, fmtDate(r.date), r.assignees, fmtH(r.shootSeconds), fmtH(r.productionSeconds), r.status]),
-                null, 'No shoots scheduled in this period.');
-            sectionTable('Attendance', ['Employee', 'Working days', 'Present', 'Leave', 'Late', 'Breaks', 'Working hours', 'Missing check-outs'],
-                m.attendance.hasData ? m.attendance.rows.map(r => [r.employee, r.workingDays, r.presentDays, fmtNum(r.leaveDays), r.lateArrivals, fmtH(r.breakSec), fmtH(r.workSec), r.missingCheckout]) : [],
-                null, 'No attendance check-ins recorded for this period.');
+            const table = ({ head, body, foot, numeric = [], widths = {}, empty, tone }) => {
+                if (!body.length) {
+                    card(M, y, CW, 32, PDF.soft);
+                    text(empty || 'No data for the selected filters.', M + 12, y + 19.5, { size: 8.5, color: PDF.muted });
+                    y += 32 + 30;
+                    return;
+                }
+                const columnStyles = {};
+                numeric.forEach(i => { columnStyles[i] = { halign: 'right' }; });
+                Object.entries(widths).forEach(([i, w]) => { columnStyles[i] = Object.assign(columnStyles[i] || {}, { cellWidth: w }); });
+                doc.autoTable({
+                    head: [head], body, foot: foot ? [foot] : undefined, showFoot: 'lastPage', showHead: 'everyPage',
+                    startY: y, margin: { left: M, right: M, top: TOP, bottom: H - BOTTOM },
+                    theme: 'plain',
+                    styles: { font: 'helvetica', fontSize: 8, textColor: PDF.body, cellPadding: { top: 5.5, bottom: 5.5, left: 6, right: 6 }, overflow: 'linebreak', valign: 'middle', lineWidth: 0 },
+                    headStyles: { fillColor: PDF.soft, textColor: PDF.muted, fontStyle: 'bold', fontSize: 6.6, cellPadding: { top: 6, bottom: 6, left: 6, right: 6 } },
+                    footStyles: { fillColor: PDF.tint, textColor: PDF.ink, fontStyle: 'bold' },
+                    columnStyles,
+                    didParseCell: d => {
+                        d.cell.text = (d.cell.text || []).map(pdfSafe);
+                        if (d.section === 'head') {
+                            d.cell.text = d.cell.text.map(s => s.toUpperCase());
+                            if (numeric.includes(d.column.index)) d.cell.styles.halign = 'right';
+                        }
+                        if (d.section === 'foot' && numeric.includes(d.column.index)) d.cell.styles.halign = 'right';
+                        if (d.section === 'body') {
+                            if (d.column.index === 0) { d.cell.styles.textColor = PDF.ink; d.cell.styles.fontStyle = 'bold'; }
+                            const c = tone ? tone(d.cell.raw, d.column.index) : null;
+                            if (c) { d.cell.styles.textColor = c; d.cell.styles.fontStyle = 'bold'; }
+                        }
+                    },
+                    didDrawCell: d => {
+                        const c = d.cell;
+                        if (d.section === 'body' || d.section === 'head') hline(c.y + c.height, PDF.line, 0.5, c.x, c.x + c.width);
+                        if (d.section === 'foot') hline(c.y, PDF.accent, 0.8, c.x, c.x + c.width);
+                    }
+                });
+                y = doc.lastAutoTable.finalY + 30;
+            };
 
-            // Footer with page numbers on every page
+            // ════════════════ Page 1 – summary ════════════════
+            y = 50;
+            if (icon) { try { doc.addImage(icon, 'PNG', M, y - 15, 20, 20); } catch (e) { /* ignore bad image */ } }
+            text(BRAND.name, M + (icon ? 27 : 0), y, { size: 11, bold: true, color: PDF.ink });
+            label('One Report', W - M, y, { align: 'right', color: PDF.accent, size: 7 });
+            y += 14;
+            hline(y);
+
+            y += 44;
+            label('Monthly agency report', M, y, { size: 7.5, color: PDF.accent });
+            y += 30;
+            text(periodTitle, M, y, { size: 28, bold: true, color: PDF.ink });
+            y += 19;
+            const range = `${fmtDate(m.period.fromStr)} – ${fmtDate(m.period.toStr)}` +
+                (m.period.inProgress && m.period.capacityToStr ? `   ·   In progress, figures up to ${fmtDate(m.period.capacityToStr)}` : '');
+            text(range, M, y, { size: 10, color: PDF.muted });
+            y += 26;
+
+            // Details: scope · filters · generated
+            const scopeText = { admin: 'All employees (admin view)', manager: 'All team members (manager view)', lead: 'You and your direct reports', employee: 'Own report' }[m.scope.level] || '—';
+            const activeFilters = filterSummary(m).slice(1).filter(([, v]) => !/^All /.test(v) && v !== 'Jira + Internal').map(([kk, v]) => `${kk}: ${v}`);
+            const details = [['Scope', scopeText], ['Filters', activeFilters.join(' · ') || 'None – all data'], ['Generated', `${generated}${viewer ? ' by ' + viewer : ''}`]];
+            const colW = CW / 3;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+            const detailLines = details.map(([, v]) => doc.splitTextToSize(pdfSafe(v), colW - 24).slice(0, 3));
+            const detailH = 30 + Math.max(...detailLines.map(l => l.length)) * 11;
+            card(M, y, CW, detailH, PDF.soft);
+            details.forEach(([kk], i) => {
+                const x = M + 14 + i * colW;
+                label(kk, x, y + 16);
+                detailLines[i].forEach((ln, j) => text(ln, x, y + 30 + j * 11, { size: 8.5, color: PDF.ink }));
+            });
+            y += detailH + 32;
+
+            // Key figures – four groups of four cards
+            text('Key figures', M, y, { size: 12.5, bold: true, color: PDF.ink });
+            y += 16;
+            const share = s => (k.totalSec ? `${fmtPct(s / k.totalSec)} of logged time` : '');
+            const groups = [
+                ['Time', [
+                    ['Total logged', fmtH(k.totalSec), `${k.timeEntries} work sessions`],
+                    ['Client delivery', fmtH(k.clientSec), share(k.clientSec)],
+                    ['Internal', fmtH(k.internalSec), share(k.internalSec)],
+                    ['Business development', fmtH(k.bdSec), share(k.bdSec)]]],
+                ['Capacity', [
+                    ['Team capacity', fmtH(k.capacitySec), `${m.settings.hoursPerDay} h per working day`],
+                    ['Utilization', fmtPct(k.utilization), 'logged ÷ capacity'],
+                    ['Employees', fmtNum(k.employeeCount), 'in this report'],
+                    ['Active clients', fmtNum(k.activeClients), 'with logged hours']]],
+                ['Delivery', [
+                    ['Assigned tasks', fmtNum(k.assigned), 'in this period'],
+                    ['Completed', fmtNum(k.completed), k.assigned ? `${fmtPct(k.completed / k.assigned)} of assigned` : ''],
+                    ['Pending', fmtNum(k.pending), 'open at period end'],
+                    ['Overdue', fmtNum(m.performanceTotals.overdue), 'open and past due']]],
+                ['Quality', [
+                    ['QC reviews', k.qcPassed === null ? 'N/A' : fmtNum(k.qcPassed + k.qcFailed), 'in this period'],
+                    ['Passed', fmtNum(k.qcPassed), 'first or later round'],
+                    ['Pass rate', fmtPct(k.qcPassRate), 'passed ÷ reviewed'],
+                    ['Rework', fmtNum(k.reworkCount), 'sent back by QC']]]
+            ];
+            const gap = 8, cardW = (CW - gap * 3) / 4, cardH = 52;
+            groups.forEach(([g, cards]) => {
+                label(g, M, y);
+                y += 7;
+                cards.forEach(([lbl, val, sub], i) => {
+                    const x = M + i * (cardW + gap);
+                    card(x, y, cardW, cardH);
+                    text(fit(lbl, cardW - 20, 7.5, false), x + 10, y + 15, { size: 7.5, color: PDF.muted });
+                    text(String(val), x + 10, y + 34, { size: 15, bold: true, color: PDF.ink });
+                    if (sub) text(fit(sub, cardW - 20, 6.5, false), x + 10, y + 45, { size: 6.5, color: PDF.faint });
+                });
+                y += cardH + 16;
+            });
+
+            // At a glance – top clients and employees with proportion bars
+            y += 6;
+            const half = (CW - 24) / 2;
+            const miniList = (title, rows, x, y0) => {
+                label(title, x, y0);
+                let yy = y0 + 14;
+                if (!rows.length) { text('No time logged', x, yy + 8, { size: 8.5, color: PDF.muted }); return yy + 22; }
+                rows.forEach(([name, val, frac]) => {
+                    text(fit(name, half - 110, 8.5, true), x, yy + 8, { size: 8.5, bold: true, color: PDF.ink });
+                    text(val, x + half, yy + 8, { size: 8, color: PDF.body, align: 'right' });
+                    setColor('FillColor', PDF.soft); doc.roundedRect(x, yy + 13, half, 3, 1.5, 1.5, 'F');
+                    setColor('FillColor', PDF.accent); doc.roundedRect(x, yy + 13, Math.max(3, half * Math.min(1, frac)), 3, 1.5, 1.5, 'F');
+                    yy += 23;
+                });
+                return yy;
+            };
+            const topClients = m.clients.slice(0, 5).map(c => [c.client, `${fmtH(c.seconds)}  ·  ${fmtPct(c.share)}`, k.totalSec ? c.seconds / k.totalSec : 0]);
+            const teamSorted = m.team.filter(r => r.loggedSec > 0).sort((a, b) => b.loggedSec - a.loggedSec).slice(0, 5);
+            const maxLogged = Math.max(1, ...teamSorted.map(r => r.loggedSec));
+            const topTeam = teamSorted.map(r => [r.employee, `${fmtH(r.loggedSec)}  ·  ${fmtPct(r.utilization)} utilized`, r.loggedSec / maxLogged]);
+            ensure(150);
+            text('At a glance', M, y, { size: 12.5, bold: true, color: PDF.ink });
+            y += 18;
+            const yA = miniList('Top clients by hours', topClients, M, y);
+            const yB = miniList('Hours by employee', topTeam, M + half + 24, y);
+            y = Math.max(yA, yB) + 14;
+
+            // Notes
+            if (m.notes.length) {
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+                const lines = m.notes.flatMap(n => doc.splitTextToSize(pdfSafe('–  ' + n), CW - 28));
+                const h = 26 + lines.length * 10.5;
+                ensure(h);
+                card(M, y, CW, h, PDF.soft);
+                label('Notes', M + 14, y + 15);
+                lines.forEach((ln, i) => text(ln, M + 14, y + 28 + i * 10.5, { size: 7.5, color: PDF.muted }));
+                y += h + 10;
+            }
+
+            // ════════════════ Charts ════════════════
+            const chartW = (CW - 14) / 2, chartH = 178;
+            const imgs = chartImages(m, { w: Math.round(chartW - 22), h: Math.round(chartH - 40), font: 6.5 });
+            const charted = CHARTS.filter(([id]) => imgs[id]);
+            if (charted.length) {
+                newPage();
+                section('Charts', 'Visual summary of the figures in this report.');
+                for (let i = 0; i < charted.length; i += 2) {
+                    ensure(chartH);
+                    charted.slice(i, i + 2).forEach(([id, title], j) => {
+                        const x = M + j * (chartW + 14);
+                        card(x, y, chartW, chartH);
+                        text(title, x + 12, y + 18, { size: 9, bold: true, color: PDF.ink });
+                        doc.addImage(imgs[id], 'PNG', x + 11, y + 28, chartW - 22, chartH - 40, undefined, 'FAST');
+                    });
+                    y += chartH + 14;
+                }
+            }
+
+            // ════════════════ Detail sections ════════════════
+            newPage();
+            const tt = m.team.reduce((a, r) => ({ av: a.av + r.availableSec, lg: a.lg + r.loggedSec, cl: a.cl + r.clientSec, in: a.in + r.internalSec, bd: a.bd + r.bdSec }), { av: 0, lg: 0, cl: 0, in: 0, bd: 0 });
+            section('Team summary', 'Available versus logged hours per employee, split by type of work.');
+            table({
+                head: ['Employee', 'Available', 'Logged', 'Client', 'Internal', 'Bus. dev.', 'Leave', 'Utilization'],
+                body: m.team.map(r => [r.employee, fmtH(r.availableSec), fmtH(r.loggedSec), fmtH(r.clientSec), fmtH(r.internalSec), fmtH(r.bdSec), fmtNum(r.leaveDays), fmtPct(r.utilization)]),
+                foot: ['Total', fmtH(tt.av), fmtH(tt.lg), fmtH(tt.cl), fmtH(tt.in), fmtH(tt.bd), '', fmtPct(k.utilization)],
+                numeric: [1, 2, 3, 4, 5, 6, 7], widths: { 0: 110 }
+            });
+
+            section('Client summary', 'Hours per client and their share of the team\'s logged time.');
+            table({
+                head: ['Client', 'Hours', 'Share', 'Employees', 'Main task category'],
+                body: m.clients.map(c => [c.client, fmtH(c.seconds), fmtPct(c.share), c.employeeCount, c.topCategory]),
+                foot: ['Total', fmtH(k.totalSec), k.totalSec ? '100.0%' : 'N/A', '', ''],
+                numeric: [1, 2, 3], widths: { 0: 150 }
+            });
+
+            const cats = Object.entries(m.categoryTotals).sort((a, b) => b[1] - a[1]);
+            section('Task categories', 'Where the time went, by type of task.');
+            table({
+                head: ['Task category', 'Hours', 'Share'],
+                body: cats.map(([c, s]) => [c, fmtH(s), fmtPct(k.totalSec ? s / k.totalSec : null)]),
+                foot: ['Total', fmtH(k.totalSec), k.totalSec ? '100.0%' : 'N/A'],
+                numeric: [1, 2]
+            });
+
+            const pt = m.performanceTotals;
+            section('Task performance', 'Completed = finished in the period · Pending = open at period end · Overdue = open and past due.');
+            table({
+                head: ['Employee', 'Assigned', 'Completed', 'Pending', 'In progress', 'Overdue', 'Rework'],
+                body: m.performance.map(r => [r.employee, r.assigned, r.completed, r.pending, r.inProgress, r.overdue, r.rework]),
+                foot: ['Total', pt.assigned, pt.completed, pt.pending, pt.inProgress, pt.overdue, pt.rework],
+                numeric: [1, 2, 3, 4, 5, 6], widths: { 0: 120 }
+            });
+
+            section('Quality checks', `${m.qc.reviews} review${m.qc.reviews === 1 ? '' : 's'} · ${m.qc.passed} passed · ${m.qc.failed} sent to rework · pass rate ${fmtPct(m.qc.passRate)}`);
+            table({
+                head: ['Creator', 'Reviewer', 'Task', 'Date', 'Result', 'Failure reason', 'Round', 'QC time'],
+                body: m.qc.rows.map(r => [r.creator, r.reviewer, r.description || r.submissionId, fmtDate(r.date), r.result, r.failureReason || '–', r.reworkRounds, fmtH(r.qcSeconds)]),
+                foot: m.qc.rows.length ? ['Total', '', `${m.qc.reviews} reviews`, '', '', '', '', fmtH(m.qc.qcSeconds)] : null,
+                numeric: [6, 7], widths: { 0: 58, 1: 54, 3: 62, 4: 44, 6: 42, 7: 46 },
+                tone: (v, col) => col === 4 ? (v === 'Pass' ? PDF.good : v === 'Fail' ? PDF.bad : null) : null,
+                empty: 'No QC reviews recorded in this period.'
+            });
+
+            section('Shoots & production', 'Shoot duration counts overlapping crew time once; production hours are total person-hours.');
+            table({
+                head: ['Shoot', 'Client', 'Date', 'Crew', 'Duration', 'Person-hours', 'Status'],
+                body: m.shoots.rows.map(r => [r.title || r.shootId, r.client, fmtDate(r.date), r.assignees, fmtH(r.shootSeconds), fmtH(r.productionSeconds), r.status]),
+                numeric: [4, 5], widths: { 0: 110, 2: 58 },
+                empty: 'No shoots scheduled in this period.'
+            });
+
+            section('Attendance', 'Late = first check-in after 9:45 AM · working hours exclude breaks.');
+            table({
+                head: ['Employee', 'Working days', 'Present', 'Leave', 'Late', 'Breaks', 'Working hours', 'No check-out'],
+                body: m.attendance.hasData ? m.attendance.rows.map(r => [r.employee, r.workingDays, r.presentDays, fmtNum(r.leaveDays), r.lateArrivals, fmtH(r.breakSec), fmtH(r.workSec), r.missingCheckout || '–']) : [],
+                numeric: [1, 2, 3, 4, 5, 6, 7], widths: { 0: 110 },
+                empty: 'No attendance check-ins recorded for this period.'
+            });
+
+            // ════════════════ Running header & footer ════════════════
             const pages = doc.internal.getNumberOfPages();
             for (let p = 1; p <= pages; p++) {
                 doc.setPage(p);
-                doc.setFontSize(8);
-                doc.setTextColor(148, 163, 184);
-                doc.text(`${BRAND.name} · ${BRAND.product} · ${m.period.label} · Confidential`, M, H - 18);
-                doc.text(`Page ${p} of ${pages}`, W - M, H - 18, { align: 'right' });
+                if (p > 1) {
+                    text(`One Report  ·  ${periodTitle}`, M, 36, { size: 7.5, color: PDF.muted });
+                    text(BRAND.name, W - M, 36, { size: 7.5, bold: true, color: PDF.ink, align: 'right' });
+                    hline(44);
+                }
+                hline(H - 40);
+                text(`Confidential  ·  Generated ${generated}`, M, H - 27, { size: 7, color: PDF.faint });
+                text(`Page ${p} of ${pages}`, W - M, H - 27, { size: 7, color: PDF.faint, align: 'right' });
             }
             doc.save(`${fileBase(m)}.pdf`);
             notify('PDF report downloaded', 'success');
