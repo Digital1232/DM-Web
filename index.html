@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.48">
+    <meta name="app-version" content="1.0.49">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -3820,12 +3820,13 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         My Monthly Report
                     </button>
-                    <button onclick="switchView('weekly-matrix')" id="nav-weekly-matrix" data-label="Weekly Matrix"
-                        aria-label="Weekly Matrix"
+                    <!-- MONTHLY REPORTS (agency-wide, role-scoped) -->
+                    <button onclick="switchView('monthly-reports')" id="nav-monthly-reports"
+                        data-label="Monthly Reports" aria-label="Monthly Reports"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:calendar-date-bold-duotone" width="20"
+                        <iconify-icon icon="solar:document-text-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        Weekly Matrix
+                        Monthly Reports
                     </button>
                     <button onclick="switchView('shoots')" id="nav-shoots" data-label="Shoot Calendar"
                         aria-label="Shoot Calendar"
@@ -9788,158 +9789,6 @@
                     </div>
                 </div><!-- /view-meta-integration-panel -->
 
-                <!-- ════ WEEKLY MATRIX PLANNER VIEW ════ -->
-                <div id="view-weekly-matrix-panel" class="hidden flex flex-col gap-4 fade-in w-full pb-20">
-                    <!-- Header Card with Premium Layout -->
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
-                        <div class="flex items-center gap-3">
-                            <div
-                                class="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                <iconify-icon icon="solar:calendar-date-bold-duotone" width="22"></iconify-icon>
-                            </div>
-                            <div>
-                                <h2 class="text-lg font-black text-slate-900 dark:text-white">Weekly Matrix Planner</h2>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Drag & drop tasks across clients
-                                    and days of the week to schedule operations.</p>
-                            </div>
-                        </div>
-
-                        <!-- Navigation and Actions -->
-                        <div class="flex flex-wrap items-center gap-2.5">
-                            <!-- Week Switcher -->
-                            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-xl p-1 gap-1">
-                                <button onclick="matrixChangeWeek(-7)"
-                                    class="p-2 hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-all"
-                                    title="Previous Week">
-                                    <iconify-icon icon="solar:alt-arrow-left-linear" width="16"></iconify-icon>
-                                </button>
-                                <span id="matrix-week-display"
-                                    class="text-xs font-extrabold px-3 text-slate-700 dark:text-slate-200 min-w-[180px] text-center">Loading
-                                    week...</span>
-                                <button onclick="matrixChangeWeek(7)"
-                                    class="p-2 hover:bg-white dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-all"
-                                    title="Next Week">
-                                    <iconify-icon icon="solar:alt-arrow-right-linear" width="16"></iconify-icon>
-                                </button>
-                                <button onclick="matrixGoToCurrentWeek()"
-                                    class="px-3 py-1.5 hover:bg-white dark:hover:bg-slate-600 text-xs font-black text-indigo-600 dark:text-indigo-400 rounded-lg transition-all">
-                                    Today
-                                </button>
-                            </div>
-
-                            <!-- Client Filter -->
-                            <select id="matrix-client-filter" onchange="renderMatrixTable()"
-                                class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-bold rounded-xl px-3 py-2.5 outline-none transition-all text-slate-700 dark:text-slate-200">
-                                <option value="All">All Clients</option>
-                            </select>
-
-                            <!-- Assignee Filter -->
-                            <select id="matrix-assignee-filter" onchange="renderMatrixTable()"
-                                class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-bold rounded-xl px-3 py-2.5 outline-none transition-all text-slate-700 dark:text-slate-200">
-                                <option value="All">All Assignees</option>
-                            </select>
-
-                            <!-- Search Input -->
-                            <div class="relative">
-                                <iconify-icon icon="solar:magnifer-linear"
-                                    class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                                    width="16"></iconify-icon>
-                                <input id="matrix-search" type="text" oninput="renderMatrixTable()"
-                                    placeholder="Search tasks..."
-                                    class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2.5 outline-none transition-all w-48 focus:w-64">
-                            </div>
-
-                            <!-- Auto-Schedule Button -->
-                            <button onclick="openWeeklyMatrixAutoScheduleModal()"
-                                class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer"
-                                title="Auto-schedule videos for Barath, Immanuel & Muthu based on daily capacities & shoots">
-                                <iconify-icon icon="solar:magic-stick-3-bold" width="16"></iconify-icon>
-                                <span>Auto-Schedule</span>
-                            </button>
-
-                            <!-- Capacity Rules Button -->
-                            <button onclick="openWeeklyMatrixCapacitySettingsModal()"
-                                class="p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl transition-all cursor-pointer"
-                                title="Configure Daily Editor Quotas">
-                                <iconify-icon icon="solar:settings-bold" width="16"></iconify-icon>
-                            </button>
-
-                            <!-- Reset/Sync Button -->
-                            <button onclick="renderMatrixTable()"
-                                class="p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl transition-all cursor-pointer"
-                                title="Refresh Matrix">
-                                <iconify-icon icon="solar:restart-linear" width="16"
-                                    class="hover:rotate-180 transition-transform duration-500"></iconify-icon>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Live Editor Capacity & Workload Bar -->
-                    <div id="matrix-editor-capacity-bar"
-                        class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-3 flex-shrink-0">
-                        <!-- Populated by JS -->
-                    </div>
-
-                    <!-- Matrix Board Scrollable Area -->
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl overflow-hidden w-full flex flex-col">
-                        <div id="matrix-table-scroll-wrapper" class="overflow-x-auto overflow-y-auto relative w-full"
-                            style="max-height: calc(100vh - 220px); min-height: 480px;">
-                            <table class="w-full text-left min-w-[1350px]"
-                                style="border-collapse: separate; border-spacing: 0;">
-                                <thead
-                                    class="sticky top-0 z-30 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
-                                    <tr>
-                                        <!-- Sticky Top-Left Corner for Client Header -->
-                                        <th
-                                            class="matrix-sticky-top-left p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[180px]">
-                                            Client
-                                        </th>
-                                        <!-- Backlog Column Header -->
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-rose-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[160px]">
-                                            Backlog / Unassigned
-                                        </th>
-                                        <!-- Day Headers (Mon to Sun) -->
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Mon <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="1">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Tue <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="2">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Wed <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="3">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Thu <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="4">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Fri <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="5">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest border-r border-slate-100 dark:border-slate-700 w-[140px]">
-                                            Sat <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="6">-</span></th>
-                                        <th
-                                            class="matrix-sticky-header p-4 text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest w-[140px]">
-                                            Sun <span class="matrix-day-date text-[9px] font-medium block mt-0.5"
-                                                data-day="0">-</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="matrix-tbody" class="divide-y divide-slate-100 dark:divide-slate-700">
-                                    <!-- Dynamic client rows loaded here -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div><!-- /view-weekly-matrix-panel -->
-
                 <!-- ════ REPORTS VIEW ════ -->
                 <div id="view-reports-panel" class="hidden fade-in space-y-6 overflow-y-auto"
                     style="max-height: calc(100vh - 100px);">
@@ -11080,6 +10929,9 @@
                         </div>
                     </div>
                 </div> <!-- /view-reports-panel -->
+
+                <!-- ════ MONTHLY REPORTS VIEW (content rendered by js/monthlyReports.js) ════ -->
+                <div id="view-monthly-reports-panel" class="hidden fade-in space-y-6 overflow-y-auto"></div>
 
                 <!-- ════ MY MONTHLY REPORT VIEW ════ -->
                 <div id="view-my-monthly-report-panel" class="hidden fade-in space-y-6 overflow-y-auto">
@@ -13611,149 +13463,6 @@
                 <button onclick="document.getElementById('clientDeliveryTaskModal').close()"
                     class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer">
                     Close
-                </button>
-            </div>
-        </div>
-    </dialog>
-
-    <!-- Modal: Weekly Matrix Auto-Scheduler -->
-    <dialog id="weeklyMatrixAutoScheduleModal"
-        class="rounded-3xl shadow-2xl p-0 w-full max-w-4xl border-none overflow-hidden backdrop:bg-slate-900/60">
-        <div
-            class="p-6 md:p-8 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col max-h-[85vh]">
-            <div class="flex justify-between items-start mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                <div class="flex items-center gap-3">
-                    <div
-                        class="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                        <iconify-icon icon="solar:magic-stick-3-bold" width="24"></iconify-icon>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Weekly Matrix
-                            Auto-Scheduler</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Optimizes video allocation based on
-                            due dates, daily editor limits, shoots & reworks</p>
-                    </div>
-                </div>
-                <button onclick="document.getElementById('weeklyMatrixAutoScheduleModal').close()"
-                    class="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer">
-                    <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
-                </button>
-            </div>
-
-            <div class="space-y-4 overflow-y-auto flex-1 pr-1" id="weekly-matrix-auto-content">
-                <!-- Populated dynamically by JS -->
-            </div>
-
-            <div
-                class="mt-6 flex flex-wrap justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800 gap-3">
-                <div class="flex items-center gap-2">
-                    <button onclick="openWeeklyMatrixCapacitySettingsModal()"
-                        class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                        <iconify-icon icon="solar:settings-bold" width="14"></iconify-icon> Adjust Quotas
-                    </button>
-                    <span class="text-[11px] text-slate-400">Reworks prioritized • Shoots checked automatically</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="document.getElementById('weeklyMatrixAutoScheduleModal').close()"
-                        class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer">
-                        Cancel
-                    </button>
-                    <button onclick="applyWeeklyMatrixAutoSchedule()" id="btn-apply-weekly-schedule"
-                        class="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer">
-                        <iconify-icon icon="solar:check-circle-bold" width="16"></iconify-icon> Apply Schedule to Matrix
-                    </button>
-                </div>
-            </div>
-        </div>
-    </dialog>
-
-    <!-- Modal: Weekly Matrix Capacity Settings -->
-    <dialog id="weeklyMatrixCapacityModal"
-        class="rounded-3xl shadow-2xl p-0 w-full max-w-md border-none overflow-hidden backdrop:bg-slate-900/60">
-        <div class="p-6 md:p-8 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
-            <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-                <div class="flex items-center gap-2.5">
-                    <div
-                        class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                        <iconify-icon icon="solar:settings-bold" width="18"></iconify-icon>
-                    </div>
-                    <h3 class="text-base font-black text-slate-900 dark:text-white">Editor Daily Capacities</h3>
-                </div>
-                <button onclick="document.getElementById('weeklyMatrixCapacityModal').close()"
-                    class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
-                    <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
-                </button>
-            </div>
-
-            <div class="space-y-4 text-xs">
-                <div
-                    class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span>Barath Magesh M</span>
-                            <span class="text-[10px] text-indigo-600 font-semibold">(Videos + Reworks)</span>
-                        </label>
-                        <div class="flex items-center gap-1">
-                            <input type="number" id="quota-barath" min="1" max="10" value="4"
-                                class="w-16 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center font-black text-sm">
-                            <span class="text-[11px] text-slate-400 font-bold">/ day</span>
-                        </div>
-                    </div>
-                    <p class="text-[10px] text-slate-400">Total videos allocated per day. Any rework tasks received are
-                        included within this count.</p>
-                </div>
-
-                <div
-                    class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="font-extrabold text-slate-900 dark:text-white">Immanuel Raja S (Standard)</label>
-                        <div class="flex items-center gap-1">
-                            <input type="number" id="quota-immanuel" min="1" max="10" value="4"
-                                class="w-16 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center font-black text-sm">
-                            <span class="text-[11px] text-slate-400 font-bold">/ day</span>
-                        </div>
-                    </div>
-                    <div
-                        class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
-                        <label class="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">When Half-day Shoot
-                            Planned:</label>
-                        <div class="flex items-center gap-1">
-                            <input type="number" id="quota-immanuel-half" min="0" max="6" value="2"
-                                class="w-16 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center font-black text-sm">
-                            <span class="text-[11px] text-slate-400 font-bold">/ day</span>
-                        </div>
-                    </div>
-                    <p class="text-[10px] text-slate-400 mt-1">If a full-day shoot is planned, 0 videos are scheduled
-                        for that day.</p>
-                </div>
-
-                <div
-                    class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span>Muthu</span>
-                            <span class="text-[10px] text-emerald-600 font-semibold">(Editable for future
-                                increase)</span>
-                        </label>
-                        <div class="flex items-center gap-1">
-                            <input type="number" id="quota-muthu" min="1" max="10" value="2"
-                                class="w-16 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center font-black text-sm">
-                            <span class="text-[11px] text-slate-400 font-bold">/ day</span>
-                        </div>
-                    </div>
-                    <p class="text-[10px] text-slate-400">Currently set to 2 videos per day. You can increase this
-                        anytime here.</p>
-                </div>
-            </div>
-
-            <div class="mt-6 flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button onclick="document.getElementById('weeklyMatrixCapacityModal').close()"
-                    class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer">
-                    Cancel
-                </button>
-                <button onclick="saveWeeklyMatrixCapacitySettings()"
-                    class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 cursor-pointer">
-                    Save Changes
                 </button>
             </div>
         </div>
@@ -16769,6 +16478,9 @@
                     if (typeof activeView !== 'undefined' && activeView === 'my-monthly-report' && window.MyMonthlyReport) {
                         window.MyMonthlyReport.refresh();
                     }
+                    if (typeof activeView !== 'undefined' && activeView === 'monthly-reports' && window.MonthlyReports) {
+                        window.MonthlyReports.refresh();
+                    }
                 }
             }
             window.pruneTasksByProjectKeys = pruneTasksByProjectKeys;
@@ -16973,6 +16685,7 @@
             const LEAVE_APPROVER_EMAILS = [...new Set(
                 Object.values(LEAVE_APPROVAL_CHAINS).flat().map(e => e.toLowerCase())
             )];
+            window.LEAVE_APPROVAL_CHAINS = LEAVE_APPROVAL_CHAINS;
 
             const REPORT_TABS = ['timing', 'task', 'analytics', 'summary', 'weekly', 'detailed', 'performance', 'indiv-perf', 'client', 'client-wide', 'client-wise-timing', 'client-perf', 'client-delivery', 'operation-eta'];
             const TEAM_REPORT_ACCESS = {
@@ -17909,6 +17622,9 @@
                     renderQcTasks();
                     if (typeof activeView !== 'undefined' && activeView === 'my-monthly-report' && window.MyMonthlyReport) {
                         window.MyMonthlyReport.refresh();
+                    }
+                    if (typeof activeView !== 'undefined' && activeView === 'monthly-reports' && window.MonthlyReports) {
+                        window.MonthlyReports.refresh();
                     }
 
                     // Apply date filters
@@ -19605,7 +19321,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     loadInternalBoardSettings();
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
-                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'my-monthly-report'];
+                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'my-monthly-report', 'monthly-reports'];
                     if (canViewProjects()) validViews.push('projects');
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
@@ -22434,7 +22150,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org',
                     'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org',
                     'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads',
-                    'marketing-hub', 'meta-integration', 'weekly-matrix', 'my-monthly-report'
+                    'marketing-hub', 'meta-integration', 'my-monthly-report', 'monthly-reports'
                 ];
 
                 allPanelIds.forEach(id => {
@@ -22498,8 +22214,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'plan-tracking': 'Production Control Center',
                     'files-manager': 'Files Manager',
                     discussions: 'Discussion History & Schedule',
-                    'weekly-matrix': 'Weekly Matrix Planner',
-                    'my-monthly-report': 'My Monthly Report'
+                    'my-monthly-report': 'My Monthly Report',
+                    'monthly-reports': 'Monthly Reports'
                 };
                 document.getElementById('view-title').textContent = titles[view] || 'One Desk';
 
@@ -22592,7 +22308,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     else if (view === 'meta-ads') { loadMetaAdsData(); }
                     else if (view === 'marketing-hub') { initMarketingHub(); }
                     else if (view === 'meta-integration') { initMetaIntegration(); }
-                    else if (view === 'weekly-matrix') { initWeeklyMatrix(); }
+                    else if (view === 'monthly-reports') {
+                        if (window.MonthlyReports) window.MonthlyReports.init();
+                    }
                     else if (view === 'my-monthly-report') {
                         if (typeof window.loadAttendanceEvents === 'function') loadAttendanceEvents();
                         if (typeof window.loadAllTimeLogs === 'function') loadAllTimeLogs();
@@ -40339,6 +40057,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (typeof activeView !== 'undefined' && activeView === 'my-monthly-report' && window.MyMonthlyReport) {
                         window.MyMonthlyReport.refresh();
                     }
+                    if (typeof activeView !== 'undefined' && activeView === 'monthly-reports' && window.MonthlyReports) {
+                        window.MonthlyReports.refresh();
+                    }
                 });
             }
 
@@ -41104,7 +40825,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </div>
                 </div>`;
 
-                // WEEKLY MATRIX BREAKDOWN
+                // WEEKLY TIMING BREAKDOWN
                 let html = '';
                 let grandTotalSeconds = 0;
                 let grandTotalDeliverables = 0;
@@ -45418,6 +45139,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     safeSetLocalStorage('worksync_all_timelogs', JSON.stringify(allTimeLogs));
                     if (typeof activeView !== 'undefined' && activeView === 'my-monthly-report' && window.MyMonthlyReport) {
                         window.MyMonthlyReport.refresh();
+                    }
+                    if (typeof activeView !== 'undefined' && activeView === 'monthly-reports' && window.MonthlyReports) {
+                        window.MonthlyReports.refresh();
                     }
                     console.log("loadAllTimeLogs: canViewReports", canViewReports(), "currentUser.email", currentUser?.email);
                     if (canViewReports()) {
@@ -66572,12 +66296,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             <span id="mob-task-badge" class="mobile-tab-badge hidden">0</span>
         </button>
 
-        <!-- 3. Weekly Matrix -->
-        <button type="button" id="mob-tab-matrix" onclick="switchView('weekly-matrix')" class="mobile-tab-btn"
-            aria-label="Matrix Planner">
+        <!-- 3. My Monthly Report -->
+        <button type="button" id="mob-tab-report" onclick="switchView('my-monthly-report')" class="mobile-tab-btn"
+            aria-label="My Monthly Report">
             <span class="tab-indicator"></span>
-            <iconify-icon icon="solar:calendar-date-bold-duotone"></iconify-icon>
-            <span>Matrix</span>
+            <iconify-icon icon="solar:file-chart-bold-duotone"></iconify-icon>
+            <span>Report</span>
         </button>
 
         <!-- 4. Team Chat -->
@@ -66933,6 +66657,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
     <script src="js/sales-hub.js"></script>
     <script src="js/push-notifications.js"></script>
     <script src="js/myMonthlyReport.js"></script>
+    <script src="js/monthlyReportsEngine.js"></script>
+    <script src="js/monthlyReports.js"></script>
 
 
 </body>

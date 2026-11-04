@@ -13,7 +13,7 @@
         'internal-tasks': 'mob-tab-tasks',
         'dailyplan': 'mob-tab-tasks',
         'completed-tasks': 'mob-tab-tasks',
-        'weekly-matrix': 'mob-tab-matrix',
+        'my-monthly-report': 'mob-tab-report',
         'chat': 'mob-tab-chat'
     };
 
