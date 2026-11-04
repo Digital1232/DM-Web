@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.47">
+    <meta name="app-version" content="1.0.48">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -30281,23 +30281,82 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            function ensureEmployeeCurrentTasksInTasks() {
+                if (typeof currentWorkUsers === 'undefined' || !Array.isArray(currentWorkUsers) || !currentWorkUsers.length) return;
+                let added = false;
+                currentWorkUsers.forEach(u => {
+                    if (!u.currentTask || !u.currentTask.taskId) return;
+                    const ct = u.currentTask;
+                    const ctId = String(ct.taskId).trim();
+                    const existing = tasks.find(t => t.id === ctId || (t.desc && ct.taskDesc && t.desc.toLowerCase().trim() === ct.taskDesc.toLowerCase().trim()));
+                    if (!existing) {
+                        const synthesized = {
+                            id: ctId,
+                            desc: ct.taskDesc || 'Active Task',
+                            summary: ct.taskDesc || 'Active Task',
+                            status: ct.status || (ct.state === 'working' ? 'In Progress' : 'Hold'),
+                            client: ct.client || 'Others',
+                            priority: ct.priority || 'Medium',
+                            assignee: u.name || u.email,
+                            assigneeEmail: u.email,
+                            userId: u.email,
+                            manual: true,
+                            taskType: 'internal',
+                            duedate: todayIso(),
+                            createdAt: ct.startedAt || Date.now()
+                        };
+                        tasks.unshift(synthesized);
+                        added = true;
+                    } else {
+                        // Keep status in sync if user is currently working on it
+                        if (ct.state === 'working' && existing.status !== 'In Progress' && !isDone(existing.status)) {
+                            existing.status = 'In Progress';
+                            added = true;
+                        }
+                    }
+                });
+                if (added) {
+                    PerfOptimizer.invalidateCache('filterTasks');
+                }
+            }
+
+            function isTaskCurrentlyWorkingOrActive(t) {
+                if (!t) return false;
+                if (activeTaskId && t.id === activeTaskId) return true;
+                const statusLower = String(t.status || '').toLowerCase().trim();
+                if (statusLower === 'in progress' || statusLower === 'working') return true;
+                if (typeof currentWorkUsers !== 'undefined' && Array.isArray(currentWorkUsers)) {
+                    return currentWorkUsers.some(u => u.currentTask && (
+                        String(u.currentTask.taskId).trim() === String(t.id).trim() ||
+                        (u.currentTask.taskDesc && t.desc && u.currentTask.taskDesc.trim().toLowerCase() === t.desc.trim().toLowerCase())
+                    ));
+                }
+                return false;
+            }
+
             function renderInternalTasks() {
                 const tbody = document.getElementById('internal-tasks-tbody');
                 if (!tbody) return;
 
+                if (typeof ensureEmployeeCurrentTasksInTasks === 'function') {
+                    ensureEmployeeCurrentTasksInTasks();
+                }
+
+                const isWorking = (t) => isTaskCurrentlyWorkingOrActive(t);
+
                 let filtered = tasks.filter(isInternalTask);
                 if (currentInternalStatusFilter !== 'all') {
                     filtered = currentInternalStatusFilter.length
-                        ? filtered.filter(t => (activeTaskId && t.id === activeTaskId) || currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase()))
-                        : (activeTaskId ? tasks.filter(t => t.id === activeTaskId && isInternalTask(t)) : []);
+                        ? filtered.filter(t => isWorking(t) || currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase()))
+                        : (activeTaskId ? tasks.filter(t => (isWorking(t) || t.id === activeTaskId) && isInternalTask(t)) : []);
                 }
                 if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || assigneeMatches(t, currentInternalAssigneeFilter));
-                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || t.client === currentInternalClientFilter);
+                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => isWorking(t) || t.client === currentInternalClientFilter);
 
                 if (currentInternalDueDateFromRange || currentInternalDueDateToRange) {
                     // Custom date range filtering
                     filtered = filtered.filter(t => {
-                        if (activeTaskId && t.id === activeTaskId) return true;
+                        if (isWorking(t)) return true;
                         if (!t.duedate) return false;
                         const [y, m, d] = t.duedate.split('-').map(Number);
                         const dueDate = new Date(y, m - 1, d);
@@ -30324,7 +30383,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     today.setHours(0, 0, 0, 0);
                     if (currentInternalDueDateFilter === 'overdue') {
                         filtered = filtered.filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             if (!t.duedate || (isDone(t.status) || isInternalDone(t.status))) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30333,7 +30392,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else if (currentInternalDueDateFilter === 'today') {
                         const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
                         filtered = filtered.filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             if (t.duedate !== todayStr) return false;
                             if (currentInternalStatusFilter === 'all') {
                                 const s = (t.status || '').toLowerCase().trim();
@@ -30345,7 +30404,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const yesterday = new Date(today);
                         yesterday.setDate(today.getDate() - 1);
                         const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
-                        filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || t.duedate === yesterdayStr);
+                        filtered = filtered.filter(t => isWorking(t) || t.duedate === yesterdayStr);
                     } else if (currentInternalDueDateFilter === 'last_week') {
                         const startOfLastWeek = new Date(today);
                         const currentDay = today.getDay();
@@ -30358,7 +30417,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         endOfLastWeek.setHours(23, 59, 59, 999);
 
                         filtered = filtered.filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30366,13 +30425,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         });
                     } else if (currentInternalDueDateFilter === 'this_week') {
                         const startOfWeek = new Date(today);
-                        startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+                        const day = today.getDay();
+                        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                        startOfWeek.setDate(diff);
                         startOfWeek.setHours(0, 0, 0, 0);
+
                         const endOfWeek = new Date(startOfWeek);
                         endOfWeek.setDate(startOfWeek.getDate() + 6);
                         endOfWeek.setHours(23, 59, 59, 999);
+
                         filtered = filtered.filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30381,8 +30444,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else if (currentInternalDueDateFilter === 'this_month') {
                         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
                         filtered = filtered.filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30412,10 +30476,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     // Board only shows tasks with taskType 'internal' (excludes manual client tasks)
                     // Apply strict internal filter on top of the already-filtered list
+                    const isWorking = (t) => isTaskCurrentlyWorkingOrActive(t);
                     const boardTasks = tasks
                         .filter(isInternalTask)
                         .filter(t => {
-                            if (activeTaskId && t.id === activeTaskId) return true;
+                            if (isWorking(t)) return true;
                             // Status filter
                             if (currentInternalStatusFilter !== 'all' && Array.isArray(currentInternalStatusFilter) && currentInternalStatusFilter.length) {
                                 if (!currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase())) return false;
@@ -30674,8 +30739,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function isInternalTask(t) {
                 if (!t) return false;
                 const tId = String(t.id || t.taskId || '').toUpperCase().trim();
-                if (tId.startsWith('M-') || tId.startsWith('LEARN-')) return true;
-                return t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true';
+                if (tId.startsWith('M-') || tId.startsWith('LEARN-') || tId.startsWith('MP-') || tId.startsWith('DISC-') || tId.startsWith('P-')) return true;
+                if (t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true') return true;
+                return typeof isJiraCloudTask === 'function' ? !isJiraCloudTask(t) : false;
             }
 
             function morningLearningTaskId(email) {
@@ -31888,22 +31954,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!currentUser && filterValue === 'me') return false;
 
                 const crit = getAssigneeFilterCriteria(filterValue);
-                const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
+                const taskEmail = (task.assigneeEmail || task.userId || task.plannedForUser || task.owner || task.email || task.userEmail || '').toLowerCase();
 
                 if (taskEmail && crit.filterEmail && taskEmail === crit.filterEmail) return true;
 
                 // Direct alias matching for Murugesh, Ajith, and Alex
                 if (crit.isMurugesh && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
                 if (crit.isAjith && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
-                if (crit.isAlex && (ALEX_EMAILS.includes(taskEmail) || task.alexTask)) return true;
+                if (crit.isAlex && (ALEX_EMAILS.includes(taskEmail) || task.alexTask || taskEmail.includes('alex'))) return true;
                 if (task.murugeshTask && crit.filterNameHasMurugesh) return true;
                 if (task.ajithTask && crit.filterNameHasAjith) return true;
                 if (task.alexTask && crit.filterNameHasAlex) return true;
 
-                const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
+                const taskName = normalizeAssigneeValue(task.assignee || task.assigneeName || task.userName || task.ownerName || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
 
-                if (crit.isAlex && (taskName === 'alex' || taskName.startsWith('alex'))) return true;
-                if (ALEX_EMAILS.includes(taskEmail) && (crit.filterName === 'alex' || crit.filterName.startsWith('alex'))) return true;
+                if (crit.isAlex && (taskName === 'alex' || taskName.startsWith('alex') || taskName.includes('alex') || taskEmail.includes('alex'))) return true;
+                if ((ALEX_EMAILS.includes(taskEmail) || taskEmail.includes('alex')) && (crit.filterName === 'alex' || crit.filterName.startsWith('alex'))) return true;
 
                 if (!crit.filterName || !taskName) return false;
                 if (taskName === crit.filterName) return true;
@@ -34047,6 +34113,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             return aActive - bActive || (a.name || '').localeCompare(b.name || '');
                         });
                     renderEmployeeCurrentTasks();
+                    if (typeof ensureEmployeeCurrentTasksInTasks === 'function') {
+                        ensureEmployeeCurrentTasksInTasks();
+                    }
                     const nextFilterKey = currentWorkUsers.map(u => `${u.email}:${u.name}:${u.role}`).join('|');
                     if (nextFilterKey !== currentWorkFilterKey) {
                         currentWorkFilterKey = nextFilterKey;
@@ -50340,6 +50409,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function loadManualTasks() {
                 if (!currentUser) return;
+                const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                 const userEmail = (currentUser.email || '').toLowerCase().trim();
                 const isMurugesh = userEmail === 'murugeshvilpower@gmail.com' || userEmail === 'murugesh@vilpower.com' || userEmail.includes('murugesh');
                 const isAjith = userEmail === 'ajithvilpower@gmail.com' || userEmail === 'ajith@vilpower.com' || userEmail.includes('ajith');
@@ -50349,7 +50419,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Admins and Murugesh load all manual tasks from all users
                     onValue(ref(db, `worksync/manual_tasks`), snap => {
                         // Cleanup target tasks requested by user
-                        const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                         snap.forEach(userTasksSnap => {
                             const userKey = userTasksSnap.key;
                             const tasksMap = userTasksSnap.val() || {};
@@ -50452,7 +50521,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     onValue(ref(db, `worksync/manual_tasks/${eKey(currentUser.email)}`), snap => {
                         if (!currentUser || !currentUser.email) return;
                         // Cleanup target tasks if owned by this user
-                        const targetIds = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624'];
                         const userTasksMap = snap.val() || {};
                         Object.keys(userTasksMap).forEach(taskId => {
                             if (targetIds.includes(taskId)) {
