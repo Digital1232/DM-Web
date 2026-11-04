@@ -57430,16 +57430,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!appInitialized) {
                     if (typeof hideInitialLoading === 'function') hideInitialLoading();
                     document.documentElement.classList.remove('auth-pending');
-                    document.documentElement.classList.remove('has-user');
                     const loadingView = document.getElementById('loading-view');
                     if (loadingView) {
                         loadingView.classList.add('hidden');
                         loadingView.style.display = 'none';
                     }
                     if (!currentUser) {
+                        document.documentElement.classList.remove('has-user');
                         document.getElementById('login-view')?.classList.remove('hidden');
                         document.getElementById('dashboard-view')?.classList.add('hidden');
                     } else {
+                        document.documentElement.classList.add('has-user');
                         finishLogin();
                     }
                 }
@@ -57449,46 +57450,79 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 clearTimeout(authInitTimeout);
                 try {
                     if (fbUser) {
-                        const snap = await get(ref(db, `worksync/users/${eKey(fbUser.email)}`)); // Fetch user data from Firebase
-                        const hardcoded = knownUserByEmail(fbUser.email);
-                        if (snap.exists()) {
-                            currentUser = { ...snap.val(), ...(hardcoded || {}), uid: fbUser.uid };
-                        } else {
-                            currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : {
-                                email: fbUser.email,
-                                name: fbUser.displayName || fbUser.email.split('@')[0],
-                                role: 'Junior Video Editor',
-                                avatar: 'Muthu',
-                                uid: fbUser.uid
-                            };
-                            try {
-                                await set(ref(db, `worksync/users/${eKey(fbUser.email)}`), currentUser);
-                            } catch (setErr) {
-                                console.warn('[Auth] Could not auto-create user in RTDB:', setErr);
+                        try {
+                            const snap = await get(ref(db, `worksync/users/${eKey(fbUser.email)}`)); // Fetch user data from Firebase
+                            const hardcoded = knownUserByEmail(fbUser.email);
+                            if (snap.exists()) {
+                                currentUser = { ...snap.val(), ...(hardcoded || {}), uid: fbUser.uid };
+                            } else {
+                                currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : {
+                                    email: fbUser.email,
+                                    name: fbUser.displayName || fbUser.email.split('@')[0],
+                                    role: 'Junior Video Editor',
+                                    avatar: 'Muthu',
+                                    uid: fbUser.uid
+                                };
+                                try {
+                                    await set(ref(db, `worksync/users/${eKey(fbUser.email)}`), currentUser);
+                                } catch (setErr) {
+                                    console.warn('[Auth] Could not auto-create user in RTDB:', setErr);
+                                }
+                            }
+                        } catch (rtdbErr) {
+                            console.warn('[Auth] RTDB user fetch failed, preserving cached/hardcoded profile:', rtdbErr);
+                            if (!currentUser) {
+                                const hardcoded = knownUserByEmail(fbUser.email);
+                                currentUser = hardcoded ? { ...hardcoded, uid: fbUser.uid } : {
+                                    email: fbUser.email,
+                                    name: fbUser.displayName || fbUser.email.split('@')[0],
+                                    role: 'Junior Video Editor',
+                                    uid: fbUser.uid
+                                };
                             }
                         }
                         localStorage.setItem('worksync_user', JSON.stringify(currentUser));
                         document.documentElement.classList.add('has-user');
                         await finishLogin();
                     } else {
-                        // User is signed out. The logout() function handles state and UI cleanup.
-                        // This block is a fallback for external sign-out events.
-                        if (!currentUser || currentUser.uid !== 'mock-uid-nanjil') {
+                        // User is signed out in Firebase Auth.
+                        // CRITICAL SAFEGUARD: Do NOT automatically log out if we already have a valid cached session in localStorage.
+                        // A temporary null fbUser happens during initial token verification, offline mode, or slow network.
+                        // Only force logout if the user explicitly has NO cached session, or if explicit logout was requested.
+                        if (!currentUser || !currentUser.email) {
                             await logout();
+                        } else {
+                            console.log('[Auth] Firebase reported null fbUser, preserving valid cached session for:', currentUser.email);
+                            document.documentElement.classList.add('has-user');
+                            document.documentElement.classList.remove('auth-pending');
+                            if (!appInitialized) {
+                                await finishLogin();
+                            }
                         }
                     }
                     populateAssigneeFilter(); // Populate filters after user is set
                     populateClientFilter();   // Populate filters after user is set
                 } catch (err) {
                     console.error("Auth init error:", err);
-                    localStorage.removeItem('worksync_user');
-                    document.documentElement.classList.remove('has-user');
-                    document.documentElement.classList.remove('auth-pending');
-                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
-                    const loadingView = document.getElementById('loading-view');
-                    if (loadingView) loadingView.classList.add('hidden');
-                    document.getElementById('dashboard-view').classList.add('hidden');
-                    document.getElementById('login-view').classList.remove('hidden');
+                    // CRITICAL SAFEGUARD: Do NOT purge localStorage on network errors!
+                    // If we have a cached user, keep them logged in instead of kicking them out.
+                    if (currentUser && currentUser.email) {
+                        console.warn('[Auth] Preserving cached session despite auth error.');
+                        document.documentElement.classList.add('has-user');
+                        document.documentElement.classList.remove('auth-pending');
+                        if (!appInitialized) {
+                            await finishLogin();
+                        }
+                    } else {
+                        localStorage.removeItem('worksync_user');
+                        document.documentElement.classList.remove('has-user');
+                        document.documentElement.classList.remove('auth-pending');
+                        if (typeof hideInitialLoading === 'function') hideInitialLoading();
+                        const loadingView = document.getElementById('loading-view');
+                        if (loadingView) loadingView.classList.add('hidden');
+                        document.getElementById('dashboard-view')?.classList.add('hidden');
+                        document.getElementById('login-view')?.classList.remove('hidden');
+                    }
                 }
             });
 
