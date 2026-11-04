@@ -22058,14 +22058,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             // VIEW NAVIGATION
-            function switchTasksTab(tab) {
+            function switchTasksTab(tab, fromSwitchView = false) {
                 try {
-                    // Ensure the main tasks panel is shown if we're currently on a different view
-                    const tasksPanel = document.getElementById('view-tasks-panel');
-                    if (tasksPanel && (tasksPanel.classList.contains('hidden') || tasksPanel.style.display === 'none')) {
+                    // If we're not currently on the tasks view, route via switchView cleanly to avoid circular calls
+                    if (!fromSwitchView && activeView !== 'tasks') {
+                        activeTasksTab = tab;
                         if (typeof switchView === 'function') {
                             switchView('tasks');
                         }
+                        return;
                     }
 
                     const jiraTab = document.getElementById('tasks-tab-jira');
@@ -22224,12 +22225,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let panelId = view;
                 if (view === 'internal-tasks') {
                     panelId = 'tasks';
-                    setTimeout(() => switchTasksTab('internal'), 10);
+                    activeTasksTab = 'internal';
                 } else if (view === 'dailyplan') {
                     panelId = 'tasks';
-                    setTimeout(() => switchTasksTab('dailyplan'), 10);
+                    activeTasksTab = 'dailyplan';
                 } else if (view === 'tasks') {
-                    setTimeout(() => switchTasksTab('jira'), 10);
+                    if (!activeTasksTab) activeTasksTab = 'jira';
                 }
 
                 if (view === 'reports' && !canViewReports()) { view = 'dashboard'; panelId = 'dashboard'; }
@@ -22391,15 +22392,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Safety check: only run if the view hasn't changed since the timeout was scheduled
                     if (activeView !== view) return;
 
-                    if (view === 'tasks') {
-                        if (activeTasksTab === 'internal' || (typeof isInternalTabActive === 'function' && isInternalTabActive())) {
-                            renderInternalTasks();
-                        } else {
-                            renderTasks();
-                        }
-                    }
-                    else if (view === 'internal-tasks') {
-                        renderInternalTasks();
+                    if (view === 'tasks' || view === 'internal-tasks' || view === 'dailyplan') {
+                        const targetTab = activeTasksTab || (view === 'internal-tasks' ? 'internal' : (view === 'dailyplan' ? 'dailyplan' : 'jira'));
+                        switchTasksTab(targetTab, true);
                     }
                     else if (view === 'shoots') {
                         renderShootCalendar();
@@ -25562,6 +25557,37 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return _strategyEventsIndex;
             }
 
+            let _taskLookupMap = null;
+            let _taskLookupMapTasksRef = null;
+
+            function getTaskLookupMap() {
+                if (_taskLookupMap && _taskLookupMapTasksRef === tasks) {
+                    return _taskLookupMap;
+                }
+                const map = new Map();
+                const list = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
+                for (let i = 0; i < list.length; i++) {
+                    const t = list[i];
+                    if (!t) continue;
+                    if (t.id) {
+                        const idStr = String(t.id).toLowerCase().trim();
+                        if (!map.has(idStr)) map.set(idStr, t);
+                    }
+                    if (t.jiraId) {
+                        const jidStr = String(t.jiraId).toLowerCase().trim();
+                        if (!map.has(jidStr)) map.set(jidStr, t);
+                    }
+                    if (t.key) {
+                        const kStr = String(t.key).toLowerCase().trim();
+                        if (!map.has(kStr)) map.set(kStr, t);
+                    }
+                }
+                _taskLookupMap = map;
+                _taskLookupMapTasksRef = tasks;
+                return _taskLookupMap;
+            }
+            window.getTaskLookupMap = getTaskLookupMap;
+
             function isStrategyTask(t) {
                 if (!t) return false;
                 if (t._isStrategyMemo !== undefined && t._isStrategyMemoObj === strategyEvents) {
@@ -25604,12 +25630,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         t._isStrategyMemoObj = strategyEvents;
                         return true;
                     }
-                    let allTasks = (typeof tasks !== 'undefined' && Array.isArray(tasks)) ? tasks : [];
-                    let parentTask = allTasks.find(p => p && p !== t && (
-                        String(p.id || '').toLowerCase() === pIdStr ||
-                        String(p.jiraId || '').toLowerCase() === pIdStr ||
-                        String(p.key || '').toLowerCase() === pIdStr
-                    ));
+                    const taskMap = getTaskLookupMap();
+                    const parentTask = taskMap.get(pIdStr);
 
                     if (parentTask) {
                         if (parentTask.isStrategyEvent || parentTask.isStrategy || parentTask.eventId || parentTask.strategyEventId || parentTask.isStrategyTask || parentTask.fileManagerPath || parentTask.driveLink || parentTask.sourceLink || parentTask.sourceFolder || parentTask.folderPath || parentTask.fileSourceUrl || parentTask.file_source_url || parentTask.source_url || (parentTask.category && String(parentTask.category).toLowerCase() === 'strategy')) {
@@ -29943,15 +29965,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (style.bg.includes('blue')) return { bg: 'bg-blue-50/50', border: 'border-blue-100', titleColor: 'text-blue-600' };
                         return { bg: 'bg-amber-50/50', border: 'border-amber-100', titleColor: 'text-amber-600' };
                     };
+                    // Pre-group filtered tasks by status in a single O(N) pass
+                    const tasksByStatus = new Map();
+                    for (let i = 0; i < filtered.length; i++) {
+                        const t = filtered[i];
+                        const s = t.status || 'To Do';
+                        let list = tasksByStatus.get(s);
+                        if (!list) {
+                            list = [];
+                            tasksByStatus.set(s, list);
+                        }
+                        list.push(t);
+                    }
+
                     const cols = allStatuses.map(status => ({
                         id: status.toLowerCase().replace(/\s/g, '-'),
                         title: status,
-                        count: filtered.filter(t => t.status === status).length,
+                        count: (tasksByStatus.get(status) || []).length,
                         ...statusColors(status)
                     }));
 
                     kanban.innerHTML = cols.map(col => {
-                        const colTasks = filtered.filter(t => t.status === col.title);
+                        const colTasks = tasksByStatus.get(col.title) || [];
                         const statusJs = `'${col.title.replace(/'/g, "\\'")}'`;
                         return `
                     <div data-kanban-col="${escapeHtml(col.title)}" class="flex flex-col rounded-2xl ${col.bg} border ${col.border} p-4 h-full min-h-[300px] w-80 flex-shrink-0 transition-all" ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move';" ondragenter="dragTaskEnter(event, this)" ondragleave="dragTaskLeave(event, this)" ondrop="dropTask(event, ${statusJs})">
@@ -31694,57 +31729,73 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             }
 
+            let _lastFilterCriteriaVal = null;
+            let _cachedFilterCriteria = null;
+
+            function getAssigneeFilterCriteria(filterValue) {
+                if (_lastFilterCriteriaVal === filterValue && _cachedFilterCriteria) {
+                    return _cachedFilterCriteria;
+                }
+                const filterUser = filterValue === 'me'
+                    ? currentUser
+                    : (allUsersMap.get((filterValue || '').toLowerCase()) || USERS.find(u => u.email === filterValue));
+                const filterEmail = (filterUser?.email || filterValue || '').toLowerCase();
+                const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
+                const cleanFilter = filterName.replace(/vilpower/g, '');
+                const filterFirstName = cleanFilter.split(/[\s_.-]+/)[0];
+                const isMurugesh = MURUGESH_EMAILS.includes(filterEmail);
+                const isAjith = AJITH_EMAILS.includes(filterEmail);
+                const isAlex = ALEX_EMAILS.includes(filterEmail);
+                const filterNameHasMurugesh = (filterEmail.includes('murugesh') || (filterUser?.name || '').toLowerCase().includes('murugesh'));
+                const filterNameHasAjith = (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'));
+                const filterNameHasAlex = (filterEmail.includes('alex') || (filterUser?.name || '').toLowerCase().includes('alex'));
+
+                _lastFilterCriteriaVal = filterValue;
+                _cachedFilterCriteria = {
+                    filterUser, filterEmail, filterName, cleanFilter, filterFirstName,
+                    isMurugesh, isAjith, isAlex, filterNameHasMurugesh, filterNameHasAjith, filterNameHasAlex
+                };
+                return _cachedFilterCriteria;
+            }
+
             function assigneeMatches(task, filterValue) {
                 if (!filterValue) return false;
                 if (!currentUser && filterValue === 'me') return false;
 
-                const filterUser = filterValue === 'me'
-                    ? currentUser
-                    : (allUsersMap.get((filterValue || '').toLowerCase()) || USERS.find(u => u.email === filterValue));
-
-                const filterEmail = (filterUser?.email || filterValue || '').toLowerCase();
+                const crit = getAssigneeFilterCriteria(filterValue);
                 const taskEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
 
-                if (taskEmail && filterEmail && taskEmail === filterEmail) return true;
+                if (taskEmail && crit.filterEmail && taskEmail === crit.filterEmail) return true;
 
                 // Direct alias matching for Murugesh, Ajith, and Alex
-                if (MURUGESH_EMAILS.includes(filterEmail) && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
-                if (AJITH_EMAILS.includes(filterEmail) && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
-                if (ALEX_EMAILS.includes(filterEmail) && (ALEX_EMAILS.includes(taskEmail) || task.alexTask)) return true;
-                if (task.murugeshTask && (filterEmail.includes('murugesh') || (filterUser?.name || '').toLowerCase().includes('murugesh'))) return true;
-                if (task.ajithTask && (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'))) return true;
-                if (task.alexTask && (filterEmail.includes('alex') || (filterUser?.name || '').toLowerCase().includes('alex'))) return true;
+                if (crit.isMurugesh && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
+                if (crit.isAjith && (AJITH_EMAILS.includes(taskEmail) || task.ajithTask)) return true;
+                if (crit.isAlex && (ALEX_EMAILS.includes(taskEmail) || task.alexTask)) return true;
+                if (task.murugeshTask && crit.filterNameHasMurugesh) return true;
+                if (task.ajithTask && crit.filterNameHasAjith) return true;
+                if (task.alexTask && crit.filterNameHasAlex) return true;
 
-                if (ALEX_EMAILS.includes(filterEmail)) {
-                    const tName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
-                    if (tName === 'alex' || tName.startsWith('alex')) return true;
-                }
-                if (ALEX_EMAILS.includes(taskEmail)) {
-                    const fName = normalizeAssigneeValue(filterUser?.name || (filterValue || '').replace(/^name:/, ''));
-                    if (fName === 'alex' || fName.startsWith('alex')) return true;
-                }
-
-                const filterName = normalizeAssigneeValue(filterUser?.name || (filterValue || "").replace(/^name:/, ""));
                 const taskName = normalizeAssigneeValue(task.assignee || (typeof assigneeName === 'function' ? assigneeName(task) : ''));
 
-                if (!filterName || !taskName) return false;
-                if (taskName === filterName) return true;
+                if (crit.isAlex && (taskName === 'alex' || taskName.startsWith('alex'))) return true;
+                if (ALEX_EMAILS.includes(taskEmail) && (crit.filterName === 'alex' || crit.filterName.startsWith('alex'))) return true;
+
+                if (!crit.filterName || !taskName) return false;
+                if (taskName === crit.filterName) return true;
 
                 // Prevent generic tokens like "vilpower", "admin", "team" from matching every user
-                if (GENERIC_NAME_TOKENS.has(taskName) || GENERIC_NAME_TOKENS.has(filterName)) return false;
+                if (GENERIC_NAME_TOKENS.has(taskName) || GENERIC_NAME_TOKENS.has(crit.filterName)) return false;
 
                 // Strip "vilpower" suffix if present to compare primary user names
-                const cleanFilter = filterName.replace(/vilpower/g, '');
                 const cleanTask = taskName.replace(/vilpower/g, '');
-                if (cleanFilter && cleanTask && cleanFilter === cleanTask) return true;
+                if (crit.cleanFilter && cleanTask && crit.cleanFilter === cleanTask) return true;
 
                 // Tokenized first-name match
-                const filterFirstName = cleanFilter.split(/[\s_.-]+/)[0];
                 const taskFirstName = cleanTask.split(/[\s_.-]+/)[0];
-                if (filterFirstName && taskFirstName && !GENERIC_NAME_TOKENS.has(filterFirstName) && !GENERIC_NAME_TOKENS.has(taskFirstName)) {
-                    if (filterFirstName === taskFirstName) return true;
-                    if (filterFirstName.length >= 4 && taskFirstName.length >= 4) {
-                        if (filterFirstName.startsWith(taskFirstName) || taskFirstName.startsWith(filterFirstName)) return true;
+                if (crit.filterFirstName && taskFirstName && !GENERIC_NAME_TOKENS.has(crit.filterFirstName) && !GENERIC_NAME_TOKENS.has(taskFirstName)) {
+                    if (crit.filterFirstName === taskFirstName) return true;
+                    if (crit.filterFirstName.length >= 4 && taskFirstName.length >= 4) {
+                        if (crit.filterFirstName.startsWith(taskFirstName) || taskFirstName.startsWith(crit.filterFirstName)) return true;
                     }
                 }
 
@@ -51203,14 +51254,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     });
                 };
 
-                // Add synced Jira task assignees
-                tasks.filter(t => !isInternalTask(t)).forEach(t => {
+                // Add synced Jira task assignees (pre-deduplicate raw candidates in O(N))
+                const seenRawJira = new Set();
+                const candidateJiraAssignees = [];
+                const taskList = tasks || [];
+                for (let i = 0; i < taskList.length; i++) {
+                    const t = taskList[i];
+                    if (!t || isInternalTask(t)) continue;
                     const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
+                    if (!name || name === 'Unassigned') continue;
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
-
-                    if (!name || name === 'Unassigned') return;
+                    const key = email + '|||' + name;
+                    if (!seenRawJira.has(key)) {
+                        seenRawJira.add(key);
+                        candidateJiraAssignees.push({ email, name });
+                    }
+                }
+                candidateJiraAssignees.forEach(({ email, name }) => {
                     if (isAlreadyPresent(email, name)) return;
-
                     const normName = normalizeAssigneeValue(name);
                     const optEmail = email || ('name:' + normName);
                     uniqueList.push({ email: optEmail, name });
@@ -51294,14 +51355,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     });
                 };
 
-                // Add any names from internal tasks that aren't in system users
-                tasks.filter(isInternalTask).forEach(t => {
+                // Add any names from internal tasks that aren't in system users (pre-deduplicate raw candidates in O(N))
+                const seenRawInt = new Set();
+                const candidateIntAssignees = [];
+                const taskListInt = tasks || [];
+                for (let i = 0; i < taskListInt.length; i++) {
+                    const t = taskListInt[i];
+                    if (!t || !isInternalTask(t)) continue;
                     const name = t.assignee || (typeof assigneeName === 'function' ? assigneeName(t) : '');
+                    if (!name || name === 'Unassigned') continue;
                     const email = (t.assigneeEmail || t.userId || '').toLowerCase();
-
-                    if (!name || name === 'Unassigned') return;
+                    const key = email + '|||' + name;
+                    if (!seenRawInt.has(key)) {
+                        seenRawInt.add(key);
+                        candidateIntAssignees.push({ email, name });
+                    }
+                }
+                candidateIntAssignees.forEach(({ email, name }) => {
                     if (isAlreadyPresent(email, name)) return;
-
                     const normName = normalizeAssigneeValue(name);
                     const optEmail = email || ('name:' + normName);
                     uniqueList.push({ email: optEmail, name });
