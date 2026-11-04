@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.60">
+    <meta name="app-version" content="1.0.61">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -16889,6 +16889,7 @@
             let selectedSaturday = null;
             let pendingApprovalReq = null;
             let taskTimerRef = null;
+            let lastCurrentTaskSyncSec = 0;
             let taskSeconds = 0;
             let taskOnHold = false;
             let taskStartTime = null;
@@ -21443,7 +21444,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
                                 activeInternalTask.isOnHold = false;
                                 if (typeof updateInternalTaskStatus === 'function') {
-                                    updateInternalTaskStatus(activeTaskId, 'In Progress');
+                                    const resumeStatus = (typeof isShootTask === 'function' && isShootTask(activeInternalTask)) ? 'Shoot In Progress' : 'In Progress';
+                                    updateInternalTaskStatus(activeTaskId, resumeStatus);
                                 }
                             }
 
@@ -22592,6 +22594,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // CENTRALIZED TASK STATUS HELPERS - Single source of truth
             // ═══════════════════════════════════════════════════════════════════
 
+            function isShootTask(task) {
+                if (!task) return false;
+                if (task.shootPlan === true || task.shootGroupId) return true;
+                const id = String(task.id || '').toUpperCase();
+                if (id.includes('SHOOT') || id.startsWith('M-SHOOT')) return true;
+                const st = String(task.status || '').toLowerCase();
+                if (st.startsWith('shoot')) return true;
+                return false;
+            }
+            window.isShootTask = isShootTask;
+
             function isCompletedTask(status) {
                 if (!status) return false;
                 const s = String(status).trim().toLowerCase();
@@ -22772,8 +22785,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }).join('');
                         const extraCount = assigneeList.length > 4 ? `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-[8px] font-bold text-slate-500 -ml-1">+${assigneeList.length - 4}</span>` : '';
 
-                        // Quick-action button
-                        const actionBtn = style.nextStatus ? `<button onclick="event.stopPropagation(); advanceShootGroupStatus('${escapeHtml(group.shootGroupId || group.id)}', '${style.nextStatus}')" class="mt-1.5 w-full text-[9px] font-bold py-0.5 rounded-md ${style.text} bg-white/80 border ${style.border} hover:bg-white transition-colors">${style.nextLabel}</button>` : '';
+                        // Quick-action button with multi-assignee and active task awareness
+                        let actionBtn = '';
+                        const myEmail = (currentUser?.email || '').toLowerCase();
+                        const myAssignee = assigneeList.find(a => (a.email || '').toLowerCase() === myEmail);
+                        const isMyTaskActive = myAssignee && activeTaskId === myAssignee.taskId;
+
+                        if (group.status === 'Shoot In Progress') {
+                            if (isMyTaskActive) {
+                                actionBtn = `<button onclick="event.stopPropagation(); advanceShootGroupStatus('${escapeHtml(group.shootGroupId || group.id)}', 'Shoot Completed')" class="mt-1.5 w-full text-[9px] font-bold py-0.5 rounded-md text-emerald-700 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 transition-colors">Complete Shoot</button>`;
+                            } else if (myAssignee) {
+                                actionBtn = `<div class="mt-1.5 flex gap-1">
+                                    <button onclick="event.stopPropagation(); doStartTask('${escapeHtml(myAssignee.taskId)}', { internalStatus: 'Shoot In Progress' })" class="flex-1 text-[9px] font-bold py-0.5 rounded-md text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors">Join Shoot</button>
+                                    <button onclick="event.stopPropagation(); advanceShootGroupStatus('${escapeHtml(group.shootGroupId || group.id)}', 'Shoot Completed')" class="text-[9px] font-bold px-1 py-0.5 rounded-md text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 transition-colors" title="Complete Shoot for all">End</button>
+                                </div>`;
+                            } else {
+                                actionBtn = `<button onclick="event.stopPropagation(); advanceShootGroupStatus('${escapeHtml(group.shootGroupId || group.id)}', 'Shoot Completed')" class="mt-1.5 w-full text-[9px] font-bold py-0.5 rounded-md ${style.text} bg-white/80 border ${style.border} hover:bg-white transition-colors">Mark Complete</button>`;
+                            }
+                        } else if (style.nextStatus) {
+                            actionBtn = `<button onclick="event.stopPropagation(); advanceShootGroupStatus('${escapeHtml(group.shootGroupId || group.id)}', '${style.nextStatus}')" class="mt-1.5 w-full text-[9px] font-bold py-0.5 rounded-md ${style.text} bg-white/80 border ${style.border} hover:bg-white transition-colors">${style.nextLabel}</button>` : '';
+                        }
 
                         dayHtml += `<div onclick="event.stopPropagation(); openEditTaskModal('${group.id}')" class="${style.bg} p-2 rounded-lg border ${style.border} shadow-sm hover:shadow-md transition-shadow">
                         <div class="flex items-center gap-1.5 mb-0.5">
@@ -22808,12 +22839,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!groupTasks.length) return;
 
                 const statusLabels = { 'Shoot Planned': 'Planned', 'Shoot In Progress': 'In Progress', 'Shoot Completed': 'Completed', 'Shoot Cancelled': 'Cancelled' };
+                const isCompleting = newStatus === 'Shoot Completed' || newStatus === 'Shoot Cancelled';
+
                 try {
+                    // If current user is actively working on a task in this shoot group and completing it:
+                    if (isCompleting && activeTaskId && groupTasks.some(t => t.id === activeTaskId)) {
+                        // End current task so time is accurately logged to timelogs
+                        await endTask();
+                    }
+
                     for (const task of groupTasks) {
                         const path = `worksync/manual_tasks/${eKey(task.userId || task.assigneeEmail)}/${task.id}`;
-                        await update(ref(db, path), { status: newStatus });
+                        const updates = { status: newStatus };
+                        if (isCompleting) {
+                            updates.completedAt = Date.now();
+                            updates.lastCompletedDate = todayIso();
+                        }
+                        await update(ref(db, path), updates);
                         const idx = tasks.findIndex(t => t.id === task.id);
-                        if (idx !== -1) tasks[idx].status = newStatus;
+                        if (idx !== -1) {
+                            tasks[idx].status = newStatus;
+                            if (isCompleting) {
+                                tasks[idx].completedAt = Date.now();
+                                tasks[idx].lastCompletedDate = todayIso();
+                            }
+                        }
                     }
 
                     if (newStatus === 'Shoot In Progress' && currentUser?.email) {
@@ -30278,8 +30328,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else {
                         // Keep status in sync if user is currently working on it
                         if (ct.state === 'working' && existing.status !== 'In Progress' && !isDone(existing.status)) {
-                            existing.status = 'In Progress';
-                            added = true;
+                            if (!isShootTask(existing) && existing.status !== 'Shoot In Progress') {
+                                existing.status = 'In Progress';
+                                added = true;
+                            }
                         }
                     }
                 });
@@ -32193,6 +32245,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            // Re-calculate elapsed time and sync on tab visibility or device wake
+            document.addEventListener('visibilitychange', () => {
+                /* worksync_visibility_active_task_handler */
+                if (document.visibilityState === 'visible' && activeTaskId && !taskOnHold && taskStartTime) {
+                    taskSeconds = Math.max(taskSeconds || 0, Math.floor((Date.now() - taskStartTime) / 1000));
+                    const el = document.getElementById('task-timer-display');
+                    if (el) el.textContent = formatTime(taskSeconds);
+                    saveCurrentTaskState('working').catch(() => {});
+                }
+            });
+            window.addEventListener('pageshow', () => {
+                if (activeTaskId && !taskOnHold && taskStartTime) {
+                    taskSeconds = Math.max(taskSeconds || 0, Math.floor((Date.now() - taskStartTime) / 1000));
+                    const el = document.getElementById('task-timer-display');
+                    if (el) el.textContent = formatTime(taskSeconds);
+                    saveCurrentTaskState('working').catch(() => {});
+                }
+            });
+
             // Persist active task state immediately on page reload or tab navigation
             window.addEventListener('beforeunload', () => {
                 if (activeTaskId && currentUser) {
@@ -32784,8 +32855,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const el = document.getElementById('task-timer-display');
                     if (el) el.textContent = formatTime(taskSeconds);
 
-                    // Periodic sync with DB every minute
-                    if (taskSeconds > 0 && taskSeconds % 60 === 0) {
+                    // Periodic sync with DB (resilient to setInterval throttling in background tabs)
+                    if (taskSeconds > 0 && (taskSeconds - lastCurrentTaskSyncSec >= 30 || taskSeconds % 60 === 0)) {
+                        lastCurrentTaskSyncSec = taskSeconds;
                         saveCurrentTaskState('working');
                     }
                 }, 1000);
@@ -32806,7 +32878,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (activeTaskId) {
                     const task = tasks.find(t => t.id === activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
-                        updateInternalTaskStatus(activeTaskId, 'Hold');
+                        if (!isShootTask(task)) {
+                            updateInternalTaskStatus(activeTaskId, 'Hold');
+                        }
                     }
                 }
                 saveCurrentTaskState('on_hold');
@@ -32827,7 +32901,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 taskOnHold = true;
                 const task = tasks.find(t => t.id === activeTaskId);
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
-                    updateInternalTaskStatus(activeTaskId, 'Hold');
+                    if (!isShootTask(task)) {
+                        updateInternalTaskStatus(activeTaskId, 'Hold');
+                    }
                 }
                 saveCurrentTaskState('on_hold');
                 renderTasks();
@@ -32846,7 +32922,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const task = tasks.find(t => t.id === activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         task.isOnHold = false;
-                        updateInternalTaskStatus(activeTaskId, 'In Progress');
+                        const resumeStatus = isShootTask(task) ? 'Shoot In Progress' : 'In Progress';
+                        updateInternalTaskStatus(activeTaskId, resumeStatus);
                     }
                 }
                 updateSessionStatus();
@@ -50640,6 +50717,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         });
 
                         const manual = Object.values(snap.val() || {});
+                        // If my active shoot task was marked completed remotely, gracefully end it so time is logged
+                        if (activeTaskId && isShootTask(tasks.find(t => t.id === activeTaskId))) {
+                            const updatedActiveTask = manual.find(t => t && t.id === activeTaskId);
+                            if (updatedActiveTask && (updatedActiveTask.status === 'Shoot Completed' || updatedActiveTask.status === 'Shoot Cancelled')) {
+                                console.log('[ShootTask] Active shoot task marked completed remotely. Logging time and ending task.');
+                                endTask().catch(e => console.warn('Failed to end remote completed shoot task:', e));
+                            }
+                        }
                         tasks = mergeTasksById([...tasks.filter(t => !t.manual), ...manual]);
                         try { localStorage.setItem('worksync_manual_tasks', JSON.stringify(manual)); } catch (e) { }
                         populateAssigneeFilter();
