@@ -334,6 +334,39 @@ describe('MyMonthlyReport Module Verification', () => {
         expect(mockWindow.MyMonthlyReportState.dateMode).toBe('current_month');
     });
 
+    it('custom date range lists only tasks worked on or completed in that range', () => {
+        // The app provides this helper (index.html isCompletedTask); "Approved" counts as done.
+        mockWindow.isCompletedTask = (s: string) => /^(done|posted|completed|approved|client approved)/i.test(String(s || '').trim());
+        const applyRange = (from: string, to: string) => {
+            mockWindow.document = {
+                getElementById: (id: string) => {
+                    if (id === 'mmr-date-from') return { value: from };
+                    if (id === 'mmr-date-to') return { value: to };
+                    return null;
+                }
+            };
+            mockWindow.MyMonthlyReport.applyCustomDateRange();
+            return mockWindow.MyMonthlyReportState.cachedReportData;
+        };
+
+        // Single day: only INT-501 was worked on 4 Nov. NOV-101 (worked 2–3 Nov) and
+        // NOV-102 (never worked) must not appear even though they are November tasks.
+        let data = applyRange('2026-11-04', '2026-11-04');
+        expect(data.allTasks.map((t: any) => t.id)).toEqual(['INT-501']);
+        expect(data.jiraTasks.length).toBe(0);
+        expect(data.kpis.totalWorkedSeconds).toBe(5400);
+
+        // 2–3 Nov: only NOV-101 had sessions.
+        data = applyRange('2026-11-02', '2026-11-03');
+        expect(data.allTasks.map((t: any) => t.id)).toEqual(['NOV-101']);
+        expect(data.kpis.totalWorkedSeconds).toBe(19800);
+
+        // Completed in range without a session still counts (NOV-101 completedAt 10 Nov).
+        data = applyRange('2026-11-10', '2026-11-10');
+        expect(data.allTasks.map((t: any) => t.id)).toEqual(['NOV-101']);
+        expect(data.kpis.totalWorkedSeconds).toBe(0);
+    });
+
     it('should allow Admin to view All Employees enterprise summary', () => {
         mockWindow.currentUser = { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Admin' };
         mockWindow.isAdmin = () => true;

@@ -1,5 +1,5 @@
 /**
- * My Monthly Report Module
+ * Monthly Report Module
  * Employee Self-Service Monthly Reporting System
  * Enterprise SaaS Operations, HRMS & Productivity Analytics
  *
@@ -539,6 +539,8 @@
             return matchesMonth && matchesYear;
         }) || (repMonth === 11 && repYear === 2026) || (repMonth === 10 && repYear === 2026);
 
+        const isCustomRange = MMR.dateMode === 'custom_range' && period.statusText === 'Custom Range Period';
+
         const relevantTasks = candidateUserTasks.filter(t => {
             const tId = String(t.id || '').toUpperCase().trim();
             const dashIdx = tId.indexOf('-');
@@ -583,6 +585,13 @@
                 (postTs >= period.fromTs && postTs <= period.toTs);
 
             const isInternal = isInternalFn(t);
+
+            // Custom date range (e.g. a single day): list only tasks with real activity in that
+            // range – time logged or completed. The month-level rules below (whole Jira space key,
+            // open backlog) would otherwise list tasks nobody worked on in the selected dates.
+            if (isCustomRange) {
+                return hasLogsInPeriod || (isDone && compTs >= period.fromTs && compTs <= period.toTs);
+            }
 
             if (isInternal) {
                 // If the employee logged time on this internal task in this month, it belongs to this report!
