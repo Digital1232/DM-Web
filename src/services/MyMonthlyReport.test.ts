@@ -763,4 +763,57 @@ describe('MyMonthlyReport Module Verification', () => {
         expect(qc.seconds).toBe(3600);
         expect(qc.hours).toBe(1);
     });
+
+    it('should accurately classify tasks into all 21 canonical task types', () => {
+        const detect = mockWindow.MyMonthlyReport.detectTaskType;
+        expect(typeof detect).toBe('function');
+
+        expect(detect({ desc: 'Q4 Brand Strategy & Monthly Planning' })).toBe('Strategy & Planning');
+        expect(detect({ desc: 'December Content Calendar & Schedule' })).toBe('Content Calendar');
+        expect(detect({ desc: 'Instagram Caption Writing and Copy' })).toBe('Content Writing / Captions');
+        expect(detect({ desc: 'Diwali Wishes Nivya Poster', format: 'Poster' })).toBe('Graphic Design');
+        expect(detect({ desc: 'Outdoor Client Video Shoot at Studio', shootPlan: true })).toBe('Video Shoot');
+        expect(detect({ desc: 'Nursing - Fresher Day Glimpse Video', format: 'Video' })).toBe('Video Editing');
+        expect(detect({ desc: 'Weekly Post Publishing & Community Management' })).toBe('Posting & Community Management');
+        expect(detect({ desc: 'Meta Ads Campaign Setup & Optimization' })).toBe('Paid Ads');
+        expect(detect({ desc: 'Monthly Performance DPR & Analytics Report' })).toBe('Reporting & Analytics');
+        expect(detect({ desc: 'Weekly Client Call and Zoom Meeting' })).toBe('Client Calls & Meetings');
+        expect(detect({ desc: 'HR Onboarding & Internal Admin Training' })).toBe('Internal Admin & Training');
+        expect(detect({ desc: 'Figma Auto-layout Learnings Session', id: 'LEARN-101' })).toBe('Learnings');
+        expect(detect({ desc: 'Poster Quality Check & Review', id: 'QC-505' })).toBe('Quality Check');
+        expect(detect({ desc: 'B2B Lead Collection and Prospecting' })).toBe('Lead Collection');
+        expect(detect({ desc: 'Calendly Demo Appointment Booking' })).toBe('Appointment Booking');
+        expect(detect({ desc: 'Onsite Client Visit (In Person) to Bangalore Office' })).toBe('Client Visit (In Person)');
+        expect(detect({ desc: 'Commercial Proposal & Follow-up with prospect' })).toBe('Proposal & Follow-up');
+        expect(detect({ desc: 'Instagram Story Updates and Social Media Activity' })).toBe('Social Media Activity');
+        expect(detect({ desc: 'Investor Pitch Presentation (PPT) Slide Deck' })).toBe('Presentation (PPT)');
+        expect(detect({ desc: 'WordPress Website Redesign and Web Development' })).toBe('Web Development');
+        expect(detect({ desc: 'Production Studio Misc Equipment Setup' })).toBe('Other / Shoot Support');
+    });
+
+    it('should support Task Type filtering on Jira Tasks sub-tab', () => {
+        let tbodyContent = '';
+        mockWindow.document = {
+            getElementById: (id: string) => {
+                if (id === 'mmr-jira-tasks-tbody') {
+                    return {
+                        set innerHTML(val: string) { tbodyContent = val; },
+                        get innerHTML() { return tbodyContent; }
+                    };
+                }
+                return null;
+            }
+        };
+
+        // Trigger user report render
+        mockWindow.MyMonthlyReport.handleUserChange('karthikavilpower@gmail.com');
+
+        // Apply task type filter: Graphic Design
+        mockWindow.MyMonthlyReport.handleTaskTypeFilter('Graphic Design');
+        expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('Graphic Design');
+
+        // Reset filter
+        mockWindow.MyMonthlyReport.handleTaskTypeFilter('all');
+        expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('all');
+    });
 });

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.57">
+    <meta name="app-version" content="1.0.58">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -19439,6 +19439,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 appInitialized = true;
                 console.log("Initializing workspace for", currentUser.email);
 
+                // Shrink this user's oversized stored profile photo once startup has settled
+                setTimeout(() => { shrinkOwnProfilePhotoIfLarge(); }, 8000);
+
                 try {
                     // PERFORMANCE: Immediately remove blocking CSS classes and show dashboard
                     document.documentElement.classList.add('app-ready');
@@ -20074,6 +20077,55 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('profileModal').showModal();
             }
 
+            // ── Avatar images ─────────────────────────────────────────────────────
+            // Profile and group photos are stored as text (data URLs) inside user and
+            // conversation records, which Chat and the live board download in full.
+            // Keep them small: max 256 px, JPEG ≈ 15–30 KB instead of up to 2.7 MB.
+            const AVATAR_MAX_PX = 256;
+            const AVATAR_MAX_CHARS = 120000; // larger stored photos get shrunk
+
+            function shrinkImageToDataUrl(src, maxPx = AVATAR_MAX_PX, quality = 0.85) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const scale = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+                            const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                            const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = '#ffffff'; // JPEG has no transparency
+                            ctx.fillRect(0, 0, w, h);
+                            ctx.drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', quality));
+                        } catch (e) { reject(e); }
+                    };
+                    img.onerror = () => reject(new Error('Could not read image'));
+                    img.src = src;
+                });
+            }
+
+            async function imageFileToAvatarDataUrl(file) {
+                const url = URL.createObjectURL(file);
+                try { return await shrinkImageToDataUrl(url); } finally { URL.revokeObjectURL(url); }
+            }
+            window.shrinkImageToDataUrl = shrinkImageToDataUrl;
+
+            // One-time, per user: shrink an oversized stored profile photo after login.
+            async function shrinkOwnProfilePhotoIfLarge() {
+                try {
+                    const pic = currentUser && currentUser.profilePicture;
+                    if (!db || typeof pic !== 'string' || !pic.startsWith('data:image') || pic.length <= AVATAR_MAX_CHARS) return;
+                    const small = await shrinkImageToDataUrl(pic);
+                    if (!small || small.length >= pic.length) return;
+                    await update(ref(db, `worksync/users/${eKey(currentUser.email)}`), { profilePicture: small });
+                    currentUser.profilePicture = small;
+                    try { localStorage.setItem('worksync_user', JSON.stringify(currentUser)); } catch (e) { }
+                    console.log(`[Avatar] Profile photo shrunk ${Math.round(pic.length / 1024)} KB → ${Math.round(small.length / 1024)} KB`);
+                } catch (e) { console.warn('[Avatar] Could not shrink profile photo:', e); }
+            }
+
             function fileToBase64(file) {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -20627,7 +20679,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (file.size > 2 * 1024 * 1024) return toast('Image must be less than 2MB', 'error');
                 toast('Uploading photo...', 'info');
                 try {
-                    const base64Url = await fileToBase64(file);
+                    const base64Url = await imageFileToAvatarDataUrl(file);
                     currentUser.profilePicture = base64Url;
                     document.getElementById('profile-pic').src = base64Url;
                     document.getElementById('user-avatar').src = base64Url;
@@ -35071,8 +35123,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.switchChatSubTab = switchChatSubTab;
 
             let chatConversationsUnsub = null;
+            let chatReadReceiptsSynced = false;
             function initChat() {
                 if (!db || !currentUser || !currentUser.email) return;
+                chatReadReceiptsSynced = false; // re-sync read receipts once for this chat session
                 if (chatConversationsUnsub) {
                     try { chatConversationsUnsub(); } catch (e) { }
                     chatConversationsUnsub = null;
@@ -35136,7 +35190,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     });
 
-                    // Synchronize read receipts from Firebase so cross-device/clean-session read states are respected
+                    // Synchronize read receipts from Firebase so cross-device/clean-session read states are respected.
+                    // This tree holds every conversation × every user, so download it once per chat session –
+                    // not after every message anyone sends (this listener fires on every conversation update).
+                    if (!chatReadReceiptsSynced) {
+                    chatReadReceiptsSynced = true;
                     get(ref(db, 'worksync/read_receipts')).then(rrSnap => {
                         if (!rrSnap.exists()) return;
                         const rrData = rrSnap.val() || {};
@@ -35161,7 +35219,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             renderChatBadge();
                             renderChatSidebar();
                         }
-                    }).catch(() => { });
+                    }).catch(() => { chatReadReceiptsSynced = false; });
+                    } // end once-per-session read receipts sync (merged into storedLastSeen, reused afterwards)
 
                     // Factor in manually flagged unread conversations
                     const manualUnreadKey = 'worksync_manual_unread_' + myKey;
@@ -35854,7 +35913,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 };
             }
 
-            async function renderChatSidebar() {
+            // The sidebar is requested many times in a row (e.g. opening a conversation asked for it
+            // three times, and every conversation update asks again). Merge requests made in the same
+            // tick into one redraw.
+            let chatSidebarPending = null;
+            let chatSidebarUsersRefetched = false;
+            function renderChatSidebar() {
+                if (!chatSidebarPending) {
+                    chatSidebarPending = Promise.resolve().then(() => {
+                        chatSidebarPending = null;
+                        return renderChatSidebarNow();
+                    });
+                }
+                return chatSidebarPending;
+            }
+
+            async function renderChatSidebarNow() {
                 if (!currentUser || !currentUser.email) return;
                 const myKey = eKey(currentUser.email);
                 const { pinnedList, mutedList, manualUnreadList } = getChatPreferences();
@@ -35865,14 +35939,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 });
 
-                // Ensure allUsersMap is fully populated with profile pictures
-                if (!allUsersMap || (allUsersMap instanceof Map && (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)))) {
+                // Ensure allUsersMap is fully populated with profile pictures.
+                // Re-download the users list at most once: if nobody has a photo, this check would
+                // otherwise be true on every redraw and fetch the whole users node each time.
+                if (!chatSidebarUsersRefetched && (!allUsersMap || (allUsersMap instanceof Map && (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture))))) {
+                    chatSidebarUsersRefetched = true;
                     if (typeof getAllUsers === 'function') {
                         try {
                             allUsersMap = await getAllUsers();
                             window.allUsersMap = allUsersMap;
                         } catch (e) {
                             console.warn('Failed to load allUsersMap in renderChatSidebar:', e);
+                            chatSidebarUsersRefetched = false; // allow a retry on the next redraw
                         }
                     }
                 }
@@ -38709,7 +38787,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (file.size > 2 * 1024 * 1024) return toast('Image must be less than 2MB', 'error');
                 toast('Processing photo...', 'info');
                 try {
-                    const base64Url = await fileToBase64(file);
+                    const base64Url = await imageFileToAvatarDataUrl(file);
                     document.getElementById(imgId).src = base64Url;
                     document.getElementById(imgId).dataset.newPic = base64Url;
                     toast('Photo ready to save', 'success');
@@ -50774,7 +50852,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (file.size > 2 * 1024 * 1024) return toast('Image must be less than 2MB', 'error');
                 toast('Processing photo...', 'info');
                 try {
-                    const base64Url = await fileToBase64(file);
+                    const base64Url = await imageFileToAvatarDataUrl(file);
                     document.getElementById('au-profile-pic').src = base64Url;
                     document.getElementById('au-profile-pic').dataset.newPic = base64Url;
                     toast('Photo ready to save', 'success');
