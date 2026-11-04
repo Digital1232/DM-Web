@@ -13946,14 +13946,21 @@
                             oninput="window.handleApSearchInput ? window.handleApSearchInput() : filterAssignPlanTasks()"
                             class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
+                    <div class="grid grid-cols-3 gap-2 mb-2">
                         <select id="ap-client-filter" onchange="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600 truncate">
                             <option value="">All Clients</option>
                         </select>
                         <select id="ap-status-filter" onchange="filterAssignPlanTasks()"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600">
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600 truncate">
                             <option value="">All Status</option>
+                        </select>
+                        <select id="ap-type-filter" onchange="filterAssignPlanTasks()"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-slate-600 truncate">
+                            <option value="">All Types</option>
+                            <option value="poster">Poster</option>
+                            <option value="video">Video</option>
+                            <option value="thumbnail">Thumbnail</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -55443,6 +55450,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const statusSel = document.getElementById('ap-status-filter');
                 if (statusSel) statusSel.innerHTML = '<option value="">All Statuses</option>' + statuses.map(s => `<option value="${s}">${escapeHtml(s)}</option>`).join('');
 
+                const typeSel = document.getElementById('ap-type-filter');
+                if (typeSel) typeSel.value = '';
+
                 filterAssignPlanTasks();
                 const modal = document.getElementById('assignPlanModal');
                 if (modal && typeof modal.showModal === 'function') {
@@ -55523,6 +55533,47 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.handleApSearchInput = handleApSearchInput;
 
+            function getTaskDeliverableType(task) {
+                if (!task) return '';
+                const type = `${task.format || ''} ${task.issueType || ''} ${task.type || ''} ${task.category || ''} ${task.taskType || ''}`.toLowerCase();
+                const desc = `${task.desc || ''} ${task.summary || ''} ${task.name || ''} ${task.title || ''} ${task.id || ''}`.toLowerCase();
+                const status = (task.status || '').toLowerCase();
+                const labels = Array.isArray(task.clientLabels) ? task.clientLabels.map(l => (l || '').toLowerCase()) : [];
+                if (Array.isArray(task.labels)) task.labels.forEach(l => labels.push(String(l).toLowerCase()));
+
+                // 1. Thumbnail
+                if (
+                    status.includes('thumbnail') ||
+                    type.includes('thumbnail') || type.includes('thumb') ||
+                    desc.includes('thumbnail') || desc.includes('thumb') ||
+                    labels.some(l => l.includes('thumbnail') || l.includes('thumb'))
+                ) {
+                    return 'thumbnail';
+                }
+
+                // 2. Video
+                if (
+                    type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || type.includes('shoot') ||
+                    desc.includes('video') || desc.includes('reel') || desc.includes('teaser') || desc.includes('glimpse') || desc.includes('shoot') || desc.includes('editing') ||
+                    labels.some(l => l.includes('video') || l.includes('reel') || l.includes('shoot'))
+                ) {
+                    return 'video';
+                }
+
+                // 3. Poster
+                if (
+                    type.includes('poster') || type.includes('design') || type.includes('static') || type.includes('creative') ||
+                    status.includes('poster') ||
+                    desc.includes('poster') || desc.includes('design') || desc.includes('banner') || desc.includes('creative') || desc.includes('flyer') || desc.includes('brochure') || desc.includes('carousel') || desc.includes('cover') ||
+                    labels.some(l => l.includes('poster') || l.includes('design') || l.includes('creative'))
+                ) {
+                    return 'poster';
+                }
+
+                return '';
+            }
+            window.getTaskDeliverableType = getTaskDeliverableType;
+
             function filterAssignPlanTasks() {
                 const list = document.getElementById('ap-task-list');
                 const userEmail = document.getElementById('ap-user').value;
@@ -55530,6 +55581,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const searchLower = (term || '').toLowerCase();
                 const clientFilter = document.getElementById('ap-client-filter')?.value || '';
                 const statusFilter = document.getElementById('ap-status-filter')?.value || '';
+                const typeFilter = document.getElementById('ap-type-filter')?.value || '';
                 const dueDateFrom = document.getElementById('ap-due-from')?.value || '';
                 const dueDateTo = document.getElementById('ap-due-to')?.value || '';
 
@@ -55570,6 +55622,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (clientFilter) filtered = filtered.filter(t => t.client === clientFilter);
                 if (statusFilter) filtered = filtered.filter(t => t.status === statusFilter);
+                if (typeFilter) {
+                    filtered = filtered.filter(t => {
+                        const deliverableType = typeof getTaskDeliverableType === 'function' ? getTaskDeliverableType(t) : '';
+                        return deliverableType === typeFilter;
+                    });
+                }
 
                 // Due date range filter
                 if (dueDateFrom || dueDateTo) {
@@ -55583,7 +55641,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 // By default (when no filters/search are set), show tasks assigned to the target user, strategy events owned by user, or unassigned.
-                if (!term && !clientFilter && !statusFilter && !dueDateFrom && !dueDateTo) {
+                if (!term && !clientFilter && !statusFilter && !typeFilter && !dueDateFrom && !dueDateTo) {
                     filtered = filtered.filter(t => (
                         assigneeMatches(t, userEmail) ||
                         (t.owner && t.owner.toLowerCase() === (userEmail || '').toLowerCase()) ||
