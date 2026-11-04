@@ -930,6 +930,143 @@
         const deltaWorkPct = prevWorkedSec > 0 ? Math.round(((totalWorkedSeconds - prevWorkedSec) / prevWorkedSec) * 100) : null;
         const deltaCompleted = prevCompletedCount > 0 ? (completedDeliverables.length - prevCompletedCount) : null;
 
+        // 8. Shoot & Video Production Tracking (Ajith, Immanuel & Production Team)
+        const shootTasks = allCombinedTasks.filter(t => {
+            if (t.shootPlan === true || t.shootGroupId) return true;
+            const tId = String(t.id || '').toUpperCase();
+            if (tId.includes('SHOOT')) return true;
+            const d = (t.desc || t.title || '').toLowerCase();
+            const s = (t.status || '').toLowerCase();
+            const act = (t.activity || '').toLowerCase();
+            const cat = (t.category || '').toLowerCase();
+            return d.includes('shoot') || s.includes('shoot') || act.includes('shoot') || cat.includes('shoot');
+        });
+
+        // Also check if any periodLogs have shoot activity
+        const shootLogs = periodLogs.filter(l => {
+            const act = (l.activity || '').toLowerCase();
+            const d = (l.taskDesc || l.taskTitle || '').toLowerCase();
+            return act.includes('shoot') || d.includes('shoot');
+        });
+        const shootTaskIdsFromLogs = new Set(shootLogs.map(l => String(l.taskId || '').toLowerCase()));
+        
+        shootTaskIdsFromLogs.forEach(id => {
+            if (!id || id === 'general') return;
+            if (!shootTasks.some(t => String(t.id).toLowerCase() === id)) {
+                const match = allCombinedTasks.find(t => String(t.id).toLowerCase() === id);
+                if (match) shootTasks.push(match);
+            }
+        });
+
+        let totalShootSeconds = 0;
+        const shootList = shootTasks.map(t => {
+            const tLogs = taskLogsMap.get(String(t.id).trim().toLowerCase()) || [];
+            const tSec = tLogs.reduce((acc, l) => acc + getLogDurationSec(l), 0);
+            totalShootSeconds += tSec;
+
+            // Classify shoot type
+            const titleLow = (t.desc || t.title || '').toLowerCase();
+            const notesLow = (t.notes || '').toLowerCase();
+            const combinedText = `${titleLow} ${notesLow}`;
+            let shootType = 'Video Shoot';
+            if (combinedText.includes('product') || combinedText.includes('photo')) shootType = 'Product Photography';
+            else if (combinedText.includes('promo') || combinedText.includes('brand')) shootType = 'Promotional Shoot';
+            else if (combinedText.includes('outdoor') || combinedText.includes('site') || combinedText.includes('field')) shootType = 'Outdoor Shoot';
+            else if (combinedText.includes('setup') || combinedText.includes('studio')) shootType = 'Studio Setup';
+            else if (combinedText.includes('support') || combinedText.includes('assist')) shootType = 'Production Support';
+
+            return {
+                id: t.id,
+                shootGroupId: t.shootGroupId || t.id,
+                client: t.client || 'Client Shoot',
+                title: t.desc || t.title || 'Production Shoot',
+                date: t.duedate || t.dueDate || formatDateStr(t.createdAt),
+                shootTime: t.shootTime || '',
+                shootType,
+                team: t.assignees || [t.assignee || employeeProfile.name],
+                durationSec: tSec,
+                formattedTime: formatHoursMinutes(tSec),
+                status: t.status || 'Shoot Planned',
+                isCompleted: t.isCompleted || (t.status || '').toLowerCase().includes('completed')
+            };
+        });
+
+        const completedShoots = shootList.filter(s => s.isCompleted);
+        const plannedShoots = shootList.filter(s => !s.isCompleted);
+        const shootTypeCounts = {};
+        shootList.forEach(s => {
+            shootTypeCounts[s.shootType] = (shootTypeCounts[s.shootType] || 0) + 1;
+        });
+
+        const shootReport = {
+            totalShoots: shootList.length,
+            completedShoots: completedShoots.length,
+            plannedShoots: plannedShoots.length,
+            totalShootSeconds,
+            totalShootHours: (totalShootSeconds / 3600).toFixed(1),
+            shootList,
+            shootTypeCounts
+        };
+
+        // 9. Role-Based Work Activity Breakdown (Content Writing, QC Review, Video, Design, Admin, etc.)
+        const activityMap = {
+            contentWriting: { name: 'Content Writing & Copywriting', sec: 0, sessions: 0, tasks: new Set() },
+            qcReview: { name: 'Quality Check & QC Review', sec: 0, sessions: 0, tasks: new Set() },
+            videoProduction: { name: 'Video Editing & Production', sec: 0, sessions: 0, tasks: new Set() },
+            graphicDesign: { name: 'Graphic & Visual Design', sec: 0, sessions: 0, tasks: new Set() },
+            adminMeetings: { name: 'Administrative & Meetings', sec: 0, sessions: 0, tasks: new Set() },
+            other: { name: 'Other Production Activities', sec: 0, sessions: 0, tasks: new Set() }
+        };
+
+        periodLogs.forEach(log => {
+            const dur = getLogDurationSec(log);
+            const act = (log.activity || '').toLowerCase();
+            const desc = (log.taskDesc || log.taskTitle || log.title || '').toLowerCase();
+            const text = `${act} ${desc}`;
+            const tId = String(log.taskId || 'general');
+
+            if (text.includes('content') || text.includes('copy') || text.includes('script') || text.includes('caption') || text.includes('article') || text.includes('blog') || text.includes('writing')) {
+                activityMap.contentWriting.sec += dur;
+                activityMap.contentWriting.sessions++;
+                activityMap.contentWriting.tasks.add(tId);
+            } else if (text.includes('qc') || text.includes('quality') || text.includes('proofreading') || text.includes('audit') || text.includes('review') || text.includes('inspection')) {
+                activityMap.qcReview.sec += dur;
+                activityMap.qcReview.sessions++;
+                activityMap.qcReview.tasks.add(tId);
+            } else if (text.includes('video') || text.includes('editing') || text.includes('reel') || text.includes('shoot') || text.includes('render') || text.includes('audio') || text.includes('footage') || text.includes('animation')) {
+                activityMap.videoProduction.sec += dur;
+                activityMap.videoProduction.sessions++;
+                activityMap.videoProduction.tasks.add(tId);
+            } else if (text.includes('design') || text.includes('poster') || text.includes('banner') || text.includes('thumbnail') || text.includes('flyer') || text.includes('creative') || text.includes('photoshop') || text.includes('illustrator')) {
+                activityMap.graphicDesign.sec += dur;
+                activityMap.graphicDesign.sessions++;
+                activityMap.graphicDesign.tasks.add(tId);
+            } else if (text.includes('meeting') || text.includes('sync') || text.includes('admin') || text.includes('training') || text.includes('call') || text.includes('discussion')) {
+                activityMap.adminMeetings.sec += dur;
+                activityMap.adminMeetings.sessions++;
+                activityMap.adminMeetings.tasks.add(tId);
+            } else {
+                activityMap.other.sec += dur;
+                activityMap.other.sessions++;
+                activityMap.other.tasks.add(tId);
+            }
+        });
+
+        const activityBreakdown = Object.entries(activityMap).map(([key, a]) => {
+            const hours = (a.sec / 3600).toFixed(1);
+            const pct = totalWorkedSeconds > 0 ? Math.round((a.sec / totalWorkedSeconds) * 100) : 0;
+            return {
+                key,
+                name: a.name,
+                seconds: a.sec,
+                hours: Number(hours),
+                formattedTime: formatHoursMinutes(a.sec),
+                sessionsCount: a.sessions,
+                tasksCount: a.tasks.size,
+                pct
+            };
+        }).filter(a => a.seconds > 0 || (employeeProfile.designation.toLowerCase().includes('content') && (a.key === 'contentWriting' || a.key === 'qcReview')));
+
         return {
             period,
             employee: employeeProfile,
@@ -978,6 +1115,8 @@
             periodLogs,
             dailyAttendanceMap,
             breakSessions,
+            shoot: shootReport,
+            activityBreakdown,
             qc: {
                 totalSubmissions: qcTotalCount,
                 passedCount: qcPassed.length,
@@ -1083,6 +1222,30 @@
                 title: 'Month-over-Month Velocity',
                 message: `Compared to the previous month, total logged working hours shifted by ${sign}${k.comparison.deltaWorkPct}%, reflecting your dynamic operational capacity.`
             });
+        }
+
+        // 6. Shoot & Video Production Performance
+        if (data.shoot && data.shoot.totalShoots > 0) {
+            insights.push({
+                type: 'win',
+                category: 'Production Velocity',
+                title: 'Shoot & On-Site Execution',
+                message: `${empName}, you delivered ${data.shoot.completedShoots} of ${data.shoot.totalShoots} production shoots with ${data.shoot.totalShootHours} hours of dedicated shooting and setup focus.`
+            });
+        }
+
+        // 7. Role Activity & Dual-Discipline Focus (e.g., Sneha Content Writing & QC)
+        if (Array.isArray(data.activityBreakdown) && data.activityBreakdown.length > 1) {
+            const writing = data.activityBreakdown.find(a => a.key === 'contentWriting');
+            const qc = data.activityBreakdown.find(a => a.key === 'qcReview');
+            if (writing && qc && (writing.seconds > 0 || qc.seconds > 0)) {
+                insights.push({
+                    type: 'neutral',
+                    category: 'Role Specialization',
+                    title: 'Content Writing & Quality Distribution',
+                    message: `You maintained a dual focus across Content Writing (${writing.formattedTime}, ${writing.pct}%) and QC Quality Review (${qc.formattedTime}, ${qc.pct}%), ensuring comprehensive editorial integrity.`
+                });
+            }
         }
 
         return insights;
@@ -1330,6 +1493,62 @@
                 }
             });
         }
+
+        // 9. Role-Based Work Activity Breakdown Chart
+        const actBreakdownCtx = getEl('mmr-chart-activity-breakdown')?.getContext('2d');
+        if (actBreakdownCtx) {
+            const acts = (data.activityBreakdown || []).filter(a => a.hours > 0);
+            const labels = acts.length > 0 ? acts.map(a => a.name) : ['General Production'];
+            const actData = acts.length > 0 ? acts.map(a => a.hours) : [Number(data.kpis.totalWorkingHours) || 1];
+            const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#64748b'];
+
+            MMR.charts.actBreakdown = new Chart(actBreakdownCtx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: actData,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // 10. Client Time Allocation Chart
+        const clientDistCtx = getEl('mmr-chart-client-distribution')?.getContext('2d');
+        if (clientDistCtx) {
+            const clientSummary = computeClientTimingSummary(data);
+            const topClients = (clientSummary.clients || []).slice(0, 7);
+            const cLabels = topClients.length > 0 ? topClients.map(c => c.name) : ['No Clients'];
+            const cHours = topClients.length > 0 ? topClients.map(c => Number((c.totalSeconds / 3600).toFixed(1))) : [0];
+
+            MMR.charts.clientDist = new Chart(clientDistCtx, {
+                type: 'bar',
+                data: {
+                    labels: cLabels,
+                    datasets: [{
+                        label: 'Client Hours',
+                        data: cHours,
+                        backgroundColor: '#7c3aed',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true, title: { display: true, text: 'Hours' } } }
+                }
+            });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1456,7 +1675,7 @@
 
         // Hide all tab panels
         const tabPanels = [
-            'overview', 'jira', 'internal', 'timing', 'client-timing', 'qc', 'rework', 'attendance', 'breaks', 'insights', 'goals'
+            'overview', 'jira', 'internal', 'timing', 'client-timing', 'shoot', 'qc', 'rework', 'attendance', 'breaks', 'insights', 'goals'
         ];
         tabPanels.forEach(t => {
             getEl(`mmr-tab-${t}`)?.classList.add('hidden');
@@ -1487,6 +1706,8 @@
             renderTimingTab(data);
         } else if (tab === 'client-timing') {
             renderClientTimingTab(data);
+        } else if (tab === 'shoot') {
+            renderShootTab(data);
         } else if (tab === 'qc') {
             renderQcTab(data);
         } else if (tab === 'rework') {
@@ -1797,6 +2018,90 @@
                     </div>
                 `;
             }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // SUB-TAB: SHOOT & VIDEO PRODUCTION REPORT
+    // ─────────────────────────────────────────────────────────────
+
+    function renderShootTab(data) {
+        const kpisContainer = getEl('mmr-shoot-kpis');
+        const typesContainer = getEl('mmr-shoot-types');
+        const tbody = getEl('mmr-shoot-tbody');
+        if (!tbody && !kpisContainer) return;
+
+        const shoot = data.shoot || { totalShoots: 0, completedShoots: 0, plannedShoots: 0, totalShootHours: '0.0', shootList: [], shootTypeCounts: {} };
+
+        if (kpisContainer) {
+            kpisContainer.innerHTML = `
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <span class="text-xs font-semibold text-slate-500">Assigned Shoots</span>
+                    <div class="text-2xl font-black text-slate-900 mt-1">${shoot.totalShoots}</div>
+                    <span class="text-[10px] text-slate-400 mt-1">Production shoots in scope</span>
+                </div>
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <span class="text-xs font-semibold text-emerald-600">Completed Shoots</span>
+                    <div class="text-2xl font-black text-emerald-600 mt-1">${shoot.completedShoots}</div>
+                    <span class="text-[10px] text-emerald-700 mt-1">${shoot.totalShoots > 0 ? Math.round((shoot.completedShoots / shoot.totalShoots) * 100) : 100}% wrap rate</span>
+                </div>
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <span class="text-xs font-semibold text-purple-600">Total Shoot Hours</span>
+                    <div class="text-2xl font-black text-purple-700 mt-1">${shoot.totalShootHours}h</div>
+                    <span class="text-[10px] text-purple-600 mt-1">Logged shooting & set focus</span>
+                </div>
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <span class="text-xs font-semibold text-amber-600">Planned / In-Progress</span>
+                    <div class="text-2xl font-black text-amber-600 mt-1">${shoot.plannedShoots}</div>
+                    <span class="text-[10px] text-amber-700 mt-1">Active shoot pipeline</span>
+                </div>
+            `;
+        }
+
+        if (typesContainer) {
+            const types = Object.entries(shoot.shootTypeCounts || {});
+            if (types.length === 0) {
+                typesContainer.innerHTML = `<span class="text-xs text-slate-400 font-medium">No shoot activity recorded for this period.</span>`;
+            } else {
+                typesContainer.innerHTML = types.map(([type, cnt]) => `
+                    <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-100">
+                        <span class="w-2 h-2 rounded-full bg-purple-600"></span>
+                        <span class="text-xs font-bold text-slate-800">${esc(type)}:</span>
+                        <span class="text-xs font-black text-purple-700">${cnt} shoot${cnt === 1 ? '' : 's'}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        if (tbody) {
+            if (shoot.shootList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-medium">No shoot assignments or video production records found for this period.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = shoot.shootList.map(s => {
+                const isDone = s.isCompleted;
+                const badgeClass = isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100';
+                const teamStr = Array.isArray(s.team) ? s.team.join(', ') : s.team;
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                        <td class="px-4 py-3 font-mono font-bold text-xs text-purple-700">${esc(s.id)}</td>
+                        <td class="px-4 py-3">
+                            <p class="font-bold text-xs text-slate-900">${esc(s.title)}</p>
+                            <span class="text-[10px] text-slate-400">${esc(s.client)}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(s.shootType)}</span>
+                        </td>
+                        <td class="px-4 py-3 text-xs font-mono text-slate-600">${s.date} ${s.shootTime ? `<span class="text-slate-400 font-normal">(${s.shootTime})</span>` : ''}</td>
+                        <td class="px-4 py-3 text-xs text-slate-600 font-medium">${esc(teamStr)}</td>
+                        <td class="px-4 py-3 font-mono font-bold text-xs text-purple-700">${s.formattedTime}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2.5 py-1 text-[10px] font-bold rounded-lg border ${badgeClass}">${esc(s.status)}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
     }
 
@@ -2460,33 +2765,36 @@
             </div>
         </div>
 
-        <!-- Client Work Allocation Summary Table -->
+        <!-- Role-Based Work Activity Breakdown Table -->
         <div>
             <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
-                Client Work Allocation Summary
+                Role-Based Work Activity Breakdown
             </h2>
             <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
                 <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                     <tr>
-                        <th class="p-2">Client / Account Name</th>
-                        <th class="p-2 w-24 text-center">Deliverables</th>
-                        <th class="p-2 w-20 text-center">Sessions</th>
-                        <th class="p-2 w-24 text-right">Logged Time</th>
-                        <th class="p-2 w-28 text-right">Allocation Share</th>
+                        <th class="p-2">Work Activity Discipline</th>
+                        <th class="p-2 w-28 text-center">Work Sessions</th>
+                        <th class="p-2 w-28 text-center">Tasks Handled</th>
+                        <th class="p-2 w-28 text-right">Logged Duration</th>
+                        <th class="p-2 w-28 text-right">Workload Share</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    ${clientSummary.clients.length === 0 ? `
-                        <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">No client work allocation recorded for this period.</td></tr>
-                    ` : clientSummary.clients.map((c, idx) => `
+                    ${(!data.activityBreakdown || data.activityBreakdown.length === 0) ? `
+                        <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">Standard production work logged across assigned deliverables.</td></tr>
+                    ` : data.activityBreakdown.map((act, idx) => `
                         <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                            <td class="p-1.5 font-bold text-slate-900">${esc(c.name)}</td>
-                            <td class="p-1.5 text-center font-semibold text-slate-600">${c.tasksCount} tasks</td>
-                            <td class="p-1.5 text-center text-slate-500">${c.sessionsCount} sessions</td>
-                            <td class="p-1.5 text-right font-mono font-bold text-slate-900">${c.formattedTime}</td>
+                            <td class="p-1.5 font-bold text-slate-900 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+                                ${esc(act.name)}
+                            </td>
+                            <td class="p-1.5 text-center font-semibold text-slate-700">${act.sessionsCount} sessions</td>
+                            <td class="p-1.5 text-center text-slate-600">${act.tasksCount} tasks</td>
+                            <td class="p-1.5 text-right font-mono font-bold text-slate-900">${act.formattedTime}</td>
                             <td class="p-1.5 text-right">
-                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">${c.pct}%</span>
+                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-purple-50 text-purple-700 border border-purple-100">${act.pct}%</span>
                             </td>
                         </tr>
                     `).join('')}
@@ -2572,7 +2880,125 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- SECTION 3: OVERALL QUALITY SCORE & REWORK / REVISIONS         -->
+    <!-- SECTION 3: CLIENT-WISE TIME & WORK REPORT                      -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        ${renderHeader('Client-Wise Time & Work Report')}
+
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Client-Wise Time & Work Report</h2>
+                <p class="text-[10px] text-slate-500">Breakdown of time investment, active sessions, and deliverable volume across individual client accounts</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    ${clientSummary.clients.length} Active Clients
+                </span>
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-purple-50 text-purple-700 border border-purple-100">
+                    ${formatDurationHM(clientSummary.totalSeconds)} Total Logged
+                </span>
+            </div>
+        </div>
+
+        <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                    <th class="p-2">CLIENT / ACCOUNT NAME</th>
+                    <th class="p-2 w-28 text-center">DELIVERABLES</th>
+                    <th class="p-2 w-24 text-center">SESSIONS</th>
+                    <th class="p-2 w-28 text-center">COMPLETED</th>
+                    <th class="p-2 w-28 text-right">LOGGED TIME</th>
+                    <th class="p-2 w-28 text-right">WORK SHARE</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                ${clientSummary.clients.length === 0 ? `
+                    <tr><td colspan="6" class="p-6 text-center text-slate-400 font-medium">No client work recorded for this reporting period.</td></tr>
+                ` : clientSummary.clients.map((c, idx) => `
+                    <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                        <td class="p-2 font-bold text-slate-900">${esc(c.name)}</td>
+                        <td class="p-2 text-center font-semibold text-slate-700">${c.tasksCount} tasks</td>
+                        <td class="p-2 text-center text-slate-600">${c.sessionsCount} sessions</td>
+                        <td class="p-2 text-center">
+                            <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">${c.completedCount} done</span>
+                        </td>
+                        <td class="p-2 text-right font-mono font-bold text-slate-900">${c.formattedTime}</td>
+                        <td class="p-2 text-right">
+                            <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">${c.pct}%</span>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+
+        ${renderFooter('Client-Wise Report • Section 3')}
+    </div>
+
+    ${(data.shoot && data.shoot.totalShoots > 0) ? `
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION 4: SHOOT & VIDEO PRODUCTION REPORT                     -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="print-page page-break">
+        ${renderHeader('Shoot & Video Production Report')}
+
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Shoot & Video Production Report</h2>
+                <p class="text-[10px] text-slate-500">Dedicated on-site shoots, studio sessions, product photography, and production crew participation</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-purple-50 text-purple-700 border border-purple-100">
+                    ${data.shoot.totalShoots} Total Shoots
+                </span>
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    ${data.shoot.completedShoots} Completed
+                </span>
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    ${data.shoot.totalShootHours}h Shoot Duration
+                </span>
+            </div>
+        </div>
+
+        <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                    <th class="p-2 w-24">SHOOT ID</th>
+                    <th class="p-2">SHOOT TITLE & CLIENT</th>
+                    <th class="p-2 w-28">SHOOT TYPE</th>
+                    <th class="p-2 w-28">DATE & TIME</th>
+                    <th class="p-2 w-32">CREW INVOLVED</th>
+                    <th class="p-2 w-24 text-center">DURATION</th>
+                    <th class="p-2 w-28 text-center">STATUS</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                ${data.shoot.shootList.map((s, idx) => `
+                    <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                        <td class="p-2 font-mono font-bold text-purple-700">${esc(s.id)}</td>
+                        <td class="p-2">
+                            <div class="font-bold text-slate-900">${esc(s.title)}</div>
+                            <div class="text-[8px] text-slate-400 font-medium">${esc(s.client)}</div>
+                        </td>
+                        <td class="p-2">
+                            <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(s.shootType)}</span>
+                        </td>
+                        <td class="p-2 text-slate-600 font-mono">${s.date} ${s.shootTime ? `<span class="text-slate-400">(${s.shootTime})</span>` : ''}</td>
+                        <td class="p-2 text-slate-600 font-medium">${esc(Array.isArray(s.team) ? s.team.join(', ') : s.team)}</td>
+                        <td class="p-2 text-center font-mono font-bold text-slate-900">${s.formattedTime}</td>
+                        <td class="p-2 text-center">
+                            <span class="px-2 py-0.5 rounded text-[8px] font-bold ${s.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}">${esc(s.status)}</span>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+
+        ${renderFooter('Shoot & Production • Section 4')}
+    </div>
+    ` : ''}
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION 5: OVERALL QUALITY SCORE & REWORK / REVISIONS         -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
         ${renderHeader('Overall Quality Score & Rework')}
@@ -2699,11 +3125,11 @@
             </table>
         </div>
 
-        ${renderFooter('Overall Quality & Rework • Section 3')}
+        ${renderFooter('Overall Quality & Rework • Section 5')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- SECTION 4: ATTENDANCE WITH BREAK DISTRIBUTION                 -->
+    <!-- SECTION 6: ATTENDANCE WITH BREAK DISTRIBUTION                 -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
         ${renderHeader('Attendance with Break Distribution')}
@@ -2788,11 +3214,11 @@
             </table>
         </div>
 
-        ${renderFooter('Attendance with Break • Section 4')}
+        ${renderFooter('Attendance with Break • Section 6')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- SECTION 5: AI INSIGHTS, GOALS & FORMAL APPRAISAL SIGN-OFF    -->
+    <!-- SECTION 7: AI INSIGHTS, GOALS & FORMAL APPRAISAL SIGN-OFF    -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
         ${renderHeader('AI Insights & Appraisal')}
@@ -2867,7 +3293,7 @@
             </div>
         </div>
 
-        ${renderFooter('AI Insights & Appraisal • Section 5')}
+        ${renderFooter('AI Insights & Appraisal • Section 7')}
     </div>
 
     <script>
@@ -3108,6 +3534,20 @@
         return client.trim();
     }
 
+    function toggleClientRow(safeKey) {
+        const row = getEl(`mmr-client-tasks-row-${safeKey}`);
+        const chevron = getEl(`mmr-client-chevron-${safeKey}`);
+        if (!row) return;
+        const isHidden = row.classList.contains('hidden');
+        if (isHidden) {
+            row.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        } else {
+            row.classList.add('hidden');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+
     function renderClientTimingTab(data) {
         if (!data) {
             if (MMR.cachedReportData) data = MMR.cachedReportData;
@@ -3190,8 +3630,10 @@
 
         // 1. KPI cards
         const totalClients = clientsList.length;
-        const topClient = clientsList.length > 0 ? clientsList[0].name : 'None';
+        const topClientByTime = clientsList.length > 0 ? clientsList[0].name : 'None';
         const topClientTime = clientsList.length > 0 ? formatDurationHM(clientsList[0].totalSeconds) : '0h 0m';
+        const mostActiveClientByTasks = [...clientsList].sort((a, b) => b.tasks.length - a.tasks.length)[0]?.name || 'None';
+        const mostActiveTaskCount = [...clientsList].sort((a, b) => b.tasks.length - a.tasks.length)[0]?.tasks.length || 0;
         const avgSeconds = totalClients > 0 ? Math.round(totalClientSeconds / totalClients) : 0;
         const totalSessions = clientsList.reduce((acc, c) => acc + c.sessionsCount, 0);
 
@@ -3202,7 +3644,7 @@
                     <div>
                         <span class="text-xs font-semibold text-slate-500">Active Clients</span>
                         <p class="text-2xl font-black text-slate-900 mt-1">${totalClients}</p>
-                        <p class="text-[11px] text-slate-400 mt-0.5">With assigned work</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">${totalSessions} total work sessions</p>
                     </div>
                     <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
                         <iconify-icon icon="solar:buildings-bold-duotone" width="22"></iconify-icon>
@@ -3210,12 +3652,22 @@
                 </div>
                 <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
                     <div>
-                        <span class="text-xs font-semibold text-slate-500">Top Client</span>
-                        <p class="text-xl font-black text-slate-900 mt-1 truncate max-w-[140px]">${esc(topClient)}</p>
+                        <span class="text-xs font-semibold text-slate-500">Top Client (Time)</span>
+                        <p class="text-xl font-black text-slate-900 mt-1 truncate max-w-[140px]">${esc(topClientByTime)}</p>
                         <p class="text-[11px] text-purple-600 font-bold mt-0.5">${topClientTime} logged</p>
                     </div>
                     <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                         <iconify-icon icon="solar:star-fall-bold-duotone" width="22"></iconify-icon>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-slate-500">Most Active (Tasks)</span>
+                        <p class="text-xl font-black text-slate-900 mt-1 truncate max-w-[140px]">${esc(mostActiveClientByTasks)}</p>
+                        <p class="text-[11px] text-indigo-600 font-bold mt-0.5">${mostActiveTaskCount} deliverables</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <iconify-icon icon="solar:checklist-minimalistic-bold-duotone" width="22"></iconify-icon>
                     </div>
                 </div>
                 <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
@@ -3228,41 +3680,166 @@
                         <iconify-icon icon="solar:clock-circle-bold-duotone" width="22"></iconify-icon>
                     </div>
                 </div>
-                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-semibold text-slate-500">Client Sessions</span>
-                        <p class="text-2xl font-black text-slate-900 mt-1">${totalSessions}</p>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Total focus sessions</p>
+            `;
+        }
+
+        // Render or update Visual Analytics Charts container
+        let chartsContainer = getEl('mmr-client-charts-container');
+        if (!chartsContainer) {
+            const tabEl = getEl('mmr-tab-client-timing');
+            const tableCard = tabEl ? tabEl.querySelector('.bg-white.rounded-2xl.border') : null;
+            if (tabEl && tableCard) {
+                chartsContainer = document.createElement('div');
+                chartsContainer.id = 'mmr-client-charts-container';
+                chartsContainer.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 my-2';
+                tabEl.insertBefore(chartsContainer, tableCard);
+            }
+        }
+
+        if (chartsContainer) {
+            chartsContainer.innerHTML = `
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <iconify-icon icon="solar:pie-chart-2-bold-duotone" class="text-purple-600" width="16"></iconify-icon>
+                            Client Contribution Share
+                        </h4>
+                        <span class="text-[10px] text-slate-400 font-mono">By Working Hours</span>
                     </div>
-                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                        <iconify-icon icon="solar:stopwatch-play-bold-duotone" width="22"></iconify-icon>
+                    <div class="relative h-56 flex items-center justify-center">
+                        <canvas id="mmr-chart-client-donut"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <iconify-icon icon="solar:chart-square-bold-duotone" class="text-indigo-600" width="16"></iconify-icon>
+                            Client Working Hours Allocation
+                        </h4>
+                        <span class="text-[10px] text-slate-400 font-mono">Ranked by Duration</span>
+                    </div>
+                    <div class="relative h-56 flex items-center justify-center">
+                        <canvas id="mmr-chart-client-bars"></canvas>
                     </div>
                 </div>
             `;
+
+            // Draw Charts if Chart.js is present
+            if (typeof Chart !== 'undefined' && clientsList.length > 0) {
+                if (MMR.charts.clientDonut) { try { MMR.charts.clientDonut.destroy(); } catch (e) { } }
+                if (MMR.charts.clientBars) { try { MMR.charts.clientBars.destroy(); } catch (e) { } }
+
+                const top5 = clientsList.slice(0, 5);
+                const otherSec = clientsList.slice(5).reduce((acc, c) => acc + c.totalSeconds, 0);
+                const donutLabels = top5.map(c => c.name);
+                const donutData = top5.map(c => +(c.totalSeconds / 3600).toFixed(2));
+                if (otherSec > 0) {
+                    donutLabels.push('Other Clients');
+                    donutData.push(+(otherSec / 3600).toFixed(2));
+                }
+
+                const donutCtx = getEl('mmr-chart-client-donut')?.getContext('2d');
+                if (donutCtx && donutData.length > 0) {
+                    MMR.charts.clientDonut = new Chart(donutCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: donutLabels,
+                            datasets: [{
+                                data: donutData,
+                                backgroundColor: ['#7c3aed', '#6366f1', '#0d9488', '#f59e0b', '#ec4899', '#94a3b8'],
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                            },
+                            cutout: '65%'
+                        }
+                    });
+                }
+
+                const barCtx = getEl('mmr-chart-client-bars')?.getContext('2d');
+                if (barCtx && clientsList.length > 0) {
+                    const barLabels = clientsList.slice(0, 7).map(c => c.name);
+                    const barData = clientsList.slice(0, 7).map(c => +(c.totalSeconds / 3600).toFixed(2));
+                    MMR.charts.clientBars = new Chart(barCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: barLabels,
+                            datasets: [{
+                                label: 'Hours Worked',
+                                data: barData,
+                                backgroundColor: '#6366f1',
+                                borderRadius: 6
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+            }
         }
 
         const badgeEl = getEl('mmr-client-total-badge');
         if (badgeEl) badgeEl.textContent = `${totalClients} Client${totalClients === 1 ? '' : 's'}`;
 
-        // 2. Table rows
+        // 3. Table rows with inline accordion for deliverables
         const tbody = getEl('mmr-client-timing-tbody');
         if (tbody) {
+            const thead = (typeof tbody.closest === 'function') ? tbody.closest('table')?.querySelector('thead') : null;
+            if (thead) {
+                thead.innerHTML = `
+                    <tr>
+                        <th class="px-4 py-3">Client</th>
+                        <th class="px-4 py-3 text-center">Tasks (Worked / Total)</th>
+                        <th class="px-4 py-3 text-center">Sessions</th>
+                        <th class="px-4 py-3">Total Time</th>
+                        <th class="px-4 py-3">Work Share</th>
+                        <th class="px-4 py-3 text-center">Rework</th>
+                        <th class="px-4 py-3 text-center">Completed</th>
+                        <th class="px-4 py-3 text-right">Deliverables</th>
+                    </tr>
+                `;
+            }
+
             if (clientsList.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400 font-medium">No client task timing records for this period.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400 font-medium">No client task timing records for this period.</td></tr>';
             } else {
                 tbody.innerHTML = clientsList.map(c => {
                     const pct = totalClientSeconds > 0 ? Math.round((c.totalSeconds / totalClientSeconds) * 100) : 0;
+                    const safeKey = esc(c.name).replace(/[^a-zA-Z0-9_-]/g, '_');
+                    const workedCount = c.tasks.filter(t => (t.workingTimeSec || 0) > 0 || (t.workSessionsCount || 0) > 0).length;
+                    const reworkCount = c.tasks.reduce((sum, t) => sum + (t.reworkCount || 0), 0);
+
                     return `
-                        <tr class="hover:bg-slate-50/80 transition-colors">
+                        <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2.5">
+                                    <button type="button" onclick="window.MyMonthlyReport.toggleClientRow('${safeKey}')" class="text-slate-400 hover:text-purple-600 transition-colors p-1" title="Toggle Deliverables">
+                                        <iconify-icon id="mmr-client-chevron-${safeKey}" icon="solar:alt-arrow-down-bold" width="14" class="transition-transform duration-200"></iconify-icon>
+                                    </button>
                                     <div class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 font-black text-xs flex items-center justify-center shrink-0">
                                         ${esc((c.name || 'G').charAt(0).toUpperCase())}
                                     </div>
                                     <span class="font-bold text-slate-900">${esc(c.name)}</span>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-center font-semibold text-slate-700">${c.tasks.length}</td>
+                            <td class="px-4 py-3 text-center font-semibold text-slate-700">
+                                <span class="font-bold text-slate-900">${workedCount}</span>
+                                <span class="text-slate-400"> / ${c.tasks.length}</span>
+                            </td>
                             <td class="px-4 py-3 text-center font-semibold text-slate-700">${c.sessionsCount}</td>
                             <td class="px-4 py-3 font-mono font-bold text-purple-700">${formatDurationHM(c.totalSeconds)}</td>
                             <td class="px-4 py-3">
@@ -3273,21 +3850,84 @@
                                     <span class="text-[11px] font-bold text-slate-600">${pct}%</span>
                                 </div>
                             </td>
+                            <td class="px-4 py-3 text-center font-bold ${reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">
+                                ${reworkCount}
+                            </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${c.completedCount === c.tasks.length && c.tasks.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
                                     ${c.completedCount} / ${c.tasks.length}
                                 </span>
                             </td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <button type="button" onclick="window.MyMonthlyReport.toggleClientRow('${safeKey}')" class="px-2.5 py-1 text-[11px] font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors cursor-pointer">
+                                    Deliverables (${c.tasks.length})
+                                </button>
+                            </td>
+                        </tr>
+                        <!-- Expandable Client Deliverables Accordion Row -->
+                        <tr id="mmr-client-tasks-row-${safeKey}" class="hidden bg-slate-50/70 border-b border-slate-200">
+                            <td colspan="8" class="px-6 py-3">
+                                <div class="bg-white rounded-xl border border-slate-200 p-3 shadow-xs">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h4 class="text-[11px] font-black uppercase text-slate-700 tracking-wide flex items-center gap-1.5">
+                                            <iconify-icon icon="solar:folder-with-files-bold-duotone" class="text-purple-600" width="14"></iconify-icon>
+                                            ${esc(c.name)} Deliverables & Work Sessions (${c.tasks.length} Total Tasks)
+                                        </h4>
+                                        <span class="text-[10px] text-slate-400 font-mono">Logged Hours: ${formatDurationHM(c.totalSeconds)}</span>
+                                    </div>
+                                    ${c.tasks.length === 0 ? `
+                                        <p class="text-xs text-slate-400 italic py-2">No tasks mapped to this client.</p>
+                                    ` : `
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-left text-[11px]">
+                                                <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] border-b border-slate-100">
+                                                    <tr>
+                                                        <th class="px-3 py-1.5">Task ID</th>
+                                                        <th class="px-3 py-1.5">Task Description</th>
+                                                        <th class="px-3 py-1.5">Source</th>
+                                                        <th class="px-3 py-1.5">Status</th>
+                                                        <th class="px-3 py-1.5">Due Date</th>
+                                                        <th class="px-3 py-1.5 text-center">Sessions</th>
+                                                        <th class="px-3 py-1.5">Duration</th>
+                                                        <th class="px-3 py-1.5 text-center">Rework</th>
+                                                        <th class="px-3 py-1.5 text-right">Details</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-100">
+                                                    ${c.tasks.map(t => {
+                                                        const src = t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira';
+                                                        return `
+                                                            <tr class="hover:bg-slate-50/50">
+                                                                <td class="px-3 py-1.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
+                                                                <td class="px-3 py-1.5 font-medium text-slate-800">${esc(t.desc || t.title)}</td>
+                                                                <td class="px-3 py-1.5">
+                                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${src === 'Jira' ? 'bg-indigo-50 text-indigo-700' : 'bg-fuchsia-50 text-fuchsia-700'}">${src}</span>
+                                                                </td>
+                                                                <td class="px-3 py-1.5">
+                                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
+                                                                </td>
+                                                                <td class="px-3 py-1.5 text-slate-500">${formatDateStr(t.dueDate || t.duedate)}</td>
+                                                                <td class="px-3 py-1.5 text-center font-bold text-slate-700">${t.workSessionsCount || 0}</td>
+                                                                <td class="px-3 py-1.5 font-mono font-bold text-purple-700">${formatDurationHMS(t.workingTimeSec || 0)}</td>
+                                                                <td class="px-3 py-1.5 text-center font-bold ${(t.reworkCount || 0) > 0 ? 'text-rose-600' : 'text-slate-400'}">${t.reworkCount || 0}</td>
+                                                                <td class="px-3 py-1.5 text-right">
+                                                                    <button type="button" onclick="window.MyMonthlyReport.openTaskDetailModal('${esc(t.id)}')" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 hover:bg-purple-100">
+                                                                        Sessions
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        `;
+                                                    }).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    `}
+                                </div>
+                            </td>
                         </tr>
                     `;
                 }).join('');
             }
-        }
-
-        // Clean up any existing chart instance
-        if (MMR.charts.clientTiming) {
-            try { MMR.charts.clientTiming.destroy(); } catch (e) { }
-            MMR.charts.clientTiming = null;
         }
     }
 
@@ -3611,6 +4251,8 @@
             if (MMR.cachedReportData) renderQcTab(MMR.cachedReportData);
         },
         toggleSessionsRow: toggleSessionsRow,
+        toggleClientRow: toggleClientRow,
+        renderShootTab: renderShootTab,
         openTaskDetailModal: openTaskDetailModal,
         closeTaskDetailModal: closeTaskDetailModal,
         exportPdf: exportReportAsPdf,

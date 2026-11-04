@@ -536,4 +536,198 @@ describe('MyMonthlyReport Module Verification', () => {
         expect(timingIds).toContain('M-102');
         expect(timingIds).not.toContain('NOV-103');
     });
+
+    it('Phase 3: should calculate comprehensive client metrics, work share %, and render client deliverables accordion', () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).getTime();
+
+        const mockDom: any = {
+            'mmr-client-timing-kpis': { innerHTML: '' },
+            'mmr-client-total-badge': { textContent: '' },
+            'mmr-client-timing-tbody': { innerHTML: '' },
+            'mmr-tab-client-timing': { classList: { add: () => {}, remove: () => {} }, querySelector: () => null, insertBefore: () => {} },
+            'mmr-subtab-btn-client-timing': { classList: { add: () => {}, remove: () => {} } }
+        };
+        mockWindow.document = {
+            getElementById: (id: string) => mockDom[id] || { value: '', classList: { add: () => {}, remove: () => {} } },
+            createElement: () => ({ id: '', className: '', innerHTML: '' })
+        };
+
+        mockWindow.tasks = [
+            { id: 'NOV-201', desc: 'Client A Campaign', client: 'Client A', assigneeEmail: 'karthikavilpower@gmail.com', status: 'Done', created: startOfMonth + 1000 },
+            { id: 'NOV-202', desc: 'Client A Reel', client: 'Client A', assigneeEmail: 'karthikavilpower@gmail.com', status: 'In Progress', created: startOfMonth + 2000 },
+            { id: 'NOV-203', desc: 'Client B Brochure', client: 'Client B', assigneeEmail: 'karthikavilpower@gmail.com', status: 'Done', created: startOfMonth + 3000 }
+        ];
+
+        mockWindow.allTimeLogs = [
+            { taskId: 'NOV-201', userId: 'karthikavilpower@gmail.com', startTime: startOfMonth + 4000, durationSeconds: 7200, client: 'Client A' },
+            { taskId: 'NOV-203', userId: 'karthikavilpower@gmail.com', startTime: startOfMonth + 12000, durationSeconds: 3600, client: 'Client B' }
+        ];
+
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'admin' };
+        mockWindow.MyMonthlyReport.handleUserChange('karthikavilpower@gmail.com');
+        mockWindow.MyMonthlyReport.switchSubTab('client-timing');
+
+        const kpisHtml = mockDom['mmr-client-timing-kpis']?.innerHTML || '';
+        const tbodyHtml = mockDom['mmr-client-timing-tbody']?.innerHTML || '';
+
+        // Verification of Client KPIs
+        expect(kpisHtml).toContain('Active Clients');
+        expect(kpisHtml).toContain('Top Client (Time)');
+        expect(kpisHtml).toContain('Client A');
+
+        // Verification of Table & Deliverables Accordion
+        expect(tbodyHtml).toContain('Client A');
+        expect(tbodyHtml).toContain('Client B');
+        expect(tbodyHtml).toContain('Deliverables & Work Sessions');
+        expect(tbodyHtml).toContain('NOV-201');
+        expect(tbodyHtml).toContain('NOV-203');
+    });
+
+    it('should accurately track Shoot & Video Production tasks, calculate shoot duration, classify shoot types, and render the Shoot tab', () => {
+        const mockDom: any = {
+            'mmr-shoot-kpis': { innerHTML: '' },
+            'mmr-shoot-types': { innerHTML: '' },
+            'mmr-shoot-tbody': { innerHTML: '' },
+            'mmr-tab-shoot': { classList: { add: () => {}, remove: () => {} } },
+            'mmr-subtab-btn-shoot': { classList: { add: () => {}, remove: () => {} } }
+        };
+        mockWindow.document = {
+            getElementById: (id: string) => mockDom[id] || { value: '', classList: { add: () => {}, remove: () => {} } },
+            createElement: () => ({ id: '', className: '', innerHTML: '' })
+        };
+
+        // Ajith: Video Production Team
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'Admin', role: 'admin' };
+        mockWindow.selectedMonth = 10;
+        mockWindow.selectedYear = 2026;
+
+        mockWindow.tasks = [
+            {
+                id: 'M-SHOOT-101',
+                desc: 'Client Alpha Product Photography & Video Shoot',
+                client: 'Client Alpha',
+                status: 'Shoot Completed',
+                assignee: 'Ajith',
+                assigneeEmail: 'ajithvilpower@gmail.com',
+                duedate: '2026-11-02',
+                shootPlan: true,
+                shootGroupId: 'SHOOT-GRP-1'
+            },
+            {
+                id: 'M-SHOOT-102',
+                desc: 'Client Beta Outdoor Promotional Shoot on Location',
+                client: 'Client Beta',
+                status: 'Shoot Planned',
+                assignee: 'Ajith',
+                assigneeEmail: 'ajithvilpower@gmail.com',
+                duedate: '2026-11-04',
+                shootPlan: true,
+                shootGroupId: 'SHOOT-GRP-2'
+            }
+        ];
+
+        mockWindow.allTimeLogs = [
+            {
+                taskId: 'M-SHOOT-101',
+                taskTitle: 'Client Alpha Product Photography & Video Shoot',
+                userId: 'ajithvilpower@gmail.com',
+                startTime: new Date('2026-11-02T10:00:00+05:30').getTime(),
+                durationSeconds: 14400, // 4 hours
+                activity: 'Shoot'
+            }
+        ];
+
+        mockWindow.MyMonthlyReport.handleUserChange('ajithvilpower@gmail.com');
+        mockWindow.MyMonthlyReport.switchSubTab('shoot');
+
+        const cached = mockWindow.MyMonthlyReportState.cachedReportData;
+        expect(cached).toBeDefined();
+        expect(cached.shoot).toBeDefined();
+        expect(cached.shoot.totalShoots).toBe(2);
+        expect(cached.shoot.completedShoots).toBe(1);
+        expect(cached.shoot.plannedShoots).toBe(1);
+        expect(cached.shoot.totalShootSeconds).toBe(14400);
+        expect(cached.shoot.totalShootHours).toBe('4.0');
+
+        // Verify Shoot Types classification
+        expect(cached.shoot.shootList[0].shootType).toBe('Product Photography');
+        expect(cached.shoot.shootList[1].shootType).toBe('Promotional Shoot');
+
+        // Verify rendered Shoot tab DOM
+        const kpisHtml = mockDom['mmr-shoot-kpis']?.innerHTML || '';
+        const typesHtml = mockDom['mmr-shoot-types']?.innerHTML || '';
+        const tbodyHtml = mockDom['mmr-shoot-tbody']?.innerHTML || '';
+
+        expect(kpisHtml).toContain('Assigned Shoots');
+        expect(kpisHtml).toContain('Total Shoot Hours');
+        expect(typesHtml).toContain('Product Photography');
+        expect(typesHtml).toContain('Promotional Shoot');
+        expect(tbodyHtml).toContain('M-SHOOT-101');
+        expect(tbodyHtml).toContain('M-SHOOT-102');
+        expect(tbodyHtml).toContain('Client Alpha');
+        expect(tbodyHtml).toContain('Client Beta');
+    });
+
+    it('should accurately track Role-Based Work Activity breakdown (Content Writing vs QC Review vs Video vs Design)', () => {
+        // Sneha or Multidisciplinary Member: Content Writing & QC Incharge
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'Admin', role: 'admin' };
+        mockWindow.selectedMonth = 10;
+        mockWindow.selectedYear = 2026;
+
+        mockWindow.tasks = [
+            {
+                id: 'NOV-301',
+                desc: 'Client Alpha Diwali Carousel Copy & Script Writing',
+                client: 'Client Alpha',
+                status: 'Done',
+                assignee: 'Sneha',
+                assigneeEmail: 'snehavilpower@gmail.com'
+            },
+            {
+                id: 'NOV-302',
+                desc: 'Client Beta Social Media Post Quality Check & Proofreading',
+                client: 'Client Beta',
+                status: 'Quality Check',
+                assignee: 'Sneha',
+                assigneeEmail: 'snehavilpower@gmail.com'
+            }
+        ];
+
+        mockWindow.allTimeLogs = [
+            {
+                taskId: 'NOV-301',
+                taskTitle: 'Client Alpha Diwali Carousel Copy & Script Writing',
+                userId: 'snehavilpower@gmail.com',
+                startTime: new Date('2026-11-01T10:00:00+05:30').getTime(),
+                durationSeconds: 7200, // 2 hours
+                activity: 'Content Writing'
+            },
+            {
+                taskId: 'NOV-302',
+                taskTitle: 'Client Beta Social Media Post Quality Check & Proofreading',
+                userId: 'snehavilpower@gmail.com',
+                startTime: new Date('2026-11-01T14:00:00+05:30').getTime(),
+                durationSeconds: 3600, // 1 hour
+                activity: 'QC Review'
+            }
+        ];
+
+        mockWindow.MyMonthlyReport.handleUserChange('snehavilpower@gmail.com');
+        const cached = mockWindow.MyMonthlyReportState.cachedReportData;
+
+        expect(cached).toBeDefined();
+        expect(cached.activityBreakdown).toBeDefined();
+
+        const writing = cached.activityBreakdown.find((a: any) => a.key === 'contentWriting');
+        const qc = cached.activityBreakdown.find((a: any) => a.key === 'qcReview');
+
+        expect(writing).toBeDefined();
+        expect(writing.seconds).toBe(7200);
+        expect(writing.hours).toBe(2);
+
+        expect(qc).toBeDefined();
+        expect(qc.seconds).toBe(3600);
+        expect(qc.hours).toBe(1);
+    });
 });
