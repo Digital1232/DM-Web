@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.59">
+    <meta name="app-version" content="1.0.60">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -9072,11 +9072,19 @@
                                     Directory
                                     & Access Roles</p>
                             </div>
+                            <div class="flex items-center gap-2">
+                            <button onclick="optimizeAllPhotos()" id="btn-optimize-photos"
+                                title="Shrink oversized profile and group photos so Chat and the dashboard load faster"
+                                class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2.5 transition-all disabled:opacity-60">
+                                <iconify-icon icon="solar:gallery-minimalistic-bold" width="18"></iconify-icon>
+                                Optimize Photos
+                            </button>
                             <button onclick="openAdminUserModal()"
                                 class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
                                 <iconify-icon icon="solar:user-plus-rounded-bold" width="18"></iconify-icon>
                                 Add User
                             </button>
+                            </div>
                         </div>
                         <div id="admin-users-list" class="divide-y divide-slate-50">
                             <!-- Populated via JS -->
@@ -20110,6 +20118,71 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.log(`[Avatar] Profile photo shrunk ${Math.round(pic.length / 1024)} KB → ${Math.round(small.length / 1024)} KB`);
                 } catch (e) { console.warn('[Avatar] Could not shrink profile photo:', e); }
             }
+
+            // Admin: shrink every oversized stored profile and group photo in one go
+            // (User Management → "Optimize Photos"). Speeds up Chat and the live board for everyone.
+            async function optimizeAllPhotos() {
+                if (!db || !isAdmin()) return toast('Only admins can optimize photos', 'error');
+                const ok = confirm('Shrink all oversized profile and group photos to 256 px?\n\n' +
+                    'This makes Chat and the dashboard load faster for everyone. Photos still look sharp at avatar size, ' +
+                    'but the original high-resolution versions are replaced and cannot be restored.');
+                if (!ok) return;
+                const btn = document.getElementById('btn-optimize-photos');
+                const label = btn ? btn.innerHTML : '';
+                const setLabel = t => { if (btn) btn.innerHTML = `<iconify-icon icon="solar:refresh-bold" width="18" class="animate-spin"></iconify-icon> ${t}`; };
+                if (btn) btn.disabled = true;
+                setLabel('Scanning…');
+                let done = 0, failed = 0, beforeChars = 0, afterChars = 0;
+                try {
+                    const jobs = [];
+                    const isBig = p => typeof p === 'string' && p.startsWith('data:image') && p.length > AVATAR_MAX_CHARS;
+                    const usersSnap = await get(ref(db, 'worksync/users'));
+                    usersSnap.forEach(ch => {
+                        const u = ch.val() || {};
+                        if (isBig(u.profilePicture)) jobs.push({ path: `worksync/users/${ch.key}`, pic: u.profilePicture, email: u.email });
+                    });
+                    const convSnap = await get(ref(db, 'worksync/conversations'));
+                    convSnap.forEach(ch => {
+                        const c = ch.val() || {};
+                        if (isBig(c.profilePicture)) jobs.push({ path: `worksync/conversations/${ch.key}`, pic: c.profilePicture, convId: ch.key });
+                    });
+                    if (!jobs.length) { toast('All photos are already optimized', 'success'); return; }
+
+                    for (let i = 0; i < jobs.length; i++) {
+                        const job = jobs[i];
+                        setLabel(`Optimizing ${i + 1}/${jobs.length}…`);
+                        try {
+                            const small = await shrinkImageToDataUrl(job.pic);
+                            if (!small || small.length >= job.pic.length) continue;
+                            await update(ref(db, job.path), { profilePicture: small });
+                            done++; beforeChars += job.pic.length; afterChars += small.length;
+                            // Keep in-memory copies in sync
+                            if (job.email && allUsersMap instanceof Map) {
+                                const u = allUsersMap.get(String(job.email).toLowerCase());
+                                if (u) u.profilePicture = small;
+                            }
+                            if (job.convId && chatConversations && chatConversations[job.convId]) chatConversations[job.convId].profilePicture = small;
+                            if (job.email && currentUser && String(job.email).toLowerCase() === String(currentUser.email).toLowerCase()) {
+                                currentUser.profilePicture = small;
+                                try { localStorage.setItem('worksync_user', JSON.stringify(currentUser)); } catch (e) { }
+                            }
+                        } catch (e) {
+                            failed++;
+                            console.warn('[Avatar] Could not optimize', job.path, e);
+                        }
+                    }
+                    const mb = n => (n / 1024 / 1024).toFixed(1);
+                    toast(`Optimized ${done} photo${done === 1 ? '' : 's'}: ${mb(beforeChars)} MB → ${mb(afterChars)} MB` +
+                        (failed ? ` (${failed} could not be read and were left unchanged)` : ''), failed ? 'warning' : 'success', 8000);
+                    if (typeof renderChatSidebar === 'function') renderChatSidebar();
+                } catch (e) {
+                    console.error('[Avatar] Photo optimization failed:', e);
+                    toast('Photo optimization failed: ' + e.message, 'error');
+                } finally {
+                    if (btn) { btn.disabled = false; btn.innerHTML = label; }
+                }
+            }
+            window.optimizeAllPhotos = optimizeAllPhotos;
 
             function fileToBase64(file) {
                 return new Promise((resolve, reject) => {
