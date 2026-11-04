@@ -106,9 +106,34 @@
         return !isJiraKey(id);
     }
 
+    // Client spellings that differ only by case/spacing are merged during a build
+    // (Excel's SUMIFS treats them as equal too, so totals stay consistent).
+    let clientCanon = null;
+    const clientKey = s => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
     function cleanClient(raw) {
-        const s = String(raw || '').trim();
-        return NON_CLIENT_NAMES.has(s.toLowerCase()) ? INTERNAL_CLIENT : s;
+        const s = String(raw || '').trim().replace(/\s+/g, ' ');
+        if (NON_CLIENT_NAMES.has(s.toLowerCase())) return INTERNAL_CLIENT;
+        return (clientCanon && clientCanon.get(clientKey(s))) || s;
+    }
+
+    function buildClientCanon(ctx) {
+        const counts = new Map(); // key -> Map(variant -> count)
+        const add = v => {
+            const s = String(v || '').trim().replace(/\s+/g, ' ');
+            if (!s || NON_CLIENT_NAMES.has(s.toLowerCase())) return;
+            const k = clientKey(s);
+            const m = counts.get(k) || new Map();
+            m.set(s, (m.get(s) || 0) + 1);
+            counts.set(k, m);
+        };
+        (ctx.timeLogs || []).forEach(l => l && add(l.client || l.clientName));
+        (ctx.tasks || []).forEach(t => t && add(t.client));
+        (ctx.qcReports || []).forEach(r => r && add(r.client));
+        const canon = new Map();
+        // Most frequent spelling wins; ties go to the first seen.
+        counts.forEach((m, k) => canon.set(k, [...m.entries()].sort((a, b) => b[1] - a[1])[0][0]));
+        return canon;
     }
 
     function deriveCategory(desc, task) {
@@ -603,13 +628,22 @@
     // ─────────────────────────────────────────────────────────────
 
     function build(ctx, opts) {
-        opts = opts || {};
+        clientCanon = buildClientCanon(ctx || {});
+        try {
+            return buildReport(ctx || {}, opts || {});
+        } finally {
+            clientCanon = null;
+        }
+    }
+
+    function buildReport(ctx, opts) {
         const nowTs = opts.now || Date.now();
         const settings = Object.assign({}, DEFAULT_SETTINGS, opts.settings || {});
         const period = resolvePeriod(opts.period || {}, nowTs);
         const scope = resolveScope(opts.viewer, ctx);
         const f = Object.assign({ employee: 'all', client: 'all', category: 'all', source: 'all' }, opts.filters || {});
         f.employee = f.employee === 'all' ? 'all' : normEmail(f.employee);
+        if (f.client !== 'all') f.client = cleanClient(f.client);
 
         // An employee outside the viewer's scope is never honoured.
         if (f.employee !== 'all' && !inScope(scope, f.employee)) f.employee = 'all';
@@ -663,8 +697,10 @@
         const team = reportEmails.map(email => {
             const mine = entries.filter(l => l.email === email);
             const lv = leaves ? (leaves[email] || { leave: new Map(), saturdayOff: new Set() }) : null;
-            const workingDays = lv ? capDays.filter(d => !lv.saturdayOff.has(d)).length : capDays.length;
-            const leaveDays = lv ? capDays.reduce((s, d) => s + (lv.leave.get(d) || 0), 0) : null;
+            const myDays = lv ? capDays.filter(d => !lv.saturdayOff.has(d)) : capDays;
+            const workingDays = myDays.length;
+            // Leave only counts on the employee's own working days (never on an approved Saturday off).
+            const leaveDays = lv ? myDays.reduce((s, d) => s + (lv.leave.get(d) || 0), 0) : null;
             const availableSec = Math.max(0, (workingDays - (leaveDays || 0)) * settings.hoursPerDay * HOUR);
             const loggedSec = sumBy(mine, () => true);
             const att = attendance[email];

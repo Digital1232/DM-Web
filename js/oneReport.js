@@ -660,7 +660,9 @@
         const m = state.model || buildModel();
         if (!m) return;
         const q = v => {
-            const s = v === null || v === undefined ? '' : String(v);
+            let s = v === null || v === undefined ? '' : String(v);
+            // Text such as "=cmd" would run as a formula when the CSV is opened in Excel.
+            if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
             return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         };
         const head = ['Date', 'Employee', 'Employee Email', 'Client', 'Task ID', 'Task Source', 'Task Category', 'Work Type', 'Task Description', 'Start Time', 'End Time', 'Duration (h)', 'Duration (hh:mm)', 'Entry Type', 'Remarks'];
@@ -809,7 +811,7 @@
             row.getCell(4).value = r.workingDays;
             row.getCell(5).value = r.leaveDays === null ? 'N/A' : r.leaveDays;
             const availDays = r.workingDays - (r.leaveDays || 0);
-            row.getCell(6).value = f(`D${rr}-N(E${rr})`, availDays);
+            row.getCell(6).value = f(`D${rr}-IF(ISNUMBER(E${rr}),E${rr},0)`, availDays);
             row.getCell(7).value = f(`F${rr}*${HPD}`, hrs(r.availableSec));
             row.getCell(7).numFmt = FMT_H;
         });
@@ -842,6 +844,9 @@
 
         const R = col => `'Time Log'!$${col}$${logFirst}:$${col}$${logLast}`;
         const HOURS = R('L'), EMAIL = R('C'), CLIENT = R('D'), CAT = R('G'), WTYPE = R('H');
+        // Client names are free text: SUMIFS would read * ? ~ < > = in them as wildcards/operators,
+        // so client lookups use SUMPRODUCT with a plain (exact, case-insensitive) comparison.
+        const sumWhere = (...conds) => `SUMPRODUCT(${conds.map(([range, ref]) => `(${range}=${ref})`).join('*')}*${HOURS})`;
 
         // ── Team Summary
         title(wsTeam, 'Team Summary', subtitle, 10);
@@ -860,7 +865,7 @@
             row.getCell(6).value = f(`SUMIFS(${HOURS},${EMAIL},B${rr},${WTYPE},"Internal")`, hrs(r.internalSec));
             row.getCell(7).value = f(`SUMIFS(${HOURS},${EMAIL},B${rr},${WTYPE},"Business Development")`, hrs(r.bdSec));
             row.getCell(8).value = f(`Setup!E${sr}`, r.leaveDays === null ? 'N/A' : r.leaveDays);
-            row.getCell(9).value = f(`IF(N(C${rr})=0,"N/A",D${rr}/C${rr})`, r.utilization === null ? 'N/A' : r.utilization);
+            row.getCell(9).value = f(`IF(IF(ISNUMBER(C${rr}),C${rr},0)=0,"N/A",D${rr}/C${rr})`, r.utilization === null ? 'N/A' : r.utilization);
             row.getCell(10).value = r.entries;
             [3, 4, 5, 6, 7].forEach(c => { row.getCell(c).numFmt = FMT_H; });
             row.getCell(9).numFmt = FMT_PCT;
@@ -874,7 +879,7 @@
             wsTeam.getCell(`${col}${tTot}`).numFmt = FMT_H;
         });
         wsTeam.getCell(`H${tTot}`).value = f(`SUM(H${tFirst}:H${tLast})`, teamTot.lv);
-        wsTeam.getCell(`I${tTot}`).value = f(`IF(N(C${tTot})=0,"N/A",D${tTot}/C${tTot})`, m.kpis.utilization === null ? 'N/A' : m.kpis.utilization);
+        wsTeam.getCell(`I${tTot}`).value = f(`IF(IF(ISNUMBER(C${tTot}),C${tTot},0)=0,"N/A",D${tTot}/C${tTot})`, m.kpis.utilization === null ? 'N/A' : m.kpis.utilization);
         wsTeam.getCell(`I${tTot}`).numFmt = FMT_PCT;
         wsTeam.getCell(`J${tTot}`).value = f(`SUM(J${tFirst}:J${tLast})`, teamTot.s);
         totalRow(wsTeam, tTot, 10);
@@ -888,9 +893,9 @@
             const rr = C_HEAD + 1 + i;
             const row = wsClient.getRow(rr);
             row.getCell(1).value = c.client;
-            row.getCell(2).value = f(`SUMIFS(${HOURS},${CLIENT},A${rr})`, hrs(c.seconds));
+            row.getCell(2).value = f(sumWhere([CLIENT, `A${rr}`]), hrs(c.seconds));
             row.getCell(2).numFmt = FMT_H;
-            row.getCell(3).value = f(`IF(N($B$${cTot})=0,"N/A",B${rr}/$B$${cTot})`, c.share === null ? 'N/A' : c.share);
+            row.getCell(3).value = f(`IF(IF(ISNUMBER($B$${cTot}),$B$${cTot},0)=0,"N/A",B${rr}/$B$${cTot})`, c.share === null ? 'N/A' : c.share);
             row.getCell(3).numFmt = FMT_PCT;
             row.getCell(4).value = c.employeeCount;
             row.getCell(5).value = c.topCategory;
@@ -899,7 +904,7 @@
         wsClient.getCell(cTot, 1).value = 'TOTAL';
         wsClient.getCell(cTot, 2).value = f(`SUM(B${cFirst}:B${cLast})`, hrs(m.kpis.totalSec));
         wsClient.getCell(cTot, 2).numFmt = FMT_H;
-        wsClient.getCell(cTot, 3).value = f(`IF(N(B${cTot})=0,"N/A",1)`, m.kpis.totalSec ? 1 : 'N/A');
+        wsClient.getCell(cTot, 3).value = f(`IF(IF(ISNUMBER(B${cTot}),B${cTot},0)=0,"N/A",1)`, m.kpis.totalSec ? 1 : 'N/A');
         wsClient.getCell(cTot, 3).numFmt = FMT_PCT;
         totalRow(wsClient, cTot, 5);
 
@@ -919,7 +924,7 @@
             row.getCell(2).value = r.email;
             mc.forEach((c, j) => {
                 const cl = colL(2 + j);
-                row.getCell(3 + j).value = f(`SUMIFS(${HOURS},${EMAIL},$B${rr},${CLIENT},${cl}$${M_HEAD})`, hrs(r.cells[c]));
+                row.getCell(3 + j).value = f(sumWhere([EMAIL, `$B${rr}`], [CLIENT, `${cl}$${M_HEAD}`]), hrs(r.cells[c]));
                 row.getCell(3 + j).numFmt = '#,##0.00;-#,##0.00;"–"';
             });
 
@@ -948,9 +953,9 @@
             row.getCell(2).value = r.employee;
             row.getCell(3).value = r.email;
             row.getCell(4).value = r.client;
-            row.getCell(5).value = f(`SUMIFS(${HOURS},${CAT},A${rr},${EMAIL},C${rr},${CLIENT},D${rr})`, hrs(r.seconds));
+            row.getCell(5).value = f(sumWhere([CAT, `A${rr}`], [EMAIL, `C${rr}`], [CLIENT, `D${rr}`]), hrs(r.seconds));
             row.getCell(5).numFmt = FMT_H;
-            row.getCell(6).value = f(`IF(N($E$${bTot})=0,"N/A",E${rr}/$E$${bTot})`, r.share === null ? 'N/A' : r.share);
+            row.getCell(6).value = f(`IF(IF(ISNUMBER($E$${bTot}),$E$${bTot},0)=0,"N/A",E${rr}/$E$${bTot})`, r.share === null ? 'N/A' : r.share);
             row.getCell(6).numFmt = FMT_PCT;
         });
         styleBody(wsBreak, bFirst, bLast, 6);
@@ -1115,7 +1120,7 @@
         [
             ['Report Overview', 'Headline KPIs and the filters used for this export. Hour KPIs link to the Team Summary totals.'],
             ['Setup', 'Period, standard hours per day and each employee\'s working days, leave days and available hours. Change the hours-per-day cell (yellow) to recalculate capacity and utilization.'],
-            ['Time Log', 'Every work entry in the report. All hour totals in the other sheets are SUMIFS formulas over this sheet, so editing a duration here updates every summary.'],
+            ['Time Log', 'Every work entry in the report. All hour totals in the other sheets are formulas (SUMIFS / SUMPRODUCT) over this sheet, so editing a duration here updates every summary.'],
             ['Team Summary', 'Available vs logged hours per employee, split into client, internal and business development work. Utilization shows N/A when available hours are zero.'],
             ['Client Summary', 'Hours per client with share of total team hours. "Internal (VilPower)" collects work not tagged to a client.'],
             ['Member x Client', 'Hours per employee per client with row and column totals.'],
@@ -1171,7 +1176,7 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4', compress: true });
             // Built-in PDF fonts only cover Latin-1, so swap dashes and drop other symbols.
-            const pdfSafe = t => String(t === null || t === undefined ? '' : t).replace(/[–—]/g, '-').replace(/•/g, '-').replace(/[^ -ÿ]/g, '');
+            const pdfSafe = t => String(t === null || t === undefined ? '' : t).replace(/[–—]/g, '-').replace(/•/g, '-').replace(/[^\x00-\xFF]/g, '');
             const rawText = doc.text.bind(doc);
             doc.text = (t, ...rest) => rawText(Array.isArray(t) ? t.map(pdfSafe) : pdfSafe(t), ...rest);
             const W = doc.internal.pageSize.getWidth();
