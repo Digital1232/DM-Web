@@ -3,7 +3,7 @@
  * Provides offline shell support, asset caching, and PWABuilder / TWA compliance.
  */
 
-const CACHE_NAME = 'onedesk-pwa-v1.0.56';
+const CACHE_NAME = 'onedesk-pwa-v1.0.57';
 
 // Core shell assets to pre-cache
 const PRECACHE_ASSETS = [
@@ -12,11 +12,11 @@ const PRECACHE_ASSETS = [
   '/manifest.json',
   '/mobile-app.css',
   '/js/mobile-app.js',
-  '/img/Mobile app fav Icon.jpg',
+  '/img/app-icon-192.jpg',
   '/img/Fav-Icon.png',
-  '/img/favicon.svg',
+  '/img/favicon-64.png',
   '/img/onedesk-logo.png',
-  '/img/loading_logo.gif'
+  '/img/loading_logo.webp'
 ];
 
 // Install Event - Pre-cache core shell

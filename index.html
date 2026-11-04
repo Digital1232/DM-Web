@@ -9,15 +9,22 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.52">
+    <meta name="app-version" content="1.0.57">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
-    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
-    <link rel="shortcut icon" href="img/Mobile app fav Icon.jpg">
-    <link rel="apple-touch-icon" sizes="180x180" href="img/Mobile app fav Icon.jpg">
-    <link rel="apple-touch-icon-precomposed" href="img/Mobile app fav Icon.jpg">
-    <link rel="preload" as="image" href="img/loading_logo.gif" type="image/gif">
+    <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
+    <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
+    <link rel="shortcut icon" href="img/favicon-64.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="img/app-icon-192.jpg">
+    <link rel="apple-touch-icon-precomposed" href="img/app-icon-192.jpg">
+    <link rel="preload" as="image" href="img/loading_logo.webp" type="image/webp">
     <title>One Desk Endless Productivity</title>
+    <!-- Open connections early to the servers the first screen needs (libraries, icons, fonts, Firebase SDK) -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://code.iconify.design">
+    <link rel="preconnect" href="https://api.iconify.design">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com">
     <!-- Tailwind CSS v4, prebuilt from src/input.css (npm run build:css). This file styles the app;
          the cdn.tailwindcss.com script was removed because it generated no CSS. -->
     <link rel="stylesheet" href="dist/output.css">
@@ -63,12 +70,12 @@
             document.documentElement.classList.add('dark');
         }
     </script>
-    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/css/litepicker.css" />
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
     <!-- Social Analytics Import Module -->
-    <script src="js/socialAnalyticsImport.js"></script>
+    <script defer src="js/socialAnalyticsImport.js"></script>
     <script>
         window.getInitialsAvatar = window.getInitialsAvatar || function (nameOrEmail) {
             var str = (nameOrEmail || '?').toString().trim();
@@ -2046,16 +2053,27 @@
             display: none !important;
         }
 
+        /* These views start with the .hidden class, which also sets visibility:hidden,
+           opacity:0, transform:scale(0), z-index:-9999 and pointer-events:none. Undo all of
+           it here, otherwise the screen stays blank until the app's JS removes .hidden. */
         html.auth-pending #loading-view,
         html.has-user:not(.app-ready) #loading-view {
             display: flex !important;
             opacity: 1 !important;
             visibility: visible !important;
+            transform: none !important;
+            z-index: 70 !important;
+            pointer-events: auto !important;
         }
 
         /* Show login view ONLY when explicitly unauthenticated */
         html.no-user #login-view {
             display: flex !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            transform: none !important;
+            z-index: 60 !important;
+            pointer-events: auto !important;
         }
 
         html.no-user #loading-view,
@@ -3705,7 +3723,7 @@
     <div id="loading-view"
         class="fixed inset-0 z-[70] bg-slate-50 dark:bg-slate-950 flex-col items-center justify-center hidden transition-opacity duration-500">
         <div class="relative flex items-center justify-center mb-5">
-            <img src="img/loading_logo.gif" alt="Loading..." class="w-32 h-32 object-contain">
+            <img src="img/loading_logo.webp" alt="Loading..." class="w-32 h-32 object-contain">
         </div>
         <div class="flex items-center gap-2.5 px-4 py-2">
             <iconify-icon icon="svg-spinners:ring-resize" width="18"
@@ -3751,7 +3769,7 @@
             </div>
             <div class="mobile-push-body">
                 <div class="mobile-push-avatar-wrap">
-                    <img id="mobile-push-avatar" src="img/Mobile app fav Icon.jpg" alt="Sender avatar"
+                    <img id="mobile-push-avatar" src="img/app-icon-192.jpg" alt="Sender avatar"
                         class="mobile-push-avatar">
                     <span class="mobile-push-dot"></span>
                 </div>
@@ -3844,7 +3862,7 @@
                 <div class="flex justify-between items-center mb-10 shrink-0">
                     <div onclick="switchView('dashboard')" class="cursor-pointer">
                         <img src="img/onedesk-logo.png" alt="One Desk Logo" class="w-32">
-                        <img src="img/favicon.svg" alt="One Desk Favicon"
+                        <img src="img/favicon-192.png" alt="One Desk Favicon"
                             class="w-8 h-8 hidden logo-collapsed hover:scale-105 transition-transform">
                     </div>
                 </div>
@@ -10995,7 +11013,7 @@
                         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <img id="mmr-header-avatar" src="img/favicon.svg" alt="Avatar"
+                                    <img id="mmr-header-avatar" src="img/favicon-192.png" alt="Avatar"
                                         class="w-16 h-16 rounded-2xl object-cover bg-slate-100 border-2 border-purple-100 shadow-sm">
                                     <div
                                         class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full">
@@ -11362,17 +11380,47 @@
                                     oninput="window.MyMonthlyReport.handleTaskSearch(this.value)"
                                     class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-purple-500">
                             </div>
-                            <div class="flex items-center gap-2 w-full sm:w-auto">
-                                <span class="text-xs font-bold text-slate-400">Status:</span>
-                                <select onchange="window.MyMonthlyReport.handleTaskStatusFilter(this.value)"
-                                    class="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-2 outline-none">
-                                    <option value="all">All Statuses</option>
-                                    <option value="Approved">Approved / Completed</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="QC Review">QC Review</option>
-                                    <option value="Rework">Rework</option>
-                                    <option value="Assigned">Assigned</option>
-                                </select>
+                            <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-slate-400">Task Type:</span>
+                                    <select id="mmr-task-type-filter" onchange="window.MyMonthlyReport.handleTaskTypeFilter(this.value)"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500">
+                                        <option value="all">All Task Types</option>
+                                        <option value="Strategy & Planning">Strategy & Planning</option>
+                                        <option value="Content Calendar">Content Calendar</option>
+                                        <option value="Content Writing / Captions">Content Writing / Captions</option>
+                                        <option value="Graphic Design">Graphic Design</option>
+                                        <option value="Video Shoot">Video Shoot</option>
+                                        <option value="Video Editing">Video Editing</option>
+                                        <option value="Posting & Community Management">Posting & Community Management</option>
+                                        <option value="Paid Ads">Paid Ads</option>
+                                        <option value="Reporting & Analytics">Reporting & Analytics</option>
+                                        <option value="Client Calls & Meetings">Client Calls & Meetings</option>
+                                        <option value="Internal Admin & Training">Internal Admin & Training</option>
+                                        <option value="Learnings">Learnings</option>
+                                        <option value="Quality Check">Quality Check</option>
+                                        <option value="Lead Collection">Lead Collection</option>
+                                        <option value="Appointment Booking">Appointment Booking</option>
+                                        <option value="Client Visit (In Person)">Client Visit (In Person)</option>
+                                        <option value="Proposal & Follow-up">Proposal & Follow-up</option>
+                                        <option value="Social Media Activity">Social Media Activity</option>
+                                        <option value="Presentation (PPT)">Presentation (PPT)</option>
+                                        <option value="Other / Shoot Support">Other / Shoot Support</option>
+                                        <option value="Web Development">Web Development</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-slate-400">Status:</span>
+                                    <select id="mmr-task-status-filter" onchange="window.MyMonthlyReport.handleTaskStatusFilter(this.value)"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500">
+                                        <option value="all">All Statuses</option>
+                                        <option value="Approved">Approved / Completed</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="QC Review">QC Review</option>
+                                        <option value="Rework">Rework</option>
+                                        <option value="Assigned">Assigned</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -11383,6 +11431,7 @@
                                         <tr>
                                             <th class="px-4 py-3">Issue ID</th>
                                             <th class="px-4 py-3">Task Title & Client</th>
+                                            <th class="px-4 py-3">Task Type</th>
                                             <th class="px-4 py-3">Priority</th>
                                             <th class="px-4 py-3">Assigned Date</th>
                                             <th class="px-4 py-3">Due Date</th>
@@ -15670,7 +15719,7 @@
             class="bg-white/95 dark:bg-slate-900/95 border border-slate-200/50 dark:border-slate-800/80 rounded-[24px] overflow-hidden p-8 flex flex-col items-center text-center shadow-2xl backdrop-blur-md relative">
             <!-- SVG Illustration -->
             <div class="relative w-48 h-48 mb-6 flex items-center justify-center">
-                <img src="img/Programming Computer.svg" alt="Break Illustration" class="w-full h-full object-contain">
+                <img src="img/Programming Computer.svg" loading="lazy" alt="Break Illustration" class="w-full h-full object-contain">
             </div>
 
             <!-- Message icon & Title -->
@@ -15731,7 +15780,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js"></script>
     <!-- ══════════════════════════════════════════
          SCRIPTS
     ══════════════════════════════════════════ -->
@@ -35440,7 +35489,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (avatarEl) {
                     const senderUser = msg.senderEmail ? (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get ? allUsersMap.get(msg.senderEmail.toLowerCase()) : (typeof knownUserByEmail === 'function' ? knownUserByEmail(msg.senderEmail) : null)) : null;
-                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/Mobile app fav Icon.jpg'));
+                    const avatarSrc = (conv?.type === 'group' && conv?.profilePicture) ? conv.profilePicture : ((senderUser && senderUser.profilePicture) || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName) : 'img/app-icon-192.jpg'));
                     avatarEl.src = avatarSrc;
                 }
 

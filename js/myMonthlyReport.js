@@ -359,7 +359,7 @@
             name: canonicalName,
             designation: (catalogUser && catalogUser.role) || rawUserObj.role || rawUserObj.designation || 'Team Member',
             department: rawUserObj.department || (((catalogUser && catalogUser.role) || rawUserObj.role || '').includes('Designer') ? 'Visual Design' : (((catalogUser && catalogUser.role) || rawUserObj.role || '').includes('Video') ? 'Video Production' : 'Operations & Creative Delivery')),
-            avatar: isAll ? 'img/favicon.svg' : (rawUserObj.profilePicture || (typeof window.getUserAvatarSrc === 'function' ? window.getUserAvatarSrc(rawUserObj) : ''))
+            avatar: isAll ? 'img/favicon-192.png' : (rawUserObj.profilePicture || (typeof window.getUserAvatarSrc === 'function' ? window.getUserAvatarSrc(rawUserObj) : ''))
         };
 
         const KNOWN_NAME_ALIASES = {
