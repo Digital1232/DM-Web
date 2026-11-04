@@ -127,6 +127,53 @@
         'Tasks - ( All other)'
     ];
 
+    // ─────────────────────────────────────────────────────────────
+    // MULTI-ROLE EMPLOYEES
+    // People who do more than one kind of work on the same tasks. Their report labels each task
+    // by what THEY did (from their own time sessions), not by the task title, and only their
+    // report shows the Task Type filter. Everyone else's report is unchanged.
+    // To add someone: add their email with their main work type and the types they do.
+    // ─────────────────────────────────────────────────────────────
+    const MULTI_ROLE_EMPLOYEES = {
+        // Sneha: writes content for posters and videos, and does QC
+        'snehavilpower@gmail.com': { label: 'Content Writer & QC', primaryType: 'Content', types: ['Content', 'Quality Check'] }
+    };
+
+    function getMultiRoleProfile(email) {
+        const e = Engine && typeof Engine.normalizeEmail === 'function' ? Engine.normalizeEmail(email) : String(email || '').toLowerCase().trim();
+        return MULTI_ROLE_EMPLOYEES[e] || null;
+    }
+
+    // Sessions logged from the QC Portal are saved with a "[QC]" prefix on the task description.
+    function isQcSession(log) {
+        if (!log) return false;
+        const d = String(log.taskDesc || log.taskName || log.title || '').trim();
+        return /^\[qc\]/i.test(d) || log.isQc === true || String(log.type || '').toLowerCase() === 'qc';
+    }
+
+    /**
+     * For a multi-role employee: split this task's time by what they did.
+     * QC Portal sessions → "Quality Check"; their other sessions → their main type
+     * (Learning tasks stay "Learning"). Returns { workTypes, timeByType, mainType }.
+     */
+    function splitWorkByType(task, logs, profile) {
+        const taskBased = detectTaskType(task);
+        const otherType = taskBased === 'Learning' ? 'Learning' : profile.primaryType;
+        const timeByType = {};
+        (logs || []).forEach(l => {
+            const type = isQcSession(l) ? 'Quality Check' : otherType;
+            timeByType[type] = (timeByType[type] || 0) + getLogDurationSec(l);
+        });
+        let workTypes = Object.keys(timeByType);
+        if (!workTypes.length) {
+            // Assigned but no time logged yet: QC-stage tasks are QC work, everything else main type
+            workTypes = [taskBased === 'Quality Check' || taskBased === 'Learning' ? taskBased : profile.primaryType];
+        }
+        // Main type = the one with the most time (for sorting and the single-label views)
+        const mainType = workTypes.slice().sort((a, b) => (timeByType[b] || 0) - (timeByType[a] || 0))[0];
+        return { workTypes, timeByType, mainType };
+    }
+
     function detectTaskType(t) {
         if (!t) return 'Tasks - ( All other)';
 
@@ -761,6 +808,8 @@
             return false;
         }
 
+        const multiRoleProfile = isAll ? null : getMultiRoleProfile(normalizedTarget);
+
         relevantTasks.forEach(t => {
             const tLogs = taskLogsMap.get(String(t.id).trim().toLowerCase()) || [];
             const taskTotalTimeSec = tLogs.reduce((acc, l) => acc + getLogDurationSec(l), 0);
@@ -779,9 +828,14 @@
             const isRework = calculatedReworkCount > 0;
             const isProgress = Engine.isInProgressStatus(t.status);
 
+            // Multi-role employees (e.g. Sneha): type = what they did on the task, from their sessions
+            const split = multiRoleProfile ? splitWorkByType(t, tLogs, multiRoleProfile) : null;
+
             const enriched = {
                 ...t,
-                derivedTaskType: detectTaskType(t),
+                derivedTaskType: split ? split.mainType : detectTaskType(t),
+                workTypes: split ? split.workTypes : null,
+                timeByWorkType: split ? split.timeByType : null,
                 workingTimeSec: taskTotalTimeSec,
                 workSessionsCount: sessionCount,
                 workSessions: tLogs,
@@ -1226,6 +1280,7 @@
             },
             jiraTasks,
             internalTasks,
+            multiRole: multiRoleProfile,
             allTasks: allCombinedTasks,
             workedTasks,
             unstartedTasks,
@@ -1846,20 +1901,48 @@
     // SUB-TAB 1: JIRA TASKS
     // ─────────────────────────────────────────────────────────────
 
+    // Work types of a task: for multi-role employees what they did (can be several), else the task type
+    function taskWorkTypes(t) {
+        return (t.workTypes && t.workTypes.length) ? t.workTypes : [t.derivedTaskType || detectTaskType(t)];
+    }
+
+    // The Task Type filter is only shown on multi-role employees' reports (e.g. Sneha),
+    // listing just the types relevant to them.
+    function syncTaskTypeFilter(data) {
+        const sel = getEl('mmr-task-type-filter');
+        if (!sel) return;
+        const wrap = sel.parentElement;
+        const profile = data && data.multiRole;
+        if (!profile) {
+            if (wrap && wrap.classList) wrap.classList.add('hidden');
+            MMR.taskTypeFilter = 'all';
+            return;
+        }
+        if (wrap && wrap.classList) wrap.classList.remove('hidden');
+        const present = new Set();
+        (data.jiraTasks || []).forEach(t => taskWorkTypes(t).forEach(x => present.add(x)));
+        const types = [...new Set([...profile.types, ...present])];
+        const html = '<option value="all">All Task Types</option>' + types.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+        if (sel.dataset && sel.dataset.opts !== html) { sel.innerHTML = html; sel.dataset.opts = html; }
+        if (MMR.taskTypeFilter !== 'all' && !types.includes(MMR.taskTypeFilter)) MMR.taskTypeFilter = 'all';
+        sel.value = MMR.taskTypeFilter || 'all';
+    }
+
     function renderJiraTab(data) {
         const tbody = getEl('mmr-jira-tasks-tbody');
         if (!tbody) return;
+        syncTaskTypeFilter(data);
 
         let filtered = data.jiraTasks;
         if (MMR.taskSearchTerm) {
             const term = MMR.taskSearchTerm.toLowerCase();
-            filtered = filtered.filter(t => (t.id || '').toLowerCase().includes(term) || (t.desc || '').toLowerCase().includes(term) || (t.client || '').toLowerCase().includes(term) || (t.derivedTaskType || detectTaskType(t)).toLowerCase().includes(term));
+            filtered = filtered.filter(t => (t.id || '').toLowerCase().includes(term) || (t.desc || '').toLowerCase().includes(term) || (t.client || '').toLowerCase().includes(term) || taskWorkTypes(t).join(' ').toLowerCase().includes(term));
         }
         if (MMR.taskStatusFilter !== 'all') {
             filtered = filtered.filter(t => Engine.normalizeStatus(t.status).toLowerCase() === MMR.taskStatusFilter.toLowerCase());
         }
         if (MMR.taskTypeFilter && MMR.taskTypeFilter !== 'all') {
-            filtered = filtered.filter(t => (t.derivedTaskType || detectTaskType(t)) === MMR.taskTypeFilter);
+            filtered = filtered.filter(t => taskWorkTypes(t).includes(MMR.taskTypeFilter));
         }
 
         if (filtered.length === 0) {
@@ -1876,8 +1959,12 @@
             else if (norm === 'Rework') statusBadge = 'bg-rose-50 text-rose-700 border border-rose-200';
             else if (norm === 'QC Review') statusBadge = 'bg-amber-50 text-amber-700 border border-amber-200';
 
-            const taskType = t.derivedTaskType || detectTaskType(t);
-            const badgeClass = getTaskTypeBadge(taskType);
+            // One badge per work type; for multi-role employees also the time spent on each
+            const typeBadges = taskWorkTypes(t).map(type => {
+                const sec = t.timeByWorkType ? (t.timeByWorkType[type] || 0) : 0;
+                const timeTxt = (t.workTypes && t.workTypes.length > 1 && sec > 0) ? ` · ${formatDurationHM(sec)}` : '';
+                return `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${getTaskTypeBadge(type)}">${esc(type)}${timeTxt}</span>`;
+            }).join(' ');
 
             return `
                 <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
@@ -1891,11 +1978,7 @@
                         <p class="font-semibold text-xs text-slate-900 line-clamp-2">${esc(t.desc || t.title)}</p>
                         <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${esc(t.client || 'General')}</span>
                     </td>
-                    <td class="px-4 py-3 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${badgeClass}">
-                            ${esc(taskType)}
-                        </span>
-                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap"><div class="flex flex-wrap gap-1">${typeBadges}</div></td>
                     <td class="px-4 py-3 text-xs font-medium text-slate-600">${esc(t.priority || 'Medium')}</td>
                     <td class="px-4 py-3 text-xs text-slate-500">${formatDateStr(t.created || t.createdAt)}</td>
                     <td class="px-4 py-3 text-xs">
@@ -3452,7 +3535,7 @@
 
         data.allTasks.forEach(t => {
             const source = t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira';
-            const taskType = t.derivedTaskType || detectTaskType(t);
+            const taskType = taskWorkTypes(t).join(' + ');
             const cleanTitle = `"${(t.desc || t.title || '').replace(/"/g, '""')}"`;
             const cleanClient = `"${(t.client || '').replace(/"/g, '""')}"`;
             csvContent += `${t.id},${source},"${taskType}",${cleanTitle},${cleanClient},${t.priority || 'Medium'},${t.status || 'Active'},${t.created || ''},${t.duedate || ''},${formatDurationHMS(t.workingTimeSec)},${t.workingTimeSec},${t.workSessionsCount},${t.reworkCount || 0}\n`;

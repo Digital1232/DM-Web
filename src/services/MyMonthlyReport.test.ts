@@ -826,4 +826,76 @@ describe('MyMonthlyReport Module Verification', () => {
         mockWindow.MyMonthlyReport.handleTaskTypeFilter('all');
         expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('all');
     });
+
+    describe('multi-role employees (Sneha: Content Writer & QC)', () => {
+        const at = (d: number, h: number, m = 0) => new Date(2026, 10, d, h, m).getTime();
+
+        beforeEach(() => {
+            mockWindow.USERS.push({ email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member' });
+            mockWindow.currentUser = { email: 'snehavilpower@gmail.com', name: 'Sneha S', role: 'Team Member' };
+            mockWindow.tasks.push(
+                // Video task assigned to the editor; Sneha wrote its content and later did QC
+                { id: 'NOV-200', desc: 'Diwali Video 17', client: 'NTT', status: 'Posted', assigneeEmail: 'muthuvilpower@gmail.com', duedate: '2026-11-03', created: '2026-11-01', taskType: 'jira', manual: false },
+                // Poster content task assigned to Sneha (content only)
+                { id: 'NOV-201', desc: 'Diwali Wishes Poster', client: 'Nivya', status: 'Done', assigneeEmail: 'snehavilpower@gmail.com', duedate: '2026-11-03', created: '2026-11-01', completedAt: '2026-11-03', taskType: 'jira', manual: false }
+            );
+            mockWindow.allTimeLogs.push(
+                { taskId: 'NOV-200', taskDesc: 'Diwali Video 17', userId: 'snehavilpower@gmail.com', startTime: at(2, 10), endTime: at(2, 10, 25), durationSeconds: 1500 },
+                { taskId: 'NOV-200', taskDesc: '[QC] Diwali Video 17', userId: 'snehavilpower@gmail.com', startTime: at(3, 15), endTime: at(3, 15, 10), durationSeconds: 600 },
+                { taskId: 'NOV-201', taskDesc: 'Diwali Wishes Poster', userId: 'snehavilpower@gmail.com', startTime: at(2, 12), endTime: at(2, 12, 40), durationSeconds: 2400 }
+            );
+        });
+
+        it("labels Sneha's tasks by what she did: QC Portal sessions = Quality Check, others = Content", () => {
+            mockWindow.MyMonthlyReport.refresh();
+            const data = mockWindow.MyMonthlyReportState.cachedReportData;
+            expect(data.multiRole && data.multiRole.primaryType).toBe('Content');
+
+            const video = data.jiraTasks.find((t: any) => t.id === 'NOV-200');
+            expect(video.workTypes.sort()).toEqual(['Content', 'Quality Check']);
+            expect(video.timeByWorkType).toEqual({ Content: 1500, 'Quality Check': 600 });
+            expect(video.derivedTaskType).toBe('Content'); // most time spent writing content, not "Video Editing"
+
+            const poster = data.jiraTasks.find((t: any) => t.id === 'NOV-201');
+            expect(poster.workTypes).toEqual(['Content']);
+        });
+
+        it('shows the Task Type filter only on multi-role reports and filters by work done', () => {
+            let tbody = '';
+            const filterWrap = { classes: new Set<string>(['hidden']), classList: null as any };
+            filterWrap.classList = { add: (c: string) => filterWrap.classes.add(c), remove: (c: string) => filterWrap.classes.delete(c) };
+            const select: any = { value: 'all', innerHTML: '', dataset: {}, parentElement: filterWrap };
+            mockWindow.document = {
+                getElementById: (id: string) => {
+                    if (id === 'mmr-jira-tasks-tbody') return { set innerHTML(v: string) { tbody = v; }, get innerHTML() { return tbody; } };
+                    if (id === 'mmr-task-type-filter') return select;
+                    return null;
+                }
+            };
+            mockWindow.MyMonthlyReport.switchSubTab('jira');
+
+            // Sneha's own report: filter visible, offering her work types
+            mockWindow.MyMonthlyReport.refresh();
+            expect(filterWrap.classes.has('hidden')).toBe(false);
+            expect(select.innerHTML).toContain('Content');
+            expect(select.innerHTML).toContain('Quality Check');
+            expect(select.innerHTML).not.toContain('Video Editing');
+
+            mockWindow.MyMonthlyReport.handleTaskTypeFilter('Quality Check');
+            expect(tbody).toContain('NOV-200');      // she did QC on the video
+            expect(tbody).not.toContain('NOV-201');  // poster: content only
+            mockWindow.MyMonthlyReport.handleTaskTypeFilter('Content');
+            expect(tbody).toContain('NOV-200');
+            expect(tbody).toContain('NOV-201');
+
+            // Someone else's report (Karthika): filter hidden and reset
+            mockWindow.currentUser = { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate' };
+            mockWindow.MyMonthlyReport.refresh();
+            expect(filterWrap.classes.has('hidden')).toBe(true);
+            expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('all');
+            const data = mockWindow.MyMonthlyReportState.cachedReportData;
+            expect(data.multiRole).toBeNull();
+            expect(data.jiraTasks.every((t: any) => t.workTypes === null)).toBe(true);
+        });
+    });
 });
