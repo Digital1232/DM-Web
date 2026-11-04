@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.46">
+    <meta name="app-version" content="1.0.47">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/Mobile app fav Icon.jpg">
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
@@ -21475,6 +21475,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             taskStartTime = Date.now() - (taskSeconds * 1000);
                             if (typeof startTaskTimer === 'function') startTaskTimer();
                             if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
+                            // Ensure internal task status is restored to 'In Progress' after break
+                            const activeInternalTask = tasks.find(t => t.id === activeTaskId);
+                            if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
+                                activeInternalTask.isOnHold = false;
+                                if (typeof updateInternalTaskStatus === 'function') {
+                                    updateInternalTaskStatus(activeTaskId, 'In Progress');
+                                }
+                            }
+
                             if (typeof renderTasks === 'function') renderTasks();
                             if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
                             if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
@@ -30279,15 +30288,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let filtered = tasks.filter(isInternalTask);
                 if (currentInternalStatusFilter !== 'all') {
                     filtered = currentInternalStatusFilter.length
-                        ? filtered.filter(t => currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase()) || (activeTaskId && t.id === activeTaskId))
+                        ? filtered.filter(t => (activeTaskId && t.id === activeTaskId) || currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase()))
                         : (activeTaskId ? tasks.filter(t => t.id === activeTaskId && isInternalTask(t)) : []);
                 }
-                if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => assigneeMatches(t, currentInternalAssigneeFilter) || (activeTaskId && t.id === activeTaskId));
-                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => t.client === currentInternalClientFilter || (activeTaskId && t.id === activeTaskId));
+                if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || assigneeMatches(t, currentInternalAssigneeFilter));
+                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || t.client === currentInternalClientFilter);
 
                 if (currentInternalDueDateFromRange || currentInternalDueDateToRange) {
                     // Custom date range filtering
                     filtered = filtered.filter(t => {
+                        if (activeTaskId && t.id === activeTaskId) return true;
                         if (!t.duedate) return false;
                         const [y, m, d] = t.duedate.split('-').map(Number);
                         const dueDate = new Date(y, m - 1, d);
@@ -30314,6 +30324,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     today.setHours(0, 0, 0, 0);
                     if (currentInternalDueDateFilter === 'overdue') {
                         filtered = filtered.filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             if (!t.duedate || (isDone(t.status) || isInternalDone(t.status))) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30322,9 +30333,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else if (currentInternalDueDateFilter === 'today') {
                         const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
                         filtered = filtered.filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             if (t.duedate !== todayStr) return false;
                             if (currentInternalStatusFilter === 'all') {
-                                if (activeTaskId && t.id === activeTaskId) return true;
                                 const s = (t.status || '').toLowerCase().trim();
                                 if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
                             }
@@ -30334,7 +30345,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const yesterday = new Date(today);
                         yesterday.setDate(today.getDate() - 1);
                         const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
-                        filtered = filtered.filter(t => t.duedate === yesterdayStr);
+                        filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || t.duedate === yesterdayStr);
                     } else if (currentInternalDueDateFilter === 'last_week') {
                         const startOfLastWeek = new Date(today);
                         const currentDay = today.getDay();
@@ -30347,6 +30358,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         endOfLastWeek.setHours(23, 59, 59, 999);
 
                         filtered = filtered.filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30360,6 +30372,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         endOfWeek.setDate(startOfWeek.getDate() + 6);
                         endOfWeek.setHours(23, 59, 59, 999);
                         filtered = filtered.filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30369,6 +30382,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
                         filtered = filtered.filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             if (!t.duedate) return false;
                             const [y, m, d] = t.duedate.split('-').map(Number);
                             const dueDate = new Date(y, m - 1, d);
@@ -30399,8 +30413,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Board only shows tasks with taskType 'internal' (excludes manual client tasks)
                     // Apply strict internal filter on top of the already-filtered list
                     const boardTasks = tasks
-                        .filter(t => String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true)
+                        .filter(isInternalTask)
                         .filter(t => {
+                            if (activeTaskId && t.id === activeTaskId) return true;
                             // Status filter
                             if (currentInternalStatusFilter !== 'all' && Array.isArray(currentInternalStatusFilter) && currentInternalStatusFilter.length) {
                                 if (!currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase())) return false;
@@ -30412,12 +30427,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             // Due date filter
                             if (currentInternalDueDateFilter !== 'all') {
                                 const todayF = new Date(); todayF.setHours(0, 0, 0, 0);
+                                const todayStr = todayF.getFullYear() + '-' + String(todayF.getMonth() + 1).padStart(2, '0') + '-' + String(todayF.getDate()).padStart(2, '0');
                                 if (currentInternalDueDateFilter === 'overdue') {
                                     if (!t.duedate || new Date(t.duedate) >= todayF || isInternalDone(t.status) || isDone(t.status)) return false;
                                 } else if (currentInternalDueDateFilter === 'today') {
-                                    if (t.duedate !== todayF.toISOString().slice(0, 10)) return false;
+                                    if (t.duedate !== todayStr) return false;
                                     if (currentInternalStatusFilter === 'all') {
-                                        if (activeTaskId && t.id === activeTaskId) return true;
                                         const s = (t.status || '').toLowerCase().trim();
                                         if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
                                     }
