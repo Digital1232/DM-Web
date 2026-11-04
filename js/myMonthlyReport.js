@@ -116,34 +116,19 @@
     }
 
     // ─────────────────────────────────────────────────────────────
-    // PROJECT TASK TYPES (21 CANONICAL CATEGORIES)
+    // PROJECT TASK TYPES (CANONICAL CATEGORIES)
     // ─────────────────────────────────────────────────────────────
     const TASK_TYPES = [
-        'Strategy & Planning',
-        'Content Calendar',
-        'Content Writing / Captions',
-        'Graphic Design',
-        'Video Shoot',
-        'Video Editing',
-        'Posting & Community Management',
-        'Paid Ads',
-        'Reporting & Analytics',
-        'Client Calls & Meetings',
-        'Internal Admin & Training',
-        'Learnings',
+        'Content',
         'Quality Check',
-        'Lead Collection',
-        'Appointment Booking',
-        'Client Visit (In Person)',
-        'Proposal & Follow-up',
-        'Social Media Activity',
-        'Presentation (PPT)',
-        'Other / Shoot Support',
-        'Web Development'
+        'Video Editing',
+        'Learning',
+        'Website Design ( Alex)',
+        'Tasks - ( All other)'
     ];
 
     function detectTaskType(t) {
-        if (!t) return 'Other / Shoot Support';
+        if (!t) return 'Tasks - ( All other)';
 
         // 1. Direct candidate matching
         const candidates = [
@@ -172,166 +157,69 @@
             t.contentType,
             t.category,
             t.id,
+            t.assignee,
+            t.assigneeEmail,
+            t.owner,
             Array.isArray(t.labels) ? t.labels.join(' ') : (t.labels || ''),
             Array.isArray(t.clientLabels) ? t.clientLabels.join(' ') : (t.clientLabels || ''),
             Array.isArray(t.tags) ? t.tags.join(' ') : (t.tags || '')
         ].filter(Boolean).join(' ').toLowerCase();
 
         const idUpper = String(t.id || '').toUpperCase().trim();
+        const assigneeEmail = String(t.assigneeEmail || t.ownerEmail || '').toLowerCase().trim();
+        const assigneeName = String(t.assignee || t.owner || '').toLowerCase().trim();
+        const normStatus = (typeof Engine !== 'undefined' && typeof Engine.normalizeStatus === 'function')
+            ? Engine.normalizeStatus(t.status || '')
+            : String(t.status || '');
 
-        // 3. Priority-based rules
+        // 3. Rules
 
-        // Quality Check
-        if (idUpper.startsWith('QC-') || /\b(qc|qa)\b|quality check|review and qc|qc review/i.test(fullText)) {
+        // Quality Check: QC tasks or tasks under QC review
+        if (idUpper.startsWith('QC-') || normStatus === 'QC Review' || String(t.status || '').toLowerCase().includes('quality check') || /\b(qc|qa)\b|quality check|review and qc|qc review/i.test(fullText)) {
             return 'Quality Check';
         }
 
-        // Learnings
-        if (idUpper.startsWith('LEARN-') || t.learningSession === true || /\blearn(ing|ings)?\b|training session|morning learn/i.test(fullText)) {
-            return 'Learnings';
+        // Learning: Training or learning sessions
+        if (idUpper.startsWith('LEARN-') || t.learningSession === true || String(t.category || '').toLowerCase().includes('learn') || /\blearn(ing|ings)?\b|training session|morning learn/i.test(fullText)) {
+            return 'Learning';
         }
 
-        // Client Visit (In Person)
-        if (/in person|client visit|field visit|onsite visit|on-site visit|physical visit|office visit/i.test(fullText)) {
-            return 'Client Visit (In Person)';
+        // Website Design ( Alex): Alex's tasks or web development/design
+        if (assigneeEmail.includes('alex') || assigneeName.includes('alex') || /web dev(elopment)?|\bwebsite\b|web design|landing page|wordpress|shopify|frontend|backend|html|css|ui\/ux/i.test(fullText)) {
+            return 'Website Design ( Alex)';
         }
 
-        // Client Calls & Meetings
-        if (/client call|client meet(ing)?|zoom|google meet|gmeet|discovery call|sync call/i.test(fullText)) {
-            return 'Client Calls & Meetings';
+        // Content: Sneha's tasks or content writing / captions / scripts / prep selections
+        if (assigneeEmail === 'snehavilpower@gmail.com' || assigneeName.includes('sneha') ||
+            /content|caption(s)?|\bcopy\b|copywrit(ing)?|\bscript(s|writing)?\b|poster content|video content|thumbnail content|end card content/i.test(fullText)) {
+            return 'Content';
         }
 
-        // Appointment Booking
-        if (/appointment|booking|schedule call|calendar booking|calendly/i.test(fullText)) {
-            return 'Appointment Booking';
-        }
-
-        // Proposal & Follow-up
-        if (/proposal|quotation|quote|follow-up|follow up|pitch deck|commercials|negotiation/i.test(fullText)) {
-            return 'Proposal & Follow-up';
-        }
-
-        // Lead Collection
-        if (/lead collection|lead gen(eration)?|\bleads?\b|prospect(ing)?|data scraping/i.test(fullText)) {
-            return 'Lead Collection';
-        }
-
-        // Presentation (PPT)
-        if (/\bppt\b|presentation|deck|slide deck|slides|pitch presentation|keynote/i.test(fullText)) {
-            return 'Presentation (PPT)';
-        }
-
-        // Web Development
-        if (/web dev(elopment)?|\bwebsite\b|web page|landing page|wordpress|shopify|frontend|backend|fullstack|html|css|javascript/i.test(fullText)) {
-            return 'Web Development';
-        }
-
-        // Paid Ads
-        if (/paid ads?|meta ads?|google ads?|facebook ads?|ad campaign|ppc|sponsored|ad spend/i.test(fullText)) {
-            return 'Paid Ads';
-        }
-
-        // Reporting & Analytics
-        if (/\breport(ing)?\b|analytics|metrics|dashboard|insights|\bdpr\b|performance report/i.test(fullText)) {
-            return 'Reporting & Analytics';
-        }
-
-        // Content Calendar
-        if (/content calendar|calendar plan|monthly calendar|weekly calendar|editorial calendar/i.test(fullText)) {
-            return 'Content Calendar';
-        }
-
-        // Strategy & Planning
-        if (/strategy|planning|\bplan\b|roadmap|growth plan/i.test(fullText)) {
-            return 'Strategy & Planning';
-        }
-
-        // Content Writing / Captions
-        if (/content writ(ing)?|\bcaption(s)?\b|\bcopy\b|copywrit(ing)?|\bscript(s|writing)?\b|\bblog(s)?\b|article(s)?/i.test(fullText)) {
-            return 'Content Writing / Captions';
-        }
-
-        // Posting & Community Management
-        if (/\bposting\b|post scheduling|publish(ing)?|community management|comment reply|dm reply/i.test(fullText)) {
-            return 'Posting & Community Management';
-        }
-
-        // Social Media Activity
-        if (/social media|instagram|facebook|linkedin|twitter|\bx\b|engagement|story update|stories/i.test(fullText)) {
-            return 'Social Media Activity';
-        }
-
-        // Internal Admin & Training
-        if (/internal admin|admin(istration)?|training|hr|onboarding|operations|internal process|office work|timesheet/i.test(fullText)) {
-            return 'Internal Admin & Training';
-        }
-
-        // Video Shoot
-        if (idUpper.startsWith('SHOOT-') || t.shootPlan || t.shootGroupId || /video shoot|\bshoot(ing)?\b|photoshoot|photo shoot|studio shoot|outdoor shoot|camera|footage|filming/i.test(fullText)) {
-            return 'Video Shoot';
-        }
-
-        // Video Editing
+        // Video Editing: Video tasks
         const isVideoFormat = String(t.format || t.contentType || '').toLowerCase().includes('video') || String(t.issueType || '').toLowerCase().includes('video');
         if (isVideoFormat || /video edit(ing)?|\bvideo(s)?\b|\breel(s)?\b|glimpse video|shorts|yt short|youtube video|motion graphic|animation|cut|color grading/i.test(fullText)) {
             return 'Video Editing';
         }
 
-        // Graphic Design
-        const isGraphicFormat = /poster|thumbnail|carousel|reel/i.test(String(t.format || t.contentType || ''));
-        if (isGraphicFormat || /graphic(s)?|design(ing)?|\bposter(s)?\b|\bthumbnail(s)?\b|banner(s)?|flyer(s)?|creative(s)?|carousel(s)?|brochure(s)?|logo(s)?|brand identity|visual(s)?|standee|artwork/i.test(fullText)) {
-            return 'Graphic Design';
-        }
-
-        // Fallback
-        return 'Other / Shoot Support';
+        // Tasks - ( All other): Fallback for all other tasks
+        return 'Tasks - ( All other)';
     }
 
     function getTaskTypeBadge(taskType) {
         switch (taskType) {
-            case 'Strategy & Planning':
-                return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-            case 'Content Calendar':
-                return 'bg-sky-50 text-sky-700 border-sky-200';
-            case 'Content Writing / Captions':
+            case 'Content':
                 return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            case 'Graphic Design':
-                return 'bg-purple-50 text-purple-700 border-purple-200';
-            case 'Video Shoot':
-                return 'bg-amber-50 text-amber-700 border-amber-200';
-            case 'Video Editing':
-                return 'bg-blue-50 text-blue-700 border-blue-200';
-            case 'Posting & Community Management':
-                return 'bg-teal-50 text-teal-700 border-teal-200';
-            case 'Paid Ads':
-                return 'bg-rose-50 text-rose-700 border-rose-200';
-            case 'Reporting & Analytics':
-                return 'bg-cyan-50 text-cyan-700 border-cyan-200';
-            case 'Client Calls & Meetings':
-                return 'bg-violet-50 text-violet-700 border-violet-200';
-            case 'Internal Admin & Training':
-                return 'bg-slate-100 text-slate-700 border-slate-300';
-            case 'Learnings':
-                return 'bg-lime-50 text-lime-700 border-lime-200';
             case 'Quality Check':
                 return 'bg-amber-100 text-amber-800 border-amber-300';
-            case 'Lead Collection':
-                return 'bg-orange-50 text-orange-700 border-orange-200';
-            case 'Appointment Booking':
-                return 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200';
-            case 'Client Visit (In Person)':
-                return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-            case 'Proposal & Follow-up':
-                return 'bg-yellow-50 text-yellow-800 border-yellow-300';
-            case 'Social Media Activity':
-                return 'bg-pink-50 text-pink-700 border-pink-200';
-            case 'Presentation (PPT)':
-                return 'bg-indigo-100 text-indigo-800 border-indigo-300';
-            case 'Web Development':
-                return 'bg-cyan-100 text-cyan-800 border-cyan-300';
-            case 'Other / Shoot Support':
+            case 'Video Editing':
+                return 'bg-blue-50 text-blue-700 border-blue-200';
+            case 'Learning':
+                return 'bg-lime-50 text-lime-700 border-lime-200';
+            case 'Website Design ( Alex)':
+                return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            case 'Tasks - ( All other)':
             default:
-                return 'bg-slate-100 text-slate-600 border-slate-200';
+                return 'bg-purple-50 text-purple-700 border-purple-200';
         }
     }
 

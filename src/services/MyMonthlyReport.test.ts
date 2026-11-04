@@ -764,31 +764,37 @@ describe('MyMonthlyReport Module Verification', () => {
         expect(qc.hours).toBe(1);
     });
 
-    it('should accurately classify tasks into all 21 canonical task types', () => {
+    it('should accurately classify tasks into the project canonical task types', () => {
         const detect = mockWindow.MyMonthlyReport.detectTaskType;
         expect(typeof detect).toBe('function');
 
-        expect(detect({ desc: 'Q4 Brand Strategy & Monthly Planning' })).toBe('Strategy & Planning');
-        expect(detect({ desc: 'December Content Calendar & Schedule' })).toBe('Content Calendar');
-        expect(detect({ desc: 'Instagram Caption Writing and Copy' })).toBe('Content Writing / Captions');
-        expect(detect({ desc: 'Diwali Wishes Nivya Poster', format: 'Poster' })).toBe('Graphic Design');
-        expect(detect({ desc: 'Outdoor Client Video Shoot at Studio', shootPlan: true })).toBe('Video Shoot');
-        expect(detect({ desc: 'Nursing - Fresher Day Glimpse Video', format: 'Video' })).toBe('Video Editing');
-        expect(detect({ desc: 'Weekly Post Publishing & Community Management' })).toBe('Posting & Community Management');
-        expect(detect({ desc: 'Meta Ads Campaign Setup & Optimization' })).toBe('Paid Ads');
-        expect(detect({ desc: 'Monthly Performance DPR & Analytics Report' })).toBe('Reporting & Analytics');
-        expect(detect({ desc: 'Weekly Client Call and Zoom Meeting' })).toBe('Client Calls & Meetings');
-        expect(detect({ desc: 'HR Onboarding & Internal Admin Training' })).toBe('Internal Admin & Training');
-        expect(detect({ desc: 'Figma Auto-layout Learnings Session', id: 'LEARN-101' })).toBe('Learnings');
+        // Content (Sneha content preparation, captions, scripts, copy)
+        expect(detect({ desc: 'Diwali Carousel Caption and Copy', assigneeEmail: 'snehavilpower@gmail.com' })).toBe('Content');
+        expect(detect({ desc: 'Poster Content and Captions' })).toBe('Content');
+        expect(detect({ desc: 'Video Script Writing & Content Draft' })).toBe('Content');
+
+        // Quality Check (Tasks in QC or audit)
         expect(detect({ desc: 'Poster Quality Check & Review', id: 'QC-505' })).toBe('Quality Check');
-        expect(detect({ desc: 'B2B Lead Collection and Prospecting' })).toBe('Lead Collection');
-        expect(detect({ desc: 'Calendly Demo Appointment Booking' })).toBe('Appointment Booking');
-        expect(detect({ desc: 'Onsite Client Visit (In Person) to Bangalore Office' })).toBe('Client Visit (In Person)');
-        expect(detect({ desc: 'Commercial Proposal & Follow-up with prospect' })).toBe('Proposal & Follow-up');
-        expect(detect({ desc: 'Instagram Story Updates and Social Media Activity' })).toBe('Social Media Activity');
-        expect(detect({ desc: 'Investor Pitch Presentation (PPT) Slide Deck' })).toBe('Presentation (PPT)');
-        expect(detect({ desc: 'WordPress Website Redesign and Web Development' })).toBe('Web Development');
-        expect(detect({ desc: 'Production Studio Misc Equipment Setup' })).toBe('Other / Shoot Support');
+        expect(detect({ desc: 'Video QC Audit', status: 'Quality Check' })).toBe('Quality Check');
+        expect(detect({ desc: 'Deliverable Inspection', status: 'QC Review' })).toBe('Quality Check');
+
+        // Video Editing
+        expect(detect({ desc: 'Nursing - Fresher Day Glimpse Video', format: 'Video' })).toBe('Video Editing');
+        expect(detect({ desc: 'Instagram Reel Video Editing' })).toBe('Video Editing');
+        expect(detect({ desc: 'Product Promo Video', issueType: 'Video' })).toBe('Video Editing');
+
+        // Learning
+        expect(detect({ desc: 'Figma Auto-layout Training', id: 'LEARN-101' })).toBe('Learning');
+        expect(detect({ desc: 'Morning Learning Session', learningSession: true })).toBe('Learning');
+
+        // Website Design ( Alex)
+        expect(detect({ desc: 'WordPress Landing Page Development', assigneeEmail: 'alexvilpower@gmail.com' })).toBe('Website Design ( Alex)');
+        expect(detect({ desc: 'E-commerce Website Design and UI/UX' })).toBe('Website Design ( Alex)');
+
+        // Tasks - ( All other)
+        expect(detect({ desc: 'Diwali Wishes Nivya Poster', format: 'Poster' })).toBe('Tasks - ( All other)');
+        expect(detect({ desc: 'Studio Equipment Setup & Shoot Support' })).toBe('Tasks - ( All other)');
+        expect(detect({ desc: 'Weekly Team Meeting' })).toBe('Tasks - ( All other)');
     });
 
     it('should support Task Type filtering on Jira Tasks sub-tab', () => {
@@ -808,9 +814,13 @@ describe('MyMonthlyReport Module Verification', () => {
         // Trigger user report render
         mockWindow.MyMonthlyReport.handleUserChange('karthikavilpower@gmail.com');
 
-        // Apply task type filter: Graphic Design
-        mockWindow.MyMonthlyReport.handleTaskTypeFilter('Graphic Design');
-        expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('Graphic Design');
+        // Apply task type filter: Video Editing
+        mockWindow.MyMonthlyReport.handleTaskTypeFilter('Video Editing');
+        expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('Video Editing');
+
+        // Apply task type filter: Content
+        mockWindow.MyMonthlyReport.handleTaskTypeFilter('Content');
+        expect(mockWindow.MyMonthlyReportState.taskTypeFilter).toBe('Content');
 
         // Reset filter
         mockWindow.MyMonthlyReport.handleTaskTypeFilter('all');
