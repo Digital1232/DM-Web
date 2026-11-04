@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.62">
+    <meta name="app-version" content="1.0.60">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -19464,6 +19464,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     registerOnline(); initChat(); initAnnouncements(); loadHrBadge(); initReportFilters();
                     restoreTimerState();
                     restoreCheckinFromFirebase();
+                    restoreActiveTaskFromLocal();
                     initLiveAttendanceSync();
                     initDailyReportScheduler();
                     initFiveThirtyScheduler();
@@ -19755,6 +19756,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Clear stored data
                     localStorage.removeItem('worksync_toasted_notifs');
                     localStorage.removeItem('worksync_user');
+                    localStorage.removeItem('worksync_active_task');
 
                     // Update UI
                     updateOrganiserNavVisibility();
@@ -32053,14 +32055,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             async function saveCurrentTaskState(state = 'working', details = null) {
                 if (!currentUser || !activeTaskId) return;
-                const task = tasks.find(t => t.id === activeTaskId);
-                if (!task) return;
+                const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
 
                 if (details !== null) currentWorkDetails = details;
 
                 const payload = {
                     taskId: activeTaskId,
-                    taskDesc: task.desc || '',
+                    taskDesc: task.desc || task.summary || task.title || '',
                     status: task.status || '',
                     client: task.client || '',
                     priority: task.priority || '',
@@ -32071,62 +32072,172 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     updatedAt: Date.now(),
                     timerSessionId: activeTimerSessionId || ''
                 };
-                await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), payload);
+
+                // Synchronously persist to localStorage so active task survives any page reload immediately
+                try {
+                    localStorage.setItem('worksync_active_task', JSON.stringify(payload));
+                } catch (e) { }
+
+                if (db) {
+                    try {
+                        await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), payload);
+                    } catch (err) {
+                        console.warn('Failed to sync currentTask to Firebase:', err);
+                    }
+                }
             }
 
-            async function restoreActiveTask() {
-                if (!currentUser) return;
-                const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
-                const currentTaskData = snap.val();
+            // Synchronous 0ms local restore on page load
+            function restoreActiveTaskFromLocal() {
+                try {
+                    const raw = localStorage.getItem('worksync_active_task');
+                    if (!raw) return false;
+                    const data = JSON.parse(raw);
+                    if (!data || !data.taskId) return false;
 
-                if (currentTaskData && currentTaskData.taskId) {
-                    currentWorkDetails = currentTaskData.workDetails || '';
-                    activeTimerSessionId = currentTaskData.timerSessionId || null;
-                    console.log('Restoring active task:', currentTaskData);
-                    const lastUpdated = currentTaskData.updatedAt || Date.now();
-                    const elapsedSinceUpdate = Math.floor((Date.now() - lastUpdated) / 1000);
-                    const savedSeconds = currentTaskData.currentSeconds || 0;
-
-                    // If the task was updated more than 12 hours ago, assume the session was abandoned.
-                    // Restore it in a "held" state to prevent runaway timers.
+                    const lastUpdated = data.updatedAt || Date.now();
+                    const elapsedSinceUpdate = Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000));
+                    const savedSeconds = data.currentSeconds || 0;
                     const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
 
-                    if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
-                        console.warn(`Task restore gap is too large (${elapsedSinceUpdate}s). Restoring in held state.`);
-                        activeTaskId = currentTaskData.taskId;
-                        taskOnHold = true; // Force to 'on hold' state
-                        taskSeconds = savedSeconds;
-                        toast('Task was restored on hold due to long inactivity.', 'info');
-                    } else {
-                        activeTaskId = currentTaskData.taskId;
-                        taskOnHold = currentTaskData.state === 'on_hold';
+                    activeTaskId = data.taskId;
+                    currentWorkDetails = data.workDetails || '';
+                    activeTimerSessionId = data.timerSessionId || null;
 
+                    if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
+                        taskOnHold = true;
+                        taskSeconds = savedSeconds;
+                    } else {
+                        taskOnHold = data.state === 'on_hold';
                         if (taskOnHold) {
                             taskSeconds = savedSeconds;
                         } else {
-                            // It was running, so add the elapsed time.
                             taskSeconds = savedSeconds + elapsedSinceUpdate;
                         }
                     }
 
-                    // Re-align taskStartTime for timer logic
                     taskStartTime = Date.now() - (taskSeconds * 1000);
-
                     if (!taskOnHold) {
                         startTaskTimer();
                     }
+                    console.log('Restored active task immediately from local cache:', activeTaskId, taskSeconds, 'seconds');
+                    return true;
+                } catch (e) {
+                    console.warn('Failed to restore active task from local storage:', e);
+                    return false;
+                }
+            }
 
-                    renderTasks();
-                    if (isInternalTabActive()) renderInternalTasks();
-                    renderActiveTaskCard();
-                    renderDailyPlan();
+            async function restoreActiveTask() {
+                if (!currentUser || !db) return;
+                try {
+                    const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
+                    const currentTaskData = snap.val();
+
+                    if (currentTaskData && currentTaskData.taskId) {
+                        currentWorkDetails = currentTaskData.workDetails || currentWorkDetails || '';
+                        activeTimerSessionId = currentTaskData.timerSessionId || activeTimerSessionId || null;
+                        const lastUpdated = currentTaskData.updatedAt || Date.now();
+                        const elapsedSinceUpdate = Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000));
+                        const savedSeconds = currentTaskData.currentSeconds || 0;
+                        const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
+
+                        if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
+                            activeTaskId = currentTaskData.taskId;
+                            taskOnHold = true;
+                            taskSeconds = savedSeconds;
+                        } else {
+                            activeTaskId = currentTaskData.taskId;
+                            taskOnHold = currentTaskData.state === 'on_hold';
+
+                            if (taskOnHold) {
+                                taskSeconds = savedSeconds;
+                            } else {
+                                const remoteSeconds = savedSeconds + elapsedSinceUpdate;
+                                // Keep the larger/more accurate seconds between local timer and remote
+                                taskSeconds = Math.max(taskSeconds || 0, remoteSeconds);
+                            }
+                        }
+
+                        taskStartTime = Date.now() - (taskSeconds * 1000);
+
+                        if (!taskOnHold) {
+                            startTaskTimer();
+                        }
+
+                        // Reconcile and persist back to local and Firebase
+                        saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+
+                        renderTasks();
+                        if (isInternalTabActive()) renderInternalTasks();
+                        renderActiveTaskCard();
+                        renderDailyPlan();
+                    } else if (activeTaskId) {
+                        // Local has an active task running, re-publish to Firebase so remote stays in sync
+                        saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                    }
+                } catch (err) {
+                    console.warn('Failed to sync active task from Firebase:', err);
                 }
             }
 
             async function clearCurrentTask() {
-                if (!currentUser) return;
-                await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), null);
+                try {
+                    localStorage.removeItem('worksync_active_task');
+                } catch (e) { }
+                if (!currentUser || !db) return;
+                try {
+                    await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), null);
+                } catch (err) {
+                    console.warn('Failed to clear currentTask in Firebase:', err);
+                }
             }
+
+            // Persist active task state immediately on page reload or tab navigation
+            window.addEventListener('beforeunload', () => {
+                if (activeTaskId && currentUser) {
+                    try {
+                        const currentSec = (!taskOnHold && taskStartTime) ? Math.floor((Date.now() - taskStartTime) / 1000) : (taskSeconds || 0);
+                        const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
+                        const payload = {
+                            taskId: activeTaskId,
+                            taskDesc: task.desc || task.summary || task.title || '',
+                            status: task.status || '',
+                            client: task.client || '',
+                            priority: task.priority || '',
+                            state: taskOnHold ? 'on_hold' : 'working',
+                            startedAt: taskStartTime || Date.now(),
+                            currentSeconds: currentSec,
+                            workDetails: currentWorkDetails || '',
+                            updatedAt: Date.now(),
+                            timerSessionId: activeTimerSessionId || ''
+                        };
+                        localStorage.setItem('worksync_active_task', JSON.stringify(payload));
+                    } catch (e) { }
+                }
+            });
+            window.addEventListener('pagehide', () => {
+                if (activeTaskId && currentUser) {
+                    try {
+                        const currentSec = (!taskOnHold && taskStartTime) ? Math.floor((Date.now() - taskStartTime) / 1000) : (taskSeconds || 0);
+                        const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
+                        const payload = {
+                            taskId: activeTaskId,
+                            taskDesc: task.desc || task.summary || task.title || '',
+                            status: task.status || '',
+                            client: task.client || '',
+                            priority: task.priority || '',
+                            state: taskOnHold ? 'on_hold' : 'working',
+                            startedAt: taskStartTime || Date.now(),
+                            currentSeconds: currentSec,
+                            workDetails: currentWorkDetails || '',
+                            updatedAt: Date.now(),
+                            timerSessionId: activeTimerSessionId || ''
+                        };
+                        localStorage.setItem('worksync_active_task', JSON.stringify(payload));
+                    } catch (e) { }
+                }
+            });
 
             // Task Preparation popup state (pendingPrepTaskId / pendingPrepTaskType declared globally)
 
