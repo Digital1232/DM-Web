@@ -603,17 +603,18 @@
                 return true;
             }
 
-            // 2. If the task was completed or due within this reporting period:
+            // 2. If space-key mapping exists for this month and this task has a project space key:
+            // Enforce that it belongs to this month's space key (prevents cross-month ticket leakage such as NOV tasks appearing in October)
+            if (pKey && hasMappingForMonth) {
+                return isSpaceKeyMonth;
+            }
+
+            // 3. If the task was completed or due within this reporting period:
             if ((compTs >= period.fromTs && compTs <= period.toTs) || (dTs >= period.fromTs && dTs <= period.toTs)) {
                 return true;
             }
 
-            // 3. Otherwise, if space-key mapping exists for this month, require the space key
-            if (hasMappingForMonth) {
-                return isSpaceKeyMonth;
-            }
-
-            // Fallback: date range
+            // 4. Fallback: date range
             return inRange;
         });
 
@@ -881,6 +882,8 @@
 
         // 5. Rework & Revision Analysis
         const allCombinedTasks = [...jiraTasks, ...internalTasks];
+        const workedTasks = allCombinedTasks.filter(t => (t.workingTimeSec || 0) > 0 || (t.workSessionsCount || 0) > 0);
+        const unstartedTasks = allCombinedTasks.filter(t => (t.workingTimeSec || 0) === 0 && (t.workSessionsCount || 0) === 0);
         const reworkTasks = allCombinedTasks.filter(t => t.isRework || (t.reworkCount && t.reworkCount > 0));
         const totalReworkOccurrences = reworkTasks.reduce((sum, t) => sum + Math.max(1, t.reworkCount || 1), 0);
         const internalQcReworkCount = qcFailed.length;
@@ -934,6 +937,8 @@
                 totalAssigned: allCombinedTasks.length,
                 jiraAssigned: jiraTasks.length,
                 internalAssigned: internalTasks.length,
+                workedTasks: workedTasks.length,
+                unstartedTasks: unstartedTasks.length,
                 completed: completedDeliverables.length,
                 pending: allCombinedTasks.filter(t => !t.isCompleted).length,
                 inProgress: allCombinedTasks.filter(t => t.isInProgress).length,
@@ -966,6 +971,9 @@
             jiraTasks,
             internalTasks,
             allTasks: allCombinedTasks,
+            workedTasks,
+            unstartedTasks,
+            timingTasks: workedTasks,
             taskLogsMap,
             periodLogs,
             dailyAttendanceMap,
@@ -1608,38 +1616,188 @@
         const tbody = getEl('mmr-timing-tasks-tbody');
         if (!tbody) return;
 
-        const all = data.allTasks;
-        if (all.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-medium">No task timing logs found for this period.</td></tr>`;
-            return;
+        // Strictly worked tasks with valid sessions/time (Prompt Rule: Unstarted tasks must NOT appear in Task-wise Timing List)
+        const worked = (data.workedTasks || []).filter(t => (t.workingTimeSec || 0) > 0 || (t.workSessionsCount || 0) > 0);
+        const unstarted = data.unstartedTasks || [];
+
+        // Sort by working time descending
+        worked.sort((a, b) => (b.workingTimeSec || 0) - (a.workingTimeSec || 0));
+
+        if (worked.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-medium">No active task work sessions recorded for this period.</td></tr>`;
+        } else {
+            tbody.innerHTML = worked.map(t => {
+                const source = t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira';
+                const sourceClass = source === 'Jira' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100';
+                const safeId = esc(t.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const sessions = t.workSessions || [];
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="window.MyMonthlyReport.toggleSessionsRow('${safeId}')" class="text-slate-400 hover:text-purple-600 transition-colors p-1" title="Toggle Sessions">
+                                    <iconify-icon id="mmr-chevron-${safeId}" icon="solar:alt-arrow-down-bold" width="14" class="transition-transform duration-200"></iconify-icon>
+                                </button>
+                                <div>
+                                    <p class="font-bold text-xs text-slate-900">${esc(t.desc || t.title)}</p>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="font-mono text-[10px] text-purple-700 font-bold">${esc(t.id)}</span>
+                                        <span class="text-slate-300">•</span>
+                                        <span class="text-[10px] text-slate-400 font-medium">${esc(t.client || 'General')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md border ${sourceClass}">${source}</span>
+                        </td>
+                        <td class="px-4 py-3 text-xs font-bold text-slate-700 text-center">${t.workSessionsCount}</td>
+                        <td class="px-4 py-3 text-xs font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                        <td class="px-4 py-3 text-xs font-bold text-center ${t.reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">${t.reworkCount || 0}</td>
+                        <td class="px-4 py-3 text-xs">
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <button type="button" onclick="window.MyMonthlyReport.toggleSessionsRow('${safeId}')" class="px-2.5 py-1 text-[11px] font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors mr-1 cursor-pointer">
+                                Sessions (${t.workSessionsCount})
+                            </button>
+                            <button type="button" onclick="window.MyMonthlyReport.openTaskDetailModal('${esc(t.id)}')" class="px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+                                Modal
+                            </button>
+                        </td>
+                    </tr>
+                    <!-- Expandable Session History Row -->
+                    <tr id="mmr-sessions-row-${safeId}" class="hidden bg-slate-50/70 border-b border-slate-200">
+                        <td colspan="7" class="px-6 py-3">
+                            <div class="bg-white rounded-xl border border-slate-200 p-3 shadow-xs">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-[11px] font-black uppercase text-slate-700 tracking-wide flex items-center gap-1.5">
+                                        <iconify-icon icon="solar:history-bold-duotone" class="text-purple-600" width="14"></iconify-icon>
+                                        Detailed Work Session History (${sessions.length} Recorded Sessions)
+                                    </h4>
+                                    <span class="text-[10px] text-slate-400 font-mono">Aggregated Time: ${formatDurationHMS(t.workingTimeSec)}</span>
+                                </div>
+                                ${sessions.length === 0 ? `
+                                    <p class="text-xs text-slate-400 italic py-2">No individual session timestamps recorded.</p>
+                                ` : `
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-left text-[11px]">
+                                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] border-b border-slate-100">
+                                                <tr>
+                                                    <th class="px-3 py-1.5">Session #</th>
+                                                    <th class="px-3 py-1.5">Work Date</th>
+                                                    <th class="px-3 py-1.5">Time Range</th>
+                                                    <th class="px-3 py-1.5">Duration</th>
+                                                    <th class="px-3 py-1.5">Activity Category</th>
+                                                    <th class="px-3 py-1.5">Work Description</th>
+                                                    <th class="px-3 py-1.5 text-right">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                ${sessions.map((s, idx) => `
+                                                    <tr class="hover:bg-slate-50/50">
+                                                        <td class="px-3 py-1.5 font-bold text-slate-700">#${idx + 1}</td>
+                                                        <td class="px-3 py-1.5 text-slate-600">${formatDateStr(s.startTime || s.timestamp)}</td>
+                                                        <td class="px-3 py-1.5 text-slate-500 font-mono text-[10px]">${formatTimeStr(s.startTime || s.timestamp)} - ${formatTimeStr(s.endTime || (s.startTime + (s.durationSeconds || 0)*1000))}</td>
+                                                        <td class="px-3 py-1.5 font-mono font-bold text-purple-700">${formatDurationHMS(getLogDurationSec(s))}</td>
+                                                        <td class="px-3 py-1.5 text-slate-700 font-medium">${esc(s.activityCategory || s.activity || 'Production')}</td>
+                                                        <td class="px-3 py-1.5 text-slate-600 max-w-[200px] truncate" title="${esc(s.desc || s.workDescription || '')}">${esc(s.desc || s.workDescription || 'Active execution session')}</td>
+                                                        <td class="px-3 py-1.5 text-right">
+                                                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${s.isLive ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}">${s.isLive ? 'Live' : 'Logged'}</span>
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                `}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
-        tbody.innerHTML = all.map(t => {
-            const source = t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira';
-            const sourceClass = source === 'Jira' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100';
-            return `
-                <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
-                    <td class="px-4 py-3">
-                        <p class="font-bold text-xs text-slate-900">${esc(t.desc || t.title)}</p>
-                        <p class="font-mono text-[10px] text-purple-700">${esc(t.id)}</p>
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-md border ${sourceClass}">${source}</span>
-                    </td>
-                    <td class="px-4 py-3 text-xs font-bold text-slate-700 text-center">${t.workSessionsCount}</td>
-                    <td class="px-4 py-3 text-xs font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
-                    <td class="px-4 py-3 text-xs font-bold text-center ${t.reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">${t.reworkCount || 0}</td>
-                    <td class="px-4 py-3 text-xs">
-                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <button onclick="window.MyMonthlyReport.openTaskDetailModal('${esc(t.id)}')" class="px-3 py-1.5 text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors">
-                            View Sessions
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        // Render or update Unstarted Assigned Backlog Section
+        let unstartedContainer = getEl('mmr-unstarted-tasks-container');
+        if (!unstartedContainer) {
+            const tabEl = getEl('mmr-tab-timing');
+            if (tabEl) {
+                unstartedContainer = document.createElement('div');
+                unstartedContainer.id = 'mmr-unstarted-tasks-container';
+                unstartedContainer.className = 'mt-6';
+                tabEl.appendChild(unstartedContainer);
+            }
+        }
+
+        if (unstartedContainer) {
+            if (unstarted.length === 0) {
+                unstartedContainer.innerHTML = `
+                    <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                            <iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-emerald-900">Zero Unstarted Assigned Tasks</h4>
+                            <p class="text-[11px] text-emerald-700 mt-0.5">All assigned deliverables for this reporting period have active recorded work sessions.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                unstartedContainer.innerHTML = `
+                    <div class="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-amber-50/60 border-b border-amber-100 flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
+                                    <iconify-icon icon="solar:clock-circle-bold" width="16"></iconify-icon>
+                                </div>
+                                <div>
+                                    <h3 class="text-xs font-black text-amber-950 uppercase tracking-wide">
+                                        Unstarted Assigned Backlog (${unstarted.length} Deliverables)
+                                    </h3>
+                                    <p class="text-[11px] text-amber-800">
+                                        Assigned to employee during this period with no recorded working sessions. Excluded from Task-Wise Timing.
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-900">
+                                ${unstarted.length} Pending Start
+                            </span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-4 py-2.5">Task ID</th>
+                                        <th class="px-4 py-2.5">Task Description</th>
+                                        <th class="px-4 py-2.5">Client</th>
+                                        <th class="px-4 py-2.5">Source</th>
+                                        <th class="px-4 py-2.5">Due Date</th>
+                                        <th class="px-4 py-2.5">Current Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${unstarted.map(t => {
+                                        const source = t.manual || t.taskType === 'internal' ? 'Internal' : 'Jira';
+                                        return `
+                                            <tr class="hover:bg-slate-50/60">
+                                                <td class="px-4 py-2.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
+                                                <td class="px-4 py-2.5 font-medium text-slate-800">${esc(t.desc || t.title)}</td>
+                                                <td class="px-4 py-2.5 text-slate-600">${esc(t.client || 'General')}</td>
+                                                <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded text-[9px] font-bold ${source === 'Jira' ? 'bg-indigo-50 text-indigo-700' : 'bg-fuchsia-50 text-fuchsia-700'}">${source}</span></td>
+                                                <td class="px-4 py-2.5 text-slate-500">${formatDateStr(t.dueDate || t.duedate)}</td>
+                                                <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Assigned')}</span></td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1917,6 +2075,20 @@
         modal.classList.remove('hidden');
     }
 
+    function toggleSessionsRow(safeId) {
+        const row = getEl(`mmr-sessions-row-${safeId}`);
+        const chevron = getEl(`mmr-chevron-${safeId}`);
+        if (!row) return;
+        const isHidden = row.classList.contains('hidden');
+        if (isHidden) {
+            row.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        } else {
+            row.classList.add('hidden');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+
     function closeTaskDetailModal() {
         getEl('mmr-task-modal')?.classList.add('hidden');
     }
@@ -2024,7 +2196,15 @@
         const k = data.kpis;
         const clientSummary = computeClientTimingSummary(data);
         const insights = generatePersonalAiInsights(data);
-        const taskTimingList = [...data.allTasks].sort((a, b) => (b.workingTimeSec || 0) - (a.workingTimeSec || 0));
+        // Sort strictly worked tasks by working time descending (highest time first, matching Task-Wise Timing tab)
+        const workedTasksPool = (data.workedTasks && data.workedTasks.length > 0)
+            ? data.workedTasks
+            : data.allTasks.filter(t => (t.workingTimeSec || 0) > 0 || (t.workSessionsCount || 0) > 0);
+        const taskTimingList = [...workedTasksPool].sort((a, b) => {
+            const timeDiff = (b.workingTimeSec || 0) - (a.workingTimeSec || 0);
+            if (timeDiff !== 0) return timeDiff;
+            return (a.id || '').localeCompare(b.id || '');
+        });
         const totalTaskSec = k.totalWorkedSeconds || 1;
         const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -2032,7 +2212,7 @@
         const nameParts = (data.employee.name || 'User').trim().split(/\s+/);
         const initials = (nameParts[0][0] + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase();
 
-        function renderHeader(pageNum, sectionName) {
+        function renderHeader(sectionName) {
             return `
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
                     <div class="flex items-center gap-2">
@@ -2050,12 +2230,12 @@
             `;
         }
 
-        function renderFooter(pageNum) {
+        function renderFooter(sectionLabel) {
             return `
                 <div class="flex items-center justify-between border-t border-slate-200 pt-2.5 mt-4 text-[9px] text-slate-400 font-medium">
                     <span>Generated on ${nowStr} • OneDesk Reporting Engine</span>
                     <span class="tracking-wide uppercase font-semibold text-slate-500">VilPower Digital Operations • Confidential</span>
-                    <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">Page ${pageNum} of 7</span>
+                    <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${esc(sectionLabel)}</span>
                 </div>
             `;
         }
@@ -2075,13 +2255,22 @@
             body {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                background: white !important;
+                padding: 0 !important;
             }
             .page-break {
-                page-break-after: always !important;
-                break-after: page !important;
+                page-break-before: always !important;
+                break-before: page !important;
             }
             .no-print {
                 display: none !important;
+            }
+            .print-page {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
             }
             table {
                 page-break-inside: auto;
@@ -2094,690 +2283,591 @@
                 display: table-header-group;
             }
         }
+        @media screen {
+            body {
+                background: #f1f5f9;
+                padding: 24px 12px;
+            }
+            .print-page {
+                background: #ffffff;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                border: 1px solid #e2e8f0;
+                border-radius: 14px;
+                padding: 24px 28px;
+                max-width: 960px;
+                margin: 0 auto 28px auto;
+            }
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             color: #0f172a;
-            background: #ffffff;
             -webkit-font-smoothing: antialiased;
-        }
-        .print-page {
-            min-height: 268mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-sizing: border-box;
-            padding: 4px 0;
-        }
-        .print-page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
         }
     </style>
 </head>
-<body class="bg-white text-slate-900 p-2">
+<body class="text-slate-900">
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 1: EXECUTIVE OVERVIEW & SCORECARD (SUBTAB 1)            -->
+    <!-- SECTION 1: EXECUTIVE OVERVIEW & SCORECARD                     -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="print-page page-break">
-        <div>
-            ${renderHeader(1, 'Executive Overview & Scorecard')}
+    <div class="print-page">
+        ${renderHeader('Executive Overview & Scorecard')}
 
-            <!-- Profile Banner Card -->
-            <div class="p-4 bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-slate-50 border border-purple-100 rounded-xl mb-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3.5">
-                        ${data.employee.avatar ? `
-                            <img src="${esc(data.employee.avatar)}" alt="${esc(data.employee.name)}" class="w-13 h-13 rounded-xl object-cover ring-2 ring-purple-300">
-                        ` : `
-                            <div class="w-13 h-13 rounded-xl bg-purple-600 text-white font-black text-lg flex items-center justify-center ring-2 ring-purple-300">
-                                ${initials}
-                            </div>
-                        `}
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h1 class="text-lg font-black text-slate-900">${esc(data.employee.name)}</h1>
-                                <span class="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-purple-100 text-purple-700 tracking-wider">${esc(data.employee.department)}</span>
-                            </div>
-                            <p class="text-xs text-slate-600 font-semibold mt-0.5">${esc(data.employee.designation)}</p>
-                            <p class="text-[11px] text-slate-400 font-mono">${esc(data.employee.email)}</p>
+        <!-- Profile Banner Card -->
+        <div class="p-4 bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-slate-50 border border-purple-100 rounded-xl mb-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3.5">
+                    ${data.employee.avatar ? `
+                        <img src="${esc(data.employee.avatar)}" alt="${esc(data.employee.name)}" class="w-13 h-13 rounded-xl object-cover ring-2 ring-purple-300">
+                    ` : `
+                        <div class="w-13 h-13 rounded-xl bg-purple-600 text-white font-black text-lg flex items-center justify-center ring-2 ring-purple-300">
+                            ${initials}
                         </div>
-                    </div>
-                    <div class="text-right">
-                        <span class="inline-block px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-emerald-100 text-emerald-800 tracking-wide uppercase">${esc(data.period.statusText)}</span>
-                        <p class="text-xs font-black text-purple-700 mt-1">${esc(data.period.periodLabel)}</p>
-                        <p class="text-[10px] text-slate-500 font-medium">Reporting Range: ${Engine.formatLocalDate(data.period.fromDate)} to ${Engine.formatLocalDate(data.period.toDate)}</p>
+                    `}
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-lg font-black text-slate-900">${esc(data.employee.name)}</h1>
+                            <span class="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-purple-100 text-purple-700 tracking-wider">${esc(data.employee.department)}</span>
+                        </div>
+                        <p class="text-xs text-slate-600 font-semibold mt-0.5">${esc(data.employee.designation)}</p>
+                        <p class="text-[11px] text-slate-400 font-mono">${esc(data.employee.email)}</p>
                     </div>
                 </div>
-            </div>
-
-            <!-- 12 Executive KPI Cards Grid (4x3) -->
-            <div class="mb-4">
-                <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
-                    Monthly Executive Performance Scorecard (12 Key Indicators)
-                </h2>
-                <div class="grid grid-cols-4 gap-2.5">
-                    <!-- KPI 1 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total Assigned Tasks</span>
-                        <div class="text-xl font-black text-slate-900 mt-0.5">${k.totalAssigned}</div>
-                        <span class="text-[9px] font-medium text-slate-500">${k.jiraAssigned} Jira + ${k.internalAssigned} Internal</span>
-                    </div>
-                    <!-- KPI 2 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block">Jira Deliverables</span>
-                        <div class="text-xl font-black text-indigo-700 mt-0.5">${k.jiraAssigned}</div>
-                        <span class="text-[9px] font-medium text-slate-500">Client deliverables</span>
-                    </div>
-                    <!-- KPI 3 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-fuchsia-400 uppercase tracking-wider block">Internal Tasks</span>
-                        <div class="text-xl font-black text-fuchsia-700 mt-0.5">${k.internalAssigned}</div>
-                        <span class="text-[9px] font-medium text-slate-500">Learning, admin, meetings</span>
-                    </div>
-                    <!-- KPI 4 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">Completed Tasks</span>
-                        <div class="text-xl font-black text-emerald-600 mt-0.5">${k.completed}</div>
-                        <span class="text-[9px] font-medium text-emerald-700">${k.deliveryScore}% on-time completion</span>
-                    </div>
-                    <!-- KPI 5 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-amber-500 uppercase tracking-wider block">Pending Tasks</span>
-                        <div class="text-xl font-black text-amber-600 mt-0.5">${k.pending}</div>
-                        <span class="text-[9px] font-medium text-slate-500">${k.inProgress} currently in-progress</span>
-                    </div>
-                    <!-- KPI 6 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-blue-500 uppercase tracking-wider block">In-Progress Tasks</span>
-                        <div class="text-xl font-black text-blue-600 mt-0.5">${k.inProgress}</div>
-                        <span class="text-[9px] font-medium text-slate-500">Active work in pipeline</span>
-                    </div>
-                    <!-- KPI 7 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Rework Deliverables</span>
-                        <div class="text-xl font-black text-rose-600 mt-0.5">${k.rework}</div>
-                        <span class="text-[9px] font-medium text-slate-500">${data.rework.totalOccurrences} total rework loops</span>
-                    </div>
-                    <!-- KPI 8 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-purple-500 uppercase tracking-wider block">Total Working Hours</span>
-                        <div class="text-xl font-black text-purple-700 mt-0.5">${k.totalWorkingHours}h</div>
-                        <span class="text-[9px] font-medium text-purple-700">${k.utilizationPct}% work utilization</span>
-                    </div>
-                    <!-- KPI 9 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-teal-500 uppercase tracking-wider block">Attendance Days</span>
-                        <div class="text-xl font-black text-teal-700 mt-0.5">${k.attendanceDays} / ${k.totalWorkingDays}</div>
-                        <span class="text-[9px] font-medium text-slate-500">${k.absentDays} absent, ${k.lateCheckIns} late</span>
-                    </div>
-                    <!-- KPI 10 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block">Total Break Time</span>
-                        <div class="text-xl font-black text-orange-600 mt-0.5">${k.totalBreakFormatted}</div>
-                        <span class="text-[9px] font-medium text-slate-500">Avg ${k.avgDailyBreakMins}m / present day</span>
-                    </div>
-                    <!-- KPI 11 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-violet-500 uppercase tracking-wider block">QC Quality Score</span>
-                        <div class="text-xl font-black text-violet-700 mt-0.5">${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</div>
-                        <span class="text-[9px] font-medium text-slate-500">Avg rating ${data.qc.avgRating || '5.0'}/5.0</span>
-                    </div>
-                    <!-- KPI 12 -->
-                    <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-                        <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">On-Time Delivery</span>
-                        <div class="text-xl font-black text-emerald-700 mt-0.5">${k.deliveryScore}%</div>
-                        <span class="text-[9px] font-medium text-slate-500">Schedule adherence rate</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Executive Performance Highlights Summary -->
-            <div>
-                <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
-                    Monthly Executive Performance Highlights
-                </h2>
-                <div class="grid grid-cols-3 gap-3">
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            <span class="text-[11px] font-black text-slate-800">Operational Velocity</span>
-                        </div>
-                        <p class="text-[10px] text-slate-600 leading-relaxed">
-                            Completed <strong>${k.completed}</strong> assignments out of <strong>${k.totalAssigned}</strong> assigned deliverables with an active working investment of <strong>${k.totalWorkingHours} hours</strong>.
-                        </p>
-                    </div>
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-                            <span class="text-[11px] font-black text-slate-800">Quality Benchmark</span>
-                        </div>
-                        <p class="text-[10px] text-slate-600 leading-relaxed">
-                            Maintained a <strong>${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</strong> checklist review score across <strong>${data.qc.totalSubmissions}</strong> formal inspections, upholding deliverable standards.
-                        </p>
-                    </div>
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                            <span class="text-[11px] font-black text-slate-800">Punctuality & Presence</span>
-                        </div>
-                        <p class="text-[10px] text-slate-600 leading-relaxed">
-                            Reported present for <strong>${k.attendanceDays}</strong> days with <strong>${k.lateCheckIns}</strong> late log-ins and an average daily working focus of <strong>${k.avgDailyWorkHours} hours</strong>.
-                        </p>
-                    </div>
+                <div class="text-right">
+                    <span class="inline-block px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-emerald-100 text-emerald-800 tracking-wide uppercase">${esc(data.period.statusText)}</span>
+                    <p class="text-xs font-black text-purple-700 mt-1">${esc(data.period.periodLabel)}</p>
+                    <p class="text-[10px] text-slate-500 font-medium">Reporting Range: ${Engine.formatLocalDate(data.period.fromDate)} to ${Engine.formatLocalDate(data.period.toDate)}</p>
                 </div>
             </div>
         </div>
-        ${renderFooter(1)}
+
+        <!-- 12 Executive KPI Cards Grid (4x3) -->
+        <div class="mb-4">
+            <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                Monthly Executive Performance Scorecard (12 Key Indicators)
+            </h2>
+            <div class="grid grid-cols-4 gap-2.5">
+                <!-- KPI 1 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total Assigned Tasks</span>
+                    <div class="text-xl font-black text-slate-900 mt-0.5">${k.totalAssigned}</div>
+                    <span class="text-[9px] font-medium text-slate-500">${k.jiraAssigned} Jira + ${k.internalAssigned} Internal</span>
+                </div>
+                <!-- KPI 2 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block">Jira Deliverables</span>
+                    <div class="text-xl font-black text-indigo-700 mt-0.5">${k.jiraAssigned}</div>
+                    <span class="text-[9px] font-medium text-slate-500">Client deliverables</span>
+                </div>
+                <!-- KPI 3 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-fuchsia-400 uppercase tracking-wider block">Internal Tasks</span>
+                    <div class="text-xl font-black text-fuchsia-700 mt-0.5">${k.internalAssigned}</div>
+                    <span class="text-[9px] font-medium text-slate-500">Learning, admin, meetings</span>
+                </div>
+                <!-- KPI 4 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">Completed Tasks</span>
+                    <div class="text-xl font-black text-emerald-600 mt-0.5">${k.completed}</div>
+                    <span class="text-[9px] font-medium text-emerald-700">${k.deliveryScore}% on-time completion</span>
+                </div>
+                <!-- KPI 5 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-amber-500 uppercase tracking-wider block">Pending Tasks</span>
+                    <div class="text-xl font-black text-amber-600 mt-0.5">${k.pending}</div>
+                    <span class="text-[9px] font-medium text-slate-500">${k.inProgress} currently in-progress</span>
+                </div>
+                <!-- KPI 6 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-blue-500 uppercase tracking-wider block">In-Progress Tasks</span>
+                    <div class="text-xl font-black text-blue-600 mt-0.5">${k.inProgress}</div>
+                    <span class="text-[9px] font-medium text-slate-500">Active work in pipeline</span>
+                </div>
+                <!-- KPI 7 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Rework Deliverables</span>
+                    <div class="text-xl font-black text-rose-600 mt-0.5">${k.rework}</div>
+                    <span class="text-[9px] font-medium text-slate-500">${data.rework.totalOccurrences} total rework loops</span>
+                </div>
+                <!-- KPI 8 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-purple-500 uppercase tracking-wider block">Total Working Hours</span>
+                    <div class="text-xl font-black text-purple-700 mt-0.5">${k.totalWorkingHours}h</div>
+                    <span class="text-[9px] font-medium text-purple-700">${k.utilizationPct}% work utilization</span>
+                </div>
+                <!-- KPI 9 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-teal-500 uppercase tracking-wider block">Attendance Days</span>
+                    <div class="text-xl font-black text-teal-700 mt-0.5">${k.attendanceDays} / ${k.totalWorkingDays}</div>
+                    <span class="text-[9px] font-medium text-slate-500">${k.absentDays} absent, ${k.lateCheckIns} late</span>
+                </div>
+                <!-- KPI 10 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-orange-500 uppercase tracking-wider block">Total Break Time</span>
+                    <div class="text-xl font-black text-orange-600 mt-0.5">${k.totalBreakFormatted}</div>
+                    <span class="text-[9px] font-medium text-slate-500">Avg ${k.avgDailyBreakMins}m / present day</span>
+                </div>
+                <!-- KPI 11 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-violet-500 uppercase tracking-wider block">QC Quality Score</span>
+                    <div class="text-xl font-black text-violet-700 mt-0.5">${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</div>
+                    <span class="text-[9px] font-medium text-slate-500">Avg rating ${data.qc.avgRating || '5.0'}/5.0</span>
+                </div>
+                <!-- KPI 12 -->
+                <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <span class="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block">On-Time Delivery</span>
+                    <div class="text-xl font-black text-emerald-700 mt-0.5">${k.deliveryScore}%</div>
+                    <span class="text-[9px] font-medium text-slate-500">Schedule adherence rate</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Highlights -->
+        <div class="mb-4">
+            <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
+                Monthly Executive Performance Highlights
+            </h2>
+            <div class="grid grid-cols-3 gap-3">
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span class="text-[11px] font-black text-slate-800">Operational Velocity</span>
+                    </div>
+                    <p class="text-[10px] text-slate-600 leading-relaxed">
+                        Completed <strong>${k.completed}</strong> deliverables out of <strong>${k.totalAssigned}</strong> assigned tasks with an active working investment of <strong>${k.totalWorkingHours} hours</strong>.
+                    </p>
+                </div>
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                        <span class="text-[11px] font-black text-slate-800">Quality Benchmark</span>
+                    </div>
+                    <p class="text-[10px] text-slate-600 leading-relaxed">
+                        Maintained a <strong>${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</strong> checklist review score across <strong>${data.qc.totalSubmissions}</strong> formal inspections, upholding quality standards.
+                    </p>
+                </div>
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        <span class="text-[11px] font-black text-slate-800">Punctuality & Presence</span>
+                    </div>
+                    <p class="text-[10px] text-slate-600 leading-relaxed">
+                        Reported present for <strong>${k.attendanceDays}</strong> days with <strong>${k.lateCheckIns}</strong> late log-ins and an average daily working focus of <strong>${k.avgDailyWorkHours} hours</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Work Allocation Summary Table -->
+        <div>
+            <h2 class="text-xs font-black text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                Client Work Allocation Summary
+            </h2>
+            <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-2">Client / Account Name</th>
+                        <th class="p-2 w-24 text-center">Deliverables</th>
+                        <th class="p-2 w-20 text-center">Sessions</th>
+                        <th class="p-2 w-24 text-right">Logged Time</th>
+                        <th class="p-2 w-28 text-right">Allocation Share</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${clientSummary.clients.length === 0 ? `
+                        <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">No client work allocation recorded for this period.</td></tr>
+                    ` : clientSummary.clients.map((c, idx) => `
+                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                            <td class="p-1.5 font-bold text-slate-900">${esc(c.name)}</td>
+                            <td class="p-1.5 text-center font-semibold text-slate-600">${c.tasksCount} tasks</td>
+                            <td class="p-1.5 text-center text-slate-500">${c.sessionsCount} sessions</td>
+                            <td class="p-1.5 text-right font-mono font-bold text-slate-900">${c.formattedTime}</td>
+                            <td class="p-1.5 text-right">
+                                <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">${c.pct}%</span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+
+        ${renderFooter('Executive Overview • Section 1')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 2: JIRA CLIENT DELIVERABLES (SUBTAB 2)                  -->
+    <!-- SECTION 2: TASK-WISE TIMING LIST (MATCHING UI IMAGE 2)       -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
-        <div>
-            ${renderHeader(2, 'Jira Tasks')}
-            <div class="flex items-center justify-between mb-3">
-                <div>
-                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Jira Client Deliverables</h2>
-                    <p class="text-[10px] text-slate-500">Client-facing production assignments, external deliverables, deadlines, and working times</p>
-                </div>
+        ${renderHeader('Task-Wise Timing List')}
+
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Task-Wise Timing List</h2>
+                <p class="text-[10px] text-slate-500">Comprehensive breakdown of all deliverables, active sessions, working time, rework occurrences, and status</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-purple-50 text-purple-700 border border-purple-100">
+                    ${data.allTasks.length} Total Deliverables
+                </span>
                 <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
-                    ${data.jiraTasks.length} Deliverables
+                    ${k.totalWorkingHours}h Logged Focus
                 </span>
             </div>
+        </div>
 
-            <table class="w-full text-left text-[10px] border border-slate-200 rounded-lg overflow-hidden">
-                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <tr>
-                        <th class="p-2 w-20">Issue ID</th>
-                        <th class="p-2">Task Title & Client</th>
-                        <th class="p-2 w-16 text-center">Priority</th>
-                        <th class="p-2 w-20 text-center">Due Date</th>
-                        <th class="p-2 w-24 text-center">Status</th>
-                        <th class="p-2 w-20 text-right">Logged Time</th>
-                        <th class="p-2 w-14 text-center">Sessions</th>
-                        <th class="p-2 w-14 text-center">Rework</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    ${data.jiraTasks.length === 0 ? `
-                        <tr><td colspan="8" class="p-6 text-center text-slate-400 font-medium">No Jira client tasks recorded for this period.</td></tr>
-                    ` : data.jiraTasks.map((t, idx) => `
+        <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                    <th class="p-2">TASK DESCRIPTION</th>
+                    <th class="p-2 w-20 text-center">SOURCE</th>
+                    <th class="p-2 w-20 text-center">SESSIONS</th>
+                    <th class="p-2 w-28 text-center">TOTAL TIME</th>
+                    <th class="p-2 w-20 text-center">REWORK</th>
+                    <th class="p-2 w-32 text-center">STATUS</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                ${taskTimingList.length === 0 ? `
+                    <tr><td colspan="6" class="p-6 text-center text-slate-400 font-medium">No tasks or timing logs found for this period.</td></tr>
+                ` : taskTimingList.map((t, idx) => {
+                    const isInternal = t.manual || t.taskType === 'internal';
+                    const sourceLabel = isInternal ? 'Internal' : 'Jira';
+                    const sourceClass = isInternal ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+                    const reworkCount = t.reworkCount || 0;
+                    return `
                         <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                            <td class="p-2 font-mono font-bold text-indigo-700">${esc(t.id)}</td>
                             <td class="p-2">
                                 <div class="font-bold text-slate-900 leading-tight">${esc(t.desc || t.title)}</div>
-                                <div class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">${esc(t.client || 'Client Deliverable')}</div>
+                                <div class="font-mono text-[8px] text-purple-700 font-semibold mt-0.5">${esc(t.id)}</div>
                             </td>
                             <td class="p-2 text-center">
-                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${String(t.priority).toLowerCase() === 'high' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">
-                                    ${esc(t.priority || 'Medium')}
+                                <span class="px-2 py-0.5 rounded text-[8px] font-bold border ${sourceClass}">
+                                    ${sourceLabel}
                                 </span>
                             </td>
-                            <td class="p-2 text-center text-slate-600 font-mono text-[9px]">${formatDateStr(t.dueDate || t.duedate)}</td>
+                            <td class="p-2 text-center text-slate-700 font-bold">
+                                ${t.workSessionsCount || 0}
+                            </td>
+                            <td class="p-2 text-center font-mono font-bold text-slate-900">
+                                ${formatDurationHMS(t.workingTimeSec)}
+                            </td>
+                            <td class="p-2 text-center font-bold ${reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">
+                                ${reworkCount}
+                            </td>
                             <td class="p-2 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${t.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}">
+                                <span class="px-2.5 py-0.5 rounded-full text-[8px] font-extrabold ${t.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}">
                                     ${esc(t.status || 'Active')}
                                 </span>
                             </td>
-                            <td class="p-2 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
-                            <td class="p-2 text-center text-slate-600 font-semibold">${t.workSessionsCount || 0}</td>
-                            <td class="p-2 text-center font-bold ${t.reworkCount > 0 ? 'text-rose-600' : 'text-slate-400'}">${t.reworkCount || 0}</td>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-        ${renderFooter(2)}
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+
+        ${renderFooter('Task-Wise Timing • Section 2')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 3: INTERNAL & OPERATIONAL TASKS (SUBTAB 3)              -->
+    <!-- SECTION 3: OVERALL QUALITY SCORE & REWORK / REVISIONS         -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
-        <div>
-            ${renderHeader(3, 'Internal Tasks')}
-            <div class="flex items-center justify-between mb-3">
+        ${renderHeader('Overall Quality Score & Rework')}
+
+        <!-- 3A: Overall Quality Score -->
+        <div class="mb-5">
+            <div class="flex items-center justify-between mb-2">
                 <div>
-                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">Internal & Learning Tasks</h2>
-                    <p class="text-[10px] text-slate-500">Organizational workflows, design system upgrades, learning tasks, and department meetings</p>
-                </div>
-                <span class="px-2.5 py-1 text-xs font-black rounded-lg bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100">
-                    ${data.internalTasks.length} Internal Tasks
-                </span>
-            </div>
-
-            <table class="w-full text-left text-[10px] border border-slate-200 rounded-lg overflow-hidden">
-                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <tr>
-                        <th class="p-2 w-28">Task ID</th>
-                        <th class="p-2">Task Title & Category</th>
-                        <th class="p-2 w-20 text-center">Priority</th>
-                        <th class="p-2 w-28 text-center">Status</th>
-                        <th class="p-2 w-24 text-right">Working Time</th>
-                        <th class="p-2 w-16 text-center">Sessions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    ${data.internalTasks.length === 0 ? `
-                        <tr><td colspan="6" class="p-6 text-center text-slate-400 font-medium">No internal tasks recorded for this period.</td></tr>
-                    ` : data.internalTasks.map((t, idx) => `
-                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                            <td class="p-2 font-mono font-bold text-fuchsia-700">${esc(t.id)}</td>
-                            <td class="p-2">
-                                <div class="font-bold text-slate-900 leading-tight">${esc(t.desc || t.title)}</div>
-                                <div class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">${esc(t.client || 'Internal Operations')}</div>
-                            </td>
-                            <td class="p-2 text-center">
-                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${String(t.priority).toLowerCase() === 'high' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">
-                                    ${esc(t.priority || 'Medium')}
-                                </span>
-                            </td>
-                            <td class="p-2 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${t.isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}">
-                                    ${esc(t.status || 'Active')}
-                                </span>
-                            </td>
-                            <td class="p-2 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
-                            <td class="p-2 text-center text-slate-600 font-semibold">${t.workSessionsCount || 0}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-        ${renderFooter(3)}
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4: TASK & CLIENT TIMING BREAKDOWN (SUBTABS 4 & 5)       -->
-    <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="print-page page-break">
-        <div>
-            ${renderHeader(4, 'Timing Breakdown')}
-
-            <!-- Subtab 4: Task-Wise Timing -->
-            <div class="mb-5">
-                <div class="flex items-center justify-between mb-2">
-                    <div>
-                        <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                            <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
-                            Task-Wise Timing Distribution (Top Tasks Ranked by Working Time)
-                        </h2>
-                    </div>
-                    <span class="text-[10px] text-slate-400 font-medium">Total: ${k.totalWorkingHours} Hours</span>
-                </div>
-                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                            <th class="p-2">Task Title & ID</th>
-                            <th class="p-2 w-16 text-center">Type</th>
-                            <th class="p-2 w-14 text-center">Sessions</th>
-                            <th class="p-2 w-20 text-right">Logged Time</th>
-                            <th class="p-2 w-16 text-right">Time Share</th>
-                            <th class="p-2 w-20 text-center">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${taskTimingList.slice(0, 10).map((t, idx) => {
-                            const isInternal = t.manual || t.taskType === 'internal';
-                            const sharePct = Math.round(((t.workingTimeSec || 0) / totalTaskSec) * 100);
-                            return `
-                                <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                                    <td class="p-1.5">
-                                        <div class="font-bold text-slate-900 truncate max-w-xs">${esc(t.desc || t.title)}</div>
-                                        <div class="font-mono text-[8px] text-purple-700">${esc(t.id)}</div>
-                                    </td>
-                                    <td class="p-1.5 text-center">
-                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold ${isInternal ? 'bg-fuchsia-50 text-fuchsia-700' : 'bg-indigo-50 text-indigo-700'}">
-                                            ${isInternal ? 'Internal' : 'Jira'}
-                                        </span>
-                                    </td>
-                                    <td class="p-1.5 text-center font-semibold text-slate-600">${t.workSessionsCount || 0}</td>
-                                    <td class="p-1.5 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
-                                    <td class="p-1.5 text-right font-bold text-purple-700">${sharePct}%</td>
-                                    <td class="p-1.5 text-center">
-                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Subtab 5: Client-Wise Timing -->
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <div>
-                        <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                            <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
-                            Client-Wise Timing Breakdown (Account Allocation)
-                        </h2>
-                    </div>
-                    <span class="text-[10px] text-slate-400 font-medium">${clientSummary.clients.length} Client Accounts</span>
-                </div>
-                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                            <th class="p-2">Client / Account Name</th>
-                            <th class="p-2 w-24 text-center">Deliverables</th>
-                            <th class="p-2 w-20 text-center">Sessions</th>
-                            <th class="p-2 w-24 text-right">Logged Time</th>
-                            <th class="p-2 w-28 text-right">Allocation Share</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${clientSummary.clients.length === 0 ? `
-                            <tr><td colspan="5" class="p-4 text-center text-slate-400 font-medium">No client timing data recorded.</td></tr>
-                        ` : clientSummary.clients.map((c, idx) => `
-                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                                <td class="p-1.5 font-bold text-slate-900">${esc(c.name)}</td>
-                                <td class="p-1.5 text-center font-semibold text-slate-600">${c.tasksCount} tasks</td>
-                                <td class="p-1.5 text-center text-slate-500">${c.sessionsCount} sessions</td>
-                                <td class="p-1.5 text-right font-mono font-bold text-slate-900">${c.formattedTime}</td>
-                                <td class="p-1.5 text-right">
-                                    <span class="px-2 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">${c.pct}%</span>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        ${renderFooter(4)}
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5: QC QUALITY & REWORK / REVISIONS (SUBTABS 6 & 7)       -->
-    <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="print-page page-break">
-        <div>
-            ${renderHeader(5, 'QC Quality & Rework')}
-
-            <!-- Subtab 6: QC Quality -->
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
                     <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                         <span class="w-1.5 h-3.5 bg-violet-600 rounded-sm inline-block"></span>
-                        Quality Control (QC) Performance Scorecard
+                        Overall Quality Score & QC Review Scorecard
                     </h2>
+                    <p class="text-[9px] text-slate-500">Audited deliverable reviews, checklist pass rates, mistake categorization, and reviewer evaluation</p>
                 </div>
-
-                <!-- Mini Scorecard -->
-                <div class="grid grid-cols-4 gap-2 mb-3">
-                    <div class="p-2.5 bg-violet-50/50 border border-violet-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-violet-500 uppercase block">Average QC Score</span>
-                        <span class="text-lg font-black text-violet-700">${data.qc.avgScore !== null ? `${data.qc.avgScore}%` : '100%'}</span>
-                    </div>
-                    <div class="p-2.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-emerald-500 uppercase block">First-Pass Rate</span>
-                        <span class="text-lg font-black text-emerald-700">${data.qc.passPct !== null ? `${data.qc.passPct}%` : '100%'}</span>
-                    </div>
-                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-slate-500 uppercase block">Submissions</span>
-                        <span class="text-lg font-black text-slate-800">${data.qc.totalSubmissions}</span>
-                    </div>
-                    <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-indigo-500 uppercase block">Reviewer Rating</span>
-                        <span class="text-lg font-black text-indigo-700">${data.qc.avgRating || '5.0'} / 5.0</span>
-                    </div>
-                </div>
-
-                <!-- QC Submissions / Failures Log -->
-                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                            <th class="p-1.5 w-18">Task ID</th>
-                            <th class="p-1.5">Deliverable Title</th>
-                            <th class="p-1.5 w-20">Date</th>
-                            <th class="p-1.5 w-24">Reviewer</th>
-                            <th class="p-1.5 w-24">Mistake Theme</th>
-                            <th class="p-1.5">Required Corrections</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${data.qc.failedDetails.length === 0 ? `
-                            <tr><td colspan="6" class="p-3 text-center text-slate-400 font-medium">Zero recorded QC rejections in this period. Outstanding quality standards maintained!</td></tr>
-                        ` : data.qc.failedDetails.slice(0, 5).map((f, idx) => `
-                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                                <td class="p-1.5 font-mono font-bold text-purple-700">${esc(f.taskId)}</td>
-                                <td class="p-1.5 font-bold text-slate-900">${esc(f.taskName)}</td>
-                                <td class="p-1.5 text-slate-500 font-mono">${f.submissionDate}</td>
-                                <td class="p-1.5 text-slate-700 font-semibold">${esc(f.reviewer)}</td>
-                                <td class="p-1.5">
-                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-100">${esc(f.failureCategory)}</span>
-                                </td>
-                                <td class="p-1.5 text-slate-600">${esc(f.requiredCorrections)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
             </div>
 
-            <!-- Subtab 7: Rework & Revisions -->
-            <div>
-                <div class="flex items-center justify-between mb-2">
+            <!-- Mini Scorecard -->
+            <div class="grid grid-cols-4 gap-2 mb-3">
+                <div class="p-2.5 bg-violet-50/50 border border-violet-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-violet-500 uppercase block">Overall QC Score</span>
+                    <span class="text-xl font-black text-violet-700">${k.qcScore !== null ? `${k.qcScore}%` : '100%'}</span>
+                </div>
+                <div class="p-2.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-emerald-500 uppercase block">First-Pass Rate</span>
+                    <span class="text-xl font-black text-emerald-700">${data.qc.passPct !== null ? `${data.qc.passPct}%` : '100%'}</span>
+                </div>
+                <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-slate-500 uppercase block">Total Submissions</span>
+                    <span class="text-xl font-black text-slate-800">${data.qc.totalSubmissions}</span>
+                </div>
+                <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-indigo-500 uppercase block">Reviewer Rating</span>
+                    <span class="text-xl font-black text-indigo-700">${data.qc.avgRating || '5.0'} / 5.0</span>
+                </div>
+            </div>
+
+            <!-- QC Submissions / Failures Log -->
+            <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-1.5 w-20">Task ID</th>
+                        <th class="p-1.5">Deliverable Title</th>
+                        <th class="p-1.5 w-20">Date</th>
+                        <th class="p-1.5 w-24">Reviewer</th>
+                        <th class="p-1.5 w-28">Mistake Category</th>
+                        <th class="p-1.5">Required Corrections</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${data.qc.failedDetails.length === 0 ? `
+                        <tr><td colspan="6" class="p-3 text-center text-slate-400 font-medium">Zero recorded QC rejections in this period. Flawless deliverable quality maintained!</td></tr>
+                    ` : data.qc.failedDetails.map((f, idx) => `
+                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                            <td class="p-1.5 font-mono font-bold text-purple-700">${esc(f.taskId)}</td>
+                            <td class="p-1.5 font-bold text-slate-900">${esc(f.taskName)}</td>
+                            <td class="p-1.5 text-slate-500 font-mono">${f.submissionDate}</td>
+                            <td class="p-1.5 text-slate-700 font-semibold">${esc(f.reviewer)}</td>
+                            <td class="p-1.5">
+                                <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-100">${esc(f.failureCategory)}</span>
+                            </td>
+                            <td class="p-1.5 text-slate-600">${esc(f.requiredCorrections)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 3B: Rework & Revisions Analysis -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <div>
                     <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                         <span class="w-1.5 h-3.5 bg-rose-600 rounded-sm inline-block"></span>
                         Rework & Revision Analysis
                     </h2>
+                    <p class="text-[9px] text-slate-500">Deliverables requiring multiple revision loops, internal QC flags, and client-requested corrections</p>
                 </div>
-
-                <div class="grid grid-cols-4 gap-2 mb-3">
-                    <div class="p-2.5 bg-rose-50/50 border border-rose-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-rose-500 uppercase block">Rework Tasks</span>
-                        <span class="text-lg font-black text-rose-700">${data.rework.totalTasks}</span>
-                    </div>
-                    <div class="p-2.5 bg-amber-50/50 border border-amber-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-amber-500 uppercase block">Total Rework Loops</span>
-                        <span class="text-lg font-black text-amber-700">${data.rework.totalOccurrences}</span>
-                    </div>
-                    <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-slate-500 uppercase block">QC Internal Flags</span>
-                        <span class="text-lg font-black text-slate-800">${data.rework.internalQcRework}</span>
-                    </div>
-                    <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-indigo-500 uppercase block">Client Revisions</span>
-                        <span class="text-lg font-black text-indigo-700">${data.rework.clientRevisions}</span>
-                    </div>
-                </div>
-
-                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                            <th class="p-1.5 w-20">Task ID</th>
-                            <th class="p-1.5">Deliverable Title</th>
-                            <th class="p-1.5 w-20 text-center">Rework Loops</th>
-                            <th class="p-1.5 w-24 text-center">Current Status</th>
-                            <th class="p-1.5 w-24 text-right">Logged Effort</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${data.rework.reworkTaskList.length === 0 ? `
-                            <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">Zero rework loops recorded during this period.</td></tr>
-                        ` : data.rework.reworkTaskList.slice(0, 5).map((t, idx) => `
-                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                                <td class="p-1.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
-                                <td class="p-1.5 font-bold text-slate-900">${esc(t.desc || t.title)}</td>
-                                <td class="p-1.5 text-center font-bold text-rose-600">${t.reworkCount || 1} loops</td>
-                                <td class="p-1.5 text-center">
-                                    <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
-                                </td>
-                                <td class="p-1.5 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
             </div>
+
+            <div class="grid grid-cols-4 gap-2 mb-3">
+                <div class="p-2.5 bg-rose-50/50 border border-rose-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-rose-500 uppercase block">Rework Deliverables</span>
+                    <span class="text-xl font-black text-rose-700">${data.rework.totalTasks}</span>
+                </div>
+                <div class="p-2.5 bg-amber-50/50 border border-amber-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-amber-500 uppercase block">Total Rework Loops</span>
+                    <span class="text-xl font-black text-amber-700">${data.rework.totalOccurrences}</span>
+                </div>
+                <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-slate-500 uppercase block">Internal QC Flags</span>
+                    <span class="text-xl font-black text-slate-800">${data.rework.internalQcRework}</span>
+                </div>
+                <div class="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-indigo-500 uppercase block">Client Revisions</span>
+                    <span class="text-xl font-black text-indigo-700">${data.rework.clientRevisions}</span>
+                </div>
+            </div>
+
+            <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-1.5 w-24">Task ID</th>
+                        <th class="p-1.5">Deliverable Title</th>
+                        <th class="p-1.5 w-24 text-center">Rework Loops</th>
+                        <th class="p-1.5 w-28 text-center">Current Status</th>
+                        <th class="p-1.5 w-24 text-right">Logged Effort</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${data.rework.reworkTaskList.length === 0 ? `
+                        <tr><td colspan="5" class="p-3 text-center text-slate-400 font-medium">Zero rework loops recorded during this period.</td></tr>
+                    ` : data.rework.reworkTaskList.map((t, idx) => `
+                        <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                            <td class="p-1.5 font-mono font-bold text-purple-700">${esc(t.id)}</td>
+                            <td class="p-1.5 font-bold text-slate-900">${esc(t.desc || t.title)}</td>
+                            <td class="p-1.5 text-center font-bold text-rose-600">${t.reworkCount || 1} loops</td>
+                            <td class="p-1.5 text-center">
+                                <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-700">${esc(t.status || 'Active')}</span>
+                            </td>
+                            <td class="p-1.5 text-right font-mono font-bold text-slate-900">${formatDurationHMS(t.workingTimeSec)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
-        ${renderFooter(5)}
+
+        ${renderFooter('Overall Quality & Rework • Section 3')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6: ATTENDANCE, SHIFTS & BREAKS (SUBTABS 8 & 9)           -->
+    <!-- SECTION 4: ATTENDANCE WITH BREAK DISTRIBUTION                 -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="print-page page-break">
-        <div>
-            ${renderHeader(6, 'Attendance & Breaks')}
-            <div class="mb-3">
-                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2">
-                    <span class="w-1.5 h-3.5 bg-teal-600 rounded-sm inline-block"></span>
-                    Attendance, Working Hours & Shift Distribution
-                </h2>
+        ${renderHeader('Attendance with Break Distribution')}
 
-                <!-- Metrics Grid -->
-                <div class="grid grid-cols-6 gap-2 mb-3">
-                    <div class="p-2 bg-teal-50 border border-teal-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-teal-600 uppercase block">Present Days</span>
-                        <span class="text-base font-black text-teal-800">${k.attendanceDays} / ${k.totalWorkingDays}</span>
-                    </div>
-                    <div class="p-2 bg-rose-50 border border-rose-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-rose-600 uppercase block">Absent Days</span>
-                        <span class="text-base font-black text-rose-800">${k.absentDays}</span>
-                    </div>
-                    <div class="p-2 bg-amber-50 border border-amber-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-amber-600 uppercase block">Late Log-ins</span>
-                        <span class="text-base font-black text-amber-800">${k.lateCheckIns}</span>
-                    </div>
-                    <div class="p-2 bg-purple-50 border border-purple-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-purple-600 uppercase block">Total Break</span>
-                        <span class="text-base font-black text-purple-800">${k.totalBreakFormatted}</span>
-                    </div>
-                    <div class="p-2 bg-blue-50 border border-blue-100 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-blue-600 uppercase block">Avg Daily Break</span>
-                        <span class="text-base font-black text-blue-800">${k.avgDailyBreakMins}m</span>
-                    </div>
-                    <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-center">
-                        <span class="text-[8px] font-bold text-slate-500 uppercase block">Longest Break</span>
-                        <span class="text-base font-black text-slate-800">${Math.round(k.longestBreakSec / 60)}m</span>
-                    </div>
+        <div class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+                <div>
+                    <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <span class="w-1.5 h-3.5 bg-teal-600 rounded-sm inline-block"></span>
+                        Attendance, Working Hours & Break Distribution
+                    </h2>
+                    <p class="text-[9px] text-slate-500">Daily punch records, first check-in, last check-out, active hours, and total break intervals</p>
                 </div>
-
-                <!-- Attendance Day-by-Day Table -->
-                <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
-                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                            <th class="p-1.5 w-24">Date</th>
-                            <th class="p-1.5 w-20">Day</th>
-                            <th class="p-1.5 w-24 text-center">First In</th>
-                            <th class="p-1.5 w-24 text-center">Last Out</th>
-                            <th class="p-1.5 w-24 text-right">Working Time</th>
-                            <th class="p-1.5 w-24 text-right">Break Duration</th>
-                            <th class="p-1.5 w-24 text-center">Day Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${Object.values(data.dailyAttendanceMap).length === 0 ? `
-                            <tr><td colspan="7" class="p-4 text-center text-slate-400 font-medium">No attendance records found for this period.</td></tr>
-                        ` : Object.values(data.dailyAttendanceMap).slice(0, 18).map((day, idx) => {
-                            const dObj = new Date(day.date + 'T00:00:00');
-                            const dayName = isNaN(dObj.getTime()) ? '' : dObj.toLocaleDateString('en-US', { weekday: 'short' });
-                            const inTime = day.checkIns.length > 0 ? formatTimeStr(day.checkIns[0]) : '—';
-                            const outTime = day.checkOuts.length > 0 ? formatTimeStr(day.checkOuts[day.checkOuts.length - 1]) : '—';
-                            return `
-                                <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
-                                    <td class="p-1 font-mono font-bold text-slate-800">${day.date}</td>
-                                    <td class="p-1 font-semibold text-slate-500">${dayName}</td>
-                                    <td class="p-1 text-center font-mono text-slate-700">${inTime}</td>
-                                    <td class="p-1 text-center font-mono text-slate-700">${outTime}</td>
-                                    <td class="p-1 text-right font-mono font-bold text-purple-700">${formatDurationHM(day.totalWorkSec)}</td>
-                                    <td class="p-1 text-right font-mono text-slate-600">${formatDurationHM(day.totalBreakSec)}</td>
-                                    <td class="p-1 text-center">
-                                        <span class="px-2 py-0.5 rounded text-[8px] font-bold ${day.isLate ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
-                                            ${day.isLate ? 'Late In' : 'Present'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
             </div>
+
+            <!-- Metrics Grid (6 columns) -->
+            <div class="grid grid-cols-6 gap-2 mb-3">
+                <div class="p-2 bg-teal-50 border border-teal-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-teal-600 uppercase block">Present Days</span>
+                    <span class="text-base font-black text-teal-800">${k.attendanceDays} / ${k.totalWorkingDays}</span>
+                </div>
+                <div class="p-2 bg-rose-50 border border-rose-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-rose-600 uppercase block">Absent Days</span>
+                    <span class="text-base font-black text-rose-800">${k.absentDays}</span>
+                </div>
+                <div class="p-2 bg-amber-50 border border-amber-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-amber-600 uppercase block">Late Log-ins</span>
+                    <span class="text-base font-black text-amber-800">${k.lateCheckIns}</span>
+                </div>
+                <div class="p-2 bg-purple-50 border border-purple-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-purple-600 uppercase block">Total Break Time</span>
+                    <span class="text-base font-black text-purple-800">${k.totalBreakFormatted}</span>
+                </div>
+                <div class="p-2 bg-blue-50 border border-blue-100 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-blue-600 uppercase block">Avg Daily Break</span>
+                    <span class="text-base font-black text-blue-800">${k.avgDailyBreakMins}m</span>
+                </div>
+                <div class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                    <span class="text-[8px] font-bold text-slate-500 uppercase block">Longest Break</span>
+                    <span class="text-base font-black text-slate-800">${Math.round(k.longestBreakSec / 60)}m</span>
+                </div>
+            </div>
+
+            <!-- Full Day-by-Day Attendance Record Table -->
+            <table class="w-full text-left text-[9px] border border-slate-200 rounded-lg overflow-hidden">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                        <th class="p-1.5 w-24">Date</th>
+                        <th class="p-1.5 w-20">Day</th>
+                        <th class="p-1.5 w-24 text-center">First In</th>
+                        <th class="p-1.5 w-24 text-center">Last Out</th>
+                        <th class="p-1.5 w-24 text-right">Working Time</th>
+                        <th class="p-1.5 w-24 text-right">Break Duration</th>
+                        <th class="p-1.5 w-24 text-center">Day Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${Object.values(data.dailyAttendanceMap).length === 0 ? `
+                        <tr><td colspan="7" class="p-4 text-center text-slate-400 font-medium">No attendance records found for this period.</td></tr>
+                    ` : Object.values(data.dailyAttendanceMap).map((day, idx) => {
+                        const dObj = new Date(day.date + 'T00:00:00');
+                        const dayName = isNaN(dObj.getTime()) ? '' : dObj.toLocaleDateString('en-US', { weekday: 'short' });
+                        const inTime = day.checkIns.length > 0 ? formatTimeStr(day.checkIns[0]) : '—';
+                        const outTime = day.checkOuts.length > 0 ? formatTimeStr(day.checkOuts[day.checkOuts.length - 1]) : '—';
+                        return `
+                            <tr class="${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}">
+                                <td class="p-1 font-mono font-bold text-slate-800">${day.date}</td>
+                                <td class="p-1 font-semibold text-slate-500">${dayName}</td>
+                                <td class="p-1 text-center font-mono text-slate-700">${inTime}</td>
+                                <td class="p-1 text-center font-mono text-slate-700">${outTime}</td>
+                                <td class="p-1 text-right font-mono font-bold text-purple-700">${formatDurationHM(day.totalWorkSec)}</td>
+                                <td class="p-1 text-right font-mono text-slate-600">${formatDurationHM(day.totalBreakSec)}</td>
+                                <td class="p-1 text-center">
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-bold ${day.isLate ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                                        ${day.isLate ? 'Late In' : 'Present'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
         </div>
-        ${renderFooter(6)}
+
+        ${renderFooter('Attendance with Break • Section 4')}
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7: AI INSIGHTS, GOALS & APPRAISAL (SUBTABS 10 & 11)     -->
+    <!-- SECTION 5: AI INSIGHTS, GOALS & FORMAL APPRAISAL SIGN-OFF    -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="print-page">
-        <div>
-            ${renderHeader(7, 'Insights & Assessment')}
+    <div class="print-page page-break">
+        ${renderHeader('AI Insights & Appraisal')}
 
-            <!-- Subtab 10: AI Performance Insights -->
-            <div class="mb-4">
-                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
-                    <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
-                    AI Personal Performance Insights (Data-Driven Evaluation)
-                </h2>
-                <div class="space-y-2">
-                    ${insights.map(item => `
-                        <div class="p-2.5 rounded-lg border ${item.type === 'win' ? 'bg-emerald-50/60 border-emerald-200' : (item.type === 'attention' ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200')}">
-                            <div class="flex items-center gap-1.5 mb-0.5">
-                                <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${item.type === 'win' ? 'bg-emerald-200 text-emerald-900' : (item.type === 'attention' ? 'bg-rose-200 text-rose-900' : 'bg-slate-200 text-slate-800')}">${esc(item.category)}</span>
-                                <h3 class="text-[11px] font-black text-slate-900">${esc(item.title)}</h3>
-                            </div>
-                            <p class="text-[10px] text-slate-600 leading-snug">${esc(item.message)}</p>
+        <!-- AI Performance Insights -->
+        <div class="mb-4">
+            <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
+                <span class="w-1.5 h-3.5 bg-purple-600 rounded-sm inline-block"></span>
+                AI Personal Performance Insights (Data-Driven Evaluation)
+            </h2>
+            <div class="space-y-2">
+                ${insights.map(item => `
+                    <div class="p-2.5 rounded-lg border ${item.type === 'win' ? 'bg-emerald-50/60 border-emerald-200' : (item.type === 'attention' ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200')}">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${item.type === 'win' ? 'bg-emerald-200 text-emerald-900' : (item.type === 'attention' ? 'bg-rose-200 text-rose-900' : 'bg-slate-200 text-slate-800')}">${esc(item.category)}</span>
+                            <h3 class="text-[11px] font-black text-slate-900">${esc(item.title)}</h3>
                         </div>
-                    `).join('')}
+                        <p class="text-[10px] text-slate-600 leading-snug">${esc(item.message)}</p>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- Monthly OKRs & Goals -->
+        <div class="mb-5">
+            <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
+                Monthly Deliverables, OKRs & Professional Growth
+            </h2>
+            <div class="grid grid-cols-2 gap-3 text-[10px]">
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-purple-700">Production Deliverables Target</div>
+                    <p class="text-slate-600 leading-relaxed">
+                        Completed <strong>${k.completed}</strong> client and internal deliverables with <strong>${k.deliveryScore}%</strong> on-time turnaround. Active backlog stands at <strong>${k.pending}</strong> deliverables in delivery pipeline.
+                    </p>
+                </div>
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-indigo-700">Quality & Skill Development</div>
+                    <p class="text-slate-600 leading-relaxed">
+                        Logged <strong>${k.internalAssigned}</strong> skill acquisition and internal assignments with zero critical defects. First-pass QC score registered at <strong>${data.qc.passPct || 100}%</strong>.
+                    </p>
                 </div>
             </div>
+        </div>
 
-            <!-- Subtab 11: Goals & Assessment -->
-            <div class="mb-5">
-                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5 mb-2">
-                    <span class="w-1.5 h-3.5 bg-indigo-600 rounded-sm inline-block"></span>
-                    Monthly Deliverables, OKRs & Professional Growth
-                </h2>
-                <div class="grid grid-cols-2 gap-3 text-[10px]">
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                        <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-purple-700">Production Deliverables Target</div>
-                        <p class="text-slate-600 leading-relaxed">
-                            Completed <strong>${k.completed}</strong> client and internal deliverables with <strong>${k.deliveryScore}%</strong> on-time turnaround. Active backlog stands at <strong>${k.pending}</strong> deliverables in delivery pipeline.
-                        </p>
-                    </div>
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                        <div class="font-black text-slate-800 uppercase text-[9px] mb-1 text-indigo-700">Quality & Skill Development</div>
-                        <p class="text-slate-600 leading-relaxed">
-                            Logged <strong>${k.internalAssigned}</strong> skill acquisition and internal assignments with zero critical defects. First-pass QC score registered at <strong>${data.qc.passPct || 100}%</strong>.
-                        </p>
+        <!-- Formal Appraisal & Sign-off Section -->
+        <div class="border-t border-slate-200 pt-3">
+            <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide mb-3">
+                Formal Monthly Performance Review & Appraisal Sign-Off
+            </h2>
+            <div class="grid grid-cols-2 gap-6 pt-2">
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Employee Self-Acknowledgment</p>
+                    <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-black text-slate-800">${esc(data.employee.name)}</p>
+                            <p class="text-[9px] text-slate-400">${esc(data.employee.designation)}</p>
+                        </div>
+                        <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
                     </div>
                 </div>
-            </div>
-
-            <!-- Formal Appraisal & Sign-off Section -->
-            <div class="border-t border-slate-200 pt-3">
-                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wide mb-3">
-                    Formal Monthly Performance Review & Appraisal Sign-Off
-                </h2>
-                <div class="grid grid-cols-2 gap-6 pt-2">
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Employee Self-Acknowledgment</p>
-                        <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
-                            <div>
-                                <p class="text-[11px] font-black text-slate-800">${esc(data.employee.name)}</p>
-                                <p class="text-[9px] text-slate-400">${esc(data.employee.designation)}</p>
-                            </div>
-                            <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Reviewing Manager / Operations Admin</p>
+                    <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-black text-slate-800">VilPower Operations Reviewer</p>
+                            <p class="text-[9px] text-slate-400">Creative Delivery & Operations Management</p>
                         </div>
-                    </div>
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-8">Reviewing Manager / Operations Admin</p>
-                        <div class="border-t border-dashed border-slate-300 pt-2 flex items-center justify-between">
-                            <div>
-                                <p class="text-[11px] font-black text-slate-800">VilPower Operations Reviewer</p>
-                                <p class="text-[9px] text-slate-400">Creative Delivery & Operations Management</p>
-                            </div>
-                            <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
-                        </div>
+                        <span class="text-[9px] text-slate-400 font-mono">Date: ____________</span>
                     </div>
                 </div>
             </div>
         </div>
-        ${renderFooter(7)}
+
+        ${renderFooter('AI Insights & Appraisal • Section 5')}
     </div>
 
     <script>
@@ -3239,7 +3329,17 @@
         const isMgr = (typeof window.isManager === 'function' && window.isManager());
         const myEmail = String(window.currentUser?.email || '').toLowerCase().trim();
         const targetEmail = getAuthorizedUserEmail() || myEmail;
-        const employees = Engine.getAllEmployees();
+        const rawEmployees = Engine.getAllEmployees();
+
+        // De-duplicate employees strictly by normalized canonical email
+        const seenEmails = new Set();
+        const employees = [];
+        rawEmployees.forEach(emp => {
+            const norm = Engine.normalizeEmail(emp.email);
+            if (!norm || seenEmails.has(norm)) return;
+            seenEmails.add(norm);
+            employees.push({ ...emp, email: norm });
+        });
 
         if (isAdmin) {
             select.disabled = false;
@@ -3308,6 +3408,21 @@
             MMR.dateMode = preset;
             MMR.customFrom = '';
             MMR.customTo = '';
+
+            const now = new Date();
+            if (preset === 'prev_month') {
+                const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                MMR.selectedYear = prevD.getFullYear();
+                MMR.selectedMonth = prevD.getMonth() + 1;
+            } else if (preset === 'current_month') {
+                MMR.selectedYear = now.getFullYear();
+                MMR.selectedMonth = now.getMonth() + 1;
+            }
+
+            const monthSelect = getEl('mmr-custom-month-select');
+            if (monthSelect) monthSelect.value = String(MMR.selectedMonth);
+            const yearSelect = getEl('mmr-custom-year-select');
+            if (yearSelect) yearSelect.value = String(MMR.selectedYear);
 
             const fromEl = getEl('mmr-date-from');
             const toEl = getEl('mmr-date-to');
@@ -3495,6 +3610,7 @@
             MMR.qcCategoryFilter = catVal;
             if (MMR.cachedReportData) renderQcTab(MMR.cachedReportData);
         },
+        toggleSessionsRow: toggleSessionsRow,
         openTaskDetailModal: openTaskDetailModal,
         closeTaskDetailModal: closeTaskDetailModal,
         exportPdf: exportReportAsPdf,

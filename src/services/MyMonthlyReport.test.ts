@@ -423,21 +423,117 @@ describe('MyMonthlyReport Module Verification', () => {
 
         expect(writtenHtml).toContain('VilPower OneDesk');
         expect(writtenHtml).toContain('Monthly Performance Statement');
-        // Check presence of all 7 pages and 11 subtabs
-        expect(writtenHtml).toContain('Page 1 of 7');
+        // Check presence of all requested sections
         expect(writtenHtml).toContain('Executive Overview &amp; Scorecard');
-        expect(writtenHtml).toContain('Page 2 of 7');
-        expect(writtenHtml).toContain('Jira Tasks');
-        expect(writtenHtml).toContain('Page 3 of 7');
-        expect(writtenHtml).toContain('Internal Tasks');
-        expect(writtenHtml).toContain('Page 4 of 7');
-        expect(writtenHtml).toContain('Timing Breakdown');
-        expect(writtenHtml).toContain('Page 5 of 7');
-        expect(writtenHtml).toContain('QC Quality &amp; Rework');
-        expect(writtenHtml).toContain('Page 6 of 7');
-        expect(writtenHtml).toContain('Attendance &amp; Breaks');
-        expect(writtenHtml).toContain('Page 7 of 7');
-        expect(writtenHtml).toContain('Insights &amp; Assessment');
+        expect(writtenHtml).toContain('Task-Wise Timing List');
+        expect(writtenHtml).toContain('TASK DESCRIPTION');
+        expect(writtenHtml).toContain('TOTAL TIME');
+        expect(writtenHtml).toContain('Overall Quality Score &amp; Rework');
+        expect(writtenHtml).toContain('Overall QC Score');
+        expect(writtenHtml).toContain('Rework & Revision Analysis');
+        expect(writtenHtml).toContain('Attendance with Break Distribution');
+        expect(writtenHtml).toContain('Attendance, Working Hours & Break Distribution');
+        expect(writtenHtml).toContain('AI Insights &amp; Appraisal');
         expect(writtenHtml).toContain('Formal Monthly Performance Review & Appraisal Sign-Off');
+    });
+
+    it('Phase 1 & Phase 2: should resolve canonical employee identities and prevent duplicate selector entries', () => {
+        // Test normalizeEmail mappings
+        expect(mockWindow.OneDeskReportingEngine.normalizeEmail('barath@vilpower.com')).toBe('barathvilpower@gmail.com');
+        expect(mockWindow.OneDeskReportingEngine.normalizeEmail('alex@vilpower.com')).toBe('alexvilpower@gmail.com');
+        expect(mockWindow.OneDeskReportingEngine.normalizeEmail('karthika@vilpower.com')).toBe('karthikavilpower@gmail.com');
+
+        // Test employee de-duplication in getAllEmployees
+        mockWindow.USERS = [
+            { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual' },
+            { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate' }
+        ];
+        mockWindow.allUsersMap = new Map([
+            ['barath@vilpower.com', { email: 'barath@vilpower.com', name: 'Barath Magesh', role: 'Manager' }],
+            ['barathvilpower@gmail.com', { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M', role: 'Manager - Creative Content & Visual' }]
+        ]);
+
+        const employees = mockWindow.OneDeskReportingEngine.getAllEmployees();
+        const barathEntries = employees.filter((e: any) => e.email === 'barathvilpower@gmail.com');
+        expect(barathEntries.length).toBe(1);
+        expect(barathEntries[0].name).toBe('Barath Magesh M');
+    });
+
+    it('Phase 1 & Phase 2: should strictly separate Assigned, Worked, and Unstarted tasks and exclude unstarted from timing tab', () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).getTime();
+
+        mockWindow.tasks = [
+            {
+                id: 'NOV-101',
+                desc: 'Worked Jira Deliverable 1',
+                status: 'Done',
+                assigneeEmail: 'barathvilpower@gmail.com',
+                assignee: 'Barath Magesh M',
+                project: 'NOV',
+                created: startOfMonth + 1000
+            },
+            {
+                id: 'M-102',
+                desc: 'Worked Internal Task',
+                status: 'Completed',
+                manual: true,
+                assigneeEmail: 'barathvilpower@gmail.com',
+                assignee: 'Barath Magesh M',
+                created: startOfMonth + 2000
+            },
+            {
+                id: 'NOV-103',
+                desc: 'Unstarted Backlog Task with 0 sessions',
+                status: 'In Progress',
+                assigneeEmail: 'barathvilpower@gmail.com',
+                assignee: 'Barath Magesh M',
+                project: 'NOV',
+                created: startOfMonth + 3000
+            }
+        ];
+
+        // Only NOV-101 and M-102 have logged time sessions
+        mockWindow.allTimeLogs = [
+            {
+                taskId: 'NOV-101',
+                userId: 'barathvilpower@gmail.com',
+                userName: 'Barath Magesh M',
+                startTime: startOfMonth + 5000,
+                endTime: startOfMonth + 8600000,
+                durationSeconds: 3600
+            },
+            {
+                taskId: 'M-102',
+                userId: 'barathvilpower@gmail.com',
+                userName: 'Barath Magesh M',
+                startTime: startOfMonth + 10000,
+                endTime: startOfMonth + 13600000,
+                durationSeconds: 1800
+            }
+        ];
+
+        mockWindow.currentUser = { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R', role: 'admin' };
+        mockWindow.MyMonthlyReport.handleUserChange('barathvilpower@gmail.com');
+
+        const data = (mockWindow as any).MyMonthlyReportState.cachedReportData;
+        expect(data).toBeDefined();
+
+        // Total Assigned: 3 (NOV-101, M-102, NOV-103)
+        expect(data.kpis.totalAssigned).toBe(3);
+        // Worked Tasks: 2 (NOV-101, M-102)
+        expect(data.kpis.workedTasks).toBe(2);
+        expect(data.workedTasks.length).toBe(2);
+        // Unstarted Tasks: 1 (NOV-103)
+        expect(data.kpis.unstartedTasks).toBe(1);
+        expect(data.unstartedTasks.length).toBe(1);
+        expect(data.unstartedTasks[0].id).toBe('NOV-103');
+
+        // Task-Wise Timing list strictly contains only worked tasks (NOV-103 is excluded)
+        expect(data.timingTasks.length).toBe(2);
+        const timingIds = data.timingTasks.map((t: any) => t.id);
+        expect(timingIds).toContain('NOV-101');
+        expect(timingIds).toContain('M-102');
+        expect(timingIds).not.toContain('NOV-103');
     });
 });

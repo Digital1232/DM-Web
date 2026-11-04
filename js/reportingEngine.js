@@ -163,7 +163,23 @@
 
         normalizeEmail: function (email) {
             if (!email) return '';
-            return String(email).trim().toLowerCase();
+            const raw = String(email).trim().toLowerCase();
+            const CANONICAL_EMAIL_MAP = {
+                'barath@vilpower.com': 'barathvilpower@gmail.com',
+                'alex@vilpower.com': 'alexvilpower@gmail.com',
+                'karthika@vilpower.com': 'karthikavilpower@gmail.com',
+                'immanuel@vilpower.com': 'immanuelvilpower@gmail.com',
+                'muthu@vilpower.com': 'muthuvilpower@gmail.com',
+                'murugesh@vilpower.com': 'murugeshvilpower@gmail.com',
+                'murugeshkumar@vilpower.com': 'murugeshvilpower@gmail.com',
+                'ajith@vilpower.com': 'ajithvilpower@gmail.com',
+                'sneha@vilpower.com': 'snehavilpower@gmail.com',
+                'nanjilvilpower@gmail.com': 'nanjil@vilpower.com',
+                'palani@vilpower.com': 'digitalmarketing@vilpower.com',
+                'palanivilpower@gmail.com': 'digitalmarketing@vilpower.com',
+                'admin@vilpower.com': 'digitalmarketing@vilpower.com'
+            };
+            return CANONICAL_EMAIL_MAP[raw] || raw;
         },
 
         matchesUser: function (entity, targetUserEmail) {
@@ -198,18 +214,25 @@
                 if (fNorm && fNorm === target) return true;
             }
 
-            // 3. User Aliases (Alex, Murugesh, Ajith)
-            const ALEX_EMAILS = ['alexvilpower@gmail.com', 'alex@vilpower.com'];
-            const MURUGESH_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'];
-            const AJITH_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com'];
+            // 3. User Aliases (Alex, Murugesh, Ajith, Barath, Karthika, Immanuel)
+            const ALIAS_GROUPS = [
+                ['alexvilpower@gmail.com', 'alex@vilpower.com'],
+                ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'],
+                ['ajithvilpower@gmail.com', 'ajith@vilpower.com'],
+                ['barathvilpower@gmail.com', 'barath@vilpower.com'],
+                ['karthikavilpower@gmail.com', 'karthika@vilpower.com'],
+                ['immanuelvilpower@gmail.com', 'immanuel@vilpower.com'],
+                ['muthuvilpower@gmail.com', 'muthu@vilpower.com'],
+                ['snehavilpower@gmail.com', 'sneha@vilpower.com']
+            ];
 
-            for (const f of fields) {
-                if (!f) continue;
-                const fNorm = this.normalizeEmail(f);
-                if (fNorm) {
-                    if (ALEX_EMAILS.includes(target) && ALEX_EMAILS.includes(fNorm)) return true;
-                    if (MURUGESH_EMAILS.includes(target) && MURUGESH_EMAILS.includes(fNorm)) return true;
-                    if (AJITH_EMAILS.includes(target) && AJITH_EMAILS.includes(fNorm)) return true;
+            for (const group of ALIAS_GROUPS) {
+                if (group.includes(target)) {
+                    for (const f of fields) {
+                        if (!f) continue;
+                        const fNorm = this.normalizeEmail(f);
+                        if (group.includes(fNorm)) return true;
+                    }
                 }
             }
 
@@ -233,39 +256,53 @@
         },
 
         getAllEmployees: function () {
-            const users = [];
-            const seen = new Set();
+            const usersMap = new Map();
 
             const addUser = (emailRaw, nameRaw, roleRaw, picRaw) => {
                 const email = this.normalizeEmail(emailRaw);
-                if (!email || seen.has(email)) return;
+                if (!email) return;
                 if (email === 'alex@vilpower.com' || email.includes('thanush')) return;
-                seen.add(email);
-                users.push({
+
+                const existing = usersMap.get(email);
+                const name = nameRaw || (existing ? existing.name : email);
+                const role = roleRaw || (existing ? existing.role : 'Team Member');
+                const profilePicture = picRaw || (existing ? existing.profilePicture : '');
+
+                // Prefer fuller display names (e.g. "Barath Magesh M" over "Barath Magesh")
+                let chosenName = name;
+                if (existing && existing.name) {
+                    if (name.length > existing.name.length || (!existing.name.includes(' ') && name.includes(' '))) {
+                        chosenName = name;
+                    } else {
+                        chosenName = existing.name;
+                    }
+                }
+
+                usersMap.set(email, {
                     email,
-                    name: nameRaw || email,
-                    role: roleRaw || 'Team Member',
-                    profilePicture: picRaw || ''
+                    name: chosenName,
+                    role: (role && role !== 'Team Member') ? role : (existing ? existing.role : role),
+                    profilePicture: profilePicture || (existing ? existing.profilePicture : '')
                 });
             };
 
-            // 1. Current user
-            if (typeof window.currentUser !== 'undefined' && window.currentUser && window.currentUser.email) {
-                addUser(window.currentUser.email, window.currentUser.name, window.currentUser.role, window.currentUser.profilePicture);
+            // 1. System USERS catalog first (canonical source of truth for names & roles)
+            if (typeof window.USERS !== 'undefined' && Array.isArray(window.USERS)) {
+                window.USERS.forEach(u => {
+                    addUser(u.email, u.name, u.role || u.designation, u.profilePicture || u.avatar);
+                });
             }
 
-            // 2. allUsersMap
+            // 2. allUsersMap (Firebase users)
             if (typeof window.allUsersMap !== 'undefined' && window.allUsersMap) {
                 Array.from(window.allUsersMap.values()).forEach(u => {
                     addUser(u.email, u.name, u.role || u.designation, u.profilePicture);
                 });
             }
 
-            // 3. System USERS catalog
-            if (typeof window.USERS !== 'undefined' && Array.isArray(window.USERS)) {
-                window.USERS.forEach(u => {
-                    addUser(u.email, u.name, u.role || u.designation, u.profilePicture);
-                });
+            // 3. Current user
+            if (typeof window.currentUser !== 'undefined' && window.currentUser && window.currentUser.email) {
+                addUser(window.currentUser.email, window.currentUser.name, window.currentUser.role, window.currentUser.profilePicture);
             }
 
             // 4. Unique assignee users from task tracking system
@@ -298,7 +335,7 @@
                 });
             }
 
-            return users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            return Array.from(usersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         },
 
         // ─────────────────────────────────────────────────────────────
