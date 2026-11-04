@@ -17314,11 +17314,13 @@
 
             let qcStartTime = null;
             function isPendingQcTask(t) {
-                if (!t) return false;
-                // Exclude internal, DPR, learning, and admin tasks
-                if (typeof isInternalTask === 'function' && isInternalTask(t)) return false;
+                if (!t || !t.id) return false;
+                // Exclude internal routine tasks, DPR, learning, and admin tasks
+                if (typeof isMorningLearningTask === 'function' && isMorningLearningTask(t)) return false;
+                const tIdUp = String(t.id || '').toUpperCase().trim();
+                if (tIdUp.startsWith('LEARN-') || tIdUp.startsWith('MP-') || tIdUp.startsWith('DISC-') || tIdUp.startsWith('P-')) return false;
 
-                // Status must strictly match Quality Check status
+                // Status must match Quality Check status
                 if (typeof isQcStatus === 'function') {
                     if (!isQcStatus(t.status)) return false;
                 } else {
@@ -17328,27 +17330,23 @@
                 }
 
                 // Exclude completed or done tasks
-                if (typeof isDone === 'function' && isDone(t.status)) return false;
-                if (typeof isCompletedTask === 'function' && isCompletedTask(t.status)) return false;
-
-                // Active project key scoping (e.g. NOV; exclude stale historical project keys like OCT)
-                if (!t.manual) {
-                    const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
-                    const tIdUp = String(t.id || '').toUpperCase().trim();
-                    const dash = tIdUp.indexOf('-');
-                    if (dash !== -1) {
-                        const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
-                        if (pKey && pKey !== activePKey) return false;
-                    }
+                const statusLower = String(t.status || '').trim().toLowerCase();
+                if (statusLower === 'done' || statusLower === 'completed' || statusLower === 'design completed' || statusLower === 'posted' || statusLower === 'client sent' || statusLower === 'client approved') {
+                    return false;
                 }
 
-                // Check if task already has an 'Approved' QC report
-                const reports = (typeof allQcReports !== 'undefined' && Array.isArray(allQcReports)) ? allQcReports : (window.allQcReports || []);
-                if (reports && reports.length > 0) {
-                    const taskReports = reports.filter(r => r && (r.taskId === t.id || r.id === t.id));
-                    if (taskReports.length > 0) {
-                        const latest = taskReports.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
-                        if (latest && latest.status === 'Approved') return false;
+                // Project key scoping for Jira tasks (e.g. NOV; exclude stale historical project keys like OCT)
+                if (!t.manual && tIdUp.includes('-')) {
+                    const dash = tIdUp.indexOf('-');
+                    const taskKeyPrefix = tIdUp.substring(0, dash).trim();
+
+                    // Check if it's explicitly marked as a historical reporting-only key (e.g. OCT)
+                    const reportingOnlyKeys = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings))
+                        ? jiraProjectMappings.filter(m => m.forReportingOnly).map(m => String(m.projectKey).toUpperCase().trim())
+                        : ['OCT'];
+
+                    if (taskKeyPrefix && reportingOnlyKeys.includes(taskKeyPrefix)) {
+                        return false;
                     }
                 }
 
@@ -22311,7 +22309,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         renderQcTasks();
                         loadQcReports();
                         if (typeof syncTasks === 'function') {
-                            syncTasks(true).catch(e => console.warn('Background sync on QC open:', e));
+                            syncTasks(true).then(() => { if (typeof renderQcTasks === 'function') renderQcTasks(); }).catch(e => console.warn('Background sync on QC open:', e));
                         }
                     }
                     else if (view === 'reports') {
@@ -29526,6 +29524,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
                     if (typeof checkReworkAndQcTaskPopups === 'function') {
                         checkReworkAndQcTaskPopups();
+                    }
+                    if (typeof renderQcTasks === 'function') {
+                        renderQcTasks();
                     }
                     if (!isAuto && !issues.partial) {
                         const syncTypeLabel = isIncremental ? ' (Quick Sync)' : ' (Full Rebuild)';
@@ -53071,7 +53072,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function isQcStatus(status) {
                 if (!status) return false;
                 const s = String(status).trim().toLowerCase();
-                return s === 'quality check' || s.includes('quality check') || s === 'qc' || s === 'qc pending' || s === 'under qc' || s === 'qc started';
+                return s === 'quality check' ||
+                    s.includes('quality check') ||
+                    s === 'qc' ||
+                    s.startsWith('qc ') ||
+                    s.endsWith(' qc') ||
+                    s.includes(' qc ') ||
+                    s.includes('under qc') ||
+                    s.includes('in qc') ||
+                    s.includes('qc review') ||
+                    s.includes('qc pending') ||
+                    s.includes('qc started') ||
+                    s === 'qa' ||
+                    s === 'quality assurance';
             }
 
             async function sendReworkOrQcNotification(task, newStatus, changedBy) {
