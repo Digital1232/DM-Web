@@ -19110,26 +19110,39 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const curMonthStart = new Date(curMonthKey + '-01T00:00:00').getTime();
 
                 // Helper: determine whether a Jira task id belongs to a past-month project key
-                function _isCurrentMonthJiraTask(t) {
-                    if (!t || !t.id) return true; // internal/manual – always allow
-                    if (t.manual || t.taskType === 'internal') return true;
+                function _isCurrentMonthTask(t, planDateStr) {
+                    if (!t || !t.id) return false;
                     const tIdUp = String(t.id).toUpperCase().trim();
-                    const dash = tIdUp.indexOf('-');
-                    if (dash === -1) return true;
-                    const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
-                    // If we have project mappings, check whether this key maps to the current viewed month
-                    const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
-                    if (mappings.length > 0) {
-                        const entry = mappings.find(m => String(m.projectKey || '').toUpperCase() === pKey);
+
+                    // 1. Jira tasks: check project key prefix against registered mappings
+                    if (!t.manual && t.taskType !== 'internal' && tIdUp.includes('-')) {
+                        const taskPrefix = tIdUp.split('-')[0].trim();
+                        const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
+                        const entry = mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === taskPrefix);
                         if (entry) {
-                            // Allow only if the mapped month matches the currently viewed month
-                            const entryYM = String(entry.year || '').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
+                            if (entry.forReportingOnly) return false;
+                            const entryYM = String(entry.year || '2026').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
                             return entryYM === curMonthKey;
                         }
+                        const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
+                        return taskPrefix === activeKey;
                     }
-                    // Fallback: allow the active project key regardless
-                    const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
-                    return pKey === activeKey;
+
+                    // 2. Manual / Internal tasks: exclude tasks dated in past months
+                    if (t.duedate && String(t.duedate).slice(0, 7) < curMonthKey) {
+                        return false;
+                    }
+                    if (t.postDate && String(t.postDate).slice(0, 7) < curMonthKey) {
+                        return false;
+                    }
+                    if (planDateStr && String(planDateStr).slice(0, 7) < curMonthKey) {
+                        return false;
+                    }
+
+                    return true;
+                }
+                function _isCurrentMonthJiraTask(t) {
+                    return _isCurrentMonthTask(t);
                 }
 
                 // Fast O(1) task lookup map
@@ -19239,6 +19252,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (taskDue.getTime() <= selectedTime) shouldAutoInclude = true;
                         }
                     }
+
+                    // Exclude any tasks not belonging to the current month
+                    if (!_isCurrentMonthTask(task, dateStr)) continue;
 
                     // Condition C: INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES
                     if (!shouldAutoInclude && isInternalTask(task)) {
@@ -52178,7 +52194,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function collectDailyPlanRowsForView(preCollected) {
                 let uniquePlans;
                 if (preCollected && Array.isArray(preCollected)) {
-                    uniquePlans = [...preCollected];
+                    uniquePlans = [...preCollected].filter(t => typeof _isCurrentMonthTask === 'function' ? _isCurrentMonthTask(t, dateStr) : true);
                 } else {
                     const dateStr = document.getElementById('dp-date')?.value || todayIso();
                     uniquePlans = [];
