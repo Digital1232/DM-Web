@@ -124,6 +124,15 @@
          */
         async triggerPushNotification({ userKey, title, body, data }) {
             try {
+                // If on local dev/static server (e.g. Live Server on 127.0.0.1 / localhost),
+                // static servers do not have backend serverless execution for POST /api/send-push (returns 405 Method Not Allowed).
+                const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+                    && (window.location.port !== '' && window.location.port !== '80' && window.location.port !== '443');
+
+                if (isLocalDev && !window.ENABLE_LOCAL_PUSH_SERVER) {
+                    return { success: false, reason: 'skipped_local_dev' };
+                }
+
                 const response = await fetch('/api/send-push', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -134,9 +143,15 @@
                         data: data || {}
                     })
                 });
+
+                if (!response.ok) {
+                    return { success: false, status: response.status };
+                }
+
                 return await response.json();
             } catch (err) {
-                console.warn('[PushManager] Trigger push API call failed (fallback to live in-app):', err);
+                // Silently fallback without noisy console warning
+                return { success: false, error: err?.message };
             }
         }
     };
