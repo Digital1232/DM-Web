@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.65">
+    <meta name="app-version" content="1.0.66">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -4625,12 +4625,6 @@
                                     <select id="all-client-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
                                         <option value="all">All Clients</option>
                                     </select>
-                                    <select id="all-due-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                        <option value="all">All Dates</option>
-                                        <option value="today">Today</option>
-                                        <option value="overdue">Overdue</option>
-                                        <option value="this_week">This Week</option>
-                                    </select>
                                     <div class="relative">
                                         <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
                                         <input id="all-task-search" type="search" placeholder="Search tasks..." autocomplete="off" data-lpignore="true" data-1p-ignore="true"
@@ -4642,6 +4636,20 @@
                                     class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
                                     <iconify-icon icon="solar:add-circle-bold"></iconify-icon> Add Task
                                 </button>
+                            </div>
+                            <!-- Due-date quick toggle (chips with live counts) -->
+                            <div class="px-6 py-3 border-b border-slate-50 flex flex-wrap items-center gap-2">
+                                <span class="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">
+                                    <iconify-icon icon="solar:calendar-linear" width="14"></iconify-icon> Due
+                                </span>
+                                <div id="all-due-chips" class="flex flex-wrap items-center gap-1.5"></div>
+                                <div id="all-due-custom" class="hidden flex flex-wrap items-center gap-1.5">
+                                    <input id="all-due-from" type="date" onchange="onAllDueCustomChange()"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500/20 w-32 sm:w-auto">
+                                    <span class="text-xs text-slate-400">to</span>
+                                    <input id="all-due-to" type="date" onchange="onAllDueCustomChange()"
+                                        class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500/20 w-32 sm:w-auto">
+                                </div>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left">
@@ -30162,39 +30170,161 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
-            // Applies the All-view filters; returns the visible list (active task always kept)
+            // ── Due-date helpers (LOCAL calendar dates — todayIso() is UTC and is a day behind before 5:30 AM IST) ──
+            function localYmd(d) {
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+            function localTodayYmd() { return localYmd(new Date()); }
+
+            // Normalises a task's due date to "YYYY-MM-DD" (or '' when missing/invalid)
+            function taskDueYmd(t) {
+                const raw = t && (t.duedate || t.dueDate);
+                if (!raw) return '';
+                const str = String(raw).trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+                const d = new Date(str);
+                return isNaN(d.getTime()) ? '' : localYmd(d);
+            }
+
+            // Calendar ranges for the due chips, all based on the local date (weeks run Monday → Sunday)
+            function getDueRanges() {
+                const now = new Date(); now.setHours(0, 0, 0, 0);
+                const add = (base, days) => { const d = new Date(base); d.setDate(d.getDate() + days); return d; };
+                const dow = now.getDay(); // 0 = Sunday
+                const weekStart = add(now, dow === 0 ? -6 : 1 - dow);
+                return {
+                    today: localYmd(now),
+                    tomorrow: localYmd(add(now, 1)),
+                    weekFrom: localYmd(weekStart),
+                    weekTo: localYmd(add(weekStart, 6)),
+                    nextWeekFrom: localYmd(add(weekStart, 7)),
+                    nextWeekTo: localYmd(add(weekStart, 13))
+                };
+            }
+
+            const ALL_DUE_CHIPS = [
+                { key: 'all', label: 'All Dates' },
+                { key: 'overdue', label: 'Overdue', icon: 'solar:danger-triangle-bold', tone: 'rose' },
+                { key: 'today', label: 'Today' },
+                { key: 'tomorrow', label: 'Tomorrow' },
+                { key: 'this_week', label: 'This Week' },
+                { key: 'next_week', label: 'Next Week' },
+                { key: 'no_date', label: 'No Date' },
+                { key: 'custom', label: 'Custom', icon: 'solar:calendar-date-linear' }
+            ];
+            let allDueFilter = (() => {
+                const v = localStorage.getItem('worksync_allDueFilter');
+                return ALL_DUE_CHIPS.some(c => c.key === v) ? v : 'all';
+            })();
+
+            // Does task t fall into due bucket "key"? (Overdue = past due and not completed)
+            function matchesDueFilter(t, key, ranges, isDoneFn) {
+                if (key === 'all') return true;
+                const due = taskDueYmd(t);
+                if (key === 'no_date') return !due;
+                if (!due) return false;
+                switch (key) {
+                    case 'overdue': return due < ranges.today && !isDoneFn(t);
+                    case 'today': return due === ranges.today;
+                    case 'tomorrow': return due === ranges.tomorrow;
+                    case 'this_week': return due >= ranges.weekFrom && due <= ranges.weekTo;
+                    case 'next_week': return due >= ranges.nextWeekFrom && due <= ranges.nextWeekTo;
+                    case 'custom': {
+                        const from = document.getElementById('all-due-from')?.value || '';
+                        const to = document.getElementById('all-due-to')?.value || '';
+                        if (from && due < from) return false;
+                        if (to && due > to) return false;
+                        return true;
+                    }
+                }
+                return true;
+            }
+
+            function setAllDueFilter(key) {
+                allDueFilter = key;
+                try { localStorage.setItem('worksync_allDueFilter', key); } catch (e) { }
+                const custom = document.getElementById('all-due-custom');
+                if (custom) custom.classList.toggle('hidden', key !== 'custom');
+                if (key === 'custom') {
+                    const from = document.getElementById('all-due-from');
+                    const to = document.getElementById('all-due-to');
+                    if (from && !from.value && to && !to.value) {
+                        const r = getDueRanges();
+                        from.value = r.weekFrom; to.value = r.weekTo;
+                    }
+                }
+                renderAllTasks();
+            }
+            window.setAllDueFilter = setAllDueFilter;
+
+            function onAllDueCustomChange() {
+                const from = document.getElementById('all-due-from');
+                const to = document.getElementById('all-due-to');
+                // Keep the range the right way round
+                if (from && to && from.value && to.value && from.value > to.value) {
+                    const tmp = from.value; from.value = to.value; to.value = tmp;
+                }
+                renderAllTasks();
+            }
+            window.onAllDueCustomChange = onAllDueCustomChange;
+
+            function renderAllDueChips(counts) {
+                const box = document.getElementById('all-due-chips');
+                if (!box) return;
+                const custom = document.getElementById('all-due-custom');
+                if (custom) custom.classList.toggle('hidden', allDueFilter !== 'custom');
+                box.innerHTML = ALL_DUE_CHIPS.map(c => {
+                    const on = allDueFilter === c.key;
+                    const n = counts[c.key];
+                    const rose = c.tone === 'rose' && n > 0;
+                    const cls = on
+                        ? (rose ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-indigo-600 text-white border-indigo-600 shadow-sm')
+                        : (rose ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300');
+                    const badge = (n === undefined || c.key === 'custom') ? '' :
+                        `<span class="all-due-count text-[10px] font-bold px-1.5 rounded-full ${on ? 'bg-white/25 text-white' : (rose ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500')}">${n}</span>`;
+                    return `<button type="button" data-due="${c.key}" aria-pressed="${on}" onclick="setAllDueFilter('${c.key}')"
+                        class="all-due-chip inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${cls}">${c.icon ? `<iconify-icon icon="${c.icon}" width="13"></iconify-icon>` : ''}${c.label}${badge}</button>`;
+                }).join('');
+            }
+
+            // Applies the All-view filters; returns the visible list (active task always kept).
+            // Also refreshes the due chips with counts that respect every other filter.
             function getAllViewTasks() {
                 const val = id => (document.getElementById(id)?.value || 'all');
                 const status = document.getElementById('all-status-filter')?.value || 'open';
                 const assignee = val('all-assignee-filter');
                 const client = val('all-client-filter');
-                const due = val('all-due-filter');
                 const terms = (document.getElementById('all-task-search')?.value || '').toLowerCase().split(/\s+/).filter(Boolean);
-                const today = todayIso();
-                const now = new Date(); now.setHours(0, 0, 0, 0);
-                const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
-                const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
-                const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-                const wkFrom = ymd(weekStart), wkTo = ymd(weekEnd);
+                const ranges = getDueRanges();
                 const done = t => isDone(t.status) || isInternalDone(t.status);
 
-                return tasks.filter(t => {
+                // 1) every filter except the due date
+                const base = tasks.filter(t => {
                     if (!(isInternalTask(t) || isActiveProjectJiraTask(t))) return false;
-                    if (activeTaskId && t.id === activeTaskId) return true;
                     if (status === 'open' && done(t)) return false;
                     if (status === 'done' && !done(t)) return false;
                     if (assignee === 'me' && !assigneeMatches(t, 'me')) return false;
                     if (assignee !== 'all' && assignee !== 'me' && assigneeName(t) !== assignee) return false;
                     if (client !== 'all' && t.client !== client) return false;
-                    if (due === 'today' && t.duedate !== today) return false;
-                    if (due === 'overdue' && !(t.duedate && t.duedate < today && !done(t))) return false;
-                    if (due === 'this_week' && !(t.duedate && t.duedate >= wkFrom && t.duedate <= wkTo)) return false;
                     if (terms.length) {
                         const text = `${t.id || ''} ${t.desc || t.summary || ''} ${assigneeName(t) || ''} ${t.client || ''}`.toLowerCase();
                         if (!terms.every(w => text.includes(w))) return false;
                     }
                     return true;
                 });
+
+                // 2) chip counts
+                const counts = {};
+                ALL_DUE_CHIPS.forEach(c => { counts[c.key] = base.filter(t => matchesDueFilter(t, c.key, ranges, done)).length; });
+                renderAllDueChips(counts);
+
+                // 3) the due-date filter itself; the running task always stays visible
+                const list = base.filter(t => matchesDueFilter(t, allDueFilter, ranges, done));
+                if (activeTaskId && !list.some(t => t.id === activeTaskId)) {
+                    const active = tasks.find(t => t.id === activeTaskId);
+                    if (active && (isInternalTask(active) || isActiveProjectJiraTask(active))) list.unshift(active);
+                }
+                return list;
             }
 
             function updateTasksSourceSwitch() {
@@ -30241,24 +30371,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const tbody = document.getElementById('all-tasks-tbody');
                 if (!tbody) return;
                 const list = getAllViewTasks();
-                const today = todayIso();
+                const today = localTodayYmd();
                 const done = t => isDone(t.status) || isInternalDone(t.status);
                 list.sort((a, b) => {
                     if (activeTaskId) {
                         if (a.id === activeTaskId) return -1;
                         if (b.id === activeTaskId) return 1;
                     }
-                    return (a.duedate || '9999-99-99').localeCompare(b.duedate || '9999-99-99');
+                    return (taskDueYmd(a) || '9999-99-99').localeCompare(taskDueYmd(b) || '9999-99-99');
                 });
                 if (!list.length) {
-                    tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found${allDueFilter !== 'all' ? ' for this date filter' : ''}.</td></tr>`;
                     return;
                 }
                 const MAX_ROWS = 400;
                 const rows = list.slice(0, MAX_ROWS).map(t => {
                     const internal = isInternalTask(t);
                     const isActive = activeTaskId === t.id;
-                    const overdue = t.duedate && t.duedate < today && !done(t);
+                    const dueYmd = taskDueYmd(t);
+                    const overdue = dueYmd && dueYmd < today && !done(t);
                     const keyHtml = (t.manual || internal)
                         ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${escapeHtml(t.id)}</button>`
                         : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${escapeHtml(t.id)}</a>`;
@@ -30266,8 +30397,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         ? '<span class="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 align-middle">Internal</span>'
                         : '<span class="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 align-middle">Jira</span>';
                     let dueHtml = '—';
-                    if (t.duedate) {
-                        const [y, m, d] = t.duedate.split('-').map(Number);
+                    if (dueYmd) {
+                        const [y, m, d] = dueYmd.split('-').map(Number);
                         const ds = new Date(y, (m || 1) - 1, d || 1).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
                         dueHtml = overdue
                             ? `<span class="flex items-center gap-1.5 text-rose-600 font-bold"><iconify-icon icon="solar:danger-triangle-bold" width="14"></iconify-icon>${ds}</span>`
