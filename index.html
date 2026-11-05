@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.64">
+    <meta name="app-version" content="1.0.65">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -548,6 +548,15 @@
 
         html.dark .bg-slate-200 {
             background-color: #253347 !important;
+        }
+
+        html.dark #tasks-source-pill {
+            background-color: #334155 !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+        }
+
+        html.dark .tasks-source-btn.text-slate-900 {
+            color: #f8fafc !important;
         }
 
         html.dark .border-slate-100 {
@@ -4571,12 +4580,8 @@
 
                     <!-- Tasks Hub Tabs -->
                     <div class="flex items-center gap-2 border-b border-slate-100 pb-2 overflow-x-auto">
-                        <button onclick="switchTasksTab('jira')" id="tab-btn-jira"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0">Client
-                            / Jira Tasks</button>
-                        <button onclick="switchTasksTab('internal')" id="tab-btn-internal"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0">Internal
-                            Tasks</button>
+                        <button onclick="switchTasksTab(window.taskSourceMode || 'all')" id="tab-btn-jira"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0">Tasks</button>
                         <button onclick="switchTasksTab('dailyplan')" id="tab-btn-dailyplan"
                             class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0">Daily
                             Plan</button>
@@ -4584,6 +4589,80 @@
                             class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0">Today's
                             Completed</button>
                     </div>
+
+                    <!-- ── Source switch: All / Jira / Internal ── -->
+                    <div id="tasks-source-switch" class="flex">
+                        <div class="relative flex items-center bg-slate-100 rounded-2xl p-1 w-full sm:w-auto">
+                            <span id="tasks-source-pill" class="absolute left-0 rounded-xl bg-white shadow-sm transition-all duration-200 ease-out" style="top:4px;bottom:4px;"></span>
+                            <button type="button" data-source="all" onclick="switchTasksTab('all')"
+                                class="tasks-source-btn relative z-10 flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-2 text-slate-500">
+                                All <span id="tasks-source-count-all" class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600">0</span>
+                            </button>
+                            <button type="button" data-source="jira" onclick="switchTasksTab('jira')"
+                                class="tasks-source-btn relative z-10 flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-2 text-slate-500">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>Jira <span id="tasks-source-count-jira" class="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">0</span>
+                            </button>
+                            <button type="button" data-source="internal" onclick="switchTasksTab('internal')"
+                                class="tasks-source-btn relative z-10 flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-2 text-slate-500">
+                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>Internal <span id="tasks-source-count-internal" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">0</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ── All Tasks (Jira + Internal combined) ── -->
+                    <div id="tasks-tab-all" class="space-y-4 hidden">
+                        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                            <div class="p-6 border-b border-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <select id="all-status-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="open">Open Tasks</option>
+                                        <option value="all">All Status</option>
+                                        <option value="done">Completed</option>
+                                    </select>
+                                    <select id="all-assignee-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="all">All Assignees</option>
+                                    </select>
+                                    <select id="all-client-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="all">All Clients</option>
+                                    </select>
+                                    <select id="all-due-filter" onchange="renderAllTasks()" class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                        <option value="all">All Dates</option>
+                                        <option value="today">Today</option>
+                                        <option value="overdue">Overdue</option>
+                                        <option value="this_week">This Week</option>
+                                    </select>
+                                    <div class="relative">
+                                        <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-2.5 text-slate-400" width="16"></iconify-icon>
+                                        <input id="all-task-search" type="search" placeholder="Search tasks..." autocomplete="off" data-lpignore="true" data-1p-ignore="true"
+                                            oninput="renderAllTasks()"
+                                            class="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl pl-9 pr-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-40">
+                                    </div>
+                                </div>
+                                <button onclick="openAddTaskModal()"
+                                    class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
+                                    <iconify-icon icon="solar:add-circle-bold"></iconify-icon> Add Task
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left">
+                                    <thead class="bg-slate-50/50">
+                                        <tr>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Task Key</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Task</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell">Client</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell">Assignee</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:table-cell">Priority</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Due Date</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="all-tasks-tbody" class="divide-y divide-slate-50"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div><!-- /tasks-tab-all -->
 
                     <!-- ── Jira Tasks Tab ── -->
                     <div id="tasks-tab-jira" class="space-y-4">
@@ -4824,6 +4903,7 @@
                                                         id="sort-task-duedate" icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
                                             <th
                                                 class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
                                                 Action</th>
@@ -5026,6 +5106,7 @@
                                                         icon="solar:sort-vertical-linear"
                                                         class="opacity-40 group-hover:opacity-100"></iconify-icon></div>
                                             </th>
+                                            <th class="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
                                             <th
                                                 class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
                                                 Action</th>
@@ -16853,7 +16934,7 @@
             let internalTaskSortDir = 'asc';
             let currentInternalTaskViewMode = 'list';
             let internalBoardColumnOrder = null;
-            let activeTasksTab = localStorage.getItem('worksync_activeTasksTab') || 'jira'; // tracks which tab is active inside Tasks Hub
+            let activeTasksTab = localStorage.getItem('worksync_activeTasksTab') || 'all'; // tracks which tab is active inside Tasks Hub
             let activeTaskId = null;
             let dismissedDiscussionIds = [];
             let wasPausedByDiscussionHold = false;
@@ -22152,6 +22233,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const jiraTab = document.getElementById('tasks-tab-jira');
                     const intTab = document.getElementById('tasks-tab-internal');
+                    const allTab = document.getElementById('tasks-tab-all');
+                    const sourceSwitch = document.getElementById('tasks-source-switch');
                     const dpTab = document.getElementById('tasks-tab-dailyplan');
                     const completedTab = document.getElementById('tasks-tab-completed');
                     const btnJira = document.getElementById('tab-btn-jira');
@@ -22169,6 +22252,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Hide ALL tabs
                     jiraTab.classList.add('hidden');
                     intTab.classList.add('hidden');
+                    if (allTab) allTab.classList.add('hidden');
                     if (dpTab) dpTab.classList.add('hidden');
                     if (completedTab) completedTab.classList.add('hidden');
 
@@ -22178,7 +22262,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (btnDp) btnDp.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0';
                     if (btnCompleted) btnCompleted.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-600 hover:bg-slate-100 whitespace-nowrap flex-shrink-0';
 
-                    if (tab === 'jira') {
+                    // Jira / Internal / All live under the single "Tasks" tab, chosen by the source switch
+                    const isSourceTab = tab === 'all' || tab === 'jira' || tab === 'internal';
+                    if (sourceSwitch) sourceSwitch.classList.toggle('hidden', !isSourceTab);
+                    if (isSourceTab) {
+                        window.taskSourceMode = tab;
+                        if (btnJira) btnJira.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
+                    }
+                    try { localStorage.setItem('worksync_activeTasksTab', tab); } catch (e) { }
+
+                    if (tab === 'all') {
+                        activeTasksTab = 'all';
+                        if (allTab) allTab.classList.remove('hidden');
+                        try { populateAllTaskFilters(); } catch (e) { console.error('All filter err:', e); }
+                        renderAllTasks();
+                        if (typeof ensureAllRecurringTasks === 'function') ensureAllRecurringTasks();
+                    } else if (tab === 'jira') {
                         activeTasksTab = 'jira';
                         jiraTab.classList.remove('hidden');
                         if (btnJira) btnJira.className = 'px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-100 whitespace-nowrap flex-shrink-0';
@@ -22213,6 +22312,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         initCompletedTasksTab();
                     }
 
+                    if (isSourceTab) requestAnimationFrame(updateTasksSourceSwitch);
                     console.log(`[switchTasksTab END] Switched to: ${tab}, activeTasksTab: ${activeTasksTab}`);
                 } catch (e) {
                     console.error('switchTasksTab failed:', e);
@@ -29977,7 +30077,236 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════════════
+            // TASKS HUB — Time column + All / Jira / Internal source switch
+            // ═══════════════════════════════════════════════════════════════════
+
+            // Per-task logged time, built from allTimeLogs (cached until the logs change)
+            let _taskTimeCache = { src: null, len: -1, day: '', map: new Map() };
+            function getTaskTimeTotals() {
+                const logs = Array.isArray(allTimeLogs) ? allTimeLogs : [];
+                const day = todayIso();
+                if (_taskTimeCache.src === logs && _taskTimeCache.len === logs.length && _taskTimeCache.day === day) return _taskTimeCache.map;
+                const todayStart = new Date().setHours(0, 0, 0, 0);
+                const map = new Map();
+                for (const log of logs) {
+                    if (!log || !log.taskId) continue;
+                    const secs = Number(log.durationSeconds) || 0;
+                    if (secs <= 0) continue;
+                    const id = String(log.taskId);
+                    let e = map.get(id);
+                    if (!e) { e = { total: 0, today: 0, sessions: 0 }; map.set(id, e); }
+                    e.total += secs;
+                    e.sessions += 1;
+                    if ((Number(log.endTime) || Number(log.startTime) || 0) >= todayStart) e.today += secs;
+                }
+                _taskTimeCache = { src: logs, len: logs.length, day, map };
+                return map;
+            }
+
+            function formatShortDuration(s) {
+                s = Math.max(0, Math.floor(s || 0));
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+                if (h) return `${h}h ${String(m).padStart(2, '0')}m`;
+                if (m) return `${m}m`;
+                return s ? '<1m' : '0m';
+            }
+
+            function renderTaskTimeCell(t) {
+                const e = getTaskTimeTotals().get(String(t.id)) || { total: 0, today: 0, sessions: 0 };
+                if (activeTaskId && t.id === activeTaskId) {
+                    const sessions = e.sessions + 1;
+                    const tip = `Logged earlier: ${formatShortDuration(e.total)} · ${sessions} session${sessions > 1 ? 's' : ''}`;
+                    if (taskOnHold) {
+                        return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-amber-600" title="On hold · ${tip}"><iconify-icon icon="solar:pause-circle-bold" width="12"></iconify-icon>${formatTime(e.total + (taskSeconds || 0))}</span>`;
+                    }
+                    return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-600" title="Running · ${tip}"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span><span class="task-live-time" data-base="${e.total}">${formatTime(e.total + (taskSeconds || 0))}</span></span>`;
+                }
+                if (!e.total) return '<span class="text-xs text-slate-300">—</span>';
+                const tip = `Today ${formatShortDuration(e.today)} · ${e.sessions} session${e.sessions > 1 ? 's' : ''}`;
+                return `<span class="text-xs font-semibold text-slate-700" title="${tip}">${formatShortDuration(e.total)}</span>${e.today ? `<div class="text-[10px] text-slate-400">${formatShortDuration(e.today)} today</div>` : ''}`;
+            }
+            window.renderTaskTimeCell = renderTaskTimeCell;
+
+            // Same project-key rule the Jira list uses (only the active Jira project, e.g. NOV)
+            function isActiveProjectJiraTask(t) {
+                if (isInternalTask(t)) return false;
+                if (t.manual) return true;
+                const tIdUp = String(t.id || '').toUpperCase().trim();
+                const dash = tIdUp.indexOf('-');
+                if (dash === -1) return true;
+                const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
+                const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
+                return pKey === activePKey || !pKey;
+            }
+
+            window.taskSourceMode = ['all', 'jira', 'internal'].includes(activeTasksTab) ? activeTasksTab : 'all';
+
+            function populateAllTaskFilters() {
+                const aSel = document.getElementById('all-assignee-filter');
+                const cSel = document.getElementById('all-client-filter');
+                const pool = tasks.filter(t => isInternalTask(t) || isActiveProjectJiraTask(t));
+                if (aSel) {
+                    const cur = aSel.value || 'all';
+                    const names = [...new Set(pool.map(t => assigneeName(t)).filter(n => n && n !== '—'))].sort((a, b) => a.localeCompare(b));
+                    aSel.innerHTML = `<option value="all">All Assignees</option><option value="me">Assigned to me</option>` +
+                        names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+                    aSel.value = [...aSel.options].some(o => o.value === cur) ? cur : 'all';
+                }
+                if (cSel) {
+                    const cur = cSel.value || 'all';
+                    const clients = [...new Set(pool.map(t => t.client).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+                    cSel.innerHTML = `<option value="all">All Clients</option>` +
+                        clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                    cSel.value = [...cSel.options].some(o => o.value === cur) ? cur : 'all';
+                }
+            }
+
+            // Applies the All-view filters; returns the visible list (active task always kept)
+            function getAllViewTasks() {
+                const val = id => (document.getElementById(id)?.value || 'all');
+                const status = document.getElementById('all-status-filter')?.value || 'open';
+                const assignee = val('all-assignee-filter');
+                const client = val('all-client-filter');
+                const due = val('all-due-filter');
+                const terms = (document.getElementById('all-task-search')?.value || '').toLowerCase().split(/\s+/).filter(Boolean);
+                const today = todayIso();
+                const now = new Date(); now.setHours(0, 0, 0, 0);
+                const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+                const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+                const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                const wkFrom = ymd(weekStart), wkTo = ymd(weekEnd);
+                const done = t => isDone(t.status) || isInternalDone(t.status);
+
+                return tasks.filter(t => {
+                    if (!(isInternalTask(t) || isActiveProjectJiraTask(t))) return false;
+                    if (activeTaskId && t.id === activeTaskId) return true;
+                    if (status === 'open' && done(t)) return false;
+                    if (status === 'done' && !done(t)) return false;
+                    if (assignee === 'me' && !assigneeMatches(t, 'me')) return false;
+                    if (assignee !== 'all' && assignee !== 'me' && assigneeName(t) !== assignee) return false;
+                    if (client !== 'all' && t.client !== client) return false;
+                    if (due === 'today' && t.duedate !== today) return false;
+                    if (due === 'overdue' && !(t.duedate && t.duedate < today && !done(t))) return false;
+                    if (due === 'this_week' && !(t.duedate && t.duedate >= wkFrom && t.duedate <= wkTo)) return false;
+                    if (terms.length) {
+                        const text = `${t.id || ''} ${t.desc || t.summary || ''} ${assigneeName(t) || ''} ${t.client || ''}`.toLowerCase();
+                        if (!terms.every(w => text.includes(w))) return false;
+                    }
+                    return true;
+                });
+            }
+
+            function updateTasksSourceSwitch() {
+                const mode = window.taskSourceMode || 'all';
+                const wrap = document.getElementById('tasks-source-switch');
+                if (!wrap) return;
+                const btns = [...wrap.querySelectorAll('.tasks-source-btn')];
+                const pill = document.getElementById('tasks-source-pill');
+                btns.forEach(b => {
+                    const on = b.dataset.source === mode;
+                    b.classList.toggle('text-slate-900', on);
+                    b.classList.toggle('text-slate-500', !on);
+                    if (on && pill && b.offsetWidth) {
+                        pill.style.width = b.offsetWidth + 'px';
+                        pill.style.transform = `translateX(${b.offsetLeft}px)`;
+                    }
+                });
+                // Counts = open tasks per source (running task always counted)
+                const isOpen = t => (activeTaskId && t.id === activeTaskId) || !(isDone(t.status) || isInternalDone(t.status));
+                let jira = 0, internal = 0;
+                for (const t of tasks) {
+                    if (!isOpen(t)) continue;
+                    if (isInternalTask(t)) internal++;
+                    else if (isActiveProjectJiraTask(t)) jira++;
+                }
+                const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+                set('tasks-source-count-all', jira + internal);
+                set('tasks-source-count-jira', jira);
+                set('tasks-source-count-internal', internal);
+            }
+
+            let _allTasksRaf = null;
+            function scheduleTasksHubRefresh() {
+                if (activeView !== 'tasks') return;
+                if (_allTasksRaf) return;
+                _allTasksRaf = requestAnimationFrame(() => {
+                    _allTasksRaf = null;
+                    updateTasksSourceSwitch();
+                    if (activeTasksTab === 'all') renderAllTasks();
+                });
+            }
+
+            function renderAllTasks() {
+                const tbody = document.getElementById('all-tasks-tbody');
+                if (!tbody) return;
+                const list = getAllViewTasks();
+                const today = todayIso();
+                const done = t => isDone(t.status) || isInternalDone(t.status);
+                list.sort((a, b) => {
+                    if (activeTaskId) {
+                        if (a.id === activeTaskId) return -1;
+                        if (b.id === activeTaskId) return 1;
+                    }
+                    return (a.duedate || '9999-99-99').localeCompare(b.duedate || '9999-99-99');
+                });
+                if (!list.length) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found.</td></tr>`;
+                    return;
+                }
+                const MAX_ROWS = 400;
+                const rows = list.slice(0, MAX_ROWS).map(t => {
+                    const internal = isInternalTask(t);
+                    const isActive = activeTaskId === t.id;
+                    const overdue = t.duedate && t.duedate < today && !done(t);
+                    const keyHtml = (t.manual || internal)
+                        ? `<button onclick="openEditTaskModal('${t.id}')" class="hover:underline hover:text-indigo-800 transition-colors text-left">${escapeHtml(t.id)}</button>`
+                        : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${escapeHtml(t.id)}</a>`;
+                    const srcTag = internal
+                        ? '<span class="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 align-middle">Internal</span>'
+                        : '<span class="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 align-middle">Jira</span>';
+                    let dueHtml = '—';
+                    if (t.duedate) {
+                        const [y, m, d] = t.duedate.split('-').map(Number);
+                        const ds = new Date(y, (m || 1) - 1, d || 1).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                        dueHtml = overdue
+                            ? `<span class="flex items-center gap-1.5 text-rose-600 font-bold"><iconify-icon icon="solar:danger-triangle-bold" width="14"></iconify-icon>${ds}</span>`
+                            : `<span class="text-slate-600">${ds}</span>`;
+                    }
+                    const actions = isActive ? `
+                        <div class="flex items-center justify-end gap-2">
+                            <button onclick="${taskOnHold ? 'resumeTaskTimer()' : 'holdTask()'}" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all ${taskOnHold ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}">
+                                <iconify-icon icon="${taskOnHold ? 'solar:play-circle-bold' : 'solar:pause-circle-bold'}" width="16"></iconify-icon> ${taskOnHold ? 'Resume' : 'Hold'}
+                            </button>
+                            <button onclick="endTask()" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all bg-rose-600 hover:bg-rose-700 text-white shadow-lg">
+                                <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End
+                            </button>
+                        </div>` : `
+                        <button onclick="toggleActiveTask('${t.id}')" class="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-xl transition-all ${t.isOnHold ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'}">
+                            <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> ${t.isOnHold ? 'Resume' : 'Start'}
+                        </button>`;
+                    return `
+                    <tr data-task-id="${t.id}" class="task-row group hover:bg-slate-50 transition-colors ${isActive ? 'bg-indigo-50/30' : ''} ${overdue ? 'bg-rose-50/30' : ''}">
+                        <td class="px-4 py-4 text-xs font-mono font-bold text-indigo-600 whitespace-nowrap">${keyHtml}</td>
+                        <td class="px-4 py-4 max-w-sm text-xs text-slate-900 whitespace-normal break-words">${escapeHtml(t.desc || t.summary || t.title || '')}${srcTag}</td>
+                        <td class="px-4 py-4"><span class="text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${statusClass(t.status)}">${escapeHtml(t.status || '—')}</span>${t.isOnHold && !isActive ? `<span class="ml-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">On Hold</span>` : ''}</td>
+                        <td class="px-4 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${escapeHtml(t.client || '—')}</td>
+                        <td class="px-4 py-4 hidden lg:table-cell text-xs text-slate-600 font-medium">${escapeHtml(assigneeName(t))}</td>
+                        <td class="px-4 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${escapeHtml(t.priority || 'Medium')}</span></td>
+                        <td class="px-4 py-4 text-xs font-medium whitespace-nowrap">${dueHtml}</td>
+                        <td class="px-4 py-4 whitespace-nowrap">${renderTaskTimeCell(t)}</td>
+                        <td class="px-4 py-4 text-right">${actions}</td>
+                    </tr>`;
+                });
+                if (list.length > MAX_ROWS) {
+                    rows.push(`<tr><td colspan="9" class="px-6 py-4 text-center text-[11px] text-slate-400">Showing first ${MAX_ROWS} of ${list.length} tasks — use the filters to narrow down.</td></tr>`);
+                }
+                tbody.innerHTML = rows.join('');
+            }
+            window.renderAllTasks = renderAllTasks;
+
             function renderTasks() {
+                scheduleTasksHubRefresh();
                 const tbody = document.getElementById('tasks-tbody');
                 const kanban = document.getElementById('task-kanban-container');
                 let filtered = tasks.filter(t => !isInternalTask(t));
@@ -30202,7 +30531,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </div>`;
                     }).join('');
                 } else {
-                    if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found.</td></tr>`; return; }
+                    if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="10" class="px-6 py-10 text-center text-xs text-slate-400">No tasks found.</td></tr>`; return; }
                     // Apply saved custom order with O(1) index map
                     if (jiraTaskOrder.length && !taskSortCol) {
                         const orderMap = new Map();
@@ -30265,6 +30594,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         </td>
                         <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${t.priority}</span></td>
                         <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
+                        <td class="px-4 py-4 whitespace-nowrap">${renderTaskTimeCell(t)}</td>
                         <td class="px-6 py-4 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 ${editBtn}
@@ -30367,6 +30697,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderInternalTasks() {
+                scheduleTasksHubRefresh();
                 const tbody = document.getElementById('internal-tasks-tbody');
                 if (!tbody) return;
 
@@ -30649,7 +30980,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('internal-task-list-container').classList.remove('hidden');
 
                 if (!filtered.length) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-xs text-slate-400">No internal tasks found.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="10" class="px-6 py-10 text-center text-xs text-slate-400">No internal tasks found.</td></tr>`;
                     return;
                 }
 
@@ -30707,6 +31038,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </td>
                     <td class="px-6 py-4 hidden md:table-cell"><span class="text-[10px] font-bold ${priorityClass(t.priority)}">${escapeHtml(t.priority || 'Medium')}</span></td>
                     <td class="px-6 py-4 text-xs font-medium">${dueDateHtml}</td>
+                    <td class="px-4 py-4 whitespace-nowrap">${renderTaskTimeCell(t)}</td>
                     <td class="px-6 py-4 text-right">
                         <div class="flex items-center justify-end gap-1">
                             <button onclick="openEditTaskModal('${t.id}')" class="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors" title="Edit Task"><iconify-icon icon="solar:pen-linear" width="16"></iconify-icon></button>
@@ -32888,6 +33220,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const el = document.getElementById('task-timer-display');
                     if (el) el.textContent = formatTime(taskSeconds);
+                    // Live "Time" column in Tasks Hub lists (logged time + current session)
+                    document.querySelectorAll('.task-live-time').forEach(liveEl => {
+                        liveEl.textContent = formatTime((Number(liveEl.dataset.base) || 0) + (taskSeconds || 0));
+                    });
 
                     // Periodic sync with DB (resilient to setInterval throttling in background tabs)
                     if (taskSeconds > 0 && (taskSeconds - lastCurrentTaskSyncSec >= 30 || taskSeconds % 60 === 0)) {
