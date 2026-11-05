@@ -52,8 +52,15 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
+      # The ubuntu runner already ships an Android SDK (ANDROID_HOME is set).
+      # android-actions/setup-android@v3 started failing in sdkmanager, so just
+      # use the preinstalled SDK and make sure its licenses are accepted.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -n 1)
+          echo "Using $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
