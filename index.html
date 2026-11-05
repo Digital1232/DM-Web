@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.67">
+    <meta name="app-version" content="1.0.68">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -19566,6 +19566,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function finishLogin() {
                 if (appInitialized) return;
                 appInitialized = true;
+                // A successful login ends any earlier explicit logout in this tab
+                window._isExplicitLoggingOut = false;
+                try { sessionStorage.removeItem('worksync_explicit_logout'); } catch (e) { }
                 console.log("Initializing workspace for", currentUser.email);
 
                 // Shrink this user's oversized stored profile photo once startup has settled
@@ -19803,32 +19806,41 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     window._isExplicitLoggingOut = true;
                     try { sessionStorage.setItem('worksync_explicit_logout', 'true'); } catch (e) { }
 
-                    // Mark user as offline in Firebase
+                    // Mark user as offline in Firebase. On a bad connection these writes wait for the
+                    // server forever, so don't let them hold up logout (Firebase still sends them later).
+                    const settleWithin = (p, ms) => Promise.race([Promise.resolve(p).catch(() => { }), new Promise(r => setTimeout(r, ms))]);
                     if (db && currentUser) {
                         try {
-                            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false).catch(() => {});
+                            await settleWithin(set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false), 2500);
                         } catch (e) { }
 
                         if (activeTaskId) {
                             try {
-                                await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                                await settleWithin(saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working'), 2500);
                             } catch (e) { }
                         }
                     }
 
-                    // Reset all stored local and session data
+                    // Reset stored login data.
+                    // Logging out does NOT end the working day: the check-in (and any running break) stays
+                    // saved so the day continues after logging back in — only Check Out clears it.
+                    // Remember whose check-in it is, so a different user on this browser doesn't inherit it.
+                    if (currentUser && currentUser.email) {
+                        try { localStorage.setItem('worksync_checkin_owner', String(currentUser.email).toLowerCase()); } catch (e) { }
+                    }
                     localStorage.removeItem('worksync_user');
-                    localStorage.removeItem('worksync_active_task');
+                    localStorage.removeItem('worksync_active_task'); // task state was saved to Firebase above
                     localStorage.removeItem('worksync_toasted_notifs');
-                    localStorage.removeItem('worksync_timerState');
-                    localStorage.removeItem('worksync_checkInTime');
-                    localStorage.removeItem('worksync_totalBreakDuration');
-                    localStorage.removeItem('worksync_breakStartTime');
+
+                    // Stop the on-screen clocks (they restart from the saved check-in on next login)
+                    try { clearInterval(timerRef); timerRef = null; } catch (e) { }
+                    try { if (typeof stopTaskTimer === 'function') stopTaskTimer(); } catch (e) { }
+                    try { if (typeof stopBreakTimer === 'function') stopBreakTimer(); } catch (e) { }
 
                     // Sign out from Firebase Auth
                     if (auth && typeof signOut === 'function') {
                         try {
-                            await signOut(auth);
+                            await Promise.race([signOut(auth), new Promise(r => setTimeout(r, 4000))]);
                             console.log('[logout] Successfully signed out from Firebase');
                         } catch (e) {
                             console.warn('[logout] Firebase signOut non-fatal:', e);
@@ -21962,6 +21974,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function restoreTimerState() {
+                // A saved check-in belongs to the user who made it. If someone else logs in on this
+                // browser, ignore the other person's local check-in (their own is restored from Firebase).
+                try {
+                    const me = String(currentUser?.email || '').toLowerCase();
+                    const owner = localStorage.getItem('worksync_checkin_owner');
+                    if (me) {
+                        if (owner && owner !== me) {
+                            localStorage.removeItem('worksync_timerState');
+                            localStorage.removeItem('worksync_checkInTime');
+                            localStorage.removeItem('worksync_totalBreakDuration');
+                            localStorage.removeItem('worksync_breakStartTime');
+                        }
+                        localStorage.setItem('worksync_checkin_owner', me);
+                    }
+                } catch (e) { }
                 const state = localStorage.getItem('worksync_timerState');
                 const ciTime = parseInt(localStorage.getItem('worksync_checkInTime'), 10);
                 if (!state || !ciTime) {
