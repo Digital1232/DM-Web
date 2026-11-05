@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.66">
+    <meta name="app-version" content="1.0.67">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -29,6 +29,20 @@
          the cdn.tailwindcss.com script was removed because it generated no CSS. -->
     <link rel="stylesheet" href="dist/output.css">
     <link rel="stylesheet" href="mobile-app.css">
+    <link rel="stylesheet" href="app-realistic-ui.css">
+    <script>
+        // Local calendar date as "YYYY-MM-DD". Use this instead of toISOString().slice(0, 10),
+        // which is UTC and gives yesterday's date in India between midnight and 5:30 AM.
+        if (!Date.prototype.toLocalYMD) {
+            Object.defineProperty(Date.prototype, 'toLocalYMD', {
+                value: function () {
+                    if (isNaN(this.getTime())) throw new RangeError('Invalid time value');
+                    return this.getFullYear() + '-' + String(this.getMonth() + 1).padStart(2, '0') + '-' + String(this.getDate()).padStart(2, '0');
+                },
+                writable: true, configurable: true, enumerable: false
+            });
+        }
+    </script>
     <script>
         // Quiet console in production: console.log/info/debug are muted for users.
         // Warnings and errors always show. Enable full logs with ?debug=1 (remembered)
@@ -3053,7 +3067,7 @@
                 if (!selectEl) return;
 
                 const dateEl = document.getElementById('weekly-assign-date');
-                const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toISOString().split('T')[0];
+                const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toLocalYMD();
 
                 let targetYear, targetMonth;
                 if (dateVal && /^\d{4}-\d{2}/.test(dateVal)) {
@@ -3493,7 +3507,7 @@
 
             function setWeeklyTaskModalDateToToday() {
                 const dateEl = document.getElementById('weekly-assign-date');
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocalYMD();
                 if (dateEl) {
                     dateEl.value = todayStr;
                     handleWeeklyTaskModalDateChange();
@@ -3539,14 +3553,14 @@
                     if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
                         const now = new Date();
                         if (strategyCurrentDate.getFullYear() === now.getFullYear() && strategyCurrentDate.getMonth() === now.getMonth()) {
-                            dateStr = now.toISOString().split('T')[0];
+                            dateStr = now.toLocalYMD();
                         } else {
                             const y = strategyCurrentDate.getFullYear();
                             const m = String(strategyCurrentDate.getMonth() + 1).padStart(2, '0');
                             dateStr = `${y}-${m}-01`;
                         }
                     } else {
-                        dateStr = new Date().toISOString().split('T')[0];
+                        dateStr = new Date().toLocalYMD();
                     }
                 }
 
@@ -3583,7 +3597,7 @@
                     clientEl.value = targetClient;
                 }
 
-                if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
+                if (dateEl) dateEl.value = dateStr || new Date().toLocalYMD();
                 if (ownerEl) ownerEl.value = '';
                 if (formatEl) formatEl.value = 'Poster';
 
@@ -3635,7 +3649,7 @@
                 const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
                 const title = titleEl ? titleEl.value.trim() : '';
                 const client = clientEl ? clientEl.value : 'Genesys';
-                const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+                const dateStr = dateEl ? dateEl.value : new Date().toLocalYMD();
                 const owner = ownerEl ? ownerEl.value : '';
                 const format = formatEl ? formatEl.value : 'Poster';
 
@@ -16543,7 +16557,7 @@
                             return dueDate < today;
                         });
                     } else if (filters.dueDateFilter === 'today') {
-                        const todayStr = today.toISOString().slice(0, 10);
+                        const todayStr = today.toLocalYMD();
                         result = result.filter(t => t.duedate === todayStr);
                     } else if (filters.dueDateFilter === 'this_week') {
                         const startOfWeek = new Date(today);
@@ -16983,6 +16997,37 @@
             let taskOnHold = false;
             let taskStartTime = null;
             let activeTimerSessionId = null;
+            function isSameTaskId(a, b) {
+                if (!a || !b) return false;
+                return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+            }
+            window.isSameTaskId = isSameTaskId;
+
+            // Immediate 0ms synchronous restore so activeTaskId is NEVER null at any point of startup
+            try {
+                const _rawActive = localStorage.getItem('worksync_active_task');
+                if (_rawActive) {
+                    const _d = JSON.parse(_rawActive);
+                    if (_d && _d.taskId) {
+                        activeTaskId = String(_d.taskId).trim();
+                        currentWorkDetails = _d.workDetails || '';
+                        activeTimerSessionId = _d.timerSessionId || null;
+                        const _lastUp = _d.updatedAt || Date.now();
+                        const _elapsed = Math.max(0, Math.floor((Date.now() - _lastUp) / 1000));
+                        const _saved = _d.currentSeconds || 0;
+                        const MAX_GAP = 43200; // 12 Hours
+                        if (_elapsed > MAX_GAP) {
+                            taskOnHold = true;
+                            taskSeconds = _saved;
+                        } else {
+                            taskOnHold = _d.state === 'on_hold';
+                            taskSeconds = taskOnHold ? _saved : (_saved + _elapsed);
+                        }
+                        taskStartTime = Date.now() - (taskSeconds * 1000);
+                        console.log('[0ms Startup] Active task restored immediately:', activeTaskId, taskSeconds, 'seconds, onHold:', taskOnHold);
+                    }
+                }
+            } catch (e) { }
             let pendingPrepTaskId = null;
             let pendingPrepTaskType = null;
             let currentWorkDetails = '';
@@ -17317,7 +17362,7 @@
                 if (now.getHours() < 10) return; // Only after 10 AM
 
                 const todayMonthDay = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-                const todayKey = now.toISOString().slice(0, 10);
+                const todayKey = now.toLocalYMD();
 
                 const usersWithBirthday = Array.from(allUsersMap.values()).filter(u => {
                     if (!u.birthday) return false;
@@ -19371,7 +19416,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Condition A: Completed on dateStr
                     if (isDailyPlanCompletedTask(task.status)) {
                         const completedOnDate = task.lastCompletedDate === dateStr ||
-                            (task.completedAt && (typeof task.completedAt === 'string' ? task.completedAt.slice(0, 10) === dateStr : new Date(task.completedAt).toISOString().split('T')[0] === dateStr));
+                            (task.completedAt && (typeof task.completedAt === 'string' ? task.completedAt.slice(0, 10) === dateStr : new Date(task.completedAt).toLocalYMD() === dateStr));
                         if (completedOnDate) shouldAutoInclude = true;
                     }
 
@@ -19755,35 +19800,39 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             async function logout() {
                 try {
+                    window._isExplicitLoggingOut = true;
+                    try { sessionStorage.setItem('worksync_explicit_logout', 'true'); } catch (e) { }
+
                     // Mark user as offline in Firebase
                     if (db && currentUser) {
                         try {
-                            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false).catch(e => console.warn('[logout] Failed to mark offline:', e));
-                        } catch (e) {
-                            console.warn('[logout] Error marking offline:', e);
-                        }
+                            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/online`), false).catch(() => {});
+                        } catch (e) { }
 
-                        // Save the latest task timer state before signing out
                         if (activeTaskId) {
                             try {
-                                await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => { });
-                            } catch (e) {
-                                console.warn('[logout] Error saving task state:', e);
-                            }
+                                await saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                            } catch (e) { }
                         }
                     }
 
-                    // Sign out from Firebase
-                    if (auth) {
+                    // Reset all stored local and session data
+                    localStorage.removeItem('worksync_user');
+                    localStorage.removeItem('worksync_active_task');
+                    localStorage.removeItem('worksync_toasted_notifs');
+                    localStorage.removeItem('worksync_timerState');
+                    localStorage.removeItem('worksync_checkInTime');
+                    localStorage.removeItem('worksync_totalBreakDuration');
+                    localStorage.removeItem('worksync_breakStartTime');
+
+                    // Sign out from Firebase Auth
+                    if (auth && typeof signOut === 'function') {
                         try {
                             await signOut(auth);
                             console.log('[logout] Successfully signed out from Firebase');
                         } catch (e) {
-                            console.error('[logout] Error signing out:', e);
-                            // Continue with cleanup even if signOut fails
+                            console.warn('[logout] Firebase signOut non-fatal:', e);
                         }
-                    } else {
-                        console.warn('[logout] Auth object not available');
                     }
 
                     // Clean up all listeners and timers
@@ -19816,74 +19865,40 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         console.warn('[logout] Error cleaning up listeners:', e);
                     }
 
-                    // Reset state variables
-                    currentWorkUnsub = null;
-                    todayReportUnsub = null;
-                    announcementsUnsub = null;
-                    announcementNotifyUnsub = null;
-                    dprUnsub = null;
-                    notesUnsub = null;
-                    attendanceUnsub = null;
-                    allTimeLogsUnsub = null;
-                    currentWorkRefreshRef = null;
-                    syncIntervalRef = null;
-                    currentWorkFilterKey = '';
-                    convListeners = {};
+                    // Clear state variables
                     currentUser = null;
-                    currentOrganisers = null;
+                    activeTaskId = null;
+                    taskSeconds = 0;
+                    taskOnHold = false;
+                    taskStartTime = null;
+                    isCheckedIn = false;
                     tasks = [];
                     dprEntries = [];
                     attendanceEvents = [];
-                    activeTaskId = null;
-                    isCheckedIn = false;
-                    shownTaskNotifIds = new Set();
-                    clearInterval(timerRef);
-                    seconds = 0;
-                    activeConvId = null;
-                    unreadCounts = {};
-                    unreadAnnouncements = 0;
-
-                    // Clear stored data
-                    localStorage.removeItem('worksync_toasted_notifs');
-                    localStorage.removeItem('worksync_user');
-                    localStorage.removeItem('worksync_active_task');
-
-                    // Update UI
-                    updateOrganiserNavVisibility();
-                    resetTimerUI();
-                    setTimerState('idle');
-                    syncActiveSessionToFirebase('idle');
-
-                    if (typeof hideFloatBtn === 'function') hideFloatBtn();
-                    if (typeof hideWaterWidget === 'function') hideWaterWidget();
-
-                    // Switch views
                     appInitialized = false;
-                    document.documentElement.classList.remove('has-user');
-                    document.documentElement.classList.remove('app-ready');
-                    document.documentElement.classList.remove('auth-pending');
-                    document.documentElement.classList.add('no-user');
-                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
 
-                    // Show login, hide dashboard and loading views
+                    // Immediately reset UI to login screen
+                    document.documentElement.classList.remove('has-user', 'app-ready');
+                    document.documentElement.classList.add('no-user');
                     const dashboardView = document.getElementById('dashboard-view');
                     const loginView = document.getElementById('login-view');
                     const loadingView = document.getElementById('loading-view');
                     if (loadingView) loadingView.classList.add('hidden');
                     if (dashboardView) dashboardView.classList.add('hidden');
                     if (loginView) loginView.classList.remove('hidden');
+                    if (typeof hideInitialLoading === 'function') hideInitialLoading();
 
+                    window.location.hash = '';
                     console.log('[logout] Logout complete');
                 } catch (e) {
                     console.error('[logout] Unexpected error during logout:', e);
                     // Force UI reset even if something goes wrong
+                    document.documentElement.classList.remove('has-user', 'app-ready');
+                    document.documentElement.classList.add('no-user');
+                    document.getElementById('loading-view')?.classList.add('hidden');
+                    document.getElementById('dashboard-view')?.classList.add('hidden');
+                    document.getElementById('login-view')?.classList.remove('hidden');
                     if (typeof hideInitialLoading === 'function') hideInitialLoading();
-                    const dashboardView = document.getElementById('dashboard-view');
-                    const loginView = document.getElementById('login-view');
-                    const loadingView = document.getElementById('loading-view');
-                    if (loadingView) loadingView.classList.add('hidden');
-                    if (dashboardView) dashboardView.classList.add('hidden');
-                    if (loginView) loginView.classList.remove('hidden');
                 }
             }
 
@@ -21343,7 +21358,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     userName: currentUser.name,
                     type: type, // 'check_in', 'break_start', 'break_end', 'check_out'
                     timestamp: Date.now(),
-                    date: new Date().toISOString().slice(0, 10),
+                    date: new Date().toLocalYMD(),
                     duration: duration
                 };
                 await push(ref(db, 'worksync/attendance_events'), event);
@@ -22022,7 +22037,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         checkInTime: checkInTime || null,
                         breakStartTime: breakStartTime || null,
                         totalBreakDuration: totalBreakDuration || 0,
-                        date: typeof todayIso === 'function' ? todayIso() : new Date().toISOString().slice(0, 10),
+                        date: typeof todayIso === 'function' ? todayIso() : new Date().toLocalYMD(),
                         userEmail: currentUser.email,
                         userName: currentUser.name || '',
                         updatedAt: Date.now()
@@ -22053,7 +22068,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const session = snapshot.val();
                         if (!session) return;
 
-                        const today = typeof todayIso === 'function' ? todayIso() : new Date().toISOString().slice(0, 10);
+                        const today = typeof todayIso === 'function' ? todayIso() : new Date().toLocalYMD();
                         if (session.date && session.date !== today) return;
 
                         const remoteState = session.state || 'idle';
@@ -22147,7 +22162,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!db || !currentUser) return;
 
                 try {
-                    const today = new Date().toISOString().slice(0, 10);
+                    const today = new Date().toLocalYMD();
                     const snap = await get(ref(db, 'worksync/attendance_events'));
                     if (!snap || !snap.exists()) return;
 
@@ -22862,7 +22877,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 const today = new Date();
-                const todayStr = today.toISOString().slice(0, 10);
+                const todayStr = today.toLocalYMD();
 
                 // Helper: colour scheme per status
                 function shootStatusStyle(status) {
@@ -25966,7 +25981,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!selectEl) return;
 
                 const dateEl = document.getElementById('weekly-assign-date');
-                const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toISOString().split('T')[0];
+                const dateVal = specificDateStr || (dateEl ? dateEl.value : '') || new Date().toLocalYMD();
 
                 let targetYear, targetMonth;
                 if (dateVal && /^\d{4}-\d{2}/.test(dateVal)) {
@@ -26406,7 +26421,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function setWeeklyTaskModalDateToToday() {
                 const dateEl = document.getElementById('weekly-assign-date');
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocalYMD();
                 if (dateEl) {
                     dateEl.value = todayStr;
                     handleWeeklyTaskModalDateChange();
@@ -26452,14 +26467,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (typeof strategyCurrentDate !== 'undefined' && strategyCurrentDate instanceof Date) {
                         const now = new Date();
                         if (strategyCurrentDate.getFullYear() === now.getFullYear() && strategyCurrentDate.getMonth() === now.getMonth()) {
-                            dateStr = now.toISOString().split('T')[0];
+                            dateStr = now.toLocalYMD();
                         } else {
                             const y = strategyCurrentDate.getFullYear();
                             const m = String(strategyCurrentDate.getMonth() + 1).padStart(2, '0');
                             dateStr = `${y}-${m}-01`;
                         }
                     } else {
-                        dateStr = new Date().toISOString().split('T')[0];
+                        dateStr = new Date().toLocalYMD();
                     }
                 }
 
@@ -26496,7 +26511,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     clientEl.value = targetClient;
                 }
 
-                if (dateEl) dateEl.value = dateStr || new Date().toISOString().split('T')[0];
+                if (dateEl) dateEl.value = dateStr || new Date().toLocalYMD();
                 if (ownerEl) ownerEl.value = '';
                 if (formatEl) formatEl.value = 'Poster';
 
@@ -26548,7 +26563,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const selectedTaskId = selectedIdEl ? selectedIdEl.value : '';
                 const title = titleEl ? titleEl.value.trim() : '';
                 const client = clientEl ? clientEl.value : 'Genesys';
-                const dateStr = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+                const dateStr = dateEl ? dateEl.value : new Date().toLocalYMD();
                 const owner = ownerEl ? ownerEl.value : '';
                 const format = formatEl ? formatEl.value : 'Poster';
 
@@ -32161,7 +32176,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const hasTimeLogToday = allTimeLogs.some(l => {
                                 if (!userEmails.includes((l.userId || '').toLowerCase())) return false;
                                 if (l.taskId !== task.id && !String(l.taskId || '').startsWith('LEARN-')) return false;
-                                const logDate = l.startTime ? new Date(l.startTime).toISOString().slice(0, 10) : (l.endTime ? new Date(l.endTime).toISOString().slice(0, 10) : null);
+                                const logDate = l.startTime ? new Date(l.startTime).toLocalYMD() : (l.endTime ? new Date(l.endTime).toLocalYMD() : null);
                                 return logDate === today;
                             });
                             if (hasTimeLogToday) started = true;
@@ -32347,7 +32362,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     alexLearningLogs.forEach(log => {
                         const ts = log.endTime || log.startTime;
                         if (!ts) return;
-                        const dateStr = new Date(ts).toISOString().slice(0, 10);
+                        const dateStr = new Date(ts).toLocalYMD();
                         const dow = new Date(ts).getDay();
                         if (dow === 0 || dow === 6) return; // skip weekends
                         if (!existingAttendanceDates.has(dateStr)) {
@@ -32597,20 +32612,32 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             async function saveCurrentTaskState(state = 'working', details = null) {
-                if (!currentUser || !activeTaskId) return;
-                const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
+                if (!activeTaskId) return;
+                const task = tasks.find(t => isSameTaskId(t.id, activeTaskId)) || { id: activeTaskId, desc: '', client: '' };
 
                 if (details !== null) currentWorkDetails = details;
 
+                let prevCached = null;
+                try {
+                    const raw = localStorage.getItem('worksync_active_task');
+                    if (raw) prevCached = JSON.parse(raw);
+                } catch (e) { }
+
+                const taskDesc = task.desc || task.summary || task.title || prevCached?.taskDesc || '';
+                const status = task.status || prevCached?.status || 'In Progress';
+                const client = task.client || prevCached?.client || '';
+                const priority = task.priority || prevCached?.priority || 'Medium';
+                const curSec = (!taskOnHold && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : (taskSeconds || 0);
+
                 const payload = {
-                    taskId: activeTaskId,
-                    taskDesc: task.desc || task.summary || task.title || '',
-                    status: task.status || '',
-                    client: task.client || '',
-                    priority: task.priority || '',
+                    taskId: String(activeTaskId).trim(),
+                    taskDesc,
+                    status,
+                    client,
+                    priority,
                     state,
                     startedAt: taskStartTime || Date.now(),
-                    currentSeconds: taskSeconds || 0,
+                    currentSeconds: curSec,
                     workDetails: currentWorkDetails || '',
                     updatedAt: Date.now(),
                     timerSessionId: activeTimerSessionId || ''
@@ -32677,6 +32704,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
                     const currentTaskData = snap.val();
 
+                    let localData = null;
+                    try {
+                        const localRaw = localStorage.getItem('worksync_active_task');
+                        if (localRaw) localData = JSON.parse(localRaw);
+                    } catch (e) { }
+
+                    const localUpdated = localData?.updatedAt || 0;
+                    const remoteUpdated = currentTaskData?.updatedAt || 0;
+
+                    // If local cache has a newer or same active task than Firebase, local wins to prevent timer stops on reload!
+                    if (localData && localData.taskId && localUpdated >= remoteUpdated) {
+                        console.log('[restoreActiveTask] Local cache is newer or equal to Firebase. Preserving local active task:', activeTaskId);
+                        saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                        renderTasks();
+                        if (isInternalTabActive()) renderInternalTasks();
+                        renderActiveTaskCard();
+                        renderDailyPlan();
+                        return;
+                    }
+
                     if (currentTaskData && currentTaskData.taskId) {
                         currentWorkDetails = currentTaskData.workDetails || currentWorkDetails || '';
                         activeTimerSessionId = currentTaskData.timerSessionId || activeTimerSessionId || null;
@@ -32685,19 +32732,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const savedSeconds = currentTaskData.currentSeconds || 0;
                         const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
 
+                        activeTaskId = String(currentTaskData.taskId).trim();
                         if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
-                            activeTaskId = currentTaskData.taskId;
                             taskOnHold = true;
                             taskSeconds = savedSeconds;
                         } else {
-                            activeTaskId = currentTaskData.taskId;
                             taskOnHold = currentTaskData.state === 'on_hold';
 
                             if (taskOnHold) {
                                 taskSeconds = savedSeconds;
                             } else {
                                 const remoteSeconds = savedSeconds + elapsedSinceUpdate;
-                                // Keep the larger/more accurate seconds between local timer and remote
                                 taskSeconds = Math.max(taskSeconds || 0, remoteSeconds);
                             }
                         }
@@ -32718,6 +32763,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } else if (activeTaskId) {
                         // Local has an active task running, re-publish to Firebase so remote stays in sync
                         saveCurrentTaskState(taskOnHold ? 'on_hold' : 'working').catch(() => {});
+                        renderTasks();
+                        if (isInternalTabActive()) renderInternalTasks();
+                        renderActiveTaskCard();
+                        renderDailyPlan();
                     }
                 } catch (err) {
                     console.warn('Failed to sync active task from Firebase:', err);
@@ -33144,7 +33193,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             async function toggleActiveTask(id) {
-                // This function is called when clicking "Start" on a new task.
+                // If this task is already active, do not reset seconds!
+                if (isSameTaskId(activeTaskId, id)) {
+                    if (taskOnHold) {
+                        resumeTaskTimer();
+                    }
+                    return;
+                }
 
                 // ── CHECK-IN GUARD ──────────────────────────────────────────────
                 // Users must be checked in before starting ANY task.
@@ -33339,22 +33394,45 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function startTaskTimer() {
                 if (taskTimerRef) clearInterval(taskTimerRef);
                 if (!taskOnHold && taskStartTime) {
-                    taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+                    taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
                 }
+                const formatted = formatTime(taskSeconds);
                 const initialEl = document.getElementById('task-timer-display');
-                if (initialEl) initialEl.textContent = formatTime(taskSeconds);
+                if (initialEl) initialEl.textContent = formatted;
+                document.querySelectorAll('.int-task-live-clock, .jira-task-live-clock').forEach(node => {
+                    node.textContent = formatted;
+                });
+                document.querySelectorAll('.task-live-time').forEach(liveEl => {
+                    liveEl.textContent = formatTime((Number(liveEl.dataset.base) || 0) + (taskSeconds || 0));
+                });
                 taskTimerRef = setInterval(() => {
                     // Calculate actual elapsed time to avoid setInterval drift
                     if (!taskOnHold && taskStartTime) {
-                        taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
+                        taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
                     }
 
+                    const tickFormatted = formatTime(taskSeconds);
                     const el = document.getElementById('task-timer-display');
-                    if (el) el.textContent = formatTime(taskSeconds);
-                    // Live "Time" column in Tasks Hub lists (logged time + current session)
+                    if (el) el.textContent = tickFormatted;
+                    document.querySelectorAll('.int-task-live-clock, .jira-task-live-clock').forEach(node => {
+                        node.textContent = tickFormatted;
+                    });
                     document.querySelectorAll('.task-live-time').forEach(liveEl => {
                         liveEl.textContent = formatTime((Number(liveEl.dataset.base) || 0) + (taskSeconds || 0));
                     });
+
+                    // Fast local storage backup every 5 seconds so timer survives any crash/reload
+                    if (taskSeconds > 0 && taskSeconds % 5 === 0) {
+                        try {
+                            const raw = localStorage.getItem('worksync_active_task');
+                            if (raw) {
+                                const parsed = JSON.parse(raw);
+                                parsed.currentSeconds = taskSeconds;
+                                parsed.updatedAt = Date.now();
+                                localStorage.setItem('worksync_active_task', JSON.stringify(parsed));
+                            }
+                        } catch (e) { }
+                    }
 
                     // Periodic sync with DB (resilient to setInterval throttling in background tabs)
                     if (taskSeconds > 0 && (taskSeconds - lastCurrentTaskSyncSec >= 30 || taskSeconds % 60 === 0)) {
@@ -33569,7 +33647,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             `).join('');
 
                 // Set default date to today
-                const today = new Date().toISOString().split('T')[0];
+                const today = new Date().toLocalYMD();
                 document.getElementById('disc-date').value = today;
 
                 // Set default time to now + 1 hour
@@ -34171,7 +34249,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Set date and time
                 const discDate = new Date(disc.scheduledTime);
-                const dateStr = discDate.toISOString().slice(0, 10);
+                const dateStr = discDate.toLocalYMD();
                 const timeStr = discDate.toTimeString().slice(0, 5);
                 document.getElementById('disc-date').value = dateStr;
                 document.getElementById('disc-time').value = timeStr;
@@ -35133,7 +35211,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function buildDailySummaryRows() {
                 const rows = new Map();
-                const today = new Date().toISOString().slice(0, 10);
+                const today = new Date().toLocalYMD();
                 const ensure = (email, name, role = '') => {
                     const key = (email || name || 'unknown').toLowerCase();
                     if (!rows.has(key)) {
@@ -35170,7 +35248,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (attendanceEvents && attendanceEvents.length > 0) {
                     attendanceEvents.forEach(evt => {
                         if (evt.type === 'break_end' && evt.duration) {
-                            const eventDate = evt.date || new Date(evt.timestamp).toISOString().slice(0, 10);
+                            const eventDate = evt.date || new Date(evt.timestamp).toLocalYMD();
                             if (eventDate === today) {
                                 // Match by userId (which is email)
                                 const userEmail = (evt.userId || '').toLowerCase();
@@ -35573,7 +35651,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function exportDailyReport() {
                 if (!isAdmin()) return;
                 const rows = buildDailySummaryRows();
-                const today = new Date().toISOString().slice(0, 10);
+                const today = new Date().toLocalYMD();
                 const lines = [
                     ['Date', 'Employee', 'Email', 'Role', 'Logged Tasks', 'Logged Time', 'Active Task', 'Active Time', 'Total Time', 'Online'].map(csvCell).join(',')
                 ];
@@ -40333,12 +40411,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             // DPR
             function todayIso() {
-                return new Date().toISOString().slice(0, 10);
+                return new Date().toLocalYMD();
             }
 
             function monthKey(date = new Date()) {
                 if (typeof date === 'string') return date.slice(0, 7);
-                return date.toISOString().slice(0, 7);
+                return date.toLocalYMD().slice(0, 7);
             }
 
             function initDpr() {
@@ -41825,7 +41903,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const dayLogs = userLogs.filter(l => {
                                 const logTime = l.endTime || l.startTime;
                                 if (!logTime) return false;
-                                const dStr = (typeof formatLocalDate === 'function') ? formatLocalDate(new Date(logTime)) : new Date(logTime).toISOString().slice(0, 10);
+                                const dStr = (typeof formatLocalDate === 'function') ? formatLocalDate(new Date(logTime)) : new Date(logTime).toLocalYMD();
                                 return dStr === dayStr;
                             });
                             return dayLogs.reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
@@ -42123,7 +42201,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         return isTaskCompletedInPeriod(t, weekFromTs, weekToTs);
                     });
 
-                    const weekLabel = `Week ${wIndex + 1} (${week.mon.toISOString().slice(0, 10)} to ${week.sun.toISOString().slice(0, 10)})`;
+                    const weekLabel = `Week ${wIndex + 1} (${week.mon.toLocalYMD()} to ${week.sun.toLocalYMD()})`;
 
                     targetUsers.forEach(u => {
                         const uEmail = (u.email || '').toLowerCase();
@@ -42251,7 +42329,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const monthDataByDate = {};
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dObj = new Date(year, month, day);
-                    const dStr = dObj.toISOString().slice(0, 10);
+                    const dStr = dObj.toLocalYMD();
                     monthDataByDate[dStr] = {
                         dateStr: dStr,
                         dateObj: dObj,
@@ -42269,7 +42347,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Process explicit attendance events
                 periodEvents.forEach(evt => {
-                    const dStr = evt.date || (evt.timestamp ? new Date(evt.timestamp).toISOString().slice(0, 10) : null);
+                    const dStr = evt.date || (evt.timestamp ? new Date(evt.timestamp).toLocalYMD() : null);
                     if (dStr && monthDataByDate[dStr]) {
                         const dayRec = monthDataByDate[dStr];
                         dayRec.events.push(evt);
@@ -42291,7 +42369,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 periodLogs.forEach(log => {
                     const lTs = typeof getLogTime === 'function' ? getLogTime(log) : (log.timestamp || log.createdAt || 0);
                     if (!lTs) return;
-                    const dStr = new Date(lTs).toISOString().slice(0, 10);
+                    const dStr = new Date(lTs).toLocalYMD();
                     if (monthDataByDate[dStr]) {
                         const dayRec = monthDataByDate[dStr];
                         const durMs = (log.durationSeconds || (log.hours ? log.hours * 3600 : 0)) * 1000;
@@ -42358,7 +42436,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let workingDaysCount = 0;
                 let onTimeCount = 0;
 
-                const todayStr = new Date().toISOString().slice(0, 10);
+                const todayStr = new Date().toLocalYMD();
 
                 Object.values(monthDataByDate).forEach(d => {
                     if (d.dayOfWeek !== 0 && d.dateStr <= todayStr) workingDaysCount++;
@@ -42458,7 +42536,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function renderTimingHeatmap(data, container, listContainer, firstDayOfMonth) {
                 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 const leadingBlanks = firstDayOfMonth.getDay();
-                const todayStr = new Date().toISOString().slice(0, 10);
+                const todayStr = new Date().toLocalYMD();
 
                 let cellsHtml = '';
 
@@ -42733,7 +42811,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Fill target date
                 if (dateInput) {
-                    dateInput.value = date || new Date().toISOString().slice(0, 10);
+                    dateInput.value = date || new Date().toLocalYMD();
                 }
 
                 // Prepopulate current day values if available
@@ -42780,7 +42858,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (event) event.preventDefault();
 
                 const userEmail = document.getElementById('adjust-attendance-user')?.value || currentUser?.email || 'user';
-                const dateStr = document.getElementById('adjust-attendance-date')?.value || new Date().toISOString().slice(0, 10);
+                const dateStr = document.getElementById('adjust-attendance-date')?.value || new Date().toLocalYMD();
                 const checkInTime = document.getElementById('adjust-attendance-in')?.value || '09:30';
                 const checkOutTime = document.getElementById('adjust-attendance-out')?.value || '18:30';
                 const breakMins = parseInt(document.getElementById('adjust-break-mins')?.value || '45', 10);
@@ -42803,7 +42881,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Remove existing events for this user and date
                 window.attendanceEvents = window.attendanceEvents.filter(e => {
                     const eUser = (e.userId || e.email || '').toLowerCase();
-                    const eDate = e.date || (e.timestamp ? new Date(e.timestamp).toISOString().slice(0, 10) : '');
+                    const eDate = e.date || (e.timestamp ? new Date(e.timestamp).toLocalYMD() : '');
                     return !(eUser === userEmail.toLowerCase() && eDate === dateStr);
                 });
 
@@ -43477,7 +43555,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 periodTimeLogs.forEach(log => {
-                    const date = new Date(log.endTime || log.startTime).toISOString().slice(0, 10);
+                    const date = new Date(log.endTime || log.startTime).toLocalYMD();
                     if (byDate[date]) {
                         byDate[date].loggedSeconds += (log.durationSeconds || 0);
                         byDate[date].taskCount++;
@@ -43486,7 +43564,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 periodEvents.forEach(evt => {
                     if (evt.type === 'break_end' && evt.duration) {
-                        const date = new Date(evt.timestamp).toISOString().slice(0, 10);
+                        const date = new Date(evt.timestamp).toLocalYMD();
                         if (byDate[date]) byDate[date].breakSeconds += Math.floor(evt.duration / 1000);
                     }
                 });
@@ -44190,8 +44268,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const activeProductivityPercent = totalActiveSeconds > totalBreakSeconds ? Math.round((totalLoggedSeconds / (totalActiveSeconds - totalBreakSeconds)) * 100) : 0;
 
                 const periodTaskIds = new Set(periodTimeLogs.map(log => log.taskId));
-                const fromDateStr = new Date(fromTs).toISOString().slice(0, 10);
-                const toDateStr = new Date(toTs - 1).toISOString().slice(0, 10);
+                const fromDateStr = new Date(fromTs).toLocalYMD();
+                const toDateStr = new Date(toTs - 1).toLocalYMD();
 
                 const completedTasksCount = tasks.filter(t => {
                     const isCompleted = isDone(t.status) || isInternalDone(t.status);
@@ -45116,7 +45194,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 dailyReportSchedulerRef = setInterval(() => {
                     const now = new Date();
-                    const todayIso = now.toISOString().slice(0, 10);
+                    const todayIso = now.toLocalYMD();
 
                     DAILY_REPORT_TIMES.forEach(reportTime => {
                         const reportKey = `worksync_lastDailyReportDate_${reportTime.hour}${String(reportTime.minute).padStart(2, '0')}`;
@@ -45135,7 +45213,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 setInterval(() => {
                     const now = new Date();
                     if (now.getHours() === 17 && now.getMinutes() === 30) {
-                        const todayIso = now.toISOString().slice(0, 10);
+                        const todayIso = now.toLocalYMD();
                         const lastPopupDate = localStorage.getItem('worksync_lastFiveThirtyPopupDate');
                         if (lastPopupDate !== todayIso) {
                             localStorage.setItem('worksync_lastFiveThirtyPopupDate', todayIso);
@@ -45307,7 +45385,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         console.log(`[DEBUG] ========== DAILY PLAN USER: ${userEmail} ==========`);
 
                         const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(userEmail) : (dailyPlans[eKey(userEmail)] || {});
-                        const todayIso = new Date(todayStartTsVal).toISOString().slice(0, 10);
+                        const todayIso = new Date(todayStartTsVal).toLocalYMD();
 
                         const completedTasks = [];
                         tasks.forEach(t => {
@@ -46179,7 +46257,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     prevLabel = 'Last Week';
                 }
 
-                const fmt = (ts) => new Date(ts).toISOString().slice(0, 10);
+                const fmt = (ts) => new Date(ts).toLocalYMD();
 
                 list.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">Building report...</div>`;
 
@@ -49556,7 +49634,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             let cur = new Date(r.fromDate + 'T00:00:00Z');
                             const end = new Date(r.toDate + 'T00:00:00Z');
                             while (cur <= end) {
-                                const ds = cur.toISOString().slice(0, 10);
+                                const ds = cur.toLocalYMD();
                                 if (!dateMap[ds]) dateMap[ds] = [];
                                 dateMap[ds].push({
                                     key: r.key,
@@ -55439,7 +55517,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
-                const todayStr = new Date().toISOString().slice(0, 10);
+                const todayStr = new Date().toLocalYMD();
 
                 // Get all users who have morning learning tasks (non-excluded, deduplicated)
                 const learningUsers = getLearningEmployees();
@@ -55454,7 +55532,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Build attendance map: { 'YYYY-MM-DD': { attended: Set<email>, reasoned: Set<email>, autoMissed: Set<email> } }
                 const attendanceByDate = {};
                 entries.forEach(log => {
-                    const date = log.attendanceDate || log.missedDate || (log.createdAt ? new Date(log.createdAt).toISOString().slice(0, 10) : null);
+                    const date = log.attendanceDate || log.missedDate || (log.createdAt ? new Date(log.createdAt).toLocalYMD() : null);
                     if (!date) return;
                     if (!attendanceByDate[date]) attendanceByDate[date] = { attended: new Set(), reasoned: new Set(), autoMissed: new Set() };
 
@@ -55897,7 +55975,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             let cur = new Date(r.fromDate + 'T00:00:00Z');
                             const end = new Date(r.toDate + 'T00:00:00Z');
                             while (cur <= end) {
-                                const ds = cur.toISOString().split('T')[0];
+                                const ds = cur.toLocalYMD();
                                 if (!dateMap[ds]) dateMap[ds] = [];
                                 dateMap[ds].push({
                                     userName: r.userName || r.userId,
@@ -57637,7 +57715,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const date = new Date(dateStr);
                 const nextDate = new Date(date);
                 nextDate.setDate(nextDate.getDate() + 1);
-                const nextDateStr = nextDate.toISOString().slice(0, 10);
+                const nextDateStr = nextDate.toLocalYMD();
 
                 console.log(`Starting daily transition from ${dateStr} to ${nextDateStr}`);
 
@@ -57885,7 +57963,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             <p class="text-xs text-indigo-900 mb-2 font-bold">Current Status</p>
                             <p class="text-xs text-indigo-700 mb-3">This task has been carried forward <strong>${history.length}</strong> time${history.length !== 1 ? 's' : ''}</p>
                             ${isAdmin() ? `
-                                <button onclick="closeCarryForwardHistoryModal(); manuallyCarryForwardTask('${taskId}', '${new Date().toISOString().split('T')[0]}', '${new Date(Date.now() + 86400000).toISOString().split('T')[0]}')"
+                                <button onclick="closeCarryForwardHistoryModal(); manuallyCarryForwardTask('${taskId}', '${new Date().toLocalYMD()}', '${new Date(Date.now() + 86400000).toLocalYMD()}')"
                                     class="text-xs font-bold bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors">
                                     Carry Forward to Tomorrow
                                 </button>
@@ -57932,7 +58010,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!task) return;
 
                 const fromDate = todayIso();
-                const toDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10); // Tomorrow
+                const toDate = new Date(Date.now() + 86400000).toLocalYMD(); // Tomorrow
 
                 let menuHtml = `
                     <div class="fixed bg-white rounded-lg shadow-xl border border-slate-200 py-2 z-50" 
@@ -58088,7 +58166,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         previousStates: selectedIds.map(id => tasks.find(t => t.id === id))
                     };
 
-                    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+                    const tomorrow = new Date(Date.now() + 86400000).toLocalYMD();
                     let successCount = 0;
 
                     for (const taskId of selectedIds) {
@@ -58144,7 +58222,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 <input type="date" id="bulkRescheduleDate" 
                                     value="${todayIso()}"
                                     min="${todayIso()}"
-                                    max="${maxDate.toISOString().slice(0, 10)}"
+                                    max="${maxDate.toLocalYMD()}"
                                     class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
                             </div>
 
@@ -58515,10 +58593,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         await finishLogin();
                     } else {
                         // User is signed out in Firebase Auth.
-                        // CRITICAL SAFEGUARD: Do NOT automatically log out if we already have a valid cached session in localStorage.
-                        // A temporary null fbUser happens during initial token verification, offline mode, or slow network.
-                        // Only force logout if the user explicitly has NO cached session, or if explicit logout was requested.
-                        if (!currentUser || !currentUser.email) {
+                        const isExplicitLogout = window._isExplicitLoggingOut || (sessionStorage.getItem('worksync_explicit_logout') === 'true');
+                        const hasCachedSession = !!localStorage.getItem('worksync_user');
+                        if (isExplicitLogout || !hasCachedSession || !currentUser || !currentUser.email) {
+                            window._isExplicitLoggingOut = false;
+                            try { sessionStorage.removeItem('worksync_explicit_logout'); } catch(e){}
+                            document.documentElement.classList.remove('has-user', 'app-ready');
+                            document.documentElement.classList.add('no-user');
+                            document.getElementById('dashboard-view')?.classList.add('hidden');
+                            document.getElementById('login-view')?.classList.remove('hidden');
+                            if (typeof hideInitialLoading === 'function') hideInitialLoading();
                             await logout();
                         } else {
                             console.log('[Auth] Firebase reported null fbUser, preserving valid cached session for:', currentUser.email);
@@ -59375,8 +59459,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const modal = document.getElementById('clientDeliveryTaskModal');
                 if (!modal) return;
 
-                const activeReportDateFrom = (typeof reportDateFrom !== 'undefined' && reportDateFrom) ? reportDateFrom : (document.getElementById('report-from-date')?.value || new Date().toISOString().substring(0, 10));
-                const activeReportDateTo = (typeof reportDateTo !== 'undefined' && reportDateTo) ? reportDateTo : (document.getElementById('report-to-date')?.value || new Date().toISOString().substring(0, 10));
+                const activeReportDateFrom = (typeof reportDateFrom !== 'undefined' && reportDateFrom) ? reportDateFrom : (document.getElementById('report-from-date')?.value || new Date().toLocalYMD());
+                const activeReportDateTo = (typeof reportDateTo !== 'undefined' && reportDateTo) ? reportDateTo : (document.getElementById('report-to-date')?.value || new Date().toLocalYMD());
 
                 const clientTitle = client === 'ALL' ? 'All Clients' : client;
                 const typeTitle = deliverableType === 'video' ? 'Videos' :
@@ -60160,7 +60244,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement('a');
                 link.setAttribute('href', encodedUri);
-                link.setAttribute('download', `Operations_ETA_Forecast_${new Date().toISOString().substring(0, 10)}.csv`);
+                link.setAttribute('download', `Operations_ETA_Forecast_${new Date().toLocalYMD()}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -60626,7 +60710,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (range !== 'all') {
                         const cutoff = new Date();
                         cutoff.setDate(cutoff.getDate() - parseInt(range));
-                        const cutoffStr = cutoff.toISOString().slice(0, 10);
+                        const cutoffStr = cutoff.toLocalYMD();
                         entries = entries.filter(e => (e.postingDate || e.reportDate || '') >= cutoffStr);
                     }
                 }
@@ -61093,7 +61177,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 // Set default dates
-                const today = new Date().toISOString().slice(0, 10);
+                const today = new Date().toLocalYMD();
                 document.getElementById('sa-report-date').value = today;
                 document.getElementById('sa-posting-date').value = today;
 
@@ -62529,7 +62613,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `client-storage-report-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.download = `client-storage-report-${new Date().toLocalYMD()}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
                 toast('CSV exported', 'success');
@@ -65754,7 +65838,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     try {
                         const escapeKey = email.replace(/[.#$\\[\\]]/g, '_');
                         const plans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(email) : (window.dailyPlans && window.dailyPlans[escapeKey] ? window.dailyPlans[escapeKey] : {});
-                        const todayStr = now.toISOString().slice(0, 10);
+                        const todayStr = now.toLocalYMD();
                         Object.entries(plans).forEach(([tid, p]) => {
                             if (p && p.date && (typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(p.date, startOfDay, endOfDay) : p.date === todayStr)) {
                                 workedTaskIds.add(tid);
@@ -65883,7 +65967,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const targetMins = targetH * 60 + targetM;
 
                 if (currentMins >= targetMins && currentMins < targetMins + 15) {
-                    const todayStr = now.toISOString().slice(0, 10);
+                    const todayStr = now.toLocalYMD();
                     const seenKey = 'vibePopupSeen_' + todayStr;
                     if (!localStorage.getItem(seenKey)) {
                         localStorage.setItem(seenKey, 'true');

@@ -1,3 +1,14 @@
+// Local calendar date "YYYY-MM-DD" (also defined in index.html; repeated here for standalone pages)
+if (!Date.prototype.toLocalYMD) {
+  Object.defineProperty(Date.prototype, 'toLocalYMD', {
+    value: function () {
+      if (isNaN(this.getTime())) throw new RangeError('Invalid time value');
+      return this.getFullYear() + '-' + String(this.getMonth() + 1).padStart(2, '0') + '-' + String(this.getDate()).padStart(2, '0');
+    },
+    writable: true, configurable: true, enumerable: false
+  });
+}
+
 /**
  * Social Analytics Import Module
  * Handles CSV import for social media analytics data
@@ -556,7 +567,7 @@ function downloadImportTemplate() {
   const url = URL.createObjectURL(blob);
 
   link.setAttribute('href', url);
-  link.setAttribute('download', `analytics-import-template-${new Date().toISOString().split('T')[0]}.csv`);
+  link.setAttribute('download', `analytics-import-template-${new Date().toLocalYMD()}.csv`);
   link.style.visibility = 'hidden';
 
   document.body.appendChild(link);
@@ -626,7 +637,7 @@ if (typeof module !== 'undefined' && module.exports) {
 function getTopPostsForYesterday(records, sortBy = 'engagements', limit = 5) {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayDate = yesterday.toISOString().split('T')[0];
+  const yesterdayDate = yesterday.toLocalYMD();
 
   const yesterdayPosts = records.filter(r => r.postDate === yesterdayDate);
   
@@ -652,8 +663,8 @@ function getTopPostsForYesterday(records, sortBy = 'engagements', limit = 5) {
  * @returns {Object} Report data with aggregated metrics
  */
 function generateMonthlyClientReport(records, client, month, year) {
-  const monthStart = new Date(year, month - 1, 1).toISOString().split('T')[0];
-  const monthEnd = new Date(year, month, 0).toISOString().split('T')[0];
+  const monthStart = new Date(year, month - 1, 1).toLocalYMD();
+  const monthEnd = new Date(year, month, 0).toLocalYMD();
 
   const clientRecords = records.filter(r => 
     r.client === client && 

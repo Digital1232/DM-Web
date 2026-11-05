@@ -181,7 +181,7 @@ function getEmployeeDashboardData(employee, daysBack = 30) {
         priorityData[priority] = (priorityData[priority] || 0) + seconds;
 
         // Daily aggregation
-        const date = log.date || new Date(log.startTime || 0).toISOString().split('T')[0];
+        const date = log.date || new Date(log.startTime || 0).toLocalYMD();
         dailyData[date] = (dailyData[date] || 0) + seconds;
 
         // Hourly aggregation
@@ -662,7 +662,7 @@ function exportEmployeeDashboard() {
         .sort((a, b) => (a.startTime || 0) - (b.startTime || 0))
         .map(log => {
             const task = data.taskData[log.taskId] || {};
-            const date = log.date || new Date(log.startTime || 0).toISOString().split('T')[0];
+            const date = log.date || new Date(log.startTime || 0).toLocalYMD();
             const time = new Date(log.startTime || 0).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
             const duration = formatTime(log.durationSeconds || 0);
 
@@ -683,7 +683,7 @@ function exportEmployeeDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `employee-dashboard-${employee}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `employee-dashboard-${employee}-${new Date().toLocalYMD()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();

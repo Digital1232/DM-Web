@@ -150,7 +150,7 @@
         const badge = document.getElementById('sales-hub-badge');
         if (!badge) return;
 
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toLocalYMD();
         const dueTodayCount = salesLeads.filter(l => {
             if (!l.nextFollowup || l.stage === 'won' || l.stage === 'lost') return false;
             return l.nextFollowup.startsWith(todayStr) || l.nextFollowup < todayStr;
@@ -193,7 +193,7 @@
         let totalClosedDeals = 0;
         let followupsDueToday = 0;
         let followupsOverdue = 0;
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toLocalYMD();
 
         salesLeads.forEach(l => {
             const val = Number(l.dealValue) || 0;
@@ -387,7 +387,7 @@
     // ── Render Individual Lead Card HTML ──
     function renderLeadCardHtml(lead) {
         const cleanPhone = cleanPhoneNumber(lead.phone);
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toLocalYMD();
         let followupBadge = '';
 
         if (lead.nextFollowup && lead.stage !== 'won' && lead.stage !== 'lost') {
@@ -1440,7 +1440,7 @@
         // Pre-fill tomorrow's date for follow-up as default convenience
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        const tomorrowStr = tomorrow.toLocalYMD();
         if (document.getElementById('checkout-followup-date')) {
             document.getElementById('checkout-followup-date').value = tomorrowStr;
         }
@@ -1588,11 +1588,11 @@
         }
 
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = now.toLocalYMD();
         
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toLocalYMD();
 
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
@@ -1604,12 +1604,12 @@
 
         if (currentVisitFilterDate === 'today') {
             filtered = filtered.filter(v => {
-                const dStr = new Date(v.checkInTime || 0).toISOString().split('T')[0];
+                const dStr = new Date(v.checkInTime || 0).toLocalYMD();
                 return dStr === todayStr;
             });
         } else if (currentVisitFilterDate === 'yesterday') {
             filtered = filtered.filter(v => {
-                const dStr = new Date(v.checkInTime || 0).toISOString().split('T')[0];
+                const dStr = new Date(v.checkInTime || 0).toLocalYMD();
                 return dStr === yesterdayStr;
             });
         } else if (currentVisitFilterDate === 'week') {
@@ -1631,7 +1631,7 @@
         }
 
         // Metrics Calculation
-        const visitsToday = salesVisits.filter(v => new Date(v.checkInTime || 0).toISOString().split('T')[0] === todayStr).length;
+        const visitsToday = salesVisits.filter(v => new Date(v.checkInTime || 0).toLocalYMD() === todayStr).length;
         const totalDurationMins = filtered.reduce((sum, v) => sum + (Number(v.durationMinutes) || 0), 0);
         const totalMeetingHours = (totalDurationMins / 60).toFixed(1);
         const completedCount = filtered.filter(v => v.status === 'completed').length;

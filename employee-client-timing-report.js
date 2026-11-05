@@ -172,7 +172,7 @@ function renderEmployeeClientTimingReport() {
             clientData[client].taskMap[taskKey].sessions.push(log);
 
             // Daily tracking
-            const date = log.date || new Date(log.startTime || 0).toISOString().split('T')[0];
+            const date = log.date || new Date(log.startTime || 0).toLocalYMD();
             if (!clientData[client].dailyMap[date]) {
                 clientData[client].dailyMap[date] = 0;
             }
@@ -414,7 +414,7 @@ function renderEcttDailyTimeline(logs, clientData) {
     // Group by date
     const dateMap = {};
     logs.forEach(log => {
-        const date = log.date || new Date(log.startTime || 0).toISOString().split('T')[0];
+        const date = log.date || new Date(log.startTime || 0).toLocalYMD();
         if (!dateMap[date]) dateMap[date] = [];
         dateMap[date].push(log);
     });
@@ -606,7 +606,7 @@ function exportEmployeeClientTimingReport() {
     const rows = filteredLogs.map(log => {
         const task = (window.tasks || []).find(t => t.id === log.taskId);
         const client = log.client || taskClientMap[log.taskId] || 'Other';
-        const date = log.date || new Date(log.startTime || 0).toISOString().split('T')[0];
+        const date = log.date || new Date(log.startTime || 0).toLocalYMD();
         const hours = ((log.durationSeconds || 0) / 3600).toFixed(2);
 
         return [

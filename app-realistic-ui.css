@@ -1,0 +1,475 @@
+/* ==========================================================================
+   ONE DESK - REALISTIC NATIVE APP DESIGN SYSTEM (DESKTOP + MOBILE)
+   Inspired by Apple macOS / iPadOS & Modern Desktop Applications (Linear, Raycast)
+   Pure Native App Look & Feel - Eliminates All Inherited Web-Page Quirks
+   ========================================================================== */
+
+/* ── 1. NATIVE APP TYPOGRAPHY & SMOOTHING ── */
+:root {
+  --app-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+  --app-font-mono: ui-monospace, "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
+  
+  /* Primary Accent & Glow */
+  --app-accent: #4f46e5;
+  --app-accent-hover: #4338ca;
+  --app-accent-glow: rgba(79, 70, 229, 0.25);
+  --app-accent-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  
+  /* Light Theme Surfaces */
+  --app-bg: #f8fafc;
+  --app-canvas: #f8fafc;
+  --app-surface: #ffffff;
+  --app-surface-elevated: #ffffff;
+  --app-surface-subtle: #f1f5f9;
+  --app-border: rgba(15, 23, 42, 0.08);
+  --app-border-hover: rgba(15, 23, 42, 0.16);
+  --app-border-focus: rgba(79, 70, 229, 0.5);
+  
+  /* Glass & Blur */
+  --app-glass-bg: rgba(255, 255, 255, 0.85);
+  --app-glass-border: rgba(226, 232, 240, 0.85);
+  --app-header-glass: rgba(248, 250, 252, 0.88);
+  --app-sidebar-glass: rgba(255, 255, 255, 0.92);
+  
+  /* Shadows */
+  --app-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --app-shadow-sm: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --app-shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.06), 0 2px 8px -1px rgba(15, 23, 42, 0.03);
+  --app-shadow-lg: 0 16px 40px -6px rgba(15, 23, 42, 0.09), 0 4px 14px -2px rgba(15, 23, 42, 0.04);
+  --app-shadow-glow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  
+  /* Radii */
+  --app-radius-xs: 6px;
+  --app-radius-sm: 10px;
+  --app-radius-md: 14px;
+  --app-radius-lg: 18px;
+  --app-radius-xl: 24px;
+  --app-radius-full: 9999px;
+  
+  /* Physics & Transitions */
+  --app-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --app-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+html.dark {
+  --app-bg: #0b0f19;
+  --app-canvas: #0b0f19;
+  --app-surface: #131b2e;
+  --app-surface-elevated: #1a243d;
+  --app-surface-subtle: #182238;
+  --app-border: rgba(255, 255, 255, 0.08);
+  --app-border-hover: rgba(255, 255, 255, 0.16);
+  --app-border-focus: rgba(129, 140, 248, 0.5);
+  
+  --app-glass-bg: rgba(19, 27, 46, 0.85);
+  --app-glass-border: rgba(255, 255, 255, 0.08);
+  --app-header-glass: rgba(11, 15, 25, 0.88);
+  --app-sidebar-glass: rgba(19, 27, 46, 0.92);
+  
+  --app-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --app-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --app-shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
+  --app-shadow-lg: 0 20px 48px -6px rgba(0, 0, 0, 0.6);
+  --app-shadow-glow: 0 0 0 3px rgba(129, 140, 248, 0.25);
+}
+
+/* ── 2. GLOBAL RESET OF INHERITED BROWSER ARTIFACTS ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  font-family: var(--app-font-sans);
+  background-color: var(--app-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.011em;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+/* Eliminate browser default focus rectangle and apply native glowing ring */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--app-shadow-glow) !important;
+}
+
+/* ── 3. NATIVE FLOATING ULTRA-THIN SCROLLBARS ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: var(--app-radius-full);
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+/* ── 4. NATIVE APP SHELL (SIDEBAR & HEADER) ── */
+#app-sidebar, aside.w-64 {
+  background: var(--app-sidebar-glass) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid var(--app-border) !important;
+  box-shadow: 2px 0 16px -4px rgba(15, 23, 42, 0.03);
+  transition: width 0.3s var(--app-spring), transform 0.3s var(--app-spring);
+}
+
+/* Nav Item Ergonomics */
+.nav-item, #app-sidebar nav button, aside nav button, .sidebar-nav-btn {
+  border-radius: var(--app-radius-md) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  letter-spacing: -0.01em !important;
+  padding: 8px 12px !important;
+  transition: all 0.2s var(--app-ease-out) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+.nav-item:hover, #app-sidebar nav button:hover, aside nav button:hover {
+  background: rgba(79, 70, 229, 0.07) !important;
+  color: var(--app-accent) !important;
+  transform: translateX(2px);
+}
+
+html.dark .nav-item:hover, html.dark #app-sidebar nav button:hover, html.dark aside nav button:hover {
+  background: rgba(129, 140, 248, 0.12) !important;
+  color: #c7d2fe !important;
+}
+
+/* Active Nav Item - Apple-style vibrant soft pill */
+.nav-active, .nav-item.active, [data-nav-active="true"] {
+  background: var(--app-accent-gradient) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px -1px var(--app-accent-glow), 0 2px 6px -1px rgba(79, 70, 229, 0.2) !important;
+  font-weight: 700 !important;
+}
+
+.nav-active iconify-icon, .nav-item.active iconify-icon {
+  color: #ffffff !important;
+}
+
+/* Header App Bar */
+header.border-b, .app-header-bar {
+  background: var(--app-header-glass) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid var(--app-border) !important;
+  position: sticky !important;
+  top: 0;
+  z-index: 40;
+}
+
+/* ── 5. REALISTIC APP CARDS & CONTAINERS ── */
+.bg-white, .app-card, [id$="-view"] .rounded-2xl.border, [id$="-view"] .rounded-3xl.border {
+  background-color: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+}
+
+html.dark .bg-white, html.dark .app-card {
+  background-color: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+}
+
+/* Elevate main dashboard and data containers */
+.rounded-2xl {
+  border-radius: var(--app-radius-lg) !important;
+}
+
+.rounded-3xl {
+  border-radius: var(--app-radius-xl) !important;
+}
+
+/* Modern Card Box Shadows */
+.shadow-sm {
+  box-shadow: var(--app-shadow-xs) !important;
+}
+
+.shadow, .shadow-md {
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+.shadow-lg, .shadow-xl {
+  box-shadow: var(--app-shadow-md) !important;
+}
+
+/* ── 6. NATIVE BUTTONS & MICRO-PRESS PHYSICS ── */
+button, .btn {
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none;
+  font-family: inherit;
+  transition: all 0.18s var(--app-ease-out);
+}
+
+button:active, .btn:active {
+  transform: scale(0.975) translateY(0.5px) !important;
+}
+
+button:disabled, .btn:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Primary Button Styling */
+button.bg-indigo-600, .btn-primary {
+  background: var(--app-accent-gradient) !important;
+  box-shadow: 0 4px 14px -2px var(--app-accent-glow), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  font-weight: 700 !important;
+}
+
+button.bg-indigo-600:hover, .btn-primary:hover {
+  box-shadow: 0 6px 20px -2px var(--app-accent-glow), 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  filter: brightness(1.04);
+}
+
+/* Secondary Button Styling */
+button.bg-slate-100, .btn-secondary {
+  background: var(--app-surface-subtle) !important;
+  border: 1px solid var(--app-border) !important;
+  color: #334155 !important;
+}
+
+html.dark button.bg-slate-100, html.dark .btn-secondary {
+  color: #cbd5e1 !important;
+}
+
+button.bg-slate-100:hover, .btn-secondary:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.dark button.bg-slate-100:hover, html.dark .btn-secondary:hover {
+  background: #1e293b !important;
+  color: #ffffff !important;
+}
+
+/* ── 7. REFINED FORM CONTROLS & DROPDOWNS ── */
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="search"], textarea, select {
+  font-family: inherit;
+  font-size: 13px;
+  background-color: var(--app-surface) !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-md) !important;
+  padding: 8px 12px;
+  color: inherit;
+  transition: all 0.2s var(--app-ease-out);
+}
+
+input:hover, textarea:hover, select:hover {
+  border-color: var(--app-border-hover) !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--app-accent) !important;
+  box-shadow: var(--app-shadow-glow) !important;
+  background-color: var(--app-surface-elevated) !important;
+}
+
+/* Custom Select Dropdown Arrow */
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px !important;
+}
+
+/* ── 8. MODERN APP TABLES & LISTS ── */
+table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: 100%;
+}
+
+/* Sticky Blurred Table Headers */
+thead th {
+  background: var(--app-header-glass) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+  border-bottom: 1px solid var(--app-border) !important;
+}
+
+html.dark thead th {
+  color: #94a3b8 !important;
+}
+
+/* Sleek Table Rows */
+tbody tr {
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+tbody tr:hover {
+  background-color: rgba(79, 70, 229, 0.035) !important;
+}
+
+html.dark tbody tr:hover {
+  background-color: rgba(129, 140, 248, 0.05) !important;
+}
+
+tbody tr td {
+  border-bottom: 1px solid var(--app-border) !important;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* Active running task row glow */
+tr.bg-indigo-50\/30, tr[data-active-row="true"] {
+  background-color: rgba(79, 70, 229, 0.06) !important;
+  position: relative;
+}
+
+html.dark tr.bg-indigo-50\/30, html.dark tr[data-active-row="true"] {
+  background-color: rgba(129, 140, 248, 0.1) !important;
+}
+
+/* ── 9. STATUS PILLS & BADGES ── */
+.rounded-full.border, .status-pill, .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  border-radius: var(--app-radius-full) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* ── 10. REALISTIC ACTIVE TASK CARD (NOW PLAYING STYLE) ── */
+#active-task-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--app-radius-xl) !important;
+  border: 1px solid var(--app-border) !important;
+  background: linear-gradient(145deg, var(--app-surface) 0%, var(--app-surface-subtle) 100%) !important;
+  box-shadow: var(--app-shadow-md) !important;
+}
+
+#active-task-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--app-accent-gradient);
+}
+
+#task-timer-display {
+  font-family: var(--app-font-mono) !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  font-weight: 800 !important;
+}
+
+/* Live timer pulse pill in table rows */
+.live-task-timer {
+  font-family: var(--app-font-mono) !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  border-radius: var(--app-radius-sm) !important;
+}
+
+/* ── 11. MODAL DIALOGS (NATIVE SHEET ELEVATION) ── */
+dialog {
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-xl) !important;
+  background: var(--app-surface-elevated) !important;
+  box-shadow: var(--app-shadow-lg), 0 0 0 100vw rgba(15, 23, 42, 0.45) !important;
+  padding: 0 !important;
+  overflow: hidden;
+  max-width: 95vw;
+}
+
+dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+html.dark dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* ── 12. SEGMENTED TAB CONTROLS (PILL SLIDER) ── */
+.tasks-hub-tab-btn, [id^="tab-btn-"] {
+  border-radius: var(--app-radius-md) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.2s var(--app-spring) !important;
+}
+
+.tasks-hub-tab-btn:hover, [id^="tab-btn-"]:hover {
+  transform: translateY(-1px);
+}
+
+/* ── 13. TOAST NOTIFICATIONS (NATIVE FLOATING CAPSULE) ── */
+#toast, .toast, [id^="toast-"] {
+  border-radius: var(--app-radius-lg) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  box-shadow: var(--app-shadow-lg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ── 14. POLISHED RESPONSIVE CONTENT AREA ── */
+#content-area {
+  background-color: var(--app-canvas) !important;
+}
+
+/* Cursor pointer enforcement on all interactive elements */
+[onclick], a, button, select, input[type="checkbox"], input[type="radio"], summary {
+  cursor: pointer !important;
+}
+

@@ -545,7 +545,7 @@ function getDaysForCurrentMonth() {
     const year = matrixCurrentDate.getFullYear();
     const month = matrixCurrentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocalYMD();
 
     const days = [];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1256,7 +1256,7 @@ function saveTaskEdit(taskId) {
 
 function addMatrixTaskRowPrompt(clientStr = '', dateStr = '') {
     const client = clientStr || (matrixFilterClient !== 'All' ? matrixFilterClient : '');
-    const todayStr = dateStr || new Date().toISOString().split('T')[0];
+    const todayStr = dateStr || new Date().toLocalYMD();
     openAssignMonthlyPlanModal(client, todayStr);
 }
 
@@ -1555,7 +1555,7 @@ async function duplicateCurrentWeekMatrix() {
         const oldDate = new Date(y, m - 1, d);
         oldDate.setDate(oldDate.getDate() + 7);
 
-        const newDateStr = oldDate.toISOString().split('T')[0];
+        const newDateStr = oldDate.toLocalYMD();
         const newTaskId = 'STRAT-CLONE-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
 
         await saveMatrixTaskToFirebase(newTaskId, {
@@ -1599,7 +1599,7 @@ function exportMatrixPlannerCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Matrix_Plan_${matrixCurrentDate.toISOString().split('T')[0]}.csv`;
+    a.download = `Matrix_Plan_${matrixCurrentDate.toLocalYMD()}.csv`;
     a.click();
 }
 
@@ -1645,7 +1645,7 @@ function openAssignMonthlyPlanModal(clientStr = '', dateStr = '') {
     if (dateInp) {
         const year = matrixCurrentDate.getFullYear();
         const month = String(matrixCurrentDate.getMonth() + 1).padStart(2, '0');
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocalYMD();
         dateInp.value = dateStr || (today.startsWith(`${year}-${month}`) ? today : `${year}-${month}-01`);
     }
 
