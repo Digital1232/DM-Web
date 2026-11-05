@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.71">
+    <meta name="app-version" content="1.0.72">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -90,6 +90,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
     <!-- Social Analytics Import Module -->
     <script defer src="js/socialAnalyticsImport.js"></script>
+    <script defer src="js/toasts.js"></script>
     <script>
         window.getInitialsAvatar = window.getInitialsAvatar || function (nameOrEmail) {
             var str = (nameOrEmail || '?').toString().trim();
@@ -1605,43 +1606,6 @@
             z-index: -9998 !important;
         }
 
-        .toast,
-        #toast,
-        #toast:popover-open,
-        [popover].toast {
-            position: fixed !important;
-            inset: auto !important;
-            margin: 0 !important;
-            bottom: 24px !important;
-            right: 24px !important;
-            top: auto !important;
-            left: auto !important;
-            z-index: 2147483647 !important;
-            transform: translateY(20px);
-            opacity: 0;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-            pointer-events: none;
-            border: 1px solid rgba(226, 232, 240, 0.9);
-            box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.25) !important;
-            max-width: 380px !important;
-            width: auto !important;
-        }
-
-        .toast.show,
-        #toast.show,
-        #toast:popover-open.show,
-        [popover].toast.show {
-            position: fixed !important;
-            inset: auto !important;
-            bottom: 24px !important;
-            right: 24px !important;
-            top: auto !important;
-            left: auto !important;
-            transform: translateY(0) !important;
-            opacity: 1 !important;
-            pointer-events: auto !important;
-        }
-
         .hidden-sidebar {
             width: 0 !important;
             min-width: 0 !important;
@@ -2037,12 +2001,6 @@
             background: rgba(148, 163, 184, 0.2) !important;
         }
 
-
-        .toast.show {
-            transform: translateY(0);
-            opacity: 1;
-            pointer-events: auto;
-        }
 
         .report-chart-wrap {
             position: relative;
@@ -2686,13 +2644,6 @@
 
         html.dark dialog::backdrop {
             background: rgba(9, 12, 20, 0.72);
-            backdrop-filter: blur(18px);
-        }
-
-        html.dark .toast {
-            background: rgba(22, 31, 46, 0.92) !important;
-            border-color: rgba(38, 50, 72, 0.9) !important;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, .35) !important;
             backdrop-filter: blur(18px);
         }
 
@@ -3757,20 +3708,6 @@
     </div>
 
 
-    <!-- Toast Notification -->
-    <div id="toast" popover="manual"
-        class="toast flex items-center gap-3 px-4 py-3 rounded-xl bg-white shadow-2xl border border-slate-100 min-w-[300px]">
-        <div id="toast-icon" class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"></div>
-        <div class="flex-1 min-w-0">
-            <p id="toast-title" class="text-xs font-bold text-slate-900"></p>
-            <p id="toast-msg" class="text-[10px] text-slate-500 truncate"></p>
-        </div>
-        <button type="button" onclick="dismissToast(); event.stopPropagation();"
-            class="text-slate-400 hover:text-slate-600 p-1 rounded-md transition-colors shrink-0"
-            title="Dismiss notification">
-            <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
-        </button>
-    </div>
 
     <!-- Native Mobile Push Notification Banner (iOS Dynamic Island / Android Heads-Up Style) -->
     <div id="mobile-push-notification" class="mobile-push-banner" onclick="handleMobilePushClick(event)">
@@ -39865,11 +39802,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem(`worksync_last_seen_announcement_${eKey(currentUser.email)}`, String(next));
                 unreadAnnouncements = 0;
                 renderAnnouncementBadge();
-                const t = document.getElementById('toast');
-                if (t?.classList.contains('show')) {
-                    t.classList.remove('show');
-                    if (t.hidePopover && t.matches(':popover-open')) t.hidePopover();
-                }
+                dismissToast();
             }
 
             function refreshUnreadAnnouncements(data) {
@@ -51584,73 +51517,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             // UTILS
-            let toastTimeout, toastHideTimeout;
+            // Notifications are drawn by js/toasts.js (stacked, app-style cards).
             function dismissToast() {
-                const t = document.getElementById('toast');
-                if (!t) return;
-                clearTimeout(toastTimeout);
-                clearTimeout(toastHideTimeout);
-                t.classList.remove('show');
-                toastHideTimeout = setTimeout(() => {
-                    try {
-                        if (t.hidePopover && t.hasAttribute('popover')) {
-                            t.hidePopover();
-                        }
-                    } catch (e) {
-                        // Ignore already hidden popover error
-                    }
-                }, 300);
+                window.OneDeskToast?.dismissAll();
             }
 
+            // toast(msg, type) | toast(msg, type, durationMs) | toast(msg, type, onClick, durationMs)
             function toast(msg, type = 'info', onClickOrDuration = null, customDuration = 3500) {
-                const t = document.getElementById('toast'), ti = document.getElementById('toast-icon'), tt = document.getElementById('toast-title'), tm = document.getElementById('toast-msg');
-                if (!t) return;
-
-                let onClick = null;
-                let duration = 3500;
-
+                if (!window.OneDeskToast) { console.log(`[${type}] ${msg}`); return; }
+                const opts = {};
                 if (typeof onClickOrDuration === 'function') {
-                    onClick = onClickOrDuration;
-                    if (typeof customDuration === 'number') duration = customDuration;
+                    opts.onClick = onClickOrDuration;
+                    if (typeof customDuration === 'number') opts.duration = customDuration;
                 } else if (typeof onClickOrDuration === 'number') {
-                    duration = onClickOrDuration;
+                    opts.duration = onClickOrDuration;
+                    opts.explicitDuration = true;
                 }
-
-                if (tt) tt.textContent = type.toUpperCase();
-                if (tm) tm.textContent = msg;
-                if (ti) {
-                    ti.className = `w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === 'success' ? 'bg-emerald-100 text-emerald-600' : (type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600')}`;
-                    ti.innerHTML = `<iconify-icon icon="${type === 'success' ? 'solar:check-circle-bold' : (type === 'error' ? 'solar:danger-circle-bold' : 'solar:info-circle-bold')}" width="20"></iconify-icon>`;
-                }
-
-                t.onclick = onClick ? (e) => { onClick(e); dismissToast(); } : null;
-                t.style.cursor = onClick ? 'pointer' : 'default';
-
-                clearTimeout(toastTimeout);
-                clearTimeout(toastHideTimeout);
-
-                // Ensure toast stays attached to document.body and never reparented inside dialogs
-                try {
-                    if (t.parentElement !== document.body) {
-                        document.body.appendChild(t);
-                    }
-                } catch (dialogErr) {
-                    console.warn('Toast parent error:', dialogErr);
-                }
-
-                try {
-                    if (t.showPopover && t.hasAttribute('popover')) {
-                        t.showPopover();
-                    }
-                } catch (e) {
-                    // Ignore if already open or not supported
-                }
-
-                requestAnimationFrame(() => t.classList.add('show'));
-
-                toastTimeout = setTimeout(() => {
-                    dismissToast();
-                }, duration);
+                window.OneDeskToast.show(msg, type, opts);
             }
 
             function updateSystemStatus(ok, message, isAutoSync = false) {
@@ -60328,7 +60211,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.filterAssignPlanTasks = filterAssignPlanTasks; window.submitAssignPlan = submitAssignPlan;
             window.toggleDpUserDropdown = toggleDpUserDropdown; window.selectAllDpUsers = selectAllDpUsers; window.handleDpUserCheckChange = handleDpUserCheckChange; window.updateDpUserLabel = updateDpUserLabel;
             window.updateTaskStatus = updateTaskStatus; window.removeFromDailyPlan = removeFromDailyPlan; window.checkAndCreateThumbnailSubTask = checkAndCreateThumbnailSubTask; window.loadQcTaskDetails = loadQcTaskDetails; window.setQcRating = setQcRating;
-            window.dismissToast = dismissToast;
+            window.dismissToast = dismissToast; window.toast = toast;
             window.fmAddSubFolder = fmAddSubFolder; window.fmCloseSubFolderModal = fmCloseSubFolderModal; window.fmSaveSubFolder = fmSaveSubFolder; window.fmDeleteSubFolder = fmDeleteSubFolder; window.openTaskResourcesDrawer = openTaskResourcesDrawer; window.closeTaskResourcesDrawer = closeTaskResourcesDrawer; window.openInFileManager = openInFileManager; window.copyTaskFolderPath = copyTaskFolderPath; window.openParentFolderInFm = openParentFolderInFm; window.changeTaskFolder = changeTaskFolder; window.openFolderBreadcrumb = openFolderBreadcrumb; window.isStrategyTask = isStrategyTask; window.renderTaskNameHtml = renderTaskNameHtml; window.linkFileManagerSourceForStrategy = linkFileManagerSourceForStrategy; window.updateStrategyFolderUI = updateStrategyFolderUI; window.openAddStrategyEventModal = openAddStrategyEventModal; window.openEditStrategyEventModal = openEditStrategyEventModal; window.closeStrategyEventModal = closeStrategyEventModal; window.saveStrategyEvent = saveStrategyEvent; window.handleOpenAlertTask = handleOpenAlertTask; window.openReworkQcModal = openReworkQcModal; window.dismissReworkQcModal = dismissReworkQcModal; window.checkReworkAndQcTaskPopups = checkReworkAndQcTaskPopups; window.isReworkStatus = isReworkStatus; window.isQcStatus = isQcStatus; window.isPendingQcTask = isPendingQcTask; window.renderQcTasks = renderQcTasks; window.selectQcTask = selectQcTask; window.submitQcReport = submitQcReport; window.loadQcReports = loadQcReports; window.openQcReportDetails = openQcReportDetails; window.copyDailyReport = copyDailyReport;
             window.openDpEditModal = openDpEditModal; window.saveDpEdit = saveDpEdit;
             window.addTaskToApSelection = addTaskToApSelection; window.removeTaskFromApSelection = removeTaskFromApSelection; window.renderApSelectedTasks = renderApSelectedTasks; window.apSelectedTasks = apSelectedTasks;
