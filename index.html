@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.69">
+    <meta name="app-version" content="1.0.70">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -4216,7 +4216,16 @@
                     </button>
                     <h2 id="view-title" class="text-sm font-bold text-slate-900 tracking-tight">Dashboard Overview</h2>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2.5">
+                    <!-- Sync from Jira Button -->
+                    <button onclick="syncTasks(false, true)" id="sync-btn"
+                        title="Sync all tasks from Jira"
+                        class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-bold rounded-full px-3.5 py-1.5 shadow-sm shadow-indigo-100 transition-all cursor-pointer">
+                        <iconify-icon icon="solar:refresh-circle-bold" id="sync-icon" width="15" height="15"></iconify-icon>
+                        <span class="hidden sm:inline">Sync from Jira</span>
+                        <span class="sm:hidden">Sync</span>
+                    </button>
+
                     <!-- System Status -->
                     <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-200">
                         <div id="system-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
@@ -4868,12 +4877,6 @@
                                         class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
                                         <iconify-icon icon="solar:add-circle-bold"></iconify-icon>
                                         Add Task
-                                    </button>
-                                    <button onclick="syncTasks(false, true)" id="sync-btn"
-                                        title="Sync all tasks from Jira"
-                                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-indigo-100 transition-all cursor-pointer">
-                                        <iconify-icon icon="solar:refresh-circle-bold" id="sync-icon"></iconify-icon>
-                                        Sync from Jira
                                     </button>
                                 </div>
                             </div>
@@ -17329,7 +17332,7 @@
             const DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail'];
             const DAILY_PLAN_ALLOCATION_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
             const INTERNAL_DAILY_PLAN_CARRY_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Learnings'];
-            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework', 'Learnings'];
+            const INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES = ['To do', 'In Progress', 'Hold', 'Rework', 'Learnings', 'Thumbnail Waiting', 'Thumbnail'];
             const INTERNAL_DAILY_PLAN_ALLOCATION_STATUSES = ['To do', 'In Progress', 'Hold', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Learnings'];
             const MORNING_LEARNING_SLOT = '09:00-10:00';
             const MORNING_LEARNING_TITLE = 'Morning Learning (9:00 AM – 10:00 AM)';
@@ -19251,9 +19254,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 });
 
-                // 3. Auto-included Jira tasks
+                // 3. Auto-included Jira tasks (Thumbnail Waiting, Rework, etc.)
+                const normalizedCollectEmail = (userEmail || '').trim().toLowerCase();
+                const isKarthikaCollector = normalizedCollectEmail === 'karthikavilpower@gmail.com';
                 tasks
-                    .filter(task => DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .filter(task => {
+                        if (!task) return false;
+                        const s = (task.status || '').trim().toLowerCase();
+                        const isThumb = s.includes('thumbnail');
+                        const isRework = s.includes('rework');
+                        const statusMatch = DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(st => st.toLowerCase() === s) || isThumb || isRework;
+                        const userMatch = assigneeMatches(task, userEmail) || (isKarthikaCollector && isThumb);
+                        return statusMatch && userMatch;
+                    })
                     .forEach(task => {
                         if (!seenIds.has(task.id)) {
                             plannedTasks.push(task);
@@ -19263,7 +19276,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // 4. Auto-included Internal tasks
                 tasks
-                    .filter(task => isInternalTask(task) && INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && assigneeMatches(task, userEmail))
+                    .filter(task => {
+                        if (!task || !isInternalTask(task)) return false;
+                        const s = (task.status || '').trim().toLowerCase();
+                        const isThumb = s.includes('thumbnail');
+                        const isRework = s.includes('rework');
+                        const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(st => st.toLowerCase() === s) || isThumb || isRework;
+                        const userMatch = assigneeMatches(task, userEmail) || (isKarthikaCollector && isThumb);
+                        return statusMatch && userMatch;
+                    })
                     .forEach(task => {
                         if (!seenIds.has(task.id)) {
                             plannedTasks.push(task);
@@ -19406,10 +19427,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 // Single unified pass for auto-include & completed tasks
+                const isKarthika = normalizedEmail === 'karthikavilpower@gmail.com';
                 for (let i = 0; i < allTasksList.length; i++) {
                     const task = allTasksList[i];
                     if (!task || !task.id) continue;
-                    if (!assigneeMatches(task, userEmail)) continue;
+
+                    const taskStatusLower = (task.status || '').trim().toLowerCase();
+                    const isThumbnailTask = taskStatusLower.includes('thumbnail');
+                    const isReworkTask = taskStatusLower.includes('rework');
+                    const userMatch = assigneeMatches(task, userEmail) || (isKarthika && isThumbnailTask);
+                    if (!userMatch) continue;
+
+                    // Exclude any tasks not belonging to the current month
+                    if (!_isCurrentMonthTask(task, dateStr)) continue;
 
                     let shouldAutoInclude = false;
 
@@ -19421,8 +19451,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // Condition B: DAILY_PLAN_AUTO_INCLUDE_STATUSES (current-month Jira tasks only)
-                    if (!shouldAutoInclude && DAILY_PLAN_AUTO_INCLUDE_STATUSES.includes(task.status) && _isCurrentMonthJiraTask(task)) {
-                        if (!task.duedate) {
+                    const isJiraAutoStatus = DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(s => s.toLowerCase() === taskStatusLower) || isThumbnailTask || isReworkTask;
+                    if (!shouldAutoInclude && isJiraAutoStatus && _isCurrentMonthJiraTask(task)) {
+                        // Thumbnail Waiting and Rework tasks MUST always be auto-included regardless of future duedates
+                        if (isThumbnailTask || isReworkTask || !task.duedate) {
                             shouldAutoInclude = true;
                         } else {
                             const taskDue = new Date(task.duedate);
@@ -19431,16 +19463,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     }
 
-                    // Exclude any tasks not belonging to the current month
-                    if (!_isCurrentMonthTask(task, dateStr)) continue;
-
                     // Condition C: INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES
                     if (!shouldAutoInclude && isInternalTask(task)) {
                         const isLearning = isMorningLearningTask(task);
-                        const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(s => s.toLowerCase() === (task.status || '').toLowerCase()) ||
-                            (task.status || '').toLowerCase() === 'to do' || isLearning;
+                        const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(s => s.toLowerCase() === taskStatusLower) ||
+                            taskStatusLower === 'to do' || isLearning || isThumbnailTask || isReworkTask;
                         if (statusMatch) {
-                            if (!task.duedate || isLearning) {
+                            if (!task.duedate || isLearning || isThumbnailTask || isReworkTask) {
                                 if (isLearning) {
                                     const isDueToday = !task.duedate || task.duedate === dateStr || dateStr === todayIso();
                                     if (isDueToday) shouldAutoInclude = true;
@@ -53185,10 +53214,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function collectDailyPlanRowsForView(preCollected) {
                 let uniquePlans;
+                const dateStr = document.getElementById('dp-date')?.value || todayIso();
                 if (preCollected && Array.isArray(preCollected)) {
                     uniquePlans = [...preCollected].filter(t => typeof _isCurrentMonthTask === 'function' ? _isCurrentMonthTask(t, dateStr) : true);
                 } else {
-                    const dateStr = document.getElementById('dp-date')?.value || todayIso();
                     uniquePlans = [];
                     getDailyPlanTargetUserEmails().forEach(userEmail => {
                         uniquePlans.push(...collectDailyPlanTasksForUser(userEmail, dateStr));
@@ -53216,14 +53245,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
-                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''}`.toLowerCase();
+                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''} ${t.format || ''} ${t.title || ''}`.toLowerCase();
                         const isThumb = status.includes('thumbnail') || desc.includes('thumbnail') || desc.includes('thumb');
                         return isThumb && isDailyPlanBeforeQcStatus(t.status);
                     });
                 } else if (dpFilter === 'posters') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
-                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''}`.toLowerCase();
+                        const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''} ${t.format || ''} ${t.title || ''}`.toLowerCase();
                         const isThumb = status.includes('thumbnail') || desc.includes('thumbnail') || desc.includes('thumb');
                         const isVideo = status.includes('video') || status.includes('reel') || status.includes('shoot') ||
                             desc.includes('video') || desc.includes('reel') || desc.includes('shoot') || desc.includes('editing');
