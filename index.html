@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.63">
+    <meta name="app-version" content="1.0.64">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -29549,7 +29549,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (contentDedupMap.has(dedupKey)) {
                                 const existingId = contentDedupMap.get(dedupKey);
                                 const existingTask = map.get(existingId);
-                                if (existingTask) {
+                                // Never let the running task be merged away — its id must stay in `tasks`
+                                // or the timer loses its task (Hold/End buttons vanish, time logs lose desc/client).
+                                let replaceWithActive = false;
+                                if (existingTask && existingId !== task.id && activeTaskId) {
+                                    if (existingId === activeTaskId) return; // keep the active one, drop the copy
+                                    if (task.id === activeTaskId) {
+                                        map.delete(existingId);
+                                        contentDedupMap.set(dedupKey, task.id);
+                                        replaceWithActive = true; // fall through and add the active task normally
+                                    }
+                                }
+                                if (existingTask && !replaceWithActive) {
                                     Object.assign(existingTask, task);
                                     return; // Skip duplicate task object
                                 }
@@ -30306,7 +30317,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!u.currentTask || !u.currentTask.taskId) return;
                     const ct = u.currentTask;
                     const ctId = String(ct.taskId).trim();
-                    const existing = tasks.find(t => t.id === ctId || (t.desc && ct.taskDesc && t.desc.toLowerCase().trim() === ct.taskDesc.toLowerCase().trim()));
+                    // Prefer an exact id match; fall back to name only if the id isn't loaded
+                    const existing = tasks.find(t => t.id === ctId) || tasks.find(t => t.desc && ct.taskDesc && t.desc.toLowerCase().trim() === ct.taskDesc.toLowerCase().trim());
                     if (!existing) {
                         const synthesized = {
                             id: ctId,
