@@ -758,7 +758,7 @@
         import { FB_CONFIG, USERS, knownUserByEmail } from './config.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
-        import { getDatabase, ref, onValue, onChildAdded, onChildChanged, off, set, push, update, remove, query, limitToLast, get } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js';
+        import { getDatabase, ref, onValue, onChildAdded, onChildChanged, off, set, push, update, remove, query, limitToLast, get, onDisconnect, orderByKey, endBefore, startAt } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js';
         import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
         // Firebase Initialization
@@ -796,6 +796,503 @@
         USERS.forEach(u => {
             if (u && u.email) allUsersMap.set(u.email.toLowerCase(), { ...u });
         });
+
+        // ── Standalone helpers (ported from index.html) ──
+function scrollChatToBottom(smooth = false) {
+                const area = document.getElementById('messages-area');
+                if (!area) return;
+                const doScroll = () => {
+                    if (smooth) {
+                        area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+                    } else {
+                        area.scrollTop = area.scrollHeight;
+                    }
+                };
+                doScroll();
+                requestAnimationFrame(doScroll);
+                setTimeout(doScroll, 60);
+                setTimeout(doScroll, 180);
+            }
+
+let chatNotificationsMuted = localStorage.getItem('worksync_chat_muted') === 'true';
+
+async function getAllUsers() {
+                const snap = await get(ref(db, 'worksync/users'));
+                const fbUsers = snap.val() || {};
+                const merged = new Map();
+                USERS.forEach(u => merged.set(u.email.toLowerCase(), { ...u }));
+                Object.entries(fbUsers).forEach(([fbKey, u]) => {
+                    if (!u || typeof u !== 'object') return;
+                    let email = (u.email || '').toLowerCase().trim();
+                    if (!email) {
+                        const matched = USERS.find(k => eKey(k.email) === fbKey);
+                        if (matched) email = matched.email.toLowerCase();
+                    }
+                    if (!email && u.name) {
+                        const matchedName = USERS.find(k => k.name && k.name.toLowerCase().trim() === u.name.toLowerCase().trim());
+                        if (matchedName) email = matchedName.email.toLowerCase();
+                    }
+                    if (!email && fbKey.includes('_')) {
+                        const matchedAll = Array.from(merged.values()).find(k => k.email && eKey(k.email) === fbKey);
+                        if (matchedAll) email = matchedAll.email.toLowerCase();
+                    }
+                    if (email) {
+                        merged.set(email, { ...(merged.get(email) || {}), ...u, email });
+                    }
+                });
+                try {
+                    const savedUser = JSON.parse(localStorage.getItem('worksync_user') || '{}');
+                    if (savedUser && savedUser.email && (savedUser.profilePicture || savedUser.photoURL)) {
+                        const sEmail = savedUser.email.toLowerCase();
+                        merged.set(sEmail, { ...(merged.get(sEmail) || {}), ...savedUser, profilePicture: savedUser.profilePicture || savedUser.photoURL });
+                    }
+                } catch (e) { }
+                if (typeof currentUser !== 'undefined' && currentUser && currentUser.email && (currentUser.profilePicture || currentUser.photoURL)) {
+                    const cEmail = currentUser.email.toLowerCase();
+                    merged.set(cEmail, { ...(merged.get(cEmail) || {}), ...currentUser, profilePicture: currentUser.profilePicture || currentUser.photoURL });
+                }
+                // Ensure canonical single Alex email only (alexvilpower@gmail.com)
+                const alexCanonical = merged.get('alexvilpower@gmail.com') || merged.get('alex@vilpower.com');
+                if (alexCanonical) {
+                    merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
+                }
+                // Strip duplicate alex@vilpower.com and thanush from allUsersMap
+                merged.delete('alex@vilpower.com');
+                merged.delete('thanushvilpower@gmail.com');
+                merged.delete('thanush@vilpower.com');
+
+                // Auto-cleanup from Firebase database if authenticated
+                if (typeof remove === 'function' && typeof ref === 'function' && typeof db !== 'undefined' && db) {
+                    remove(ref(db, 'worksync/users/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/users/alex_vilpower_com')).catch(() => {});
+                    remove(ref(db, 'worksync/daily_plans/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/daily_plans/alex_vilpower_com')).catch(() => {});
+                    remove(ref(db, 'worksync/manual_tasks/thanushvilpower_gmail_com')).catch(() => {});
+                    remove(ref(db, 'worksync/manual_tasks/alex_vilpower_com')).catch(() => {});
+                }
+                return merged; // Return the map directly
+            }
+
+let activeConvOldestTimestamp = null;
+
+let activeConvOldestMessageKey = null;
+
+let activeConvHasMore = false;
+
+let activeConvLoadingMore = false;
+
+let activeConvHistoryDepleted = false;
+
+function resetChatLayoutScroll() {
+                let n = document.getElementById('chat-input-area')?.parentElement;
+                while (n && n !== document.documentElement) {
+                    if (n.id !== 'messages-area' && n.scrollTop) n.scrollTop = 0;
+                    n = n.parentElement;
+                }
+                const root = document.scrollingElement;
+                if (root && root.scrollTop) root.scrollTop = 0;
+            }
+
+let activeGroupMembers = [];
+
+function docFileIcon(type, name) {
+                const t = (type || '').toLowerCase();
+                const n = (name || '').toLowerCase();
+                if (t === 'application/pdf' || n.endsWith('.pdf')) return { icon: 'solar:file-text-bold', color: '#ef4444', label: 'PDF' };
+                if (t.includes('word') || n.endsWith('.docx') || n.endsWith('.doc')) return { icon: 'solar:file-bold', color: '#3b82f6', label: 'Word' };
+                if (t.includes('excel') || t.includes('spreadsheet') || n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv')) return { icon: 'solar:file-bold', color: '#22c55e', label: 'Excel' };
+                if (t.includes('powerpoint') || t.includes('presentation') || n.endsWith('.pptx') || n.endsWith('.ppt')) return { icon: 'solar:file-bold', color: '#f59e0b', label: 'PPT' };
+                if (t.includes('zip') || t.includes('rar') || t.includes('compressed')) return { icon: 'solar:file-bold', color: '#8b5cf6', label: 'Archive' };
+                return { icon: 'solar:file-download-bold', color: '#6366f1', label: 'File' };
+            }
+
+function getSafePdfUrl(url, name) {
+                if (!url) return '';
+                let strUrl = String(url);
+                if (strUrl.startsWith('data:')) return strUrl;
+                const isPdf = (name || strUrl).toLowerCase().includes('.pdf');
+                // For Cloudinary image-uploaded PDFs, add fl_attachment to force download instead of inline render
+                if (isPdf && strUrl.includes('cloudinary.com') && strUrl.includes('/image/upload/')) {
+                    const cleanName = encodeURIComponent(name || 'document.pdf');
+                    if (!strUrl.includes('fl_attachment')) {
+                        return strUrl.replace('/image/upload/', `/image/upload/fl_attachment:${cleanName}/`);
+                    }
+                }
+                // For raw uploads that snuck through (legacy URLs), convert to image path for accessibility
+                if (isPdf && strUrl.includes('cloudinary.com') && strUrl.includes('/raw/upload/')) {
+                    strUrl = strUrl.replace('/raw/upload/', '/image/upload/');
+                    const cleanName = encodeURIComponent(name || 'document.pdf');
+                    return strUrl.replace('/image/upload/', `/image/upload/fl_attachment:${cleanName}/`);
+                }
+                return strUrl;
+            }
+
+let tasks = [];
+
+function statusClass(s) {
+                const style = getStatusStyle(s);
+                return `${style.bg} ${style.text}`;
+            }
+
+function openNewTaskModal() { window.location.href = 'index.html#tasks'; }
+
+let chatGalleryImages = [];
+
+let chatGalleryIndex = 0;
+
+function scrollChatMessageIntoView(el, smooth = true) {
+                const area = document.getElementById('messages-area');
+                if (!area || !el || !area.contains(el)) return;
+                const offset = el.getBoundingClientRect().top - area.getBoundingClientRect().top;
+                const top = area.scrollTop + offset - (area.clientHeight - el.offsetHeight) / 2;
+                area.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+                resetChatLayoutScroll();
+            }
+
+function isDone(status) {
+                return isCompletedTask(status);
+            }
+
+function isInternalDone(status) {
+                return isCompletedTask(status);
+            }
+
+function isInternalTask(t) {
+                if (!t) return false;
+                const tId = String(t.id || t.taskId || '').toUpperCase().trim();
+                if (tId.startsWith('M-') || tId.startsWith('LEARN-') || tId.startsWith('MP-') || tId.startsWith('DISC-') || tId.startsWith('P-')) return true;
+                if (t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true') return true;
+                return typeof isJiraCloudTask === 'function' ? !isJiraCloudTask(t) : false;
+            }
+
+let replyToMessageId = null;
+
+async function uploadToCloudinary(file) {
+                // Non-media files (PDFs, docs, etc.) — upload via Hostinger API first to avoid base64 storage bloat
+                if (!isCloudinarySupported(file)) {
+                    try {
+                        const hostingerRes = await uploadTaskFile(file);
+                        return {
+                            url: hostingerRes.url,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            hostinger: true
+                        };
+                    } catch (hErr) {
+                        console.warn('Hostinger document upload failed, attempting Cloudinary auto upload:', hErr);
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('upload_preset', CLOUDINARY_PRESET);
+
+                            // CRITICAL FIX: Preserve filename and prevent .ai conversion
+                            // Upload PDFs as image type with format=pdf forced (raw/upload gives 401 on this account)
+                            const fileName = file.name || 'file';
+                            const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+                            const fileExt = (fileName.substring(fileName.lastIndexOf('.') + 1) || 'pdf').toLowerCase();
+
+                            // Detect if this is a PDF file
+                            const isPdfFile = fileExt === 'pdf' ||
+                                fileName.toLowerCase().endsWith('.pdf') ||
+                                file.type === 'application/pdf' ||
+                                file.type === 'application/postscript' ||
+                                (file.type || '').includes('illustrator');
+
+                            if (isPdfFile) {
+                                // Force format=pdf so Cloudinary doesn't auto-detect as .ai
+                                formData.append('format', 'pdf');
+                                // public_id includes folder prefix — don't also append 'folder' or it double-nests
+                                formData.append('public_id', `worksync_chat/${fileNameWithoutExt}`);
+                            } else {
+                                formData.append('folder', 'worksync_chat');
+                            }
+
+                            // Use /image/upload for PDFs (raw/upload gives 401 on this account)
+                            const uploadType = isPdfFile ? 'image' : 'auto';
+                            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${uploadType}/upload`, {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (res.ok) {
+                                const data = await res.json();
+                                return {
+                                    url: data.secure_url,
+                                    type: file.type || 'application/octet-stream',
+                                    name: file.name,
+                                    size: data.bytes,
+                                    cloudinary: true
+                                };
+                            }
+                        } catch (cErr) {
+                            console.warn('Cloudinary auto upload failed:', cErr);
+                        }
+
+                        // Fallback to base64 for small files (< 3MB) if server upload fails
+                        const MAX_DOC_SIZE = 3 * 1024 * 1024;
+                        if (file.size > MAX_DOC_SIZE) {
+                            throw new Error(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Upload failed. Documents over 3MB require upload server.`);
+                        }
+                        const base64 = await fileToBase64(file);
+                        return {
+                            url: base64,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            cloudinary: false,
+                            isDoc: true
+                        };
+                    }
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('upload_preset', CLOUDINARY_PRESET);
+
+                // CRITICAL FIX: Preserve filename for PDFs and prevent .ai conversion
+                // Upload PDFs as image type with format=pdf forced (raw/upload gives 401 on this account)
+                const fileName = file.name || 'file';
+                const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+                const fileExt = (fileName.substring(fileName.lastIndexOf('.') + 1) || '').toLowerCase();
+
+                // Detect if this is a PDF file
+                const isPdfFile = fileExt === 'pdf' ||
+                    fileName.toLowerCase().endsWith('.pdf') ||
+                    file.type === 'application/pdf' ||
+                    file.type === 'application/postscript' ||
+                    (file.type || '').includes('illustrator');
+
+                if (isPdfFile) {
+                    // Force format=pdf so Cloudinary doesn't auto-detect as .ai
+                    formData.append('format', 'pdf');
+                    // public_id includes folder prefix — don't also append 'folder' or it double-nests
+                    formData.append('public_id', `worksync_chat/${fileNameWithoutExt}`);
+                } else {
+                    formData.append('folder', 'worksync_chat');
+                }
+
+                // Use /image/upload for PDFs (raw/upload gives 401 on this account)
+                const uploadType = isPdfFile ? 'image' : 'auto';
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${uploadType}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    try {
+                        const hostingerRes = await uploadTaskFile(file);
+                        return {
+                            url: hostingerRes.url,
+                            type: file.type || 'application/octet-stream',
+                            name: file.name,
+                            size: file.size,
+                            hostinger: true
+                        };
+                    } catch (hErr) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error?.message || `Cloudinary upload failed (${res.status})`);
+                    }
+                }
+
+                const data = await res.json();
+                return {
+                    url: data.secure_url,
+                    type: file.type || 'application/octet-stream',
+                    name: file.name,
+                    size: data.bytes,
+                    cloudinary: true
+                };
+            }
+
+function fileToBase64(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => {
+                        let res = reader.result;
+                        if (file && file.name && file.name.toLowerCase().endsWith('.pdf') && typeof res === 'string') {
+                            res = res.replace(/^data:[^;]+;/, 'data:application/pdf;');
+                        }
+                        resolve(res);
+                    };
+                    reader.onerror = error => reject(error);
+                });
+            }
+
+let stagedAttachments = [];
+
+let mentionActive = false;
+
+let mentionFilter = '';
+
+let mentionIndex = 0;
+
+async function imageFileToAvatarDataUrl(file) {
+                const url = URL.createObjectURL(file);
+                try { return await shrinkImageToDataUrl(url); } finally { URL.revokeObjectURL(url); }
+            }
+
+function getStatusStyle(status) {
+                const s = (status || '').trim().toLowerCase();
+                if (STATUS_CATEGORIES.COMPLETED.statuses.includes(s)) {
+                    return STATUS_CATEGORIES.COMPLETED;
+                }
+                if (STATUS_CATEGORIES.WORKING.statuses.includes(s)) {
+                    return STATUS_CATEGORIES.WORKING;
+                }
+                // Default to WAITING / PENDING
+                return STATUS_CATEGORIES.WAITING;
+            }
+
+function isCompletedTask(status) {
+                if (!status) return false;
+                const s = String(status).trim().toLowerCase();
+                if (DAILY_PLAN_COMPLETED_STATUS_SET.has(s) ||
+                    s.startsWith('done') ||
+                    s.startsWith('posted') ||
+                    s.startsWith('completed')) {
+                    return true;
+                }
+                const style = getStatusStyle(status);
+                return style.bg.includes('emerald');
+            }
+
+function isJiraCloudTask(task) {
+                return task && !task.manual && /^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '');
+            }
+
+function isCloudinarySupported(file) {
+                const t = (file.type || '').toLowerCase();
+                return t.startsWith('image/') || t.startsWith('video/');
+            }
+
+async function uploadTaskFile(file) {
+                if (file.size > MAX_UPLOAD_SIZE) {
+                    throw new Error(`File too large. Max: 100 MB, Got: ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch(HOSTINGER_UPLOAD_URL, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || `Upload failed (${response.status})`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.success) {
+                        throw new Error(data.error || 'Upload failed');
+                    }
+
+                    return {
+                        url: data.file_url,
+                        name: data.file_name,
+                        size: data.file_size,
+                        uploadedAt: data.uploaded_at,
+                        type: file.type
+                    };
+                } catch (err) {
+                    console.error('Upload to Hostinger failed:', err);
+                    throw err;
+                }
+            }
+
+let CLOUDINARY_PRESET = 'One Desk';
+
+let CLOUDINARY_CLOUD = 'dhmcegvco';
+
+function shrinkImageToDataUrl(src, maxPx = AVATAR_MAX_PX, quality = 0.85) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const scale = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+                            const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                            const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = '#ffffff'; // JPEG has no transparency
+                            ctx.fillRect(0, 0, w, h);
+                            ctx.drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', quality));
+                        } catch (e) { reject(e); }
+                    };
+                    img.onerror = () => reject(new Error('Could not read image'));
+                    img.src = src;
+                });
+            }
+
+let STATUS_CATEGORIES = {
+                WORKING: {
+                    bg: 'bg-blue-100',
+                    text: 'text-blue-700',
+                    icon: 'solar:play-circle-bold',
+                    statuses: [
+                        'in progress', 'content in progress', 'design in progress',
+                        'quality check', 'qc', 'thumbnail waiting', 'rework designs',
+                        'in review', 'review', 'testing', 'qa', 'shoot in progress',
+                        'thumbnail', 'discussion', 'learnings', 'learning', 'rework'
+                    ]
+                },
+                WAITING: {
+                    bg: 'bg-amber-100',
+                    text: 'text-amber-700',
+                    icon: 'solar:clock-circle-bold',
+                    statuses: [
+                        'to do', 'shoot needed', 'client content approval',
+                        'design to do', 'design hold', 'hold', 'on hold',
+                        'backlog', 'selected for development', 'shoot planned'
+                    ]
+                },
+                COMPLETED: {
+                    bg: 'bg-emerald-100',
+                    text: 'text-emerald-700',
+                    icon: 'solar:check-circle-bold',
+                    statuses: [
+                        'design completed', 'posted', 'done', 'analytics',
+                        'client sent', 'client approved', 'completed', 'shoot completed',
+                        'resolved', 'closed', 'approved', 'shoot cancelled',
+                        'skipped', 'missed', 'published', 'post completed', 'post done'
+                    ]
+                }
+            };
+
+let DAILY_PLAN_COMPLETED_STATUS_SET = new Set([
+                'quality check',
+                'qc started',
+                'qc',
+                'completed',
+                'design completed',
+                'client sent',
+                'client approved',
+                'posted',
+                'analytics',
+                'done',
+                'resolved',
+                'closed',
+                'approved',
+                'shoot completed',
+                'shoot cancelled',
+                'skipped',
+                'missed',
+                'published',
+                'post completed',
+                'post done'
+            ]);
+
+let MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
+
+let HOSTINGER_UPLOAD_URL = 'https://onedesk.vilpower.com/api/upload-task-file.php';
+
+let AVATAR_MAX_PX = 256;
 
         // Chat core logic
             function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
