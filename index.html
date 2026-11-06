@@ -36306,8 +36306,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function showInAppChatNotification(msg, conv, convId, openAction) {
                 const banner = document.getElementById('mobile-push-notification');
                 if (!banner) {
-                    const title = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'Team Member');
-                    showInAppChatNotification(msg, conv, convId, openAction);
+                    // No banner element on this page: fall back to a toast (never call ourselves again).
+                    const fbTitle = conv?.type === 'group' && conv?.name ? `${conv.name} - ${msg.senderName}` : (msg.senderName || 'Team Member');
+                    const fbText = msg.text ? msg.text.substring(0, 45) : 'Attachment';
+                    if (typeof toast === 'function') toast(`New message from ${fbTitle}: ${fbText}`, 'info', openAction, 4500);
                     return;
                 }
 
