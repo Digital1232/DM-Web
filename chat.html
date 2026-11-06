@@ -5557,11 +5557,32 @@ let AVATAR_MAX_PX = 256;
             // Initialize chat
             initChat();
 
+            // Opened from a notification click: chat.html?conv=<id>&type=dm|group&name=..&email=..&pic=..
+            let openedFromUrl = false;
+            try {
+                const params = new URLSearchParams(location.search);
+                const urlConv = params.get('conv');
+                if (urlConv) {
+                    const isDm = params.get('type') === 'dm' || urlConv.startsWith('dm_');
+                    const urlEmail = params.get('email');
+                    const urlName = params.get('name') || '';
+                    const urlPic = params.get('pic') || '';
+                    if (isDm && urlEmail) {
+                        openDm(urlEmail, urlName, urlPic);
+                    } else {
+                        openConversation(urlConv, urlName || (isDm ? 'Chat' : 'Group'), isDm ? 'dm' : 'group', urlPic);
+                    }
+                    openedFromUrl = true;
+                    // Drop the params so a refresh restores the last active chat instead.
+                    history.replaceState(null, '', location.pathname);
+                }
+            } catch (e) { console.warn('[Chat] Could not open conversation from URL:', e); }
+
             // Restore last active conversation if remembered
             const myKey = eKey(currentUser.email);
             try {
                 const saved = JSON.parse(localStorage.getItem('worksync_last_active_conv_' + myKey) || 'null');
-                if (saved && saved.convId) {
+                if (!openedFromUrl && saved && saved.convId) {
                     openConversation(saved.convId, saved.name, saved.type, saved.avatar);
                 }
             } catch(e) {}

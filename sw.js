@@ -3,7 +3,7 @@
  * Provides offline shell support, asset caching, and PWABuilder / TWA compliance.
  */
 
-const CACHE_NAME = 'onedesk-pwa-v1.0.83';
+const CACHE_NAME = 'onedesk-pwa-v1.0.84';
 
 // Core shell assets to pre-cache
 const PRECACHE_ASSETS = [
@@ -101,22 +101,37 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
 
+  const isChatPage = (c) => {
+    try { return new URL(c.url).pathname.endsWith('/chat.html'); } catch (e) { return false; }
+  };
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url && 'focus' in client) {
-          return client.focus().then((focusedClient) => {
-            if (focusedClient) {
-              focusedClient.postMessage({
-                type: 'NOTIFICATION_CLICK',
-                chatData: data
-              });
-            }
+      // Prefer an already-open dedicated chat window, then any other One Desk window.
+      const target = clientList.find(isChatPage) || clientList.find((c) => c.url && 'focus' in c);
+      if (target) {
+        return target.focus().then((focusedClient) => {
+          (focusedClient || target).postMessage({
+            type: 'NOTIFICATION_CLICK',
+            chatData: data
           });
-        }
+        });
       }
+
+      // Nothing open: open the dedicated chat page straight on the conversation.
       if (self.clients.openWindow) {
-        return self.clients.openWindow('/#chat');
+        const url = new URL('chat.html', self.registration.scope);
+        if (data.convId) {
+          url.searchParams.set('conv', data.convId);
+          if (data.type) url.searchParams.set('type', data.type);
+          if (data.name) url.searchParams.set('name', data.name);
+          if (data.senderEmail) url.searchParams.set('email', data.senderEmail);
+          // Photos can be huge data: URIs; only pass real URLs.
+          if (/^https?:\/\//.test(data.profilePicture || '') && data.profilePicture.length < 500) {
+            url.searchParams.set('pic', data.profilePicture);
+          }
+        }
+        return self.clients.openWindow(url.href);
       }
     })
   );
