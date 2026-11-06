@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.72">
+    <meta name="app-version" content="1.0.73">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -17024,8 +17024,8 @@
                         if (currentUser && uEmail === currentUser.email.toLowerCase() && activeTaskId) {
                             curTask = {
                                 taskId: activeTaskId,
-                                taskDesc: (tasks.find(t => t.id === activeTaskId)?.desc) || '',
-                                client: (tasks.find(t => t.id === activeTaskId)?.client) || '',
+                                taskDesc: activeTaskDetails().desc,
+                                client: activeTaskDetails().client,
                                 state: taskOnHold ? 'on_hold' : 'working',
                                 startedAt: taskStartTime || Date.now(),
                                 currentSeconds: taskSeconds || 0
@@ -29685,7 +29685,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     }
 
-                    const merged = { ...(map.get(task.id) || {}), ...task };
+                    // A live stand-in row (see ensureEmployeeCurrentTasksInTasks) never overrides real
+                    // task data, and real data fully replaces a stand-in (no leftover manual/internal flags).
+                    const prev = map.get(task.id);
+                    if (prev && task.isLiveStandIn && !prev.isLiveStandIn) return;
+                    const base = (prev && prev.isLiveStandIn && !task.isLiveStandIn) ? {} : (prev || {});
+                    const merged = { ...base, ...task };
                     if (merged.client) {
                         merged.client = resolveClientDisplay(merged.client);
                     }
@@ -30788,24 +30793,38 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Prefer an exact id match; fall back to name only if the id isn't loaded and matches same user
                     const existing = tasks.find(t => isSameTaskId(t.id, ctId)) || tasks.find(t => t.desc && ct.taskDesc && t.desc.toLowerCase().trim() === ct.taskDesc.toLowerCase().trim() && ((t.userId || '').toLowerCase() === (u.email || '').toLowerCase() || (t.assigneeEmail || '').toLowerCase() === (u.email || '').toLowerCase()));
                     if (!existing) {
+                        // Stand-in so the running task is visible. Prefer a real name from
+                        // other sources; only show the ID when no name is known.
+                        const savedName = realTaskName(ct.taskDesc);
+                        const known = savedName ? null : lookupTaskInfo(ctId);
+                        const name = savedName || known?.desc || known?.summary || known?.title || ctId;
+                        const looksInternal = /^(M|A|P|MP|LEARN|DISC)-/i.test(ctId);
                         const synthesized = {
                             id: ctId,
-                            desc: ct.taskDesc || 'Active Task',
-                            summary: ct.taskDesc || 'Active Task',
+                            desc: name,
+                            summary: name,
                             status: ct.status || (ct.state === 'working' ? 'In Progress' : 'Hold'),
-                            client: ct.client || 'Others',
+                            client: ct.client || known?.client || 'Others',
                             priority: ct.priority || 'Medium',
                             assignee: u.name || u.email,
                             assigneeEmail: u.email,
                             userId: u.email,
-                            manual: true,
-                            taskType: 'internal',
+                            isLiveStandIn: true,
+                            manual: looksInternal,
+                            taskType: looksInternal ? 'internal' : 'jira',
                             duedate: todayIso(),
                             createdAt: ct.startedAt || Date.now()
                         };
                         tasks.unshift(synthesized);
                         added = true;
                     } else {
+                        // A stand-in picks up the real name once the user's live status has it
+                        if (existing.isLiveStandIn && realTaskName(ct.taskDesc) && existing.desc !== ct.taskDesc) {
+                            existing.desc = ct.taskDesc;
+                            existing.summary = ct.taskDesc;
+                            if (ct.client) existing.client = ct.client;
+                            added = true;
+                        }
                         // Keep status in sync if user is currently working on it
                         if (ct.state === 'working' && existing.status !== 'In Progress' && !isDone(existing.status)) {
                             if (!isShootTask(existing) && existing.status !== 'Shoot In Progress') {
@@ -32603,22 +32622,65 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return tasks.filter(t => !isDone(t.status) && assigneeMatches(t, 'me'));
             }
 
-            async function saveCurrentTaskState(state = 'working', details = null) {
-                if (!activeTaskId) return;
-                const task = tasks.find(t => isSameTaskId(t.id, activeTaskId)) || { id: activeTaskId, desc: '', client: '' };
+            // "Active Task" was a placeholder that sometimes got saved as a real name; treat it as unknown.
+            function realTaskName(name) {
+                const n = String(name || '').trim();
+                return n && n !== 'Active Task' ? n : '';
+            }
 
-                if (details !== null) currentWorkDetails = details;
+            // `tasks` can hold a stand-in row for someone's running task that isn't loaded
+            // (see ensureEmployeeCurrentTasksInTasks). Never read real task data from those.
+            function findRealTask(id) {
+                if (!id) return null;
+                return tasks.find(t => isSameTaskId(t.id, id) && !t.isLiveStandIn) || null;
+            }
 
-                let prevCached = null;
+            // Name/client of the running task, remembered when it is started, so the saved
+            // live status never goes out nameless when the task isn't in `tasks`
+            // (e.g. a Daily Plan row built from a strategy event).
+            var activeTaskSnapshot = null;
+
+            function lookupTaskInfo(id) {
+                if (!id) return null;
+                const real = findRealTask(id);
+                if (real) return real;
+                const planRow = (window._lastDailyPlanRows || []).find(t => isSameTaskId(t.id, id));
+                if (planRow) return planRow;
+                if (typeof strategyEvents !== 'undefined' && strategyEvents) {
+                    const ev = Object.values(strategyEvents).find(e => e && (isSameTaskId(e.jiraId, id) || isSameTaskId(e.jiraTaskId, id) || isSameTaskId(e.id, id)));
+                    if (ev) return { id, desc: ev.title || '', client: ev.client || '', status: ev.status || '' };
+                }
+                const log = (allTimeLogs || [])
+                    .filter(l => isSameTaskId(l.taskId, id) && realTaskName(l.taskDesc))
+                    .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))[0];
+                if (log) return { id, desc: log.taskDesc, client: log.client || '' };
+                return null;
+            }
+
+            // Best-known details of the running task. Cached values are only reused when
+            // they belong to the same task (never the previously running one).
+            function activeTaskDetails() {
+                const info = lookupTaskInfo(activeTaskId) || {};
+                const snap = (activeTaskSnapshot && isSameTaskId(activeTaskSnapshot.id, activeTaskId)) ? activeTaskSnapshot : {};
+                let cached = {};
                 try {
                     const raw = localStorage.getItem('worksync_active_task');
-                    if (raw) prevCached = JSON.parse(raw);
+                    const parsed = raw ? JSON.parse(raw) : null;
+                    if (parsed && isSameTaskId(parsed.taskId, activeTaskId)) cached = parsed;
                 } catch (e) { }
+                return {
+                    desc: realTaskName(info.desc || info.summary || info.title) || realTaskName(snap.desc) || realTaskName(cached.taskDesc),
+                    status: info.status || snap.status || cached.status || 'In Progress',
+                    client: info.client || snap.client || cached.client || '',
+                    priority: info.priority || snap.priority || cached.priority || 'Medium'
+                };
+            }
 
-                const taskDesc = task.desc || task.summary || task.title || prevCached?.taskDesc || '';
-                const status = task.status || prevCached?.status || 'In Progress';
-                const client = task.client || prevCached?.client || '';
-                const priority = task.priority || prevCached?.priority || 'Medium';
+            async function saveCurrentTaskState(state = 'working', details = null) {
+                if (!activeTaskId) return;
+                if (details !== null) currentWorkDetails = details;
+
+                const { desc: taskDesc, status, client, priority } = activeTaskDetails();
                 const curSec = (!taskOnHold && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : (taskSeconds || 0);
 
                 const payload = {
@@ -32801,7 +32863,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (activeTaskId && currentUser) {
                     try {
                         const currentSec = (!taskOnHold && taskStartTime) ? Math.floor((Date.now() - taskStartTime) / 1000) : (taskSeconds || 0);
-                        const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
+                        const task = activeTaskDetails();
                         const payload = {
                             taskId: activeTaskId,
                             taskDesc: task.desc || task.summary || task.title || '',
@@ -32823,7 +32885,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (activeTaskId && currentUser) {
                     try {
                         const currentSec = (!taskOnHold && taskStartTime) ? Math.floor((Date.now() - taskStartTime) / 1000) : (taskSeconds || 0);
-                        const task = tasks.find(t => t.id === activeTaskId) || { id: activeTaskId, desc: '', client: '' };
+                        const task = activeTaskDetails();
                         const payload = {
                             taskId: activeTaskId,
                             taskDesc: task.desc || task.summary || task.title || '',
@@ -33251,7 +33313,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
                     }
 
-                    const prevTask = tasks.find(t => isSameTaskId(t.id, activeTaskId));
+                    const prevTask = findRealTask(activeTaskId);
+                    const prevDetails = activeTaskDetails();
 
                     // Auto-hold the previous task (whether it was running or already on hold)
                     if (prevTask) {
@@ -33272,8 +33335,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Log the time segment for the previous task
                     const log = {
                         taskId: activeTaskId,
-                        taskDesc: prevTask?.desc || '',
-                        client: prevTask?.client || '',
+                        taskDesc: prevTask?.desc || prevDetails.desc,
+                        client: prevTask?.client || prevDetails.client,
                         userId: currentUser.email,
                         userName: currentUser.name,
                         startTime: taskStartTime,
@@ -33290,6 +33353,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Now, start the new task.
                 activeTaskId = id;
+                const startInfo = lookupTaskInfo(id);
+                activeTaskSnapshot = startInfo ? {
+                    id,
+                    desc: startInfo.desc || startInfo.summary || startInfo.title || '',
+                    client: startInfo.client || '',
+                    status: startInfo.status || '',
+                    priority: startInfo.priority || ''
+                } : null;
                 taskSeconds = 0;
                 taskOnHold = false;
                 taskStartTime = Date.now();
@@ -33447,7 +33518,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 stopTaskTimer();
                 taskOnHold = true;
                 if (activeTaskId) {
-                    const task = tasks.find(t => t.id === activeTaskId);
+                    const task = findRealTask(activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         if (!isShootTask(task)) {
                             updateInternalTaskStatus(activeTaskId, 'Hold');
@@ -33470,7 +33541,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 stopTaskTimer();
                 taskOnHold = true;
-                const task = tasks.find(t => t.id === activeTaskId);
+                const task = findRealTask(activeTaskId);
                 if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                     if (!isShootTask(task)) {
                         updateInternalTaskStatus(activeTaskId, 'Hold');
@@ -33490,7 +33561,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 saveCurrentTaskState('working');
                 // Update status back to In Progress for internal tasks
                 if (activeTaskId) {
-                    const task = tasks.find(t => t.id === activeTaskId);
+                    const task = findRealTask(activeTaskId);
                     if (task && isInternalTask(task) && !isMorningLearningTask(task)) {
                         task.isOnHold = false;
                         const resumeStatus = isShootTask(task) ? 'Shoot In Progress' : 'In Progress';
@@ -33514,7 +33585,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     taskSeconds = Math.floor((Date.now() - taskStartTime) / 1000);
                 }
 
-                const t = tasks.find(t => t.id === activeTaskId);
+                const t = findRealTask(activeTaskId);
                 const userRole = (currentUser?.role || '').toLowerCase();
                 const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
 
@@ -33544,8 +33615,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 const log = {
                     taskId: activeTaskId,
-                    taskDesc: t?.desc || '',
-                    client: t?.client || '',
+                    taskDesc: t?.desc || activeTaskDetails().desc,
+                    client: t?.client || activeTaskDetails().client,
                     userId: currentUser.email,
                     userName: currentUser.name,
                     startTime: taskStartTime,
@@ -53777,6 +53848,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Render stats from ALL tasks (including completed)
                 renderDailyPlanStats(allPlans);
+                window._lastDailyPlanRows = allPlans;
 
                 // Pass pre-collected allPlans to avoid re-scanning all users and tasks
                 let uniquePlans = collectDailyPlanRowsForView(allPlans);
