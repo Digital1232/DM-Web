@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.76">
+    <meta name="app-version" content="1.0.77">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -91,7 +91,6 @@
     <!-- Social Analytics Import Module -->
     <script defer src="js/socialAnalyticsImport.js"></script>
     <script defer src="js/toasts.js"></script>
-    <script defer src="js/celebrations.js"></script>
     <script>
         window.getInitialsAvatar = window.getInitialsAvatar || function (nameOrEmail) {
             var str = (nameOrEmail || '?').toString().trim();
@@ -19656,7 +19655,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (typeof initWaterWidget === 'function') initWaterWidget();
                     initAdminCheckoutReasonNotifications();
-                    initMomentWatchers();
                     setInterval(checkAutoCheckout, 60000);
                     setInterval(checkBreakLimit, 60000);
                     // Show the floating chat bubble now that everything is ready
@@ -21364,17 +21362,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 logAttendanceEvent('check_in');
                 syncActiveSessionToFirebase('running');
                 updateSessionStatus();
-                const hour = new Date().getHours();
-                const greet = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
-                const firstName = String(currentUser?.name || '').trim().split(/\s+/)[0];
-                const celebrated = window.OneDeskFx?.play('check-in', {
-                    title: `${greet}${firstName ? ', ' + firstName : ''}!`,
-                    subtitle: "You're checked in. Have a great day."
-                });
-                if (!celebrated) toast('Checked In Successfully', 'success');
+                toast('Checked In Successfully', 'success');
                 registerOnline();
-                // Let the welcome animation finish before the pending-tasks reminder opens
-                setTimeout(showCheckInPendingTasksReminder, celebrated ? 2300 : 0);
+                showCheckInPendingTasksReminder();
             }
             // AUTOMATIC BREAK STATUS POPUP SYSTEM
             function selectRandomBreakMessage() {
@@ -21400,12 +21390,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (modal && !modal.open) {
                     selectRandomBreakMessage();
                     modal.showModal();
-                    const iconEl = document.getElementById('break-popup-icon');
-                    if (iconEl && window.OneDeskFx?.enabled()) {
-                        iconEl.classList.add('has-lottie');
-                        const stopCup = window.OneDeskFx.mount(iconEl, 'break', { loop: true });
-                        modal.addEventListener('close', () => { stopCup(); iconEl.classList.remove('has-lottie'); }, { once: true });
-                    }
                 }
                 const floating = document.getElementById('breakFloatingReminder');
                 if (floating) {
@@ -21509,9 +21493,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem('worksync_timerState', 'running');
                 setTimerState('running');
                 syncActiveSessionToFirebase('running');
-                if (!window.OneDeskFx?.play('resume', { title: 'Welcome back!', subtitle: 'Your work timer is running again.' })) {
-                    toast('Work session resumed', 'success');
-                }
+                toast('Work session resumed', 'success');
 
                 // Close break popup, exceeded popup, and floating reminder
                 const modal = document.getElementById('breakStatusModal');
@@ -21581,7 +21563,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function executeCheckOut() {
                 clearInterval(timerRef);
-                const workedMs = checkInTime ? Math.max(0, Date.now() - checkInTime - (totalBreakDuration || 0)) : 0;
                 isCheckedIn = false;
                 if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) { try { holdTask(); } catch (e) { } } if (typeof clearCurrentTask === 'function') { clearCurrentTask().catch(() => { }); }
                 if (checkInTime) {
@@ -21597,14 +21578,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.removeItem('worksync_breakStartTime');
                 resetTimerUI();
                 updateSessionStatus();
-                const workedMin = Math.round(workedMs / 60000);
-                const workedText = workedMin >= 60 ? `${Math.floor(workedMin / 60)}h ${workedMin % 60}m` : `${workedMin}m`;
-                if (!window.OneDeskFx?.play('check-out', {
-                    title: 'Great work today!',
-                    subtitle: workedMs ? `You worked ${workedText}. See you tomorrow.` : 'See you tomorrow.'
-                })) {
-                    toast('Checked Out - Great job today!', 'success');
-                }
+                toast('Checked Out - Great job today!', 'success');
 
                 // Close break popup and floating reminder
                 const modal = document.getElementById('breakStatusModal');
@@ -21620,107 +21594,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     floating.classList.add('hidden');
                 }
                 stopBreakTimer();
-            }
-
-            // ── Milestone moments (js/celebrations.js) ─────────────────────────────
-            // Each fires only for a change that happens while the app is open (never just
-            // because the page loaded), and the daily ones at most once per day per device.
-            var momentSession = { goalBelow: false, planOpen: false };
-            function momentKey(name) {
-                return `onedesk_moment_${name}_${(currentUser?.email || '').toLowerCase()}_${todayIso()}`;
-            }
-            function momentDoneToday(name) {
-                try { return localStorage.getItem(momentKey(name)) === '1'; } catch (e) { return false; }
-            }
-            function markMomentDone(name) {
-                try { localStorage.setItem(momentKey(name), '1'); } catch (e) { }
-            }
-
-            // 8-hour goal and Daily Plan cleared (called from updateStats)
-            function checkDailyMoments(workedSeconds, planStats) {
-                if (!currentUser || !window.OneDeskFx) return;
-                const GOAL = 8 * 3600;
-                if (isCheckedIn && workedSeconds > 0 && workedSeconds < GOAL) momentSession.goalBelow = true;
-                if (momentSession.goalBelow && workedSeconds >= GOAL && !momentDoneToday('goal')) {
-                    markMomentDone('goal');
-                    window.OneDeskFx.play('goal-reached', { title: 'Daily goal reached!', subtitle: '8 hours of work done today. Great focus!' });
-                }
-                if (planStats && planStats.total > 0) {
-                    if (planStats.completed < planStats.total) {
-                        momentSession.planOpen = true;
-                    } else if (momentSession.planOpen && !momentDoneToday('plan')) {
-                        markMomentDone('plan');
-                        const n = planStats.total;
-                        window.OneDeskFx.play('plan-cleared', {
-                            title: 'Daily Plan cleared!',
-                            subtitle: n === 1 ? 'Your planned task for today is done.' : `All ${n} planned tasks done today.`
-                        });
-                    }
-                }
-            }
-
-            function momentDateLabel(iso) {
-                if (!iso) return '';
-                const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
-                return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            }
-
-            var momentQcUnsub = null, momentQcSeen = null;
-            var momentLeaveUnsub = null, momentLeaveSeen = null;
-            var momentWatchEmail = '';
-
-            // QC approvals and leave approvals for the signed-in user
-            function initMomentWatchers() {
-                if (!db || !currentUser) return;
-                const email = currentUser.email.toLowerCase();
-                if (momentWatchEmail === email && momentQcUnsub) return;
-                if (momentQcUnsub) momentQcUnsub();
-                if (momentLeaveUnsub) momentLeaveUnsub();
-                momentWatchEmail = email;
-                momentQcSeen = null;
-                momentLeaveSeen = null;
-
-                // Only the newest QC reports matter. Push keys are time-ordered, so key order needs no index.
-                const qcRef = query(ref(db, 'worksync/qc_reports'), orderByKey(), limitToLast(25));
-                momentQcUnsub = onValue(qcRef, snap => {
-                    const entries = Object.entries(snap.val() || {});
-                    if (momentQcSeen === null) { momentQcSeen = new Set(entries.map(([id]) => id)); return; }
-                    entries.forEach(([id, r]) => {
-                        if (momentQcSeen.has(id)) return;
-                        momentQcSeen.add(id);
-                        if (!r || !currentUser || !isQcReportForUser(r, currentUser.email)) return;
-                        if (String(r.status || r.actionStatus || '').toLowerCase() !== 'approved') return;
-                        window.OneDeskFx?.play('qc-approved', {
-                            title: 'Approved by QC!',
-                            subtitle: r.taskDesc || r.taskId || 'Your work passed quality check.'
-                        });
-                    });
-                }, err => console.warn('QC moment watcher:', err));
-
-                const isFullyApproved = r => r && (r.status === 'approved' ||
-                    (Array.isArray(r.approvals) && r.approvals.length > 0 && r.approvals.every(a => a && a.status === 'approved')));
-                const leaveRef = query(ref(db, 'worksync/requests'), orderByChild('userId'), equalTo(currentUser.email));
-                momentLeaveUnsub = onValue(leaveRef, snap => {
-                    const approved = Object.entries(snap.val() || {}).filter(([, r]) => isFullyApproved(r));
-                    if (momentLeaveSeen === null) { momentLeaveSeen = new Set(approved.map(([id]) => id)); return; }
-                    approved.forEach(([id, r]) => {
-                        if (momentLeaveSeen.has(id)) return;
-                        momentLeaveSeen.add(id);
-                        let subtitle;
-                        if (r.type === 'saturday') {
-                            subtitle = `Saturday off on ${momentDateLabel(r.date)} is confirmed.`;
-                        } else {
-                            const from = r.fromDate || r.date, to = r.toDate || from;
-                            const range = from && to && from !== to ? `${momentDateLabel(from)} – ${momentDateLabel(to)}` : momentDateLabel(from);
-                            const half = r.leaveDuration === 'first_half' ? ' (first half)' : (r.leaveDuration === 'second_half' ? ' (second half)' : '');
-                            subtitle = range ? `Your leave on ${range}${half} is confirmed.` : 'Your leave request is confirmed.';
-                        }
-                        window.OneDeskFx?.play('leave-approved', {
-                            title: r.type === 'saturday' ? 'Saturday off approved!' : 'Leave approved!',
-                            subtitle
-                        });
-                    });
-                }, err => console.warn('Leave moment watcher:', err));
             }
 
             let checkoutReasonsUnsub = null;
@@ -33595,10 +33468,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.error('Failed to save current task state:', err);
                     toast('Task started locally, but live board sync failed: ' + err.message, 'error');
                 });
-                const startedName = activeTaskDetails().desc || id;
-                if (!window.OneDeskFx?.play('task-start', { title: 'Task started', subtitle: startedName, duration: 1600 })) {
-                    toast(`Task ${id} started — timer running`, 'success');
-                }
+                toast(`Task ${id} started — timer running`, 'success');
             }
 
             function startTaskTimer() {
@@ -33775,11 +33645,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 await push(ref(db, 'worksync/timelogs'), log);
                 activeTimerSessionId = null;
                 await clearCurrentTask();
-                const doneMin = Math.max(1, Math.round(taskSeconds / 60));
-                const doneTime = doneMin >= 60 ? `${Math.floor(doneMin / 60)}h ${doneMin % 60}m` : `${doneMin} min`;
-                if (!window.OneDeskFx?.play('task-complete', { title: 'Task completed!', subtitle: `${log.taskDesc || log.taskId} · ${doneTime} logged` })) {
-                    toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
-                }
+                toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
                 activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
                 updateSessionStatus();
                 // Batch render calls instead of sequential
@@ -34964,10 +34830,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // --- User-specific task badge in sidebar (Daily Plan task count for today) ---
                 const badge = document.getElementById('task-badge');
-                let planStatsToday = null;
                 if (badge && currentUser) {
                     const todayStats = getDailyPlanStats(currentUser.email, todayIso());
-                    planStatsToday = todayStats;
                     const dailyPlanCount = todayStats.total; // Total daily plan tasks for today
                     badge.textContent = dailyPlanCount;
                     badge.classList.toggle('hidden', dailyPlanCount === 0);
@@ -34977,7 +34841,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const hours = (seconds / 3600).toFixed(1);
                 const hText = document.getElementById('hours-text'); if (hText) hText.textContent = `${hours} / 8.0 hrs`;
                 const pBar = document.getElementById('progress-bar'); if (pBar) pBar.style.width = Math.min((seconds / 28800) * 100, 100) + '%';
-                checkDailyMoments(seconds, planStatsToday);
 
                 renderRecentTasks();
                 // --- Global stats for Admin-only charts ---
@@ -37531,6 +37394,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (welcomeEl) welcomeEl.classList.add('hidden');
                 if (headerEl) headerEl.classList.remove('hidden');
                 if (inputEl) inputEl.classList.remove('hidden');
+                resetChatLayoutScroll();
 
                 // Persist last active conversation to localStorage
                 try {
@@ -38334,7 +38198,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     requestAnimationFrame(() => {
                         const divider = document.getElementById('chat-unread-divider');
                         if (divider) {
-                            divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            scrollChatMessageIntoView(divider);
                         }
                     });
                 }
@@ -38480,7 +38344,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Check if target is already in DOM
                 let el = document.querySelector(`[data-msg-id="${targetMsgId}"]`);
                 if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    scrollChatMessageIntoView(el);
                     highlightChatMessage(el);
                     return;
                 }
@@ -38527,7 +38391,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             hideChatJumpLoader();
                             const loadedEl = document.querySelector(`[data-msg-id="${targetMsgId}"]`);
                             if (loadedEl) {
-                                loadedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                scrollChatMessageIntoView(loadedEl);
                                 highlightChatMessage(loadedEl);
                             } else {
                                 toast('Loaded message into view', 'info');
@@ -58885,6 +58749,30 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.openApproveModal = openApproveModal; window.closeApproveModal = closeApproveModal; window.submitApproval = submitApproval;
             window.openEditLeaveModal = openEditLeaveModal; window.saveEditedLeave = saveEditedLeave; window.deleteLeave = deleteLeave;
             window.exportDailyReport = exportDailyReport; window.generateAndDisplayDailyReport = generateAndDisplayDailyReport;
+            // The chat window must never be scrolled as a whole: only #messages-area scrolls.
+            // If an outer container got scrolled, the header and the message box end up off screen.
+            function resetChatLayoutScroll() {
+                let n = document.getElementById('chat-input-area')?.parentElement;
+                while (n && n !== document.documentElement) {
+                    if (n.id !== 'messages-area' && n.scrollTop) n.scrollTop = 0;
+                    n = n.parentElement;
+                }
+                const root = document.scrollingElement;
+                if (root && root.scrollTop) root.scrollTop = 0;
+            }
+
+            // Bring a message into view by scrolling only the message list.
+            // (element.scrollIntoView() also scrolls every outer container, which pushed the
+            // message box below the screen when a chat with unread messages was opened.)
+            function scrollChatMessageIntoView(el, smooth = true) {
+                const area = document.getElementById('messages-area');
+                if (!area || !el || !area.contains(el)) return;
+                const offset = el.getBoundingClientRect().top - area.getBoundingClientRect().top;
+                const top = area.scrollTop + offset - (area.clientHeight - el.offsetHeight) / 2;
+                area.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+                resetChatLayoutScroll();
+            }
+
             function scrollChatToBottom(smooth = false) {
                 const area = document.getElementById('messages-area');
                 if (!area) return;
