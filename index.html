@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.74">
+    <meta name="app-version" content="1.0.75">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -31000,13 +31000,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const boardTasks = tasks
                         .filter(isInternalTask)
                         .filter(t => {
+                            // Your own running task always shows
+                            if (activeTaskId && isSameTaskId(t.id, activeTaskId)) return true;
+                            // Assignee filter comes first: in-progress tasks of other people must not
+                            // slip through the "keep working tasks visible" shortcut below
+                            if (currentInternalAssigneeFilter !== 'all' && !assigneeMatches(t, currentInternalAssigneeFilter)) return false;
                             if (isWorking(t)) return true;
                             // Status filter
                             if (currentInternalStatusFilter !== 'all' && Array.isArray(currentInternalStatusFilter) && currentInternalStatusFilter.length) {
                                 if (!currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase())) return false;
                             }
-                            // Assignee filter
-                            if (currentInternalAssigneeFilter !== 'all' && !assigneeMatches(t, currentInternalAssigneeFilter)) return false;
                             // Client filter
                             if (currentInternalClientFilter !== 'all' && t.client !== currentInternalClientFilter) return false;
                             // Due date filter
