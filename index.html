@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.73">
+    <meta name="app-version" content="1.0.74">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -32461,7 +32461,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             let _cachedFilterCriteria = null;
 
             function getAssigneeFilterCriteria(filterValue) {
-                if (_lastFilterCriteriaVal === filterValue && _cachedFilterCriteria) {
+                // Cache per signed-in user too: 'me' means someone else after an account switch,
+                // and named users resolve differently once the user list has loaded.
+                const cacheKey = `${filterValue}|${(currentUser?.email || '').toLowerCase()}|${allUsersMap.size}`;
+                if (_lastFilterCriteriaVal === cacheKey && _cachedFilterCriteria) {
                     return _cachedFilterCriteria;
                 }
                 const filterUser = filterValue === 'me'
@@ -32478,7 +32481,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const filterNameHasAjith = (filterEmail.includes('ajith') || (filterUser?.name || '').toLowerCase().includes('ajith'));
                 const filterNameHasAlex = (filterEmail.includes('alex') || (filterUser?.name || '').toLowerCase().includes('alex'));
 
-                _lastFilterCriteriaVal = filterValue;
+                _lastFilterCriteriaVal = cacheKey;
                 _cachedFilterCriteria = {
                     filterUser, filterEmail, filterName, cleanFilter, filterFirstName,
                     isMurugesh, isAjith, isAlex, filterNameHasMurugesh, filterNameHasAjith, filterNameHasAlex
@@ -32494,6 +32497,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const taskEmail = (task.assigneeEmail || task.userId || task.plannedForUser || task.owner || task.email || task.userEmail || '').toLowerCase();
 
                 if (taskEmail && crit.filterEmail && taskEmail === crit.filterEmail) return true;
+
+                // Same person under another of their known emails
+                if ((crit.isMurugesh && MURUGESH_EMAILS.includes(taskEmail)) ||
+                    (crit.isAjith && AJITH_EMAILS.includes(taskEmail)) ||
+                    (crit.isAlex && ALEX_EMAILS.includes(taskEmail))) return true;
+
+                // Internal tasks are saved with the assignee's login email. If that email is
+                // someone else's, the task isn't theirs - don't fall back to recurring-task flags
+                // or loose name matching (that put other people's tasks under "Assigned to me").
+                // Jira tasks skip this: their email comes from Jira and can differ from the login.
+                if (taskEmail.includes('@') && crit.filterEmail.includes('@') && isInternalTask(task)) return false;
 
                 // Direct alias matching for Murugesh, Ajith, and Alex
                 if (crit.isMurugesh && (MURUGESH_EMAILS.includes(taskEmail) || task.murugeshTask)) return true;
