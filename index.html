@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.77">
+    <meta name="app-version" content="1.0.78">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -150,10 +150,19 @@
             if (!userOrEmail) return window.getInitialsAvatar ? window.getInitialsAvatar('User') : '';
             if (typeof userOrEmail === 'object') {
                 if (userOrEmail.profilePicture) return userOrEmail.profilePicture;
+                if (userOrEmail.photoURL) return userOrEmail.photoURL;
+                if (userOrEmail.photo) return userOrEmail.photo;
                 var email = (userOrEmail.email || '').toLowerCase().trim();
                 if (email && map && map.get) {
                     var fullU = map.get(email);
-                    if (fullU && fullU.profilePicture) return fullU.profilePicture;
+                    if (fullU && (fullU.profilePicture || fullU.photoURL || fullU.photo)) {
+                        return fullU.profilePicture || fullU.photoURL || fullU.photo;
+                    }
+                }
+                if (typeof currentUser !== 'undefined' && currentUser && currentUser.email && email === currentUser.email.toLowerCase()) {
+                    if (currentUser.profilePicture || currentUser.photoURL || currentUser.photo) {
+                        return currentUser.profilePicture || currentUser.photoURL || currentUser.photo;
+                    }
                 }
                 var displayName = userOrEmail.name || userOrEmail.email || userOrEmail.avatar || 'User';
                 return window.getInitialsAvatar ? window.getInitialsAvatar(displayName) : '';
@@ -167,7 +176,8 @@
                         user = Array.from(map.values()).find(function (u) {
                             return (u.email && u.email.toLowerCase().trim() === key) ||
                                 (u.name && u.name.toLowerCase().trim() === key) ||
-                                (u.avatar && u.avatar.toLowerCase().trim() === key);
+                                (u.avatar && u.avatar.toLowerCase().trim() === key) ||
+                                (typeof eKey === 'function' && u.email && eKey(u.email) === key);
                         });
                     }
                 }
@@ -181,7 +191,14 @@
                             (u.avatar && u.avatar.toLowerCase().trim() === key);
                     });
                 }
-                if (user && user.profilePicture) return user.profilePicture;
+                if (user && (user.profilePicture || user.photoURL || user.photo)) {
+                    return user.profilePicture || user.photoURL || user.photo;
+                }
+                if (typeof currentUser !== 'undefined' && currentUser && (currentUser.email?.toLowerCase() === key || currentUser.name?.toLowerCase() === key)) {
+                    if (currentUser.profilePicture || currentUser.photoURL || currentUser.photo) {
+                        return currentUser.profilePicture || currentUser.photoURL || currentUser.photo;
+                    }
+                }
                 var finalName = (user && (user.name || user.avatar)) || userOrEmail.split('@')[0] || userOrEmail;
                 return window.getInitialsAvatar ? window.getInitialsAvatar(finalName) : '';
             }
@@ -15538,179 +15555,221 @@
 
     <!-- ════ STRATEGY EVENT MODAL ════ -->
     <dialog id="strategyEventModal"
-        class="rounded-3xl shadow-2xl p-6 w-full max-w-lg bg-white border border-slate-100 backdrop:bg-slate-900/40 max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-5">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <iconify-icon icon="solar:calendar-mark-bold-duotone" width="22"></iconify-icon>
+        class="rounded-2xl shadow-2xl p-0 w-full max-w-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm">
+        <div class="flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-center shrink-0 shadow-2xs">
+                        <iconify-icon icon="solar:calendar-mark-bold-duotone" width="22"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 id="strategy-modal-title" class="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Add Strategy Event</h3>
+                        <p class="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">Plan & organize marketing campaigns</p>
+                    </div>
                 </div>
+                <button type="button" onclick="closeStrategyEventModal()"
+                    class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer" title="Close">
+                    <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 space-y-4 overflow-y-auto flex-1">
+                <input type="hidden" id="strategy-event-id">
+
+                <!-- Title Field -->
                 <div>
-                    <h3 id="strategy-modal-title" class="text-sm font-black text-slate-900">Add Strategy Event</h3>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Plan & Organize Campaigns
-                    </p>
-                </div>
-            </div>
-            <button onclick="closeStrategyEventModal()"
-                class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"><iconify-icon
-                    icon="solar:close-circle-bold" width="20"></iconify-icon></button>
-        </div>
-
-        <div class="space-y-4">
-            <input type="hidden" id="strategy-event-id">
-
-            <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Event Title /
-                    Campaign Name</label>
-                <input id="strategy-title" type="text" placeholder="e.g. Summer Promo Launch"
-                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-            </div>
-
-            <!-- File Manager Source Folder Selector -->
-            <div>
-                <div class="flex items-center justify-between mb-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        File Manager Source Folder <span class="text-slate-300 font-normal lowercase">(optional)</span>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Event Title / Campaign Name <span class="text-rose-500 font-bold">*</span>
                     </label>
-                    <button type="button" id="strategy-folder-clear-btn" onclick="clearStrategyFolderSelection()"
-                        class="hidden text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline flex items-center gap-1 cursor-pointer">
-                        <iconify-icon icon="solar:trash-bin-trash-bold" width="12"></iconify-icon> Clear Folder
-                    </button>
+                    <input id="strategy-title" type="text" placeholder="e.g. Summer Promo Launch"
+                        class="w-full bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none transition-all shadow-2xs">
                 </div>
-                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-2.5 overflow-hidden flex-1">
-                        <div
-                            class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/50">
-                            <iconify-icon icon="solar:folder-with-files-bold-duotone" width="20"></iconify-icon>
+
+                <!-- File Manager Source Folder Selector -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            File Manager Source Folder <span class="text-slate-400 font-normal lowercase">(optional)</span>
+                        </label>
+                        <button type="button" id="strategy-folder-clear-btn" onclick="clearStrategyFolderSelection()"
+                            class="hidden text-xs text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-1 cursor-pointer transition-colors">
+                            <iconify-icon icon="solar:trash-bin-trash-bold" width="13"></iconify-icon> Clear Folder
+                        </button>
+                    </div>
+                    <div class="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/90 dark:border-slate-700/80 rounded-xl p-3 flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                        <div class="flex items-center gap-2.5 overflow-hidden flex-1">
+                            <div
+                                class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-900/50 shadow-2xs">
+                                <iconify-icon icon="solar:folder-with-files-bold-duotone" width="20"></iconify-icon>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p id="strategy-folder-display"
+                                    class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                    No folder linked
+                                </p>
+                                <p id="strategy-folder-subtext"
+                                    class="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate mt-0.5">
+                                    Select source folder from File Manager
+                                </p>
+                            </div>
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <p id="strategy-folder-display"
-                                class="text-xs font-bold text-slate-800 dark:text-white truncate">
-                                No folder linked
-                            </p>
-                            <p id="strategy-folder-subtext"
-                                class="text-[10px] text-slate-400 font-medium truncate mt-0.5">
-                                Select source folder from File Manager
-                            </p>
+                        <input type="hidden" id="strategy-folder-path" value="">
+                        <button type="button" onclick="linkFileManagerSourceForStrategy()"
+                            class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-600/20 hover:scale-[1.02]">
+                            <iconify-icon icon="solar:link-circle-bold" width="16"></iconify-icon>
+                            <span id="strategy-folder-btn-text">Link Source Folder</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Link Existing Jira Task Field -->
+                <div class="relative">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Link Existing Jira Task <span class="text-slate-400 font-normal lowercase">(optional)</span>
+                        </label>
+                        <button type="button" id="strategy-jira-clear-btn" onclick="clearStrategyJiraSelection()"
+                            class="hidden text-xs text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-1 cursor-pointer transition-colors">
+                            <iconify-icon icon="solar:trash-bin-trash-bold" width="13"></iconify-icon> Clear Link
+                        </button>
+                    </div>
+                    <input id="strategy-jira-id" type="hidden">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <iconify-icon icon="solar:magnifer-linear" width="16"
+                                class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                            <input id="strategy-jira-search" type="text"
+                                placeholder="Search Jira task key (e.g. EIS-101) or title..."
+                                onkeydown="if(event.key === 'Enter'){ event.preventDefault(); fetchJiraTasksForStrategy(); }"
+                                class="w-full bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-9 pr-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none transition-all shadow-2xs">
+                        </div>
+                        <button type="button" onclick="fetchJiraTasksForStrategy()"
+                            class="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer border border-indigo-200/60 dark:border-indigo-800/60 shadow-2xs">
+                            <iconify-icon icon="solar:magnifer-bold" width="14"></iconify-icon>
+                            Search
+                        </button>
+                    </div>
+
+                    <!-- Selected Task Display Badge -->
+                    <div id="strategy-jira-selected" class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400 px-3 py-2 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-2">
+                        No task selected
+                    </div>
+
+                    <!-- Dropdown Search Results Container -->
+                    <div id="strategy-jira-dropdown"
+                        class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+                    </div>
+                </div>
+
+                <!-- 2-Column Grid: Date & Assignee -->
+                <div class="grid grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Date <span class="text-rose-500 font-bold">*</span>
+                        </label>
+                        <input id="strategy-date" type="date"
+                            class="w-full bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none transition-all shadow-2xs">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Assignee
+                        </label>
+                        <div class="relative">
+                            <select id="strategy-owner"
+                                class="w-full appearance-none bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-3.5 pr-8 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none transition-all shadow-2xs cursor-pointer">
+                                <!-- User options dynamically loaded -->
+                            </select>
+                            <iconify-icon icon="solar:alt-arrow-down-linear" width="14"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
                         </div>
                     </div>
-                    <input type="hidden" id="strategy-folder-path" value="">
-                    <button type="button" onclick="linkFileManagerSourceForStrategy()"
-                        class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100 dark:shadow-none hover:scale-[1.02]">
-                        <iconify-icon icon="solar:link-circle-bold" width="16"></iconify-icon>
-                        <span id="strategy-folder-btn-text">Link Source Folder</span>
-                    </button>
                 </div>
-            </div>
-            <!-- Link Existing Jira Task Field -->
-            <div class="relative">
-                <div class="flex items-center justify-between mb-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        Link Existing Jira Task <span class="text-slate-300 font-normal lowercase">(optional)</span>
-                    </label>
-                    <button type="button" id="strategy-jira-clear-btn" onclick="clearStrategyJiraSelection()"
-                        class="hidden text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline flex items-center gap-1 cursor-pointer">
-                        <iconify-icon icon="solar:trash-bin-trash-bold" width="12"></iconify-icon> Clear Link
-                    </button>
-                </div>
-                <input id="strategy-jira-id" type="hidden">
-                <div class="flex gap-2">
-                    <div class="relative flex-1">
-                        <input id="strategy-jira-search" type="text"
-                            placeholder="Search Jira task key (e.g. EIS-101) or title..."
-                            onkeydown="if(event.key === 'Enter'){ event.preventDefault(); fetchJiraTasksForStrategy(); }"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 font-semibold text-slate-800">
-                        <iconify-icon icon="solar:magnifer-linear" width="16"
-                            class="absolute right-2.5 top-3 text-slate-400 pointer-events-none"></iconify-icon>
+
+                <!-- 2-Column Grid: Format & Client -->
+                <div class="grid grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Format / Type
+                        </label>
+                        <div class="relative">
+                            <select id="strategy-format" onchange="selectStrategyFormat(this.value, true)"
+                                class="w-full appearance-none bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-3.5 pr-8 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none transition-all shadow-2xs cursor-pointer">
+                                <option value="Video" selected>Video</option>
+                                <option value="Poster">Poster</option>
+                                <option value="Printing Material">Printing Material</option>
+                                <option value="Voice Over">Voice Over</option>
+                                <option value="AV Video">AV Video</option>
+                            </select>
+                            <iconify-icon icon="solar:alt-arrow-down-linear" width="14"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                        </div>
                     </div>
-                    <button type="button" onclick="fetchJiraTasksForStrategy()"
-                        class="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer border border-indigo-100">
-                        <iconify-icon icon="solar:magnifer-bold" width="14"></iconify-icon>
-                        Search
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Client
+                        </label>
+                        <div class="relative">
+                            <select id="strategy-client"
+                                class="w-full appearance-none bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-3.5 pr-8 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none transition-all shadow-2xs cursor-pointer">
+                                <!-- Dynamically populated -->
+                            </select>
+                            <iconify-icon icon="solar:alt-arrow-down-linear" width="14"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Field -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Status
+                    </label>
+                    <div class="relative">
+                        <select id="strategy-status"
+                            class="w-full appearance-none bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-3.5 pr-8 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none transition-all shadow-2xs cursor-pointer">
+                            <option value="To Do">To Do</option>
+                            <option value="Shoot Needed">Shoot Needed</option>
+                            <option value="Content In Progress">Content In Progress</option>
+                            <option value="Client Content Approval">Client Content Approval</option>
+                            <option value="Design To Do">Design To Do</option>
+                            <option value="Design In Progress">Design In Progress</option>
+                            <option value="Rework Designs">Rework Designs</option>
+                            <option value="Thumbnail Waiting">Thumbnail Waiting</option>
+                            <option value="Design Hold">Design Hold</option>
+                            <option value="Design Completed">Design Completed</option>
+                            <option value="Quality Check">Quality Check</option>
+                            <option value="Client Sent">Client Sent</option>
+                            <option value="Client Approved">Client Approved</option>
+                            <option value="Posted">Posted</option>
+                            <option value="Analytics">Analytics</option>
+                            <option value="Done">Done</option>
+                        </select>
+                        <iconify-icon icon="solar:alt-arrow-down-linear" width="14"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="px-6 py-4 bg-slate-50/80 dark:bg-slate-900/90 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+                <button id="strategy-delete-btn" type="button" onclick="deleteStrategyEvent()"
+                    class="hidden px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer">
+                    <iconify-icon icon="solar:trash-bin-trash-bold" width="14"></iconify-icon>
+                    Delete Event
+                </button>
+                <div class="flex items-center gap-2.5 ml-auto">
+                    <button type="button" onclick="closeStrategyEventModal()"
+                        class="px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs">
+                        Cancel
                     </button>
-                </div>
-
-                <!-- Selected Task Display Badge -->
-                <div id="strategy-jira-selected" class="mt-1.5 text-[11px] font-medium text-slate-500 px-1">
-                    No task selected
-                </div>
-
-                <!-- Dropdown Search Results Container -->
-                <div id="strategy-jira-dropdown"
-                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
-                </div>
-            </div>
-
-            <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
-                <input id="strategy-date" type="date"
-                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-            </div>
-
-            <div>
-                <label
-                    class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Assignee</label>
-                <select id="strategy-owner"
-                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                    <!-- User options will be dynamically loaded -->
-                </select>
-            </div>
-
-            <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Format /
-                    Type</label>
-                <select id="strategy-format" onchange="selectStrategyFormat(this.value, true)"
-                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10">
-                    <option value="Video" selected>Video</option>
-                    <option value="Poster">Poster</option>
-                    <option value="Printing Material">Printing Material</option>
-                    <option value="Voice Over">Voice Over</option>
-                    <option value="AV Video">AV Video</option>
-                </select>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Client</label>
-                    <select id="strategy-client"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                        <!-- Dynamically populated -->
-                    </select>
-                </div>
-                <div>
-                    <label
-                        class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status</label>
-                    <select id="strategy-status"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-4 focus:ring-indigo-500/10">
-                        <option value="To Do">To Do</option>
-                        <option value="Shoot Needed">Shoot Needed</option>
-                        <option value="Content In Progress">Content In Progress</option>
-                        <option value="Client Content Approval">Client Content Approval</option>
-                        <option value="Design To Do">Design To Do</option>
-                        <option value="Design In Progress">Design In Progress</option>
-                        <option value="Rework Designs">Rework Designs</option>
-                        <option value="Thumbnail Waiting">Thumbnail Waiting</option>
-                        <option value="Design Hold">Design Hold</option>
-                        <option value="Design Completed">Design Completed</option>
-                        <option value="Quality Check">Quality Check</option>
-                        <option value="Client Sent">Client Sent</option>
-                        <option value="Client Approved">Client Approved</option>
-                        <option value="Posted">Posted</option>
-                        <option value="Analytics">Analytics</option>
-                        <option value="Done">Done</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="flex justify-between items-center pt-2">
-                <button id="strategy-delete-btn" onclick="deleteStrategyEvent()"
-                    class="hidden px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all">Delete</button>
-                <div class="flex gap-2 ml-auto">
-                    <button onclick="closeStrategyEventModal()"
-                        class="px-4 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold">Cancel</button>
-                    <button onclick="saveStrategyEvent()" id="strategy-save-btn"
-                        class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 transition-all">Save
-                        Event</button>
+                    <button type="button" onclick="saveStrategyEvent()" id="strategy-save-btn"
+                        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-indigo-600/25 flex items-center gap-1.5">
+                        Save Event
+                    </button>
                 </div>
             </div>
         </div>
@@ -15718,9 +15777,37 @@
 
     <!-- Link Jira Task Modal -->
     <dialog id="ptLinkTaskModal"
-        class="rounded-3xl shadow-2xl p-0 w-full max-w-lg border-none overflow-hidden bg-white dark:bg-slate-900">
+        class="rounded-2xl shadow-2xl p-0 w-full max-w-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm">
         <div class="p-6 space-y-4">
             <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-900/40 flex items-center justify-center shrink-0 shadow-2xs">
+                        <iconify-icon icon="solar:link-bold-duotone" width="22"></iconify-icon>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Link Jira Task</h3>
+                        <p class="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">Connect Event with Task</p>
+                    </div>
+                </div>
+                <button type="button" onclick="document.getElementById('ptLinkTaskModal').close()"
+                    class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer" title="Close">
+                    <iconify-icon icon="solar:close-circle-bold" width="20"></iconify-icon>
+                </button>
+            </div>
+            <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">Search open tasks to link with this strategy event</p>
+            <input type="hidden" id="pt-link-event-id">
+            <div class="relative">
+                <iconify-icon icon="solar:magnifer-linear" width="16"
+                    class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></iconify-icon>
+                <input type="text" id="pt-link-search" oninput="searchJiraTasksForLinking()"
+                    placeholder="Search task ID or description..."
+                    class="w-full bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 rounded-xl pl-9 pr-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none transition-all shadow-2xs">
+            </div>
+
+            <div id="pt-link-results" class="space-y-2 max-h-60 overflow-y-auto mt-2 pr-1">
+                <!-- Results -->
+            </div>
+        </div>
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
                         <iconify-icon icon="solar:link-bold-duotone" width="22"></iconify-icon>
@@ -19621,7 +19708,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         loadDiscussions(),
                         loadQcReports(),
                         loadSnehaSelections(),
-                        getAllUsers().then(users => { allUsersMap = users; window.allUsersMap = users; if (activeView === 'chat') renderDmList(); return users; })
+                        getAllUsers().then(users => {
+                            allUsersMap = users;
+                            window.allUsersMap = users;
+                            if (activeView === 'chat') {
+                                renderDmList();
+                                if (typeof refreshActiveChatHeaderAvatar === 'function') refreshActiveChatHeaderAvatar();
+                                if (typeof renderMessages === 'function' && typeof currentConvMessages !== 'undefined' && currentConvMessages && Object.keys(currentConvMessages).length) {
+                                    renderMessages(currentConvMessages);
+                                }
+                            }
+                            return users;
+                        })
                     ]);
 
                     // Immediately trigger recurring tasks check without waiting for full background load
@@ -22774,11 +22872,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const fbUsers = snap.val() || {};
                 const merged = new Map();
                 USERS.forEach(u => merged.set(u.email.toLowerCase(), { ...u }));
-                Object.values(fbUsers).forEach(u => {
-                    if (u.email) {
-                        merged.set(u.email.toLowerCase(), { ...(merged.get(u.email.toLowerCase()) || {}), ...u });
+                Object.entries(fbUsers).forEach(([fbKey, u]) => {
+                    if (!u || typeof u !== 'object') return;
+                    let email = (u.email || '').toLowerCase().trim();
+                    if (!email) {
+                        const matched = USERS.find(k => eKey(k.email) === fbKey);
+                        if (matched) email = matched.email.toLowerCase();
+                    }
+                    if (!email && u.name) {
+                        const matchedName = USERS.find(k => k.name && k.name.toLowerCase().trim() === u.name.toLowerCase().trim());
+                        if (matchedName) email = matchedName.email.toLowerCase();
+                    }
+                    if (!email && fbKey.includes('_')) {
+                        const matchedAll = Array.from(merged.values()).find(k => k.email && eKey(k.email) === fbKey);
+                        if (matchedAll) email = matchedAll.email.toLowerCase();
+                    }
+                    if (email) {
+                        merged.set(email, { ...(merged.get(email) || {}), ...u, email });
                     }
                 });
+                try {
+                    const savedUser = JSON.parse(localStorage.getItem('worksync_user') || '{}');
+                    if (savedUser && savedUser.email && (savedUser.profilePicture || savedUser.photoURL)) {
+                        const sEmail = savedUser.email.toLowerCase();
+                        merged.set(sEmail, { ...(merged.get(sEmail) || {}), ...savedUser, profilePicture: savedUser.profilePicture || savedUser.photoURL });
+                    }
+                } catch (e) { }
+                if (typeof currentUser !== 'undefined' && currentUser && currentUser.email && (currentUser.profilePicture || currentUser.photoURL)) {
+                    const cEmail = currentUser.email.toLowerCase();
+                    merged.set(cEmail, { ...(merged.get(cEmail) || {}), ...currentUser, profilePicture: currentUser.profilePicture || currentUser.photoURL });
+                }
                 // Ensure canonical single Alex email only (alexvilpower@gmail.com)
                 const alexCanonical = merged.get('alexvilpower@gmail.com') || merged.get('alex@vilpower.com');
                 if (alexCanonical) {
@@ -35927,6 +36050,52 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             let chatConversations = {};
             let chatMessageCache = {};
+
+            // ── Saved copy of recent chat messages on this device ──────────────────
+            // Opening a chat shows these instantly (even after a reload) while fresh
+            // messages load. Images stored inside a message (data: URLs) are swapped for a
+            // small placeholder here so the saved copy stays small.
+            var chatDiskCache = null;
+            const CHAT_DISK_MAX_CONVS = 15;
+            const CHAT_IMG_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="100%" height="100%" fill="#e2e8f0"/></svg>');
+            function chatDiskCacheKey() {
+                return 'worksync_chat_cache_v1_' + (currentUser?.email ? eKey(currentUser.email) : '');
+            }
+            function loadChatDiskCache() {
+                if (chatDiskCache && chatDiskCache.__owner === chatDiskCacheKey()) return chatDiskCache;
+                try { chatDiskCache = JSON.parse(localStorage.getItem(chatDiskCacheKey()) || '{}') || {}; } catch (e) { chatDiskCache = {}; }
+                Object.defineProperty(chatDiskCache, '__owner', { value: chatDiskCacheKey(), enumerable: false });
+                return chatDiskCache;
+            }
+            function slimChatMessage(m) {
+                if (!m || typeof m !== 'object') return m;
+                const big = u => typeof u === 'string' && u.startsWith('data:') && u.length > 4096;
+                const swap = a => (a && big(a.url)) ? { ...a, url: (a.type || '').startsWith('image/') ? CHAT_IMG_PLACEHOLDER : '' } : a;
+                const out = { ...m };
+                if (big(out.attachmentUrl)) out.attachmentUrl = (out.attachmentType || '').startsWith('image/') ? CHAT_IMG_PLACEHOLDER : '';
+                if (Array.isArray(out.attachments)) out.attachments = out.attachments.map(swap);
+                return out;
+            }
+            const chatDiskSaveTimers = {};
+            function saveChatDiskCache(convId, messages) {
+                if (!currentUser?.email || !convId) return;
+                clearTimeout(chatDiskSaveTimers[convId]);
+                chatDiskSaveTimers[convId] = setTimeout(() => {
+                    const cache = loadChatDiskCache();
+                    const slim = {};
+                    Object.entries(messages || {}).slice(-30).forEach(([k, m]) => { slim[k] = slimChatMessage(m); });
+                    cache[convId] = { at: Date.now(), m: slim };
+                    Object.keys(cache).sort((a, b) => (cache[b].at || 0) - (cache[a].at || 0))
+                        .slice(CHAT_DISK_MAX_CONVS).forEach(id => delete cache[id]);
+                    try {
+                        localStorage.setItem(chatDiskCacheKey(), JSON.stringify(cache));
+                    } catch (e) {
+                        // Storage full: drop the saved copy rather than break the chat
+                        try { localStorage.removeItem(chatDiskCacheKey()); } catch (_) { }
+                        chatDiskCache = null;
+                    }
+                }, 800);
+            }
             let activeConvPreviousLastSeen = 0;
             let activeConvHadUnreadOnOpen = false;
             let userOnlineListeners = {};
@@ -36028,7 +36197,71 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.switchChatSubTab = switchChatSubTab;
 
+            function refreshActiveChatHeaderAvatar() {
+                if (!activeConvId) return;
+                const avatarContainer = document.getElementById('chat-conv-avatar');
+                if (!avatarContainer) return;
+                let pic = '';
+                if (activeConvId.startsWith('group_')) {
+                    const g = (typeof chatConversations !== 'undefined' && chatConversations[activeConvId]) ? chatConversations[activeConvId] : {};
+                    if (g && (g.profilePicture || g.photoURL)) pic = g.profilePicture || g.photoURL;
+                } else {
+                    const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                    const otherKey = activeConvId.replace('dm_', '').replace(myKey, '').replace(/^_|_$/g, '');
+                    const otherUser = Array.from(allUsersMap?.values() || []).find(u => eKey(u.email) === otherKey) || (allUsersMap && allUsersMap.get && allUsersMap.get(otherKey));
+                    if (otherUser && (otherUser.profilePicture || otherUser.photoURL || otherUser.photo)) {
+                        pic = otherUser.profilePicture || otherUser.photoURL || otherUser.photo;
+                    }
+                }
+                if (pic) {
+                    const img = avatarContainer.querySelector('img');
+                    if (img) {
+                        if (img.src !== pic) img.src = pic;
+                    } else {
+                        const nameEl = document.getElementById('chat-conv-name');
+                        const safeName = (nameEl?.textContent || '').replace(/'/g, "\\'");
+                        avatarContainer.innerHTML = `<img src="${pic}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeName}')" class="w-full h-full rounded-2xl object-cover">`;
+                    }
+                }
+            }
+            window.refreshActiveChatHeaderAvatar = refreshActiveChatHeaderAvatar;
+
+            const _chatRequestedAvatars = new Set();
+            function fetchAndCacheUserAvatar(email) {
+                if (!email || typeof db === 'undefined' || !db) return;
+                const normEmail = email.toLowerCase().trim();
+                if (_chatRequestedAvatars.has(normEmail)) return;
+                _chatRequestedAvatars.add(normEmail);
+                const key = eKey(normEmail);
+                get(ref(db, `worksync/users/${key}/profilePicture`)).then(snap => {
+                    const pic = snap.val();
+                    if (pic) {
+                        let u = allUsersMap?.get(normEmail);
+                        if (!u) {
+                            u = (typeof knownUserByEmail === 'function' && knownUserByEmail(normEmail)) || { email: normEmail };
+                        }
+                        u.profilePicture = pic;
+                        if (allUsersMap) allUsersMap.set(normEmail, u);
+                        document.querySelectorAll(`img[data-sender-email="${normEmail}"]`).forEach(img => {
+                            if (img.src !== pic) img.src = pic;
+                        });
+                        if (activeConvId && !activeConvId.startsWith('group_')) {
+                            const myKey = currentUser?.email ? eKey(currentUser.email) : '';
+                            const otherKey = activeConvId.replace('dm_', '').replace(myKey, '').replace(/^_|_$/g, '');
+                            if (otherKey === key) {
+                                refreshActiveChatHeaderAvatar();
+                            }
+                        }
+                    }
+                }).catch(() => {});
+            }
+            window.fetchAndCacheUserAvatar = fetchAndCacheUserAvatar;
+
             let chatConversationsUnsub = null;
+            let chatUsersLiveUnsub = null;
+            // True once the first conversations snapshot has arrived. Before that, the chat list
+            // only holds the alphabetical staff list, so it can't tell which chat is "last".
+            var chatConversationsLoaded = false;
             let chatReadReceiptsSynced = false;
             function initChat() {
                 if (!db || !currentUser || !currentUser.email) return;
@@ -36037,9 +36270,33 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     try { chatConversationsUnsub(); } catch (e) { }
                     chatConversationsUnsub = null;
                 }
+                if (!chatUsersLiveUnsub && typeof onChildChanged === 'function') {
+                    chatUsersLiveUnsub = onChildChanged(ref(db, 'worksync/users'), snap => {
+                        const val = snap.val();
+                        if (!val) return;
+                        const fbKey = snap.key;
+                        let email = (val.email || '').toLowerCase().trim();
+                        if (!email) {
+                            const matched = USERS.find(k => eKey(k.email) === fbKey);
+                            if (matched) email = matched.email.toLowerCase();
+                        }
+                        if (email && allUsersMap) {
+                            const existing = allUsersMap.get(email) || {};
+                            allUsersMap.set(email, { ...existing, ...val, email });
+                            const pic = val.profilePicture || val.photoURL || val.photo;
+                            if (pic) {
+                                document.querySelectorAll(`img[data-sender-email="${email}"]`).forEach(img => {
+                                    if (img.src !== pic) img.src = pic;
+                                });
+                                refreshActiveChatHeaderAvatar();
+                            }
+                        }
+                    });
+                }
                 chatConversationsUnsub = onValue(ref(db, 'worksync/conversations'), snap => {
                     if (!currentUser || !currentUser.email) return;
                     chatConversations = snap.val() || {};
+                    chatConversationsLoaded = true;
                     const myKey = eKey(currentUser.email);
 
                     // Compute initial unread counts from stored lastSeen markers
@@ -36743,9 +37000,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const avatarHtml = item.avatarHtml;
                 const previewText = item.lastMessage ? escapeHtml(item.lastMessage) : (isGroup ? 'Team Group' : (item.user?.designation || 'Team Member'));
 
+                const safeUserPicJs = (item.user?.profilePicture || item.user?.photoURL || item.user?.photo || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const clickAction = isGroup
                     ? `openConversation('${safeConvIdJs}','${safeNameJs}','group','${item.group?.profilePicture || ''}')`
-                    : `openDm('${(item.user?.email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
+                    : `openDm('${(item.user?.email || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', '${safeNameJs}', '${safeUserPicJs}')`;
 
                 return `
                 <div class="relative group flex items-center pr-2 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 rounded-2xl transition-all">
@@ -36897,12 +37155,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const unread = Math.max(unreadCounts[convId] || 0, altConvId ? (unreadCounts[altConvId] || 0) : 0);
                     const name = u.name || u.email.split('@')[0];
                     const key = otherKey;
-                    const avatarSrc = u.profilePicture || getUserAvatarSrc(u);
+                    const avatarSrc = u.profilePicture || u.photoURL || u.photo || getUserAvatarSrc(u);
                     const safeEmailJs = u.email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    // No photo in the cached users list: read just this user's photo once and swap it in.
+                    if (!(u.profilePicture || u.photoURL || u.photo) && typeof fetchAndCacheUserAvatar === 'function') fetchAndCacheUserAvatar(u.email);
 
                     const avatarHtml = `
                     <div class="relative shrink-0">
-                        <img src="${avatarSrc}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeEmailJs}')" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <img src="${avatarSrc}" data-sender-email="${u.email.toLowerCase().trim()}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeEmailJs}')" class="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs">
                         <span id="online-${key}" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white dark:border-slate-900 rounded-full bg-slate-300"></span>
                     </div>`;
 
@@ -37013,18 +37273,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                                 if (found.type === 'group') {
                                                     openConversation(found.convId, found.name, 'group', found.group?.profilePicture || '');
                                                 } else if (found.user?.email) {
-                                                    openDm(found.user.email);
+                                                    openDm(found.user.email, found.name, found.user?.profilePicture || found.user?.photoURL || '');
                                                 }
+                                            } else if (!chatConversationsLoaded) {
+                                                // List still loading: open the remembered chat directly instead of
+                                                // falling back to whoever is first alphabetically
+                                                opened = true;
+                                                openConversation(saved.convId, saved.name, saved.type, saved.avatar);
                                             }
                                         }
                                     } catch (e) { }
                                 }
-                                if (!opened) {
+                                // Fall back to the most recent chat only once conversations have loaded
+                                if (!opened && chatConversationsLoaded) {
                                     const topItem = mergedList[0];
                                     if (topItem.type === 'group') {
                                         openConversation(topItem.convId, topItem.name, 'group', topItem.group?.profilePicture || '');
                                     } else if (topItem.user?.email) {
-                                        openDm(topItem.user.email);
+                                        openDm(topItem.user.email, topItem.name, topItem.user?.profilePicture || topItem.user?.photoURL || '');
                                     }
                                 }
                             }
@@ -37103,7 +37369,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 const displayName = name || other.name || otherEmail.split('@')[0];
-                const displayPhoto = photo || other.photoURL || other.profilePicture || '';
+                const displayPhoto = photo || other.profilePicture || other.photoURL || other.photo || (other ? getUserAvatarSrc(other) : '') || getUserAvatarSrc(otherEmail) || '';
 
                 // Switch view to chat first if not currently in chat view
                 if (typeof activeView !== 'undefined' && activeView !== 'chat') {
@@ -37396,38 +37662,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (inputEl) inputEl.classList.remove('hidden');
                 resetChatLayoutScroll();
 
-                // Persist last active conversation to localStorage
-                try {
-                    if (myKey && convId) {
-                        localStorage.setItem('worksync_last_active_conv_' + myKey, JSON.stringify({
-                            convId,
-                            name,
-                            type,
-                            avatar: avatar || ''
-                        }));
-                    }
-                } catch (e) { }
-
-                const chatPanel = document.getElementById('view-chat-panel');
-                if (chatPanel) {
-                    chatPanel.classList.remove('no-active-chat');
-                    chatPanel.classList.add('active-chat');
-                    document.documentElement.classList.add('in-active-chat');
-                }
-
-                const nameEl = document.getElementById('chat-conv-name');
-                if (nameEl) nameEl.textContent = name;
-
-                const statusEl = document.getElementById('chat-conv-status');
-                const onlineDot = document.getElementById('chat-conv-online-indicator');
-
-                const displayAvatar = avatar || getUserAvatarSrc(name);
-                const safeConvEscaped = (name || '').replace(/'/g, "\\'");
-                const avatarContainer = document.getElementById('chat-conv-avatar');
-                if (avatarContainer) {
-                    avatarContainer.innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-2xl object-cover">`;
-                }
-
                 // Reset to Messages subtab
                 switchChatSubTab('messages'); updateChatOptionsMenuState();
 
@@ -37435,6 +37669,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 activeGroupMembers = [];
                 let convCreator = null;
                 const cachedConv = chatConversations[convId] || (altConvId ? chatConversations[altConvId] : null) || {};
+                let otherKey = '';
+                let otherUser = null;
                 if (type === 'group') {
                     convCreator = cachedConv.createdBy;
                     if (allUsersMap && allUsersMap.size) {
@@ -37445,13 +37681,76 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (onlineDot) onlineDot.classList.add('hidden');
                 } else {
                     // DM status
-                    const otherEmail = convId.replace('dm_', '').replace(eKey(currentUser.email), '').replace(/^_|_$/g, '');
-                    const otherUser = Array.from(allUsersMap?.values() || []).find(u => eKey(u.email) === otherEmail);
+                    otherKey = convId.replace('dm_', '').replace(eKey(currentUser.email), '').replace(/^_|_$/g, '');
+                    otherUser = Array.from(allUsersMap?.values() || []).find(u => eKey(u.email) === otherKey) || (allUsersMap && allUsersMap.get && allUsersMap.get(otherKey));
                     if (statusEl) statusEl.textContent = otherUser?.role || 'Team Member';
                     if (onlineDot) {
                         onlineDot.classList.remove('hidden');
                         onlineDot.className = `absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 border-white dark:border-slate-900 rounded-full ${otherUser?.online ? 'bg-emerald-500' : 'bg-slate-400'}`;
                     }
+                }
+
+                // Resolve the best avatar for the conversation
+                let displayAvatar = avatar;
+                if (!displayAvatar || displayAvatar.startsWith('data:image/svg+xml')) {
+                    if (type === 'group') {
+                        if (cachedConv.profilePicture || cachedConv.photoURL) displayAvatar = cachedConv.profilePicture || cachedConv.photoURL;
+                    } else if (otherUser && (otherUser.profilePicture || otherUser.photoURL || otherUser.photo)) {
+                        displayAvatar = otherUser.profilePicture || otherUser.photoURL || otherUser.photo;
+                    }
+                }
+                if (!displayAvatar || displayAvatar.startsWith('data:image/svg+xml')) {
+                    displayAvatar = (otherUser ? getUserAvatarSrc(otherUser) : null) || getUserAvatarSrc(name);
+                }
+
+                const safeConvEscaped = (name || '').replace(/'/g, "\\'");
+                const avatarContainer = document.getElementById('chat-conv-avatar');
+                if (avatarContainer) {
+                    avatarContainer.innerHTML = `<img src="${displayAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeConvEscaped}')" class="w-full h-full rounded-2xl object-cover">`;
+                }
+
+                // Persist last active conversation to localStorage with real displayAvatar
+                try {
+                    if (myKey && convId) {
+                        localStorage.setItem('worksync_last_active_conv_' + myKey, JSON.stringify({
+                            convId,
+                            name,
+                            type,
+                            avatar: displayAvatar || avatar || ''
+                        }));
+                    }
+                } catch (e) { }
+
+                // Fetch latest live profile photo from Firebase if available
+                if (type === 'dm' && typeof db !== 'undefined' && db && otherKey) {
+                    get(ref(db, `worksync/users/${otherKey}/profilePicture`)).then(snap => {
+                        const livePic = snap.val();
+                        if (livePic && activeConvId === convId) {
+                            const ac = document.getElementById('chat-conv-avatar');
+                            if (ac) {
+                                const img = ac.querySelector('img');
+                                if (img && img.src !== livePic) img.src = livePic;
+                            }
+                            if (otherUser) {
+                                otherUser.profilePicture = livePic;
+                                if (allUsersMap && otherUser.email) allUsersMap.set(otherUser.email.toLowerCase(), otherUser);
+                                if (currentConvMessages && Object.keys(currentConvMessages).length) {
+                                    renderMessages(currentConvMessages);
+                                }
+                            }
+                        }
+                    }).catch(() => {});
+                } else if (type === 'group' && typeof db !== 'undefined' && db) {
+                    get(ref(db, `worksync/conversations/${convId}/profilePicture`)).then(snap => {
+                        const livePic = snap.val();
+                        if (livePic && activeConvId === convId) {
+                            const ac = document.getElementById('chat-conv-avatar');
+                            if (ac) {
+                                const img = ac.querySelector('img');
+                                if (img && img.src !== livePic) img.src = livePic;
+                            }
+                        }
+                    }).catch(() => {});
                 }
 
                 const actions = document.getElementById('chat-conv-actions');
@@ -37525,7 +37824,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 renderGroupList(groups);
 
                 // Check in-memory message cache for INSTANT render
-                const cachedMessages = { ...(altConvId ? (chatMessageCache[altConvId] || {}) : {}), ...(chatMessageCache[convId] || {}) };
+                let cachedMessages = { ...(altConvId ? (chatMessageCache[altConvId] || {}) : {}), ...(chatMessageCache[convId] || {}) };
+                // Keys shown from the device cache; any of these missing from the first fresh
+                // snapshot were deleted meanwhile and get dropped then.
+                let diskShownKeys = null;
+                if (!Object.keys(cachedMessages).length) {
+                    const disk = loadChatDiskCache();
+                    cachedMessages = { ...((altConvId && disk[altConvId]?.m) || {}), ...(disk[convId]?.m || {}) };
+                    if (Object.keys(cachedMessages).length) diskShownKeys = new Set(Object.keys(cachedMessages));
+                }
+                const openStartedAt = performance.now();
                 if (cachedMessages && Object.keys(cachedMessages).length > 0) {
                     currentConvMessages = { ...cachedMessages };
                     refreshChatOldestTimestamp();
@@ -37538,9 +37846,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Query last messages from Firebase with optimal index
                 const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(activeConvMessageLimit));
+                let firstSnapshotLogged = false;
                 msgListener = onValue(q, snap => {
                     const incoming = snap.val() || {};
                     chatMessageCache[convId] = incoming;
+                    if (diskShownKeys) {
+                        diskShownKeys.forEach(k => { if (!(k in incoming)) delete currentConvMessages[k]; });
+                        diskShownKeys = null;
+                    }
+                    if (!firstSnapshotLogged) {
+                        firstSnapshotLogged = true;
+                        try {
+                            const kb = Math.round(JSON.stringify(incoming).length / 1024);
+                            console.info(`[chat] ${convId}: ${Object.keys(incoming).length} messages, ${kb} KB, loaded in ${Math.round(performance.now() - openStartedAt)} ms`);
+                        } catch (e) { }
+                    }
+                    saveChatDiskCache(convId, incoming);
                     mergeChatMessages(incoming);
                     refreshChatOldestTimestamp();
                     if (!activeConvHistoryDepleted) {
@@ -37555,6 +37876,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     altMsgListener = onValue(altQ, snap => {
                         const incoming = snap.val() || {};
                         chatMessageCache[altConvId] = incoming;
+                        saveChatDiskCache(altConvId, incoming);
                         mergeChatMessages(incoming);
                         refreshChatOldestTimestamp();
                         renderMessages(currentConvMessages);
@@ -38588,19 +38910,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     <iconify-icon icon="solar:reply-linear" width="14"></iconify-icon>
                 </button>` : '';
 
-                const senderUser = msg.senderEmail ? (allUsersMap.get(msg.senderEmail.toLowerCase()) || (typeof knownUserByEmail === 'function' && knownUserByEmail(msg.senderEmail))) : null;
-                const senderAvatar = (senderUser && senderUser.profilePicture) || getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName);
+                const senderEmailNorm = (msg.senderEmail || '').toLowerCase().trim();
+                const senderUser = senderEmailNorm ? (allUsersMap.get(senderEmailNorm) || (typeof knownUserByEmail === 'function' && knownUserByEmail(senderEmailNorm))) : null;
+                const senderAvatar = (senderUser && (senderUser.profilePicture || senderUser.photoURL || senderUser.photo)) || getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName);
                 const safeSenderName = (msg.senderName || msg.senderEmail || '?').replace(/'/g, "\\'");
+
+                if (senderEmailNorm && (!senderUser || !(senderUser.profilePicture || senderUser.photoURL))) {
+                    if (typeof fetchAndCacheUserAvatar === 'function') fetchAndCacheUserAvatar(senderEmailNorm);
+                }
+
+                const avatarMarkup = `
+                    <div class="w-8 h-8 rounded-xl overflow-hidden shrink-0 mb-1 shadow-2xs">
+                        <img src="${senderAvatar}" data-sender-email="${senderEmailNorm}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200 dark:border-slate-700" title="${escapeHtml(msg.senderName || '')}">
+                    </div>
+                `;
 
                 const div = document.createElement('div');
                 div.className = `group flex ${isMe ? 'justify-end' : 'justify-start'} fade-in items-end gap-2.5`;
                 div.dataset.msgId = id;
                 div.innerHTML = `
-                ${!isMe ? `
-                    <div class="w-8 h-8 rounded-xl overflow-hidden shrink-0 mb-1 shadow-2xs">
-                        <img src="${senderAvatar}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200 dark:border-slate-700" title="${escapeHtml(msg.senderName || '')}">
-                    </div>
-                ` : ''}
+                ${!isMe ? avatarMarkup : ''}
                 <div class="max-w-[82%] flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0">
                     ${!isMe ? `
                         <div class="flex items-center gap-1.5 mb-1 ml-1">
@@ -38637,7 +38966,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const extra = seenByUsers.length - shown.length;
                         const avatarHtml = shown.map(r => {
                             const u = allUsersMap.get(r.email.toLowerCase()) || {};
-                            const src = u.profilePicture || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}`;
+                            const src = u.profilePicture || u.photoURL || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(u || r.email) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}`);
                             return `<img src="${src}" class="w-4 h-4 rounded-full border border-white dark:border-slate-800 -ml-1 first:ml-0 inline-block object-cover" title="${escapeHtml(r.name || r.email)}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(r.name || r.email)}'">`;
                         }).join('');
                         const label = seenByUsers.length === 1
@@ -38645,7 +38974,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             : `Seen by ${seenByUsers.length}`;
                         return `<div class="msg-seen-by flex items-center gap-1 text-[9px] text-slate-400 font-bold mt-0.5 justify-end mr-1">${avatarHtml}${extra > 0 ? `<span>+${extra}</span>` : ''}<span>${label}</span></div>`;
                     })() : ''}
-                </div>`;
+                </div>
+                ${isMe ? avatarMarkup : ''}`;
                 area.appendChild(div);
             }
 
@@ -39605,7 +39935,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (validAttachments.length > 0) {
                             payload.attachments = validAttachments;
                             if (validAttachments.length === 1) {
-                                payload.attachmentUrl = validAttachments[0].url;
+                                // Readers use `attachments` first; don't duplicate an image stored inside the message
+                                payload.attachmentUrl = String(validAttachments[0].url || '').startsWith('data:') ? '' : validAttachments[0].url;
                                 payload.attachmentType = validAttachments[0].type;
                                 payload.attachmentName = validAttachments[0].name;
                             }
@@ -64836,8 +65167,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             document.getElementById('fcp-conv-name').textContent = name;
 
             var avatarEl = document.getElementById('fcp-conv-avatar');
-            avatarEl.innerHTML = '';
-            avatarEl.textContent = name.charAt(0).toUpperCase();
+            if (avatarEl) {
+                var fcpAvatarSrc = avatar || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(name) : '');
+                if (fcpAvatarSrc && !fcpAvatarSrc.startsWith('data:image/svg+xml')) {
+                    avatarEl.innerHTML = '<img src="' + fcpAvatarSrc + '" style="width:100%;height:100%;border-radius:10px;object-fit:cover;">';
+                } else {
+                    avatarEl.innerHTML = '';
+                    avatarEl.textContent = name.charAt(0).toUpperCase();
+                }
+            }
 
             document.getElementById('fcp-conv-status').textContent = type === 'group' ? 'Group Chat' : 'Direct Message';
 
@@ -64946,11 +65284,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 var align = isMe ? 'flex-end' : 'flex-start';
                 var senderColor = isDark ? '#94a3b8' : '#64748b';
                 var timeColor = isDark ? '#64748b' : '#94a3b8';
+                var senderAvatarSrc = typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(m.senderEmail || m.senderName) : '';
+                var avatarImg = senderAvatarSrc ? '<img src="' + senderAvatarSrc + '" style="width:24px;height:24px;border-radius:8px;object-fit:cover;flex-shrink:0;' + (isMe ? 'margin-left:6px;' : 'margin-right:6px;') + '" title="' + _fcpEH(m.senderName || '') + '">' : '';
 
                 return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;">'
                     + (!isMe ? '<span style="font-size:9px;font-weight:700;color:' + senderColor + ';padding:0 4px;">' + _fcpEH(m.senderName || '') + '</span>' : '')
+                    + '<div style="display:flex;align-items:flex-end;' + (isMe ? 'justify-content:flex-end;' : 'justify-content:flex-start;') + ';width:100%;">'
+                    + (!isMe ? avatarImg : '')
                     + '<div style="max-width:75%;background:' + bubbleBg + ';color:' + bubbleColor + ';border:' + bubbleBorder + ';border-radius:14px;' + (isMe ? 'border-top-right-radius:4px' : 'border-top-left-radius:4px') + ';padding:8px 12px;box-shadow:0 1px 3px rgba(0,0,0,.08);">'
                     + (m.text || m.unsent ? textHtml : '') + attachHtml
+                    + '</div>'
+                    + (isMe ? avatarImg : '')
                     + '</div>'
                     + '<span style="font-size:9px;color:' + timeColor + ';padding:0 4px;">' + timeStr + '</span>'
                     + '</div>';
@@ -65002,7 +65346,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     var attachments = (await Promise.all(uploadPromises)).filter(Boolean);
                     payload.attachments = attachments;
                     if (attachments.length === 1) {
-                        payload.attachmentUrl = attachments[0].url;
+                        // Readers use `attachments` first; don't duplicate an image stored inside the message
+                        payload.attachmentUrl = String(attachments[0].url || '').startsWith('data:') ? '' : attachments[0].url;
                         payload.attachmentType = attachments[0].type;
                         payload.attachmentName = attachments[0].name;
                     }
