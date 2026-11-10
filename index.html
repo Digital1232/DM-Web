@@ -204,6 +204,27 @@
             }
             return window.getInitialsAvatar ? window.getInitialsAvatar('User') : '';
         };
+        // Catch-all: any <img> whose src became "[object Object]" (picture stored as an object
+        // somewhere in the data) swaps to an initials avatar instead of staying broken.
+        document.addEventListener('error', function (e) {
+            var img = e.target;
+            if (!img || img.tagName !== 'IMG' || !/\[object(%20| )Object\]/.test(img.src || '')) return;
+            img.onerror = null;
+            var n = img.getAttribute('data-sender-email') || img.alt || img.title || 'User';
+            img.src = window.getInitialsAvatar ? window.getInitialsAvatar(n) : 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1 1\'%3E%3C/svg%3E';
+        }, true);
+        // A profile picture saved as an object (not a URL string) produced "[object Object]" image
+        // requests and crashed .replace() calls. Always hand back a string.
+        (function () {
+            var rawGetAvatar = window.getUserAvatarSrc;
+            window.getUserAvatarSrc = function (userOrEmail) {
+                var src = rawGetAvatar(userOrEmail);
+                if (typeof src === 'string' && src) return src;
+                var name = (userOrEmail && typeof userOrEmail === 'object')
+                    ? (userOrEmail.name || userOrEmail.email) : userOrEmail;
+                return window.getInitialsAvatar ? window.getInitialsAvatar(String(name || 'User')) : '';
+            };
+        })();
     </script>
     <style>
         .drag-handle {
@@ -35835,7 +35856,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const key = eKey(normEmail);
                 get(ref(db, `worksync/users/${key}/profilePicture`)).then(snap => {
                     const pic = snap.val();
-                    if (pic) {
+                    if (pic && typeof pic === 'string') {
                         let u = allUsersMap?.get(normEmail);
                         if (!u) {
                             u = (typeof knownUserByEmail === 'function' && knownUserByEmail(normEmail)) || { email: normEmail };
@@ -35933,7 +35954,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const existing = allUsersMap.get(email) || {};
                             allUsersMap.set(email, { ...existing, ...val, email });
                             const pic = val.profilePicture || val.photoURL || val.photo;
-                            if (pic) {
+                            if (pic && typeof pic === 'string') {
                                 document.querySelectorAll(`img[data-sender-email="${email}"]`).forEach(img => {
                                     if (img.src !== pic) img.src = pic;
                                 });
@@ -36793,7 +36814,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const unread = Math.max(unreadCounts[convId] || 0, altConvId ? (unreadCounts[altConvId] || 0) : 0);
                     const name = u.name || u.email.split('@')[0];
                     const key = otherKey;
-                    const avatarSrc = u.profilePicture || u.photoURL || u.photo || getUserAvatarSrc(u);
+                    const _rawAvatar = u.profilePicture || u.photoURL || u.photo;
+                    const avatarSrc = (typeof _rawAvatar === 'string' && _rawAvatar) ? _rawAvatar : getUserAvatarSrc(u);
                     const safeEmailJs = u.email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                     // No photo in the cached users list: read just this user's photo once and swap it in.
                     if (!(u.profilePicture || u.photoURL || u.photo) && typeof fetchAndCacheUserAvatar === 'function') fetchAndCacheUserAvatar(u.email);
@@ -36841,7 +36863,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const unread = unreadCounts[id] || 0;
                     const name = g.name || 'Unnamed Group';
 
-                    const avatarHtml = g.profilePicture
+                    const avatarHtml = (typeof g.profilePicture === 'string' && g.profilePicture)
                         ? `<img src="${escapeHtml(g.profilePicture)}" class="w-10 h-10 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">`
                         : `<div class="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-2xs">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
 
@@ -64629,7 +64651,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
         }
 
         function fcpUserRow(email, name, role, avatarSrc, cid, lastMsg, unread) {
-            var safeName = (name || email).replace(/'/g, "&#39;");
+            avatarSrc = typeof avatarSrc === 'string' ? avatarSrc : '';
+            var safeName = String(name || email || '').replace(/'/g, "&#39;");
             var isDark = document.documentElement.classList.contains('dark');
             var hoverBg = isDark ? '#253347' : '#f8fafc';
             var nameTxtColor = isDark ? '#f1f5f9' : '#1e293b';
@@ -64766,7 +64789,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     var imgBorder = isDark ? '#253347' : '#e2e8f0';
                     var avatarBg = isDark ? '#1e2a4a' : '#eef2ff';
                     var avatarColor = isDark ? '#818cf8' : '#4f46e5';
-                    var avatarHtml = g.profilePicture
+                    var avatarHtml = (typeof g.profilePicture === 'string' && g.profilePicture)
                         ? '<img src="' + g.profilePicture + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid ' + imgBorder + ';flex-shrink:0;">'
                         : '<div style="width:36px;height:36px;background:' + avatarBg + ';border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:' + avatarColor + ';flex-shrink:0;">' + _fcpEH(name.charAt(0)) + '</div>';
                     return '<button onclick="fcpOpenConv(\'' + id + '\',\'' + safeName + '\',\'group\',\'\')" '
