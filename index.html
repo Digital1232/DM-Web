@@ -30555,6 +30555,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return false;
             }
 
+            // Recurring daily tasks (Murugesh/Ajith/Palani/learning) belong to the day they were
+            // generated for. If the owner was on leave, the refresh is skipped, so the old copy must
+            // not carry forward into later days — it only shows when a date filter targets its day.
+            function isStaleRecurringTask(t) {
+                if (!t || !(t.murugeshTask || t.ajithTask || t.palaniTask || t.learningSession || t.recurring)) return false;
+                if (!t.duedate || t.duedate >= todayIso()) return false;
+                if (typeof isTaskCurrentlyWorkingOrActive === 'function' && isTaskCurrentlyWorkingOrActive(t)) return false;
+                return true;
+            }
+
             function renderInternalTasks() {
                 scheduleTasksHubRefresh();
                 const tbody = document.getElementById('internal-tasks-tbody');
@@ -30566,7 +30576,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const isWorking = (t) => isTaskCurrentlyWorkingOrActive(t);
 
-                let filtered = tasks.filter(isInternalTask);
+                const hideStaleRecurring = currentInternalDueDateFilter === 'all' && !currentInternalDueDateFromRange && !currentInternalDueDateToRange;
+                let filtered = tasks.filter(isInternalTask).filter(t => !(hideStaleRecurring && isStaleRecurringTask(t)));
                 if (currentInternalStatusFilter !== 'all') {
                     filtered = currentInternalStatusFilter.length
                         ? filtered.filter(t => isWorking(t) || currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase()))
@@ -30701,6 +30712,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const isWorking = (t) => isTaskCurrentlyWorkingOrActive(t);
                     const boardTasks = tasks
                         .filter(isInternalTask)
+                        .filter(t => !(hideStaleRecurring && isStaleRecurringTask(t)))
                         .filter(t => {
                             // Your own running task always shows
                             if (activeTaskId && isSameTaskId(t.id, activeTaskId)) return true;

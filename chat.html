@@ -27,6 +27,15 @@
     <style>
         * { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
         body { background-color: #f8fafc; }
+        /* Pin the layout to the viewport so only the message list scrolls, never the whole page */
+        html, body { height: 100%; overflow: hidden; }
+        body { height: 100dvh; max-height: 100dvh; }
+        body > main { flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #view-chat-panel { height: 100%; min-height: 0; overflow: hidden; }
+        #view-chat-panel > .chat-sidebar-view,
+        #view-chat-panel > #chat-window-wrapper { min-height: 0; max-height: 100%; }
+        #chat-window-wrapper { display: flex; flex-direction: column; overflow: hidden; }
+        #messages-area { flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
         html.dark body { background-color: #0b0f19; color: #f1f5f9; }
 
         /* Dark mode overrides matching index.html */
@@ -810,6 +819,13 @@ function scrollChatToBottom(smooth = false) {
                 };
                 doScroll();
                 requestAnimationFrame(doScroll);
+                // Images/attachments load after render and grow the list; keep pinned to the latest message
+                if (!smooth) {
+                    [150, 500, 1200].forEach(ms => setTimeout(() => {
+                        const a = document.getElementById('messages-area');
+                        if (a && a.scrollHeight - a.scrollTop - a.clientHeight < 5000) a.scrollTop = a.scrollHeight;
+                    }, ms));
+                }
                 setTimeout(doScroll, 60);
                 setTimeout(doScroll, 180);
             }
