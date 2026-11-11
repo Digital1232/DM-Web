@@ -19395,6 +19395,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     initAdminCheckoutReasonNotifications();
                     setInterval(checkAutoCheckout, 60000);
                     setInterval(checkBreakLimit, 60000);
+                    setInterval(checkIdleTaskNudge, 60000); // Check for checked-in users idle without an active task
                     // Show the floating chat bubble now that everything is ready
                     if (typeof showFloatBtn === 'function') showFloatBtn();
                     setInterval(checkBirthdays, 60000); // Check for birthdays every minute
@@ -21606,6 +21607,55 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     dialog.remove();
                 }
                 await doResume();
+            }
+
+            let lastIdleTaskNudgeTime = 0;
+            let lastTaskEndTime = null;
+
+            function checkIdleTaskNudge() {
+                // Must be checked in, not currently on break, and no task timer running
+                if (!isCheckedIn || !checkInTime || breakStartTime || activeTaskId) {
+                    lastIdleTaskNudgeTime = 0;
+                    return;
+                }
+
+                // If on approved leave today, do not nudge
+                const todayKey = todayIso ? todayIso() : new Date().toISOString().slice(0, 10);
+                if (typeof myApprovedLeaves !== 'undefined' && Array.isArray(myApprovedLeaves) && myApprovedLeaves.includes(todayKey)) {
+                    return;
+                }
+
+                const now = Date.now();
+                // Measure idle duration from either the check-in time or when the last task ended
+                const idleReferenceTime = (lastTaskEndTime && lastTaskEndTime > checkInTime) ? lastTaskEndTime : checkInTime;
+                const idleDurationMs = now - idleReferenceTime;
+
+                // Nudge if idle for more than 10 minutes (600,000 ms)
+                const IDLE_THRESHOLD = 10 * 60 * 1000;
+                if (idleDurationMs >= IDLE_THRESHOLD) {
+                    // Alert every 15 minutes
+                    if (!lastIdleTaskNudgeTime || (now - lastIdleTaskNudgeTime >= 15 * 60 * 1000)) {
+                        lastIdleTaskNudgeTime = now;
+                        const idleMins = Math.floor(idleDurationMs / (60 * 1000));
+                        
+                        // Play alert sound
+                        const sound = document.getElementById('chat-notification-sound') || document.getElementById('announcement-notification-sound');
+                        if (sound) sound.play().catch(e => console.warn('Audio play failed:', e));
+
+                        // In-app alert
+                        toast(`⚠️ You have been checked in without an active task for ${idleMins} mins! Please start your task timer.`, 'warning', 8000);
+
+                        // Browser web notification
+                        if ('Notification' in window && Notification.permission === 'granted') {
+                            try {
+                                new Notification('One Desk - Idle Task Reminder', {
+                                    body: `You have been checked in for ${idleMins} minutes without starting a task. Please start a task timer!`,
+                                    icon: 'img/favicon-192.png'
+                                });
+                            } catch (e) { }
+                        }
+                    }
+                }
             }
 
             function checkBreakLimit() {
@@ -33462,6 +33512,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 activeTimerSessionId = null;
                 await clearCurrentTask();
                 activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
+                lastTaskEndTime = Date.now(); // Record idle baseline after task completion
                 updateSessionStatus();
                 // Batch render calls instead of sequential
                 PerfOptimizer.queueRender(() => renderTasks(), 'high');
