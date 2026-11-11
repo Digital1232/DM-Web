@@ -36,6 +36,12 @@ function doPost(e) {
     if (type === 'LEARN_TASK_DAILY') {
       return createLearnTasks();
     }
+
+    if (type === 'SEND_REPORT_EMAIL') {
+      // The report is always built on the server (DailyReportEmail.gs) and sent to the
+      // configured recipients; any subject/body/recipient in the request is ignored.
+      return respond(sendDailyReportNow());
+    }
     return respond({ success: false, error: 'Unknown request type: ' + type });
   } catch (err) {
     return respond({ success: false, error: err.toString() });

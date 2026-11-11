@@ -595,14 +595,49 @@
                 if (cached) allLogs = JSON.parse(cached);
             } catch (e) { }
         }
+
+        // Build first check-in map per user per day so phantom pre-arrival hours (e.g. 4:39 AM ghost timers) are never counted
+        const rawAttendanceAll = Array.isArray(window.attendanceEvents) ? window.attendanceEvents : ((typeof attendanceEvents !== 'undefined' && Array.isArray(attendanceEvents)) ? attendanceEvents : []);
+        const firstCheckInMap = {}; // "email|YYYY-MM-DD" -> earliest check-in timestamp
+        rawAttendanceAll.forEach(evt => {
+            if (evt && evt.type === 'check_in' && evt.timestamp) {
+                const em = (evt.userId || evt.email || '').toLowerCase().trim();
+                const dStr = Engine.formatLocalDate(new Date(evt.timestamp));
+                const key = `${em}|${dStr}`;
+                if (!firstCheckInMap[key] || evt.timestamp < firstCheckInMap[key]) {
+                    firstCheckInMap[key] = evt.timestamp;
+                }
+            }
+        });
+
         const userLogs = isAll ? allLogs : allLogs.filter(matchesTargetEmployee);
 
-        // Filter logs strictly within period
+        // Filter logs strictly within period and filter out phantom hours prior to check-in
         const periodLogs = userLogs.filter(l => {
             const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
             const durSec = getLogDurationSec(l);
             const end = Engine.parseTimestamp(l.endTime || l.completedAt) || (start + durSec * 1000);
             return (start >= period.fromTs && start <= period.toTs) || (end >= period.fromTs && end <= period.toTs);
+        }).filter(l => {
+            // Check if log start was prior to first check-in of that day
+            const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
+            const end = Engine.parseTimestamp(l.endTime || l.completedAt);
+            if (start) {
+                const em = (l.userId || l.email || l.userEmail || '').toLowerCase().trim();
+                const dStr = Engine.formatLocalDate(new Date(start));
+                const checkIn = firstCheckInMap[`${em}|${dStr}`];
+                if (checkIn && start < checkIn) {
+                    // If the entire session finished before check-in, discard completely (ghost overnight session)
+                    if (end && end <= checkIn) return false;
+                    // If it started early in the morning before check-in (e.g. 4:39 AM when checkin was 9:15 AM)
+                    const checkInHour = new Date(checkIn).getHours();
+                    const startHour = new Date(start).getHours();
+                    if (checkInHour >= 8 && startHour <= 6) {
+                        return false; // Accidental overnight / ghost session
+                    }
+                }
+            }
+            return true;
         });
 
         // Task sessions map: taskId -> logs (case-insensitive)

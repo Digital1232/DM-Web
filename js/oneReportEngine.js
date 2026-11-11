@@ -374,6 +374,40 @@
             });
         });
 
+        // Break-deduction logic: Deduct overlapping break events from task sessions so break time is never counted as work
+        const breakEventsByUser = {};
+        (ctx.attendanceEvents || []).forEach(e => {
+            if (e && e.type === 'break_end' && e.duration && e.timestamp) {
+                const em = normEmail(e.userId || e.email);
+                const bEnd = toTs(e.timestamp);
+                const bDur = Math.floor(Number(e.duration) / 1000);
+                const bStart = bEnd - bDur * 1000;
+                if (bStart > 0 && bEnd > bStart) {
+                    breakEventsByUser[em] = breakEventsByUser[em] || [];
+                    breakEventsByUser[em].push({ start: bStart, end: bEnd, dur: bDur });
+                }
+            }
+        });
+
+        out.forEach(l => {
+            if (l.entryType === 'Session' && l.start && l.seconds > 0) {
+                const lEnd = l.end && l.end > l.start ? l.end : l.start + l.seconds * 1000;
+                const userBreaks = breakEventsByUser[l.email] || [];
+                userBreaks.forEach(b => {
+                    if (b.end > l.start && b.start < lEnd) {
+                        const overlapStart = Math.max(l.start, b.start);
+                        const overlapEnd = Math.min(lEnd, b.end);
+                        const overlapSec = Math.floor((overlapEnd - overlapStart) / 1000);
+                        if (overlapSec > 0) {
+                            l.seconds = Math.max(0, l.seconds - overlapSec);
+                            const prevRemark = l.remarks ? l.remarks + ' | ' : '';
+                            l.remarks = `${prevRemark}Break (${Math.round(overlapSec / 60)}m) deducted`;
+                        }
+                    }
+                });
+            }
+        });
+
         return { logs: out, breaksExcluded, undated, overlapSecondsRemoved };
     }
 
@@ -678,8 +712,59 @@
         const norm = normalizeLogs(ctx, taskMap, dir);
 
         // 1. Permission scope → 2. period → 3. user filters
+        // For multi-day or overnight sessions, clamp work session start and end to the selected period bounds
+        // so that pre-day / post-day phantom time is never attributed to this period.
         const scopedLogs = norm.logs.filter(l => inScope(scope, l.email));
-        const periodLogs = scopedLogs.filter(l => l.dateTs >= period.fromTs && l.dateTs <= period.toTs);
+        // Filter out accidental overnight/ghost logs started early morning before arrival (e.g. 4:39 AM)
+        const checkInByDate = {}; // "email|YYYY-MM-DD" -> earliest checkIn ts
+        (ctx.attendanceEvents || []).forEach(e => {
+            if (e && e.type === 'check_in' && e.timestamp) {
+                const em = normEmail(e.userId || e.email);
+                const d = localDateStr(toTs(e.timestamp));
+                const k = `${em}|${d}`;
+                const ts = toTs(e.timestamp);
+                if (!checkInByDate[k] || ts < checkInByDate[k]) checkInByDate[k] = ts;
+            }
+        });
+
+        const periodLogs = scopedLogs.filter(l => {
+            if (l.start && l.end && l.end > l.start) {
+                // Must intersect with selected period
+                if (!(l.start <= period.toTs && l.end >= period.fromTs)) return false;
+            } else {
+                if (!(l.dateTs >= period.fromTs && l.dateTs <= period.toTs)) return false;
+            }
+            // Check-in arrival clamp: discard ghost sessions started before 6:30 AM when check-in was normal daytime
+            if (l.start) {
+                const d = localDateStr(l.start);
+                const chk = checkInByDate[`${l.email}|${d}`];
+                if (chk) {
+                    const startH = new Date(l.start).getHours();
+                    const chkH = new Date(chk).getHours();
+                    if (chkH >= 8 && startH <= 6) return false; // Ghost session
+                }
+            }
+            return true;
+        }).map(l => {
+            if (l.entryType === 'Session' && l.start && l.end && l.end > l.start) {
+                const effectiveStart = Math.max(l.start, period.fromTs);
+                const effectiveEnd = Math.min(l.end, period.toTs);
+                if (effectiveEnd > effectiveStart) {
+                    const clampedSec = Math.floor((effectiveEnd - effectiveStart) / 1000);
+                    if (clampedSec !== l.seconds) {
+                        return Object.assign({}, l, {
+                            start: effectiveStart,
+                            end: effectiveEnd,
+                            seconds: Math.min(l.seconds, clampedSec),
+                            rawSeconds: Math.min(l.rawSeconds, clampedSec),
+                            dateTs: effectiveStart,
+                            date: localDateStr(effectiveStart)
+                        });
+                    }
+                }
+            }
+            return l;
+        });
         const entries = periodLogs.filter(l =>
             (f.employee === 'all' || l.email === f.employee) &&
             (f.client === 'all' || l.client === f.client) &&
