@@ -5,7 +5,8 @@
  */
 
 // STATE
-let matrixCurrentDate = new Date(2026, 7, 1); // Default August 2026
+const now = new Date();
+let matrixCurrentDate = new Date(now.getFullYear(), now.getMonth(), 1); // Default Current Month
 let activeMatrixView = 'matrix'; // 'matrix', 'calendar', 'timeline', 'kanban', 'workload'
 let matrixTasksMap = new Map(); // Key: taskId, Value: task object
 let matrixClientsList = [];
@@ -38,7 +39,7 @@ const DEFAULT_CLIENTS = [
 const DEFAULT_ASSIGNEES = [
     { email: 'barathvilpower@gmail.com', name: 'Barath Magesh M' },
     { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S' },
-    { email: 'anithavilpower@gmail.com', name: 'Karthika K' },
+    { email: 'karthikavilpower@gmail.com', name: 'Karthika K' },
     { email: 'murugeshvilpower@gmail.com', name: 'Murugesh Kumar A' },
     { email: 'snehavilpower@gmail.com', name: 'Sneha V' },
     { email: 'digitalmarketing@vilpower.com', name: 'Palanirajan R' },
@@ -62,6 +63,14 @@ function initMatrixPlannerEngine() {
  */
 function initClientsAndAssignees() {
     let clientsSet = new Set(DEFAULT_CLIENTS);
+
+    // Merge custom clients if available
+    if (Array.isArray(window.custom_clients)) {
+        window.custom_clients.forEach(c => {
+            const name = typeof c === 'string' ? c : (c?.name || '');
+            if (name && name.trim()) clientsSet.add(name.trim());
+        });
+    }
 
     // Merge clients from global tasks if available
     if (Array.isArray(window.tasks)) {
@@ -693,7 +702,7 @@ function setMatrixClientFilter(client) {
  * Render Video & Poster Format Stats & Filter Chips
  */
 function renderStrategyFormatSummary() {
-    const container = document.getElementById('strategy-format-pills-container');
+    const container = document.getElementById('strategy-format-pills-container') || document.getElementById('monthly-plan-format-summary');
     if (!container) return;
 
     const year = matrixCurrentDate.getFullYear();
@@ -1920,6 +1929,84 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function toggleMatrixAIPanel() {
+    const p = document.getElementById('matrix-ai-panel');
+    if (!p) return;
+    p.classList.toggle('hidden');
+    if (!p.classList.contains('hidden')) {
+        renderMatrixAIInsights();
+    }
+}
+
+function renderMatrixAIInsights() {
+    const list = document.getElementById('matrix-ai-insights-list');
+    if (!list) return;
+    const tasks = getFilteredMatrixTasks();
+    const completed = tasks.filter(t => ['completed', 'done', 'posted', 'analytics', 'client approved'].includes((t.status || '').toLowerCase())).length;
+    const pending = tasks.length - completed;
+    list.innerHTML = `
+        <div class="p-3 bg-indigo-50/70 rounded-xl border border-indigo-100">
+            <p class="font-bold text-indigo-900 text-xs">Total Planned: ${tasks.length} tasks</p>
+            <p class="text-[11px] text-indigo-700 mt-1">Completed: ${completed} • In Progress / Pending: ${pending}</p>
+        </div>
+        <div class="p-3 bg-purple-50/70 rounded-xl border border-purple-100">
+            <p class="font-bold text-purple-900 text-xs">Active Month Focus</p>
+            <p class="text-[11px] text-purple-700 mt-1">${matrixCurrentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+        </div>
+        <button onclick="generateAIMatrixPlan()" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl py-2 text-xs font-bold shadow-md hover:opacity-95 transition-all">
+            ✨ Auto-Generate Suggestions
+        </button>
+    `;
+}
+
+function closeMatrixTaskDrawer() {
+    const d = document.getElementById('matrix-task-drawer');
+    if (d) {
+        d.classList.add('translate-x-full');
+        setTimeout(() => d.classList.add('hidden'), 250);
+    }
+}
+
+function saveTaskFromDrawer() {
+    const id = document.getElementById('drawer-task-id')?.value;
+    if (!id) return;
+    const title = document.getElementById('drawer-task-title')?.value;
+    const client = document.getElementById('drawer-task-client')?.value;
+    const assignee = document.getElementById('drawer-task-assignee')?.value;
+    const status = document.getElementById('drawer-task-status')?.value;
+    const priority = document.getElementById('drawer-task-priority')?.value;
+    const date = document.getElementById('drawer-task-date')?.value;
+    const desc = document.getElementById('drawer-task-desc')?.value;
+
+    saveMatrixTaskToFirebase(id, {
+        title: title,
+        desc: desc || title,
+        client: client,
+        assignee: assignee,
+        status: status,
+        priority: priority,
+        date: date,
+        dueDate: date,
+        postDate: date
+    });
+    closeMatrixTaskDrawer();
+}
+
+function deleteTaskFromDrawer() {
+    const id = document.getElementById('drawer-task-id')?.value;
+    if (!id) return;
+    if (!confirm('Are you sure you want to delete this task?')) return;
+    const rtdb = window.rtdb;
+    const db = window.db;
+    if (rtdb && db) {
+        rtdb.remove(rtdb.ref(db, `worksync/strategy_events/${id}`)).catch(() => {});
+        rtdb.remove(rtdb.ref(db, `worksync/monthly_plans/${eKey(currentUser?.email)}/${matrixCurrentDate.getFullYear()}-${String(matrixCurrentDate.getMonth() + 1).padStart(2, '0')}/tasks/${id}`)).catch(() => {});
+    }
+    matrixTasksMap.delete(id);
+    closeMatrixTaskDrawer();
+    renderMatrixPlanner();
+}
+
 window.openAssignMonthlyPlanModal = openAssignMonthlyPlanModal;
 window.filterAssignMonthlyPlanTasks = filterAssignMonthlyPlanTasks;
 window.addTaskToAmpSelection = addTaskToAmpSelection;
@@ -1928,6 +2015,24 @@ window.submitAssignMonthlyPlan = submitAssignMonthlyPlan;
 
 window.addMatrixTaskRowPrompt = addMatrixTaskRowPrompt;
 window.startInlineCreateTask = startInlineCreateTask;
+
+window.initMatrixPlannerEngine = initMatrixPlannerEngine;
+window.initClientsAndAssignees = initClientsAndAssignees;
+window.renderMatrixPlanner = renderMatrixPlanner;
+window.switchMatrixView = setMatrixPlannerView;
+window.setMatrixPlannerView = setMatrixPlannerView;
+window.navigateMatrixMonth = navigateMatrixMonth;
+window.filterMatrixPlanner = filterMatrixPlanner;
+window.onMatrixSearch = function(val) { matrixSearchQuery = (val || '').trim(); renderMatrixPlanner(); };
+window.toggleMatrixAIPanel = toggleMatrixAIPanel;
+window.closeMatrixTaskDrawer = closeMatrixTaskDrawer;
+window.saveTaskFromDrawer = saveTaskFromDrawer;
+window.deleteTaskFromDrawer = deleteTaskFromDrawer;
+window.duplicateCurrentWeekMatrix = duplicateCurrentWeekMatrix;
+window.copyPreviousMonthMatrix = copyPreviousMonthMatrix;
+window.exportMatrixPlannerCSV = exportMatrixPlannerCSV;
+window.publishMatrixPlan = publishMatrixPlan;
+window.generateAIMatrixPlan = generateAIMatrixPlan;
 
 // Auto Initialize on DOM Ready or window load
 document.addEventListener('DOMContentLoaded', () => {
