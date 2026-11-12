@@ -2783,7 +2783,6 @@
         #view-daily-summary-panel,
         #view-shoots-panel,
         #view-strategy-calendar-panel,
-        #view-plan-tracking-panel,
         #view-files-manager-panel,
         #view-discussions-panel,
         #view-notes-panel,
@@ -4055,13 +4054,6 @@
                         <iconify-icon icon="solar:calendar-mark-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         Strategy Calendar
-                    </button>
-                    <button onclick="switchView('plan-tracking')" id="nav-plan-tracking"
-                        data-label="Production Control Center" aria-label="Production Control Center"
-                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:widget-bold-duotone" width="20"
-                            class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        Production Control Center
                     </button>
                     <button onclick="switchView('files-manager')" id="nav-files-manager" data-label="Files Manager"
                         aria-label="Files Manager"
@@ -6790,363 +6782,6 @@
                         <!-- Populated dynamically -->
                     </div>
                 </div>
-                <!-- ════ PRODUCTION CONTROL CENTER VIEW ════ -->
-                <div id="view-plan-tracking-panel" class="hidden space-y-6 fade-in">
-                    <!-- Header -->
-                    <div
-                        class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex items-center justify-between flex-wrap gap-4">
-                        <div class="flex items-center gap-3">
-                            <div
-                                class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                                <iconify-icon icon="solar:widget-bold-duotone" width="24"></iconify-icon>
-                            </div>
-                            <div>
-                                <h3 class="text-base font-black text-slate-900">Production Control Center</h3>
-                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                    Operational dashboard for tracking and managing the production pipeline</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 flex-wrap">
-                            <!-- Month nav for Calendar View (toggled dynamically) -->
-                            <div id="pt-calendar-nav-wrapper"
-                                class="hidden flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
-                                <button onclick="navigatePlanTracking(-1)"
-                                    class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-left-linear" width="18"></iconify-icon></button>
-                                <span id="pt-month-title"
-                                    class="text-sm font-black text-slate-800 min-w-[130px] text-center">Month
-                                    Year</span>
-                                <button onclick="navigatePlanTracking(1)"
-                                    class="p-1 rounded-lg hover:bg-slate-200 transition-colors"><iconify-icon
-                                        icon="solar:alt-arrow-right-linear" width="18"></iconify-icon></button>
-                                <span class="text-slate-300 ml-1">|</span>
-                                <button onclick="navigatePlanTracking(0)"
-                                    class="text-xs font-bold text-indigo-600 hover:underline px-1">Today</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tab Switcher -->
-                    <div class="flex gap-2">
-                        <button id="pt-tab-pcc" onclick="switchPlanTab('pcc')"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow transition-all">
-                            <iconify-icon icon="solar:widget-bold" width="14" class="mr-1"></iconify-icon> Production
-                            Control Center
-                        </button>
-                        <button id="pt-tab-calendar" onclick="switchPlanTab('calendar')"
-                            class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
-                            <iconify-icon icon="solar:calendar-bold" width="14" class="mr-1"></iconify-icon> Calendar
-                            View
-                        </button>
-                    </div>
-
-                    <!-- Production Control Center Dashboard Panel -->
-                    <div id="pt-panel-pcc" class="space-y-6">
-                        <!-- Filters Grid -->
-                        <div
-                            class="bg-white rounded-3xl p-4 shadow-xl border border-slate-100 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                            <div class="flex flex-col gap-1">
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Date
-                                    Range</span>
-                                <select id="pcc-filter-date" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="today">Today</option>
-                                    <option value="yesterday">Yesterday</option>
-                                    <option value="last_7_days" selected>Last 7 Days</option>
-                                    <option value="this_month">This Month</option>
-                                    <option value="all">All Time</option>
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Client</span>
-                                <select id="pcc-filter-client" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Clients</option>
-                                    <!-- Dynamic -->
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span
-                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Employee</span>
-                                <select id="pcc-filter-employee" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Team</option>
-                                    <!-- Dynamic -->
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span
-                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Department</span>
-                                <select id="pcc-filter-department" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Departments</option>
-                                    <option value="Content Team">Content Team</option>
-                                    <option value="Design">Design</option>
-                                    <option value="QC">QC</option>
-                                    <option value="Posting">Posting</option>
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Task
-                                    Type</span>
-                                <select id="pcc-filter-type" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Types</option>
-                                    <option value="design">Design</option>
-                                    <option value="video">Video</option>
-                                    <option value="content">Content</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span
-                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Priority</span>
-                                <select id="pcc-filter-priority" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Priorities</option>
-                                    <option value="High">High</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="Low">Low</option>
-                                </select>
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status</span>
-                                <select id="pcc-filter-status" onchange="renderPccDashboard()"
-                                    class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none">
-                                    <option value="all">All Statuses</option>
-                                    <!-- Dynamic -->
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- KPI Summary Cards Row -->
-                        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" id="pcc-kpi-row">
-                            <!-- Rendered dynamically -->
-                        </div>
-
-                        <!-- ════ NEW LAYOUT: HERO PIPELINE + BENTO GRID ════ -->
-
-                        <!-- Hero: Full Width Production Pipeline -->
-                        <div class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-6">
-                            <div class="flex justify-between items-center pb-4 border-b border-slate-50">
-                                <div>
-                                    <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider">Production
-                                        Pipeline</h4>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                        Click any stage to view task list</p>
-                                </div>
-                                <span
-                                    class="bg-indigo-50 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Interactive
-                                    Flow</span>
-                            </div>
-                            <div id="pcc-pipeline-container"
-                                class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-
-                        <!-- Bento Grid: Supporting Widgets (2 Column Responsive) -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                            <!-- Bottleneck Widget -->
-                            <div id="pcc-bottleneck-card"
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300">
-                                <!-- Populated dynamically -->
-                            </div>
-
-                            <!-- Team Availability Widget -->
-                            <div id="pcc-availability-card"
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300">
-                                <!-- Populated dynamically -->
-                            </div>
-
-                            <!-- Team Capacity Widget -->
-                            <div
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300 flex flex-col">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Team
-                                            Capacity</h4>
-                                        <p
-                                            class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                            Current operational workload</p>
-                                    </div>
-                                    <button onclick="openPccModal('capacity')"
-                                        class="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold uppercase tracking-wider transition-colors">View
-                                        All</button>
-                                </div>
-                                <div id="pcc-capacity-list" class="space-y-3 max-h-[320px] overflow-y-auto flex-1 pr-1">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <!-- Department Health Widget -->
-                            <div
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300 flex flex-col">
-                                <div>
-                                    <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Department
-                                        Health</h4>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                        Throughput comparison by team</p>
-                                </div>
-                                <div id="pcc-dept-health-list"
-                                    class="space-y-4 max-h-[320px] overflow-y-auto flex-1 pr-1">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <!-- Top Performers Widget -->
-                            <div
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300 flex flex-col">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Top
-                                            Performers</h4>
-                                        <p
-                                            class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                            Today's completed task count</p>
-                                    </div>
-                                    <button onclick="openPccModal('performers')"
-                                        class="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold uppercase tracking-wider transition-colors">View
-                                        All</button>
-                                </div>
-                                <div id="pcc-performers-list"
-                                    class="space-y-3 max-h-[320px] overflow-y-auto flex-1 pr-1">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <!-- Production Trend Widget -->
-                            <div
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300 flex flex-col">
-                                <div>
-                                    <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Production
-                                        Trend</h4>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                        Tasks comparison summary</p>
-                                </div>
-                                <div id="pcc-trend-list" class="space-y-3 max-h-[320px] overflow-y-auto flex-1 pr-1">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <!-- Live Activity Feed Widget (Spans 2 columns on md+ screens) -->
-                            <div
-                                class="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-4 hover:shadow-2xl transition-all duration-300 flex flex-col md:col-span-2">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Live
-                                            Activity Feed</h4>
-                                        <p
-                                            class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                            Recent production events</p>
-                                    </div>
-                                    <button onclick="openPccModal('activity')"
-                                        class="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold uppercase tracking-wider transition-colors">View
-                                        All</button>
-                                </div>
-                                <div id="pcc-activity-feed" class="space-y-3 max-h-[350px] overflow-y-auto flex-1 pr-1">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                        </div>
-                        <!-- END Bento Grid -->
-                    </div>
-
-                    <!-- Calendar View Tab Panel -->
-                    <div id="pt-panel-calendar" class="hidden">
-                        <div
-                            class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                            <!-- Weekday headers -->
-                            <div class="grid grid-cols-7 border-b border-slate-100 text-center bg-slate-50/60 py-3">
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sun</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mon</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tue</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wed</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thu</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fri</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sat</span>
-                            </div>
-                            <div id="pt-calendar-grid" class="grid grid-cols-7 min-h-[500px]">
-                                <!-- JS-rendered -->
-                            </div>
-                        </div>
-                        <!-- Day Detail Panel -->
-                        <div id="pt-day-detail"
-                            class="hidden mt-6 bg-white rounded-3xl p-6 shadow-xl border border-slate-100 space-y-5">
-                            <div class="flex items-center justify-between">
-                                <h4 id="pt-day-detail-title" class="text-base font-black text-slate-900"></h4>
-                                <button onclick="document.getElementById('pt-day-detail').classList.add('hidden')"
-                                    class="text-slate-400 hover:text-slate-600 transition-colors"><iconify-icon
-                                        icon="solar:close-circle-linear" width="20"></iconify-icon></button>
-                            </div>
-                            <!-- Strategy Events for that day -->
-                            <div id="pt-day-strategy" class="space-y-3"></div>
-                            <!-- Team Capacity Bars -->
-                            <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Team
-                                    Capacity</p>
-                                <div id="pt-day-capacity" class="space-y-3"></div>
-                            </div>
-                            <!-- Jira Tasks for that day -->
-                            <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Jira
-                                    Tasks Due</p>
-                                <div id="pt-day-tasks" class="space-y-2 max-h-64 overflow-y-auto"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Slide-over Backdrop Overlay -->
-                    <div id="pcc-slideover-backdrop"
-                        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9998] hidden opacity-0 transition-opacity duration-300"
-                        onclick="closePccSlideover()"></div>
-
-                    <!-- Task Slide-over Fly-out Panel -->
-                    <div id="pcc-slideover"
-                        class="fixed inset-y-0 right-0 w-full max-w-4xl bg-white shadow-2xl border-l border-slate-100 z-[9999] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col hidden">
-                        <!-- Header -->
-                        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <div>
-                                <h3 id="pcc-slideover-title" class="text-base font-black text-slate-900">Stage Tasks
-                                </h3>
-                                <p id="pcc-slideover-subtitle"
-                                    class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                                    Viewing filtered tasks</p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <button onclick="exportPccSlideoverTasks()"
-                                    class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1">
-                                    <iconify-icon icon="solar:download-bold" width="16"></iconify-icon> Export CSV
-                                </button>
-                                <span class="text-slate-200">|</span>
-                                <button onclick="closePccSlideover()"
-                                    class="text-slate-400 hover:text-slate-600 transition-colors">
-                                    <iconify-icon icon="solar:close-circle-bold" width="22"></iconify-icon>
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Slideover Content Table -->
-                        <div class="flex-1 overflow-y-auto">
-                            <table class="w-full">
-                                <thead id="pcc-slideover-thead" class="bg-slate-50 border-b border-slate-100">
-                                </thead>
-                                <tbody id="pcc-slideover-tbody" class="divide-y divide-slate-100">
-                                </tbody>
-                            </table>
-                            <div id="pcc-slideover-empty" class="p-8 text-center text-slate-400">
-                                <p class="text-sm">No tasks in this stage</p>
-                            </div>
-                        </div>
-                        <!-- Footer -->
-                        <div class="border-t border-slate-100 p-4 bg-slate-50 flex gap-3 justify-end">
-                            <button onclick="closePccSlideover()"
-                                class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors">Close</button>
-                        </div>
-                    </div>
-                </div><!-- /view-plan-tracking-panel -->
-
                 <!-- ════ FILES MANAGER VIEW ════ -->
                 <div id="view-files-manager-panel" class="hidden space-y-6 fade-in">
                     <!-- Header -->
@@ -19389,7 +19024,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (canViewDailySummary()) validViews.push('daily-summary');
                     if (isAdmin()) validViews.push('users', 'clients-admin');
                     if (canViewStrategyCalendar()) validViews.push('strategy-calendar');
-                    if (canViewPlanTracking()) validViews.push('plan-tracking');
                     if (canViewMetaAds()) validViews.push('meta-ads');
 
                     initClientSettings();
@@ -19851,7 +19485,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('nav-qc')?.classList.toggle('hidden', !canViewQcPortal());
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
                 document.getElementById('nav-sales-hub')?.classList.toggle('hidden', !canViewSalesHub());
-                document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
                 document.getElementById('nav-dailyplan')?.classList.toggle('hidden', !canViewDailyPlanTeamAccess());
                 document.getElementById('nav-app-usage')?.classList.toggle('hidden', !canViewAppUsage());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
@@ -22394,7 +22027,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'organisers-admin' && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'clients-admin' && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) { view = 'dashboard'; panelId = 'dashboard'; }
-                if (view === 'plan-tracking' && !canViewPlanTracking()) { view = 'dashboard'; panelId = 'dashboard'; }
+                if (view === 'plan-tracking') { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'app-usage' && !canViewAppUsage()) { view = 'dashboard'; panelId = 'dashboard'; }
 
@@ -22464,7 +22097,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'reports',
                     'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org',
                     'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org',
-                    'strategy-calendar', 'discussions', 'plan-tracking', 'files-manager', 'meta-ads',
+                    'strategy-calendar', 'discussions', 'files-manager', 'meta-ads',
                     'marketing-hub', 'meta-integration', 'my-monthly-report', 'one-report', 'app-usage'
                 ];
 
@@ -22526,7 +22159,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'organisers-admin': 'Monthly Organisers & Activity',
                     'dm-content-org': 'DM Content Organiser Board',
                     'strategy-calendar': 'Strategy Calendar',
-                    'plan-tracking': 'Production Control Center',
                     'files-manager': 'Files Manager',
                     discussions: 'Discussion History & Schedule',
                     'my-monthly-report': 'Monthly Report',
@@ -22618,7 +22250,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     else if (view === 'workplace-org') { renderWorkplaceOrgPanel(); }
                     else if (view === 'dm-content-org') { renderDmContentOrgPanel(); }
                     else if (view === 'strategy-calendar') { initStrategyCalendar(); }
-                    else if (view === 'plan-tracking') { initPlanTracking(); }
                     else if (view === 'social-analytics') { initSocialAnalytics(); }
                     else if (view === 'files-manager') { initFilesManager(); }
                     else if (view === 'organisers-admin') { populateOrganisersAdminPanel(); }
@@ -51672,7 +51303,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (activeView === 'shoots') PerfOptimizer.queueRender(() => renderShootCalendar(), 'high');
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
-                        if (activeView === 'plan-tracking') renderPlanTrackingView();
                     });
                 } else if (isAjith) {
                     // Ajith loads from both ajithvilpower_gmail_com and ajith_vilpower_com
@@ -51704,7 +51334,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (activeView === 'shoots') renderShootCalendar();
                             if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                             if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
-                            if (activeView === 'plan-tracking') renderPlanTrackingView();
                         });
                     });
                 } else if (isAlex) {
@@ -51737,7 +51366,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (activeView === 'shoots') renderShootCalendar();
                             if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                             if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
-                            if (activeView === 'plan-tracking') renderPlanTrackingView();
                         });
                     });
                 } else {
@@ -51776,7 +51404,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (activeView === 'shoots') renderShootCalendar();
                         if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                         if (activeView === 'reports' && currentReportTab === 'client') renderClientReport();
-                        if (activeView === 'plan-tracking') renderPlanTrackingView();
                     });
                 }
             }
@@ -67944,13 +67571,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         </div>
                         <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Strategy
                             Cal</span>
-                    </button>
-                    <button type="button" onclick="selectMobileAppView('plan-tracking')" class="mobile-app-tile">
-                        <div class="tile-icon-box bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                            <iconify-icon icon="solar:chart-square-bold-duotone"></iconify-icon>
-                        </div>
-                        <span
-                            class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Production</span>
                     </button>
                     <button type="button" onclick="selectMobileAppView('monthly-plan')" class="mobile-app-tile">
                         <div
