@@ -491,6 +491,9 @@ function renderEmployeeDashboardTaskPerformance(data) {
             : isPending 
             ? 'bg-amber-50 text-amber-700'
             : 'bg-slate-50 text-slate-700';
+        const startBtn = typeof window.toggleActiveTask === 'function'
+            ? `<button onclick="window.toggleActiveTask('${escapeHtml(task.id)}')" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-all">⚡ Start</button>`
+            : '';
 
         html += `
             <div class="bg-white rounded-lg border border-slate-100 p-4">
@@ -499,6 +502,7 @@ function renderEmployeeDashboardTaskPerformance(data) {
                         <div class="flex items-center gap-2 mb-1">
                             <span class="font-mono text-xs font-bold text-indigo-600">${escapeHtml(task.id)}</span>
                             <span class="text-xs font-bold px-2 py-0.5 rounded-full ${statusColor}">${task.status || 'Unknown'}</span>
+                            ${startBtn}
                         </div>
                         <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(task.desc)}</p>
                         <p class="text-xs text-slate-400 mt-1">${escapeHtml(task.client)} • ${task.type}</p>

@@ -6,6 +6,7 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
@@ -27,7 +28,7 @@
     <link rel="preconnect" href="https://www.gstatic.com">
     <!-- Tailwind CSS v4, prebuilt from src/input.css (npm run build:css). This file styles the app;
          the cdn.tailwindcss.com script was removed because it generated no CSS. -->
-    <link rel="stylesheet" href="dist/output.css">
+    <link rel="stylesheet" href="dist/output.css?v=1.1.01">
     <link rel="stylesheet" href="mobile-app.css">
     <link rel="stylesheet" href="app-realistic-ui.css">
     <script>
@@ -2235,34 +2236,41 @@
             background: #253347 !important;
         }
 
-        /* Desktop: Show sidebar separately below main grid */
-        @media (min-width: 1024px) {
-            #view-dashboard-panel>div:last-of-type {
-                display: grid !important;
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-                width: 100%;
-                max-width: 320px;
-                margin-left: auto;
-                margin-right: 0;
-                position: relative;
-                z-index: 1;
-                padding-top: 1.5rem;
-                pointer-events: auto;
-            }
-
-            #view-dashboard-panel>div:last-of-type>div.space-y-4 {
-                position: relative;
-                height: fit-content;
-                z-index: 1;
-            }
+        /* ── Dashboard Role-Based Section Ordering & Design System ── */
+        #view-dashboard-panel:not(.hidden) {
+            display: flex !important;
+            flex-direction: column;
+            gap: 1.5rem;
         }
+        #view-dashboard-panel .dash-sec-welcome { order: 1; }
+        #view-dashboard-panel .dash-sec-session-perf { order: 2; }
+        #view-dashboard-panel .dash-sec-focus-sync { order: 3; }
+        #view-dashboard-panel .dash-sec-queue { order: 4; }
+        #view-dashboard-panel .dash-sec-team { order: 5; }
+        #view-dashboard-panel .dash-sec-workload { order: 6; }
+        #view-dashboard-panel .dash-sec-attention { order: 7; }
+        #view-dashboard-panel .dash-sec-insights { order: 8; }
 
-        /* Mobile and tablet: Hide sidebar */
-        @media (max-width: 1023px) {
-            #view-dashboard-panel>div:last-of-type {
-                display: none !important;
-            }
+        /* Manager/Admin operational priority: elevate Live Team Overview & Attention Required */
+        #view-dashboard-panel.role-management .dash-sec-welcome { order: 1; }
+        #view-dashboard-panel.role-management .dash-sec-session-perf { order: 2; }
+        #view-dashboard-panel.role-management .dash-sec-team { order: 3; }
+        #view-dashboard-panel.role-management .dash-sec-attention { order: 4; }
+        #view-dashboard-panel.role-management .dash-sec-focus-sync { order: 5; }
+        #view-dashboard-panel.role-management .dash-sec-queue { order: 6; }
+        #view-dashboard-panel.role-management .dash-sec-workload { order: 7; }
+        #view-dashboard-panel.role-management .dash-sec-insights { order: 8; }
+
+        .onedesk-card {
+            background: #FFFFFF;
+            border: 1px solid #E8EDF4;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.02);
+        }
+        html.dark .onedesk-card {
+            background: #0f172a;
+            border-color: #1e293b;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
         }
 
         /* Removed overridden max-width for dialogs */
@@ -4374,216 +4382,512 @@
             <div id="content-area" class="flex-1 overflow-y-auto overflow-x-hidden p-8 min-h-0">
 
                 <!-- ════ DASHBOARD VIEW ════ -->
-                <div id="view-dashboard-panel" class="space-y-8 fade-in">
-                    <!-- Timer & Status Row -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div id="view-dashboard-panel" class="fade-in">
 
-                        <!-- Attendance Timer -->
-                        <div
-                            class="lg:col-span-1 bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100 relative overflow-hidden group">
-                            <div
-                                class="absolute -top-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full opacity-50 group-hover:scale-110 transition-transform">
+                    <!-- SECTION 1: Welcome Command Bar -->
+                    <section class="dash-sec-welcome rounded-2xl p-5 md:p-6 text-white shadow-sm border border-indigo-500/20 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                        style="background: linear-gradient(135deg, #5845F5 0%, #4934DC 100%);">
+                        <div class="space-y-1.5 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span id="dashboard-date" class="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-indigo-100 bg-white/15 px-2.5 py-1 rounded-lg border border-white/15">Today</span>
+                                <span id="dashboard-role-pill" class="inline-flex items-center text-[11px] font-semibold uppercase tracking-wider text-emerald-100 bg-emerald-500/25 px-2.5 py-1 rounded-lg border border-emerald-300/25">Workspace</span>
                             </div>
-                            <div class="relative z-10">
-                                <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-6">Current
-                                    Session</p>
-                                <div id="timer-display"
-                                    class="text-5xl font-black text-slate-900 tracking-tighter mb-4 font-mono">00:00:00
+                            <h2 id="dashboard-greeting" class="text-xl md:text-2xl font-extrabold tracking-tight text-white truncate">Welcome back to One Desk</h2>
+                            <p class="text-xs md:text-sm text-indigo-100/90 max-w-2xl">Your daily command center for attendance, active focus, and team momentum.</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap shrink-0">
+                            <button type="button" onclick="if(typeof openAddTaskModal==='function')openAddTaskModal('manual')"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white text-[#4934DC] hover:bg-indigo-50 text-xs font-bold shadow-sm transition-all cursor-pointer">
+                                <iconify-icon icon="solar:add-circle-bold" width="16"></iconify-icon>
+                                Quick Task
+                            </button>
+                            <button type="button" onclick="switchView('tasks')"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold transition-all cursor-pointer">
+                                <iconify-icon icon="solar:checklist-minimalistic-bold" width="16"></iconify-icon>
+                                Tasks Hub
+                            </button>
+                            <button type="button" onclick="switchView('dailyplan')"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold transition-all cursor-pointer">
+                                <iconify-icon icon="solar:calendar-mark-bold" width="16"></iconify-icon>
+                                Daily Plan
+                            </button>
+                            <div class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/20 border border-white/15 text-xs">
+                                <iconify-icon icon="solar:clock-circle-linear" width="15" class="text-indigo-200"></iconify-icon>
+                                <label for="dashboard-shift-goal" class="text-[10px] font-bold uppercase tracking-wider text-indigo-100">Shift:</label>
+                                <select id="dashboard-shift-goal" onchange="if(typeof setDailyShiftGoal==='function')setDailyShiftGoal(this.value)"
+                                    class="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer">
+                                    <option value="8" class="text-slate-900">8.0h Full</option>
+                                    <option value="5" class="text-slate-900">5.0h Sat</option>
+                                    <option value="4.5" class="text-slate-900">4.5h Half</option>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION 2: Current Session (Left) & Today's Performance (Right) -->
+                    <section class="dash-sec-session-perf grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+
+                        <!-- Current Session Card -->
+                        <div class="lg:col-span-4 onedesk-card p-5 md:p-6 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-8 h-8 rounded-xl bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 flex items-center justify-center">
+                                            <iconify-icon icon="solar:clock-circle-bold-duotone" width="18"></iconify-icon>
+                                        </span>
+                                        <div>
+                                            <p class="text-xs font-bold text-[#171D32] dark:text-white">Current Session</p>
+                                            <p class="text-[11px] text-[#718096] dark:text-slate-400">Attendance &amp; shift timer</p>
+                                        </div>
+                                    </div>
+                                    <span id="session-state-pill" class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700">
+                                        <span id="session-state-dot" class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        <span id="session-state-label">Checked Out</span>
+                                    </span>
                                 </div>
-                                <p id="timer-status" class="text-xs text-slate-400 mb-8 flex items-center gap-2">
-                                    <iconify-icon icon="solar:info-circle-linear"></iconify-icon>
+
+                                <div id="timer-display" aria-live="polite" role="timer" aria-label="Current work session time"
+                                    class="text-4xl xl:text-[42px] font-black text-[#171D32] dark:text-white tracking-tight font-mono tabular-nums mb-2">00:00:00</div>
+
+                                <p id="timer-status" class="text-xs text-[#718096] dark:text-slate-400 mb-5 flex items-center gap-1.5">
+                                    <iconify-icon icon="solar:info-circle-linear" width="15"></iconify-icon>
                                     Not checked in for today
                                 </p>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <button id="btn-checkin" onclick="doCheckIn()"
-                                        class="col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
-                                        <iconify-icon icon="solar:play-circle-bold" width="18"></iconify-icon>
-                                        Check In
-                                    </button>
-                                    <button id="btn-break" onclick="doBreak()" disabled
-                                        class="bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl py-3 text-xs font-bold transition-all disabled:opacity-40 flex items-center justify-center gap-2">
-                                        <iconify-icon icon="solar:pause-circle-linear" width="16"></iconify-icon>
-                                        Break
-                                    </button>
-                                    <button id="btn-checkout" onclick="confirmCheckOut()" disabled
-                                        class="bg-slate-900 hover:bg-slate-800 text-white rounded-2xl py-3 text-xs font-bold transition-all disabled:opacity-40 flex items-center justify-center gap-2">
-                                        <iconify-icon icon="solar:stop-circle-linear" width="16"></iconify-icon>
-                                        Check Out
-                                    </button>
-                                    <button id="btn-resume" onclick="doResume()"
-                                        class="hidden col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl py-3.5 text-sm font-bold shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2">
-                                        <iconify-icon icon="solar:play-circle-linear" width="18"></iconify-icon>
-                                        Resume Work
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Daily Progress -->
-                        <div
-                            class="lg:col-span-2 bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col">
-                            <div class="flex items-center justify-between mb-8">
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today's
-                                    Performance</p>
-                                <span
-                                    class="bg-slate-50 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full border border-slate-100">8h
-                                    Daily Goal</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100/50">
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase mb-2">Assigned</p>
-                                    <p id="stat-total" class="text-3xl font-black text-slate-900">0</p>
-                                </div>
-                                <div class="bg-blue-50 p-5 rounded-2xl border border-blue-100/50">
-                                    <p class="text-[10px] text-blue-400 font-bold uppercase mb-2">In Progress</p>
-                                    <p id="stat-todo" class="text-3xl font-black text-blue-600">0</p>
-                                </div>
-                                <div class="bg-amber-50 p-5 rounded-2xl border border-amber-100/50">
-                                    <p class="text-[10px] text-amber-500 font-bold uppercase mb-2">Hold</p>
-                                    <p id="stat-progress" class="text-3xl font-black text-amber-600">0</p>
-                                </div>
-                                <div class="bg-emerald-50 p-5 rounded-2xl border border-emerald-100/50">
-                                    <p class="text-[10px] text-emerald-500 font-bold uppercase mb-2">Completed</p>
-                                    <p id="stat-done" class="text-3xl font-black text-emerald-600">0</p>
-                                </div>
-                            </div>
-
-                            <div class="mt-auto space-y-4">
-                                <div class="flex justify-between items-end">
-                                    <p class="text-xs text-slate-500 font-medium">Progress Bar</p>
-                                    <p id="hours-text" class="text-sm font-black text-indigo-600">0.0 / 8.0 hrs</p>
-                                </div>
-                                <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                                    <div id="progress-bar"
-                                        class="bg-indigo-600 h-full w-0 transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(79,70,229,0.4)]">
+                                <div class="grid grid-cols-3 gap-2 mb-5 p-3 rounded-xl bg-[#F5F7FA] dark:bg-slate-800/60 border border-[#E8EDF4] dark:border-slate-800">
+                                    <div>
+                                        <p class="text-[10px] font-semibold uppercase tracking-wider text-[#718096] dark:text-slate-400">Started</p>
+                                        <p id="session-start-time" class="text-xs font-bold text-[#171D32] dark:text-white mt-0.5 tabular-nums">—</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-semibold uppercase tracking-wider text-[#718096] dark:text-slate-400">Break</p>
+                                        <p id="session-break-duration" class="text-xs font-bold text-[#171D32] dark:text-white mt-0.5 font-mono tabular-nums">00:00</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-semibold uppercase tracking-wider text-[#718096] dark:text-slate-400">Target</p>
+                                        <p id="session-shift-target" class="text-xs font-bold text-[#5845F5] dark:text-indigo-400 mt-0.5 tabular-nums">8.0h</p>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <!-- Admin Current Work -->
-                    <div id="admin-current-work-card"
-                        class="hidden bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100">
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                            <div>
-                                <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Live
-                                    Work Board</p>
-                                <h3 class="text-lg font-black text-slate-900 tracking-tight">Employees Current Working
-                                    Task</h3>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <button onclick="refreshEmployeeCurrentTasks()" title="Refresh"
-                                    class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-all"
-                                    id="btn-refresh-current-work">
-                                    <iconify-icon icon="solar:refresh-linear" width="16"></iconify-icon>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <button id="btn-checkin" onclick="doCheckIn()"
+                                    class="col-span-2 bg-[#5845F5] hover:bg-[#4934DC] text-white rounded-xl py-3 text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5845F5] cursor-pointer">
+                                    <iconify-icon icon="solar:play-circle-bold" width="18"></iconify-icon>
+                                    Start Working
                                 </button>
-                                <div
-                                    class="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <span id="admin-current-work-count"
-                                        class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">0
-                                        Active</span>
-                                </div>
+                                <button id="btn-break" onclick="doBreak()" disabled
+                                    class="bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/50 rounded-xl py-2.5 text-xs font-bold transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <iconify-icon icon="solar:cup-hot-bold" width="15"></iconify-icon>
+                                    Take Break
+                                </button>
+                                <button id="btn-checkout" onclick="confirmCheckOut()" disabled
+                                    class="bg-[#171D32] dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <iconify-icon icon="solar:logout-2-bold" width="15"></iconify-icon>
+                                    Check Out
+                                </button>
+                                <button id="btn-resume" onclick="doResume()"
+                                    class="hidden col-span-2 bg-[#10B981] hover:bg-emerald-600 text-white rounded-xl py-3 text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer">
+                                    <iconify-icon icon="solar:play-circle-bold" width="18"></iconify-icon>
+                                    End Break &amp; Resume
+                                </button>
                             </div>
                         </div>
-                        <div id="admin-current-work-list" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                            <!-- Employee current tasks -->
-                        </div>
-                    </div>
 
-                    <!-- Admin Workload Chart -->
-                    <div id="admin-workload-card"
-                        class="hidden bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100">
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <!-- Today's Performance KPIs + Daily Shift Progress -->
+                        <div class="lg:col-span-8 onedesk-card p-5 md:p-6 flex flex-col justify-between">
                             <div>
-                                <p class="text-[10px] font-bold text-violet-600 uppercase tracking-widest mb-2">Workload
-                                </p>
-                                <h3 class="text-lg font-black text-slate-900 tracking-tight">Assignee Workload Chart
-                                </h3>
-                            </div>
-                            <span id="workload-total"
-                                class="bg-violet-50 text-violet-600 text-[10px] font-bold px-3 py-1 rounded-full border border-violet-100 uppercase tracking-widest">0
-                                Assigned</span>
-                        </div>
-                        <div id="workload-chart" class="space-y-4">
-                            <!-- Workload bars -->
-                        </div>
-                    </div>
-
-                    <!-- Admin Report Chart -->
-                    <div id="admin-report-card"
-                        class="hidden bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100">
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                            <div>
-                                <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2">Admin
-                                    Report</p>
-                                <h3 class="text-lg font-black text-slate-900 tracking-tight">Task Status Distribution
-                                </h3>
-                            </div>
-                            <div
-                                class="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-full px-3 py-1.5">
-                                <iconify-icon icon="solar:chart-2-bold" class="text-indigo-600"
-                                    width="16"></iconify-icon>
-                                <span id="admin-report-total"
-                                    class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">0
-                                    Tasks</span>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-8 items-center">
-                            <div class="report-chart-wrap mx-auto">
-                                <canvas id="task-report-chart" class="w-full h-full" width="260" height="260"></canvas>
-                                <div class="report-chart-center">
-                                    <span id="admin-report-percent" class="text-2xl font-black text-slate-900">0%</span>
-                                    <span
-                                        class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Done</span>
-                                </div>
-                            </div>
-                            <div>
-                                <div id="admin-report-legend" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <!-- Chart legend -->
-                                </div>
-                                <div class="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 gap-4">
+                                <div class="flex items-center justify-between gap-3 mb-5">
                                     <div>
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                            Open Work</p>
-                                        <p id="admin-report-open" class="text-xl font-black text-slate-900">0</p>
+                                        <p class="text-[11px] font-bold text-[#718096] dark:text-slate-400 uppercase tracking-wider">Today's Performance</p>
+                                        <h3 class="text-base font-extrabold text-[#171D32] dark:text-white tracking-tight mt-0.5">Task &amp; Shift Progress</h3>
                                     </div>
-                                    <div>
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                            Completion</p>
-                                        <p id="admin-report-completion" class="text-xl font-black text-emerald-600">0%
-                                        </p>
+                                    <span id="daily-goal-badge"
+                                        class="bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 text-[11px] font-bold px-3 py-1 rounded-full border border-[#5845F5]/20">8.0h Daily Goal</span>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-5">
+                                    <div class="bg-[#F5F7FA] dark:bg-slate-800/60 p-3.5 rounded-xl border border-[#E8EDF4] dark:border-slate-700/50 transition-transform hover:-translate-y-0.5">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <p class="text-[11px] text-[#718096] dark:text-slate-400 font-bold uppercase tracking-wide">Assigned</p>
+                                            <iconify-icon icon="solar:layers-minimalistic-bold" class="text-slate-400" width="15"></iconify-icon>
+                                        </div>
+                                        <p id="stat-total" class="text-2xl md:text-3xl font-black text-[#171D32] dark:text-white tabular-nums">0</p>
+                                        <p id="stat-total-delta" class="text-[10px] font-medium text-[#718096] dark:text-slate-400 mt-1">Today's queue</p>
+                                    </div>
+                                    <div class="bg-sky-50/70 dark:bg-sky-950/30 p-3.5 rounded-xl border border-sky-100 dark:border-sky-900/40 transition-transform hover:-translate-y-0.5">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <p class="text-[11px] text-[#2695EB] dark:text-sky-400 font-bold uppercase tracking-wide">To Do</p>
+                                            <iconify-icon icon="solar:inbox-line-bold" class="text-[#2695EB]" width="15"></iconify-icon>
+                                        </div>
+                                        <p id="stat-notstarted" class="text-2xl md:text-3xl font-black text-[#2695EB] dark:text-sky-400 tabular-nums">0</p>
+                                        <p class="text-[10px] font-medium text-sky-700/70 dark:text-sky-300/70 mt-1">Ready to start</p>
+                                    </div>
+                                    <div class="bg-indigo-50/70 dark:bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 transition-transform hover:-translate-y-0.5">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <p class="text-[11px] text-[#5845F5] dark:text-indigo-400 font-bold uppercase tracking-wide">In Progress</p>
+                                            <iconify-icon icon="solar:bolt-circle-bold" class="text-[#5845F5]" width="15"></iconify-icon>
+                                        </div>
+                                        <p id="stat-todo" class="text-2xl md:text-3xl font-black text-[#5845F5] dark:text-indigo-400 tabular-nums">0</p>
+                                        <p class="text-[10px] font-medium text-indigo-700/70 dark:text-indigo-300/70 mt-1">Active work</p>
+                                    </div>
+                                    <div class="bg-amber-50/70 dark:bg-amber-950/30 p-3.5 rounded-xl border border-amber-100 dark:border-amber-900/40 transition-transform hover:-translate-y-0.5">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <p class="text-[11px] text-[#F59E0B] dark:text-amber-400 font-bold uppercase tracking-wide">Hold</p>
+                                            <iconify-icon icon="solar:pause-circle-bold" class="text-[#F59E0B]" width="15"></iconify-icon>
+                                        </div>
+                                        <p id="stat-progress" class="text-2xl md:text-3xl font-black text-[#F59E0B] dark:text-amber-400 tabular-nums">0</p>
+                                        <p class="text-[10px] font-medium text-amber-700/70 dark:text-amber-300/70 mt-1">Paused / blocked</p>
+                                    </div>
+                                    <div class="col-span-2 sm:col-span-1 bg-emerald-50/70 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40 transition-transform hover:-translate-y-0.5">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <p class="text-[11px] text-[#10B981] dark:text-emerald-400 font-bold uppercase tracking-wide">Completed</p>
+                                            <iconify-icon icon="solar:check-circle-bold" class="text-[#10B981]" width="15"></iconify-icon>
+                                        </div>
+                                        <p id="stat-done" class="text-2xl md:text-3xl font-black text-[#10B981] dark:text-emerald-400 tabular-nums">0</p>
+                                        <p id="stat-done-delta" class="text-[10px] font-medium text-emerald-700/70 dark:text-emerald-300/70 mt-1">Finished today</p>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <!-- Lower Row -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <!-- Active Task Card -->
-                        <div class="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100">
-                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Current Task
-                                Focus</h3>
-                            <div id="active-task-card"
-                                class="bg-slate-50 rounded-2xl p-6 border border-slate-100 border-dashed">
-                                <p class="text-sm text-slate-400">No task selected. Go to Jira Tasks to pick one.</p>
+                            <!-- Daily Shift Progress -->
+                            <div class="bg-[#F5F7FA] dark:bg-slate-800/50 p-4 rounded-xl border border-[#E8EDF4] dark:border-slate-800 space-y-2.5">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <p class="text-xs font-bold text-[#171D32] dark:text-slate-200">Daily Shift Progress</p>
+                                        <span id="hours-percent" class="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-300 tabular-nums">0%</span>
+                                        <span id="shift-overtime-badge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-[#10B981] dark:text-emerald-300"></span>
+                                    </div>
+                                    <div class="flex items-center gap-3 text-xs">
+                                        <span id="shift-remaining-text" class="text-[#718096] dark:text-slate-400 font-medium">8.0h remaining</span>
+                                        <p id="hours-text" class="text-sm font-black text-[#5845F5] dark:text-indigo-400 font-mono tabular-nums">0.0 / 8.0 hrs</p>
+                                    </div>
+                                </div>
+                                <div class="relative w-full bg-slate-200/80 dark:bg-slate-700 h-3 rounded-full overflow-hidden flex">
+                                    <div id="progress-bar" class="bg-[#5845F5] h-full w-0 transition-all duration-700 ease-out rounded-l-full"></div>
+                                    <div id="progress-bar-overtime" class="bg-[#10B981] h-full w-0 transition-all duration-700 ease-out rounded-r-full"></div>
+                                </div>
+                                <p id="shift-goal-caption" class="text-[11px] text-[#718096] dark:text-slate-400">0% of daily goal achieved (breaks excluded).</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION 3: Current Task Focus (Left) & Recently Synced (Right) -->
+                    <section class="dash-sec-focus-sync grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                        <!-- Current Task Focus -->
+                        <div class="lg:col-span-6 onedesk-card p-5 md:p-6 flex flex-col">
+                            <div class="flex items-center justify-between gap-2 mb-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-8 h-8 rounded-xl bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 flex items-center justify-center">
+                                        <iconify-icon icon="solar:target-bold-duotone" width="18"></iconify-icon>
+                                    </span>
+                                    <div>
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Current Task Focus</h3>
+                                        <p class="text-[11px] text-[#718096] dark:text-slate-400">Primary task execution workspace</p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="switchView('tasks')" class="text-xs font-bold text-[#5845F5] dark:text-indigo-400 hover:underline cursor-pointer">Open Tasks Hub →</button>
+                            </div>
+                            <div id="active-task-card" class="flex-1 flex flex-col justify-center">
+                                <!-- Rendered by renderActiveTaskCard / OneDeskDashboard -->
                             </div>
                         </div>
 
-                        <!-- Recent Tasks -->
-                        <div
-                            class="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 px-2">Recently
-                                Synced</h3>
-                            <div id="recent-tasks" class="divide-y divide-slate-50">
+                        <!-- Recently Synced -->
+                        <div class="lg:col-span-6 onedesk-card p-5 md:p-6 flex flex-col">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-8 h-8 rounded-xl bg-sky-500/10 text-[#2695EB] flex items-center justify-center">
+                                        <iconify-icon icon="solar:refresh-circle-bold-duotone" width="18"></iconify-icon>
+                                    </span>
+                                    <div>
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Recently Synced</h3>
+                                        <p class="text-[11px] text-[#718096] dark:text-slate-400">Latest task updates &amp; live activity</p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="switchView('tasks')" class="text-xs font-bold text-[#5845F5] dark:text-indigo-400 hover:underline cursor-pointer">View All →</button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mb-3">
+                                <div class="relative flex-1 min-w-[160px]">
+                                    <iconify-icon icon="solar:magnifer-linear" width="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                    <input id="recent-sync-search" type="text" placeholder="Search synced tasks..."
+                                        oninput="window.OneDeskDashboard && window.OneDeskDashboard.setRecentFilter('search', this.value)"
+                                        class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-100 focus:outline-none focus:border-[#5845F5]">
+                                </div>
+                                <select id="recent-sync-status"
+                                    onchange="window.OneDeskDashboard && window.OneDeskDashboard.setRecentFilter('status', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200 focus:outline-none focus:border-[#5845F5]">
+                                    <option value="all">All Statuses</option>
+                                    <option value="todo">To Do</option>
+                                    <option value="inprogress">In Progress</option>
+                                    <option value="hold">Hold</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="qcpending">QC Pending</option>
+                                    <option value="qccorrection">QC Correction</option>
+                                </select>
+                            </div>
+                            <div id="recent-tasks" class="divide-y divide-[#E8EDF4] dark:divide-slate-800 flex-1 max-h-[340px] overflow-y-auto pr-1">
                                 <!-- Data -->
                             </div>
                         </div>
-                    </div>
+                    </section>
+
+                    <!-- SECTION 4: My Task Queue -->
+                    <section id="my-task-queue-section" class="dash-sec-queue onedesk-card p-5 md:p-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-xl bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 flex items-center justify-center">
+                                    <iconify-icon icon="solar:list-check-bold-duotone" width="18"></iconify-icon>
+                                </span>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">My Task Queue</h3>
+                                        <span id="my-queue-count" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 border border-[#E8EDF4] dark:border-slate-700">0</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#718096] dark:text-slate-400">Pick your next task directly into Current Task Focus</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="relative">
+                                    <iconify-icon icon="solar:magnifer-linear" width="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                    <input id="queue-search-input" type="text" placeholder="Search ID, title, client..."
+                                        oninput="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('search', this.value)"
+                                        class="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-100 focus:outline-none focus:border-[#5845F5] w-48 sm:w-56">
+                                </div>
+                                <select id="queue-sort-select"
+                                    onchange="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('sort', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200 focus:outline-none focus:border-[#5845F5]">
+                                    <option value="priority">Sort: Priority</option>
+                                    <option value="duedate">Sort: Due Date</option>
+                                    <option value="recent">Sort: Recently Assigned</option>
+                                    <option value="id">Sort: Task ID</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="queue-filter-pills" class="flex items-center gap-1.5 flex-wrap mb-4">
+                            <button type="button" data-qfilter="all" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('status', 'all')" class="queue-pill px-3 py-1.5 rounded-lg text-xs font-bold bg-[#5845F5] text-white cursor-pointer">All</button>
+                            <button type="button" data-qfilter="todo" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('status', 'todo')" class="queue-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 hover:bg-slate-200/60 cursor-pointer">To Do</button>
+                            <button type="button" data-qfilter="inprogress" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('status', 'inprogress')" class="queue-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 hover:bg-slate-200/60 cursor-pointer">In Progress</button>
+                            <button type="button" data-qfilter="hold" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('status', 'hold')" class="queue-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 hover:bg-slate-200/60 cursor-pointer">Hold</button>
+                            <button type="button" data-qfilter="overdue" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setQueueFilter('status', 'overdue')" class="queue-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#F04465] hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">Overdue</button>
+                        </div>
+
+                        <div id="my-task-queue-list" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                            <!-- Rendered by OneDeskDashboard -->
+                        </div>
+                    </section>
+
+                    <!-- SECTION 5: Live Team Overview (Management) -->
+                    <section id="admin-current-work-card" class="hidden dash-sec-team onedesk-card p-5 md:p-6">
+                        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-xl bg-emerald-500/10 text-[#10B981] flex items-center justify-center">
+                                    <iconify-icon icon="solar:users-group-rounded-bold-duotone" width="18"></iconify-icon>
+                                </span>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Live Team Overview</h3>
+                                        <span id="admin-current-work-count" class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-[#10B981] border border-emerald-200/60 dark:border-emerald-900/40">0 Active</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#718096] dark:text-slate-400">Real-time employee availability, active tasks &amp; session timers</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="relative">
+                                    <iconify-icon icon="solar:magnifer-linear" width="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                    <input id="team-search-input" type="text" placeholder="Search employee..."
+                                        oninput="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('search', this.value)"
+                                        class="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-100 focus:outline-none focus:border-[#5845F5] w-44">
+                                </div>
+                                <select id="team-sort-select"
+                                    onchange="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('sort', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200 focus:outline-none focus:border-[#5845F5]">
+                                    <option value="status">Sort: Current Status</option>
+                                    <option value="name">Sort: Employee Name</option>
+                                    <option value="duration">Sort: Active Task Duration</option>
+                                    <option value="workload">Sort: Workload</option>
+                                </select>
+                                <button onclick="refreshEmployeeCurrentTasks()" title="Refresh Team Status"
+                                    class="w-8 h-8 flex items-center justify-center rounded-lg bg-[#F5F7FA] dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-[#718096] hover:text-[#5845F5] border border-[#E8EDF4] dark:border-slate-700 transition-all cursor-pointer"
+                                    id="btn-refresh-current-work">
+                                    <iconify-icon icon="solar:refresh-linear" width="15"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="team-filter-pills" class="flex items-center gap-1.5 flex-wrap mb-4">
+                            <button type="button" data-tfilter="all" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'all')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-bold bg-[#5845F5] text-white cursor-pointer">All Employees</button>
+                            <button type="button" data-tfilter="working" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'working')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 cursor-pointer">Working</button>
+                            <button type="button" data-tfilter="idle" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'idle')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 cursor-pointer">Idle</button>
+                            <button type="button" data-tfilter="break" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'break')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 cursor-pointer">On Break</button>
+                            <button type="button" data-tfilter="paused" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'paused')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 cursor-pointer">Paused</button>
+                            <button type="button" data-tfilter="checkedout" onclick="window.OneDeskDashboard && window.OneDeskDashboard.setTeamFilter('state', 'checkedout')" class="team-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 cursor-pointer">Checked Out</button>
+                        </div>
+
+                        <div id="admin-current-work-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                            <!-- Employee current tasks -->
+                        </div>
+                    </section>
+
+                    <!-- SECTION 6: Team Workload Analytics (Management) -->
+                    <section id="admin-workload-card" class="hidden dash-sec-workload onedesk-card p-5 md:p-6">
+                        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-5">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                                    <iconify-icon icon="solar:chart-bold-duotone" width="18"></iconify-icon>
+                                </span>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Team Workload Analytics</h3>
+                                        <span id="workload-total" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 border border-violet-200/60 dark:border-violet-900/40">0 Assigned</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#718096] dark:text-slate-400">Accurate proportional task volume &amp; estimated hours distribution</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select id="workload-period-filter" onchange="window.OneDeskDashboard && window.OneDeskDashboard.setWorkloadOption('period', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200">
+                                    <option value="all">All Active</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                </select>
+                                <select id="workload-metric-filter" onchange="window.OneDeskDashboard && window.OneDeskDashboard.setWorkloadOption('metric', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200">
+                                    <option value="count">Metric: Task Volume</option>
+                                    <option value="hours">Metric: Est. Workload Hours</option>
+                                </select>
+                                <select id="workload-scale-filter" onchange="window.OneDeskDashboard && window.OneDeskDashboard.setWorkloadOption('scale', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200">
+                                    <option value="linear">Scale: Linear</option>
+                                    <option value="log">Scale: Logarithmic</option>
+                                </select>
+                                <select id="workload-sort-filter" onchange="window.OneDeskDashboard && window.OneDeskDashboard.setWorkloadOption('sort', this.value)"
+                                    class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200">
+                                    <option value="assigned">Sort: Assigned</option>
+                                    <option value="inprogress">Sort: In Progress</option>
+                                    <option value="pending">Sort: Pending</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="workload-summary-strip" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                            <!-- Highest, Lowest, Total -->
+                        </div>
+
+                        <div id="workload-chart" class="space-y-3">
+                            <!-- Workload bars -->
+                        </div>
+                    </section>
+
+                    <!-- SECTION 7: Attention Required (Management) -->
+                    <section id="admin-attention-card" class="hidden dash-sec-attention onedesk-card p-5 md:p-6">
+                        <div class="flex items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-xl bg-rose-500/10 text-[#F04465] flex items-center justify-center">
+                                    <iconify-icon icon="solar:danger-triangle-bold-duotone" width="18"></iconify-icon>
+                                </span>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Attention Required</h3>
+                                        <span id="attention-count-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-[#F04465] border border-rose-200/60 dark:border-rose-900/40">0</span>
+                                    </div>
+                                    <p class="text-[11px] text-[#718096] dark:text-slate-400">Overdue tasks, QC corrections, unassigned work &amp; bottlenecks</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="attention-required-list" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <!-- Rendered dynamically from actual data -->
+                        </div>
+                    </section>
+
+                    <!-- SECTION 8: Productivity Insights (Management) -->
+                    <section id="admin-report-card" class="hidden dash-sec-insights space-y-5">
+                        <div class="onedesk-card p-5 md:p-6">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-8 h-8 rounded-xl bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 flex items-center justify-center">
+                                        <iconify-icon icon="solar:chart-2-bold-duotone" width="18"></iconify-icon>
+                                    </span>
+                                    <div>
+                                        <h3 class="text-sm font-extrabold text-[#171D32] dark:text-white">Productivity Insights</h3>
+                                        <p class="text-[11px] text-[#718096] dark:text-slate-400">Task completion, working hours &amp; status distribution</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <select id="insights-range-select" onchange="window.OneDeskDashboard && window.OneDeskDashboard.setInsightsRange(this.value)"
+                                        class="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#E8EDF4] dark:border-slate-700 bg-[#F5F7FA] dark:bg-slate-800 text-[#171D32] dark:text-slate-200">
+                                        <option value="7">Last 7 Days</option>
+                                        <option value="14">Last 14 Days</option>
+                                        <option value="30">Last 30 Days</option>
+                                    </select>
+                                    <span id="admin-report-total" class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#F5F7FA] dark:bg-slate-800 text-[#718096] dark:text-slate-300 border border-[#E8EDF4] dark:border-slate-700">0 Tasks</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                                <!-- Task Status Distribution Donut -->
+                                <div class="p-4 rounded-xl bg-[#F5F7FA] dark:bg-slate-800/40 border border-[#E8EDF4] dark:border-slate-800">
+                                    <h4 class="text-xs font-bold text-[#171D32] dark:text-white mb-3">Task Status Distribution</h4>
+                                    <div class="flex flex-col sm:flex-row xl:flex-col items-center gap-4">
+                                        <div class="report-chart-wrap mx-auto">
+                                            <canvas id="task-report-chart" class="w-full h-full" width="200" height="200"></canvas>
+                                            <div class="report-chart-center">
+                                                <span id="admin-report-percent" class="text-xl font-black text-[#171D32] dark:text-white">0%</span>
+                                                <span class="text-[10px] font-bold text-[#718096] dark:text-slate-400 uppercase tracking-wider">Done</span>
+                                            </div>
+                                        </div>
+                                        <div class="w-full space-y-3">
+                                            <div id="admin-report-legend" class="flex flex-wrap gap-2 text-xs"></div>
+                                            <div class="pt-3 border-t border-[#E8EDF4] dark:border-slate-700 grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-[#718096] dark:text-slate-400 uppercase">Open Work</p>
+                                                    <p id="admin-report-open" class="text-lg font-black text-[#171D32] dark:text-white">0</p>
+                                                </div>
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-[#718096] dark:text-slate-400 uppercase">Completion</p>
+                                                    <p id="admin-report-completion" class="text-lg font-black text-[#10B981]">0%</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Daily Completed Tasks + Daily Working Hours -->
+                                <div class="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="p-4 rounded-xl bg-[#F5F7FA] dark:bg-slate-800/40 border border-[#E8EDF4] dark:border-slate-800">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-xs font-bold text-[#171D32] dark:text-white">Daily Completed Tasks</h4>
+                                            <span id="insights-completed-total" class="text-[11px] font-bold text-[#10B981]">0 tasks</span>
+                                        </div>
+                                        <div id="insights-completed-chart" class="h-44 flex items-end gap-1.5 pt-4"></div>
+                                    </div>
+                                    <div class="p-4 rounded-xl bg-[#F5F7FA] dark:bg-slate-800/40 border border-[#E8EDF4] dark:border-slate-800">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-xs font-bold text-[#171D32] dark:text-white">Daily Working Hours</h4>
+                                            <span id="insights-hours-total" class="text-[11px] font-bold text-[#5845F5] dark:text-indigo-400">0.0h</span>
+                                        </div>
+                                        <div id="insights-hours-chart" class="h-44 flex items-end gap-1.5 pt-4"></div>
+                                    </div>
+                                    <div class="md:col-span-2 p-4 rounded-xl bg-[#F5F7FA] dark:bg-slate-800/40 border border-[#E8EDF4] dark:border-slate-800">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <h4 class="text-xs font-bold text-[#171D32] dark:text-white">Weekly Productivity Trend (Hours Logged)</h4>
+                                            <span class="text-[11px] text-[#718096] dark:text-slate-400">Separate from task count</span>
+                                        </div>
+                                        <div id="insights-weekly-trend" class="h-28"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                 </div>
+
+                <!-- Employee Activity Detail Modal (for Live Team Overview & Workload clicks) -->
+                <dialog id="employeeActivityModal" class="rounded-2xl p-0 w-full max-w-2xl bg-white dark:bg-slate-900 border border-[#E8EDF4] dark:border-slate-800 shadow-2xl backdrop:bg-slate-900/50">
+                    <div id="employee-activity-modal-body" class="p-6"></div>
+                </dialog>
 
                 <!-- ════ TASKS VIEW ════ -->
                 <div id="view-tasks-panel" class="hidden space-y-4 fade-in">
@@ -8736,7 +9040,7 @@
                                             <span id="meta-platform-facebook-val">₹0.00
                                                 (0%)</span>
                                         </div>
-                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                                             <div id="meta-platform-facebook-bar"
                                                 class="bg-indigo-600 h-full rounded-full transition-all duration-500"
                                                 style="width: 0%"></div>
@@ -8751,7 +9055,7 @@
                                             <span id="meta-platform-instagram-val">₹0.00
                                                 (0%)</span>
                                         </div>
-                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                                             <div id="meta-platform-instagram-bar"
                                                 class="bg-pink-600 h-full rounded-full transition-all duration-500"
                                                 style="width: 0%"></div>
@@ -8766,7 +9070,7 @@
                                             <span id="meta-platform-messenger-val">₹0.00
                                                 (0%)</span>
                                         </div>
-                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                                             <div id="meta-platform-messenger-bar"
                                                 class="bg-sky-500 h-full rounded-full transition-all duration-500"
                                                 style="width: 0%"></div>
@@ -8781,7 +9085,7 @@
                                             <span id="meta-platform-audience-val">₹0.00
                                                 (0%)</span>
                                         </div>
-                                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                        <div class="w-full bg-slate-100 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                                             <div id="meta-platform-audience-bar"
                                                 class="bg-emerald-500 h-full rounded-full transition-all duration-500"
                                                 style="width: 0%"></div>
@@ -18998,6 +19302,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         getAllUsers().then(users => {
                             allUsersMap = users;
                             window.allUsersMap = users;
+                            if (canViewDailySummary() && typeof refreshEmployeeCurrentTasks === 'function') {
+                                refreshEmployeeCurrentTasks(true);
+                            }
                             if (activeView === 'chat') {
                                 renderDmList();
                                 if (typeof refreshActiveChatHeaderAvatar === 'function') refreshActiveChatHeaderAvatar();
@@ -19442,15 +19749,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
                 }
                 // Daily summary cards and data loading - available to admins AND managers
+                const dashPanel = document.getElementById('view-dashboard-panel');
                 if (canViewDailySummary()) {
+                    dashPanel?.classList.add('role-management');
                     document.getElementById('admin-current-work-card')?.classList.remove('hidden');
                     document.getElementById('admin-workload-card')?.classList.remove('hidden');
+                    document.getElementById('admin-attention-card')?.classList.remove('hidden');
                     document.getElementById('admin-report-card')?.classList.remove('hidden');
                     loadEmployeeCurrentTasks();
                     loadTodayWorkSummary();
                 } else {
+                    dashPanel?.classList.remove('role-management');
                     document.getElementById('admin-current-work-card')?.classList.add('hidden');
                     document.getElementById('admin-workload-card')?.classList.add('hidden');
+                    document.getElementById('admin-attention-card')?.classList.add('hidden');
                     document.getElementById('admin-report-card')?.classList.add('hidden');
                 }
             }
@@ -21405,6 +21717,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const headerDisplay = document.getElementById('header-timer-display');
                 if (headerDisplay) headerDisplay.textContent = formatted;
                 updateSessionStatus();
+                if (window.OneDeskDashboard) window.OneDeskDashboard.syncSessionMetadata();
                 updateStats();
             }
 
@@ -22083,7 +22396,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Safety check: only run if the view hasn't changed since the timeout was scheduled
                     if (activeView !== view) return;
 
-                    if (view === 'tasks' || view === 'internal-tasks' || view === 'dailyplan') {
+                    if (view === 'dashboard') {
+                        if (canViewDailySummary()) {
+                            document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                            loadEmployeeCurrentTasks();
+                            if (!currentWorkUsers.length && typeof refreshEmployeeCurrentTasks === 'function') {
+                                refreshEmployeeCurrentTasks(true);
+                            } else {
+                                renderEmployeeCurrentTasks();
+                            }
+                        }
+                        if (window.OneDeskDashboard && typeof window.OneDeskDashboard.refreshAll === 'function') {
+                            window.OneDeskDashboard.refreshAll();
+                        }
+                    }
+                    else if (view === 'tasks' || view === 'internal-tasks' || view === 'dailyplan') {
                         const targetTab = activeTasksTab || (view === 'internal-tasks' ? 'internal' : (view === 'dailyplan' ? 'dailyplan' : 'jira'));
                         switchTasksTab(targetTab, true);
                     }
@@ -33277,42 +33604,49 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderActiveTaskCard() {
-                const el = document.getElementById('active-task-card');
-                if (!activeTaskId) {
-                    el.innerHTML = `<p class="text-sm text-slate-400">No task selected. Pick one from Jira Tasks.</p>`;
+                if (window.OneDeskDashboard && typeof window.OneDeskBridge === 'function') {
+                    window.OneDeskDashboard.renderTaskFocus();
                     return;
                 }
-                const t = tasks.find(t => t.id === activeTaskId);
+                const el = document.getElementById('active-task-card');
+                if (!el) return;
+                if (!activeTaskId) {
+                    el.innerHTML = `<p class="text-sm text-slate-500 dark:text-slate-400">No task selected. Go to Tasks Hub to pick one or start from your queue.</p>`;
+                    return;
+                }
+                const t = tasks.find(t => t.id === activeTaskId)
+                    || (window.internalTasks || []).find(t => t.id === activeTaskId)
+                    || (window.manualTasks || []).find(t => t.id === activeTaskId);
                 if (!t) return;
-                const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
+                const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors inline-flex items-center gap-1" title="Open in Jira">${t.id} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
                 el.innerHTML = `
                 <div class="flex items-start justify-between mb-4">
                     <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs font-mono font-bold text-indigo-600">${taskKeyHtml}</span>
+                        <div class="flex items-center gap-2 mb-2 flex-wrap">
+                            <span class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">${taskKeyHtml}</span>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
-                            ${t.client ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${t.client}</span>` : ''}
+                            ${t.client ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${t.client}</span>` : ''}
                         </div>
-                        <p class="text-sm font-bold text-slate-900">${escapeHtml(t.desc)}</p>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">${escapeHtml(t.desc)}</p>
                     </div>
-                    <button onclick="toggleActiveTask('${t.id}')" class="text-rose-400 p-1 hover:bg-rose-50 rounded-lg transition-colors shrink-0">
+                    <button onclick="toggleActiveTask('${t.id}')" class="text-rose-400 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors shrink-0">
                         <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
                     </button>
                 </div>
-                <div class="border-t border-slate-100 pt-4 mt-2">
+                <div class="border-t border-slate-100 dark:border-slate-700/50 pt-4 mt-2">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time on Task</p>
-                            <p id="task-timer-display" class="text-2xl font-black text-slate-900 font-mono">${formatTime(taskSeconds)}</p>
+                            <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Time on Task</p>
+                            <p id="task-timer-display" class="text-2xl font-black text-slate-900 dark:text-white font-mono">${formatTime(taskSeconds)}</p>
                         </div>
                         <div class="flex gap-2">
-                            <button id="task-hold-btn" onclick="holdTask()" class="${taskOnHold ? 'hidden' : ''} flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                            <button id="task-hold-btn" onclick="holdTask()" class="${taskOnHold ? 'hidden' : ''} flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
                                 <iconify-icon icon="solar:pause-circle-bold" width="16"></iconify-icon> Hold
                             </button>
-                            <button id="task-resume-btn" onclick="resumeTaskTimer()" class="${taskOnHold ? '' : 'hidden'} flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                            <button id="task-resume-btn" onclick="resumeTaskTimer()" class="${taskOnHold ? '' : 'hidden'} flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
                                 <iconify-icon icon="solar:play-circle-bold" width="16"></iconify-icon> Resume
                             </button>
-                            <button onclick="endTask()" class="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-rose-100 transition-all">
+                            <button onclick="endTask()" class="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-rose-100 dark:shadow-rose-950/40 transition-all">
                                 <iconify-icon icon="solar:stop-circle-bold" width="16"></iconify-icon> End Task
                             </button>
                         </div>
@@ -34433,18 +34767,103 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
+            function getDailyGoalSeconds() {
+                // Loaded from user settings stored in localStorage; fallback to 8h
+                try {
+                    const goal = parseFloat(localStorage.getItem('worksync_daily_goal_hours') || '8');
+                    return (isNaN(goal) || goal < 1 || goal > 16) ? 28800 : Math.round(goal * 3600);
+                } catch (e) { return 28800; }
+            }
+
+            function setDailyShiftGoal(hoursVal) {
+                try {
+                    const parsed = parseFloat(hoursVal);
+                    if (!isNaN(parsed) && parsed >= 1 && parsed <= 16) {
+                        localStorage.setItem('worksync_daily_goal_hours', String(parsed));
+                        updateStats();
+                    }
+                } catch (e) { }
+            }
+            window.setDailyShiftGoal = setDailyShiftGoal;
+
+            function updateDashboardHeroHeader() {
+                const greetEl = document.getElementById('dashboard-greeting');
+                const dateEl = document.getElementById('dashboard-date');
+                const roleEl = document.getElementById('dashboard-role-pill');
+                const shiftSel = document.getElementById('dashboard-shift-goal');
+                const hour = new Date().getHours();
+                const salutation = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
+                const rawName = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.name || currentUser.email || '').split('@')[0] : '';
+                const firstName = rawName ? rawName.split(/\s+/)[0] : '';
+                if (greetEl) greetEl.textContent = firstName ? `${salutation}, ${firstName}` : `${salutation}!`;
+                if (dateEl) {
+                    try {
+                        dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    } catch (e) { dateEl.textContent = todayIso(); }
+                }
+                if (roleEl && typeof currentUser !== 'undefined' && currentUser) {
+                    roleEl.textContent = currentUser.role || (typeof isAdmin === 'function' && isAdmin() ? 'Administrator' : 'Team Member');
+                }
+                if (shiftSel) {
+                    const saved = localStorage.getItem('worksync_daily_goal_hours') || '8';
+                    if ([...shiftSel.options].some(o => o.value === saved)) shiftSel.value = saved;
+                }
+            }
+
+            window.OneDeskBridge = function () {
+                return {
+                    tasks,
+                    allTimeLogs: typeof allTimeLogs !== 'undefined' ? allTimeLogs : (window.allTimeLogs || []),
+                    currentUser,
+                    currentWorkUsers: typeof currentWorkUsers !== 'undefined' ? currentWorkUsers : [],
+                    activeTaskId,
+                    taskSeconds,
+                    taskOnHold,
+                    isCheckedIn,
+                    checkInTime,
+                    breakStartTime,
+                    totalBreakDuration,
+                    seconds,
+                    JIRA: typeof JIRA !== 'undefined' ? JIRA : { domain: 'vilpower.atlassian.net' },
+                    getDailyGoalSeconds,
+                    todayIso,
+                    isTodo,
+                    isInProgress,
+                    isDone,
+                    isInternalDone,
+                    isTaskCompletedStatus,
+                    statusClass,
+                    assigneeMatches,
+                    assigneeName,
+                    knownUserByEmail,
+                    canViewDailySummary,
+                    getSafePdfUrl: typeof getSafePdfUrl === 'function' ? getSafePdfUrl : null,
+                    getUserAvatarSrc: typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc : null
+                };
+            };
+            window.toggleActiveTask = toggleActiveTask;
+            window.holdTask = holdTask;
+            window.resumeTaskTimer = resumeTaskTimer;
+            window.endTask = endTask;
+            window.openTaskResourcesDrawer = openTaskResourcesDrawer;
+            window.switchView = switchView;
+            window.openAddTaskModal = openAddTaskModal;
+
             function updateStats() {
+                updateDashboardHeroHeader();
 
                 // --- User-specific stats for "Today's Performance" card ---
                 const myEmail = currentUser ? currentUser.email : 'me';
                 const myTodayTasks = collectAllTodayTasksForUser(myEmail, todayIso());
 
                 const myAssigned = myTodayTasks.length;
+                const myNotStarted = myTodayTasks.filter(t => isTodo(t.status)).length;
                 const myInProgress = myTodayTasks.filter(t => isInProgress(t.status)).length;
                 const myHold = myTodayTasks.filter(t => (t.status || '').toLowerCase().includes('hold')).length;
                 const myCompleted = myTodayTasks.filter(t => isDone(t.status) || isInternalDone(t.status) || isTaskCompletedStatus(t.status)).length;
 
                 const elTotal = document.getElementById('stat-total'); if (elTotal) elTotal.textContent = myAssigned;
+                const elNotStarted = document.getElementById('stat-notstarted'); if (elNotStarted) elNotStarted.textContent = myNotStarted;
                 const elTodo = document.getElementById('stat-todo'); if (elTodo) elTodo.textContent = myInProgress;
                 const elProg = document.getElementById('stat-progress'); if (elProg) elProg.textContent = myHold;
                 const elDone = document.getElementById('stat-done'); if (elDone) elDone.textContent = myCompleted;
@@ -34458,10 +34877,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     badge.classList.toggle('hidden', dailyPlanCount === 0);
                 }
 
-                // --- Timer-based progress bar ---
-                const hours = (seconds / 3600).toFixed(1);
-                const hText = document.getElementById('hours-text'); if (hText) hText.textContent = `${hours} / 8.0 hrs`;
-                const pBar = document.getElementById('progress-bar'); if (pBar) pBar.style.width = Math.min((seconds / 28800) * 100, 100) + '%';
+                // --- Timer-based progress bar (supports >100% & overtime) ---
+                const goalSeconds = getDailyGoalSeconds();
+                const goalHours = (goalSeconds / 3600).toFixed(1);
+                const goalBadge = document.getElementById('daily-goal-badge');
+                if (goalBadge) goalBadge.textContent = `${goalHours}h Daily Goal`;
+
+                if (window.OneDeskDashboard) {
+                    window.OneDeskDashboard.syncSessionMetadata();
+                    window.OneDeskDashboard.updateShiftProgress(seconds, goalSeconds);
+                    window.OneDeskDashboard.renderTaskFocus();
+                    window.OneDeskDashboard.renderTaskQueue();
+                    window.OneDeskDashboard.renderAttentionRequired();
+                    window.OneDeskDashboard.renderProductivityInsights();
+                } else {
+                    const hours = (seconds / 3600).toFixed(1);
+                    const pct = Math.round((seconds / goalSeconds) * 100);
+                    const hText = document.getElementById('hours-text'); if (hText) hText.textContent = `${hours} / ${goalHours} hrs`;
+                    const hPct = document.getElementById('hours-percent'); if (hPct) hPct.textContent = `${pct}%`;
+                    const pBar = document.getElementById('progress-bar'); if (pBar) pBar.style.width = Math.min((seconds / goalSeconds) * 100, 100) + '%';
+                }
 
                 renderRecentTasks();
                 // --- Global stats for Admin-only charts ---
@@ -34497,7 +34932,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('admin-report-completion').textContent = `${completion}%`;
                 document.getElementById('admin-report-legend').innerHTML = segments.map(s => {
                     const percent = total ? Math.round((s.value / total) * 100) : 0;
-                    return `<span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${s.color}"></span><span class="text-xs font-bold text-slate-600">${s.label}: ${s.value} (${percent}%)</span></span>`;
+                    return `<span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${s.color}"></span><span class="text-xs font-bold text-slate-600 dark:text-slate-300">${s.label}: ${s.value} (${percent}%)</span></span>`;
                 }).join(' · ');
                 const rect = canvas.getBoundingClientRect();
                 const size = Math.max(Math.floor(rect.width || 260), 220);
@@ -34515,7 +34950,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 ctx.lineWidth = lineWidth;
                 ctx.lineCap = 'round';
-                ctx.strokeStyle = '#e2e8f0';
+                ctx.strokeStyle = document.documentElement.classList.contains('dark') ? '#334155' : '#e2e8f0';
                 ctx.beginPath();
                 ctx.arc(cx, cy, radius - lineWidth / 2, 0, Math.PI * 2);
                 ctx.stroke();
@@ -34564,6 +34999,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderEmployeeCurrentTasks() {
+                if (window.OneDeskDashboard && typeof window.OneDeskBridge === 'function') {
+                    window.OneDeskDashboard.renderLiveTeamOverview();
+                    window.OneDeskDashboard.renderAttentionRequired();
+                    return;
+                }
                 const list = document.getElementById('admin-current-work-list');
                 const countEl = document.getElementById('admin-current-work-count');
                 if (!list || !countEl) return;
@@ -34589,42 +35029,42 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const working = task?.state === 'working';
                     const stateLabel = task ? (working ? 'Working' : 'On Hold') : 'Idle';
                     const stateClass = task
-                        ? (working ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100')
-                        : 'bg-slate-50 text-slate-400 border-slate-100';
+                        ? (working ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30')
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-100 dark:border-slate-700';
                     return `
-                        <div class="rounded-2xl border border-slate-100 p-5 bg-slate-50/60">
+                        <div class="rounded-2xl border border-slate-100 dark:border-slate-800 p-5 bg-slate-50/60 dark:bg-slate-800/40">
                             <div class="flex items-start justify-between gap-4 mb-4">
                                 <div class="flex items-center gap-3 min-w-0">
                                     <div class="relative shrink-0">
-                                        <img src="${escapeHtml(getSafePdfUrl(u.profilePicture || getUserAvatarSrc(u)))}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
-                                        <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 ${online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                                        <img src="${escapeHtml(getSafePdfUrl(u.profilePicture || getUserAvatarSrc(u)))}" class="w-11 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 object-cover">
+                                        <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 dark:border-slate-900 ${online ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}"></span>
                                     </div>
                                     <div class="min-w-0">
-                                        <p class="text-sm font-black text-slate-900 truncate">${escapeHtml(u.name || u.email)}</p>
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${escapeHtml(u.role || 'Employee')}</p>
+                                        <p class="text-sm font-black text-slate-900 dark:text-white truncate">${escapeHtml(u.name || u.email)}</p>
+                                        <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">${escapeHtml(u.role || 'Employee')}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1.5">
                             <span class="text-[10px] font-bold px-2.5 py-1 rounded-full border ${stateClass}">${stateLabel}</span>
-                            ${(isAdmin() || isManager()) && task ? `<button data-user-email="${escapeHtml(u.email)}" onclick="adminClearUserCurrentTask(this.dataset.userEmail)" class="text-[9px] font-bold text-rose-600 hover:bg-rose-100 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 transition-all shadow-sm" title="Clear Stale Task">Clear</button>` : ''}
+                            ${(isAdmin() || isManager()) && task ? `<button data-user-email="${escapeHtml(u.email)}" onclick="adminClearUserCurrentTask(this.dataset.userEmail)" class="text-[9px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-900/30 transition-all shadow-sm" title="Clear Stale Task">Clear</button>` : ''}
                         </div>
                             </div>
                             ${task ? `
-                                <div class="bg-white rounded-2xl border border-slate-100 p-4">
+                                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
                                     <div class="flex items-center gap-2 mb-2">
-                                        <span class="text-[10px] font-mono font-black text-indigo-600">${task.taskId.startsWith('M-') ? escapeHtml(task.taskId) : `<a href="https://${JIRA.domain}/browse/${encodeURIComponent(task.taskId)}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${escapeHtml(task.taskId)}</a>`}</span>
+                                        <span class="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">${task.taskId.startsWith('M-') ? escapeHtml(task.taskId) : `<a href="https://${JIRA.domain}/browse/${encodeURIComponent(task.taskId)}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors" title="Open in Jira">${escapeHtml(task.taskId)}</a>`}</span>
                                         ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(task.status)}">${escapeHtml(task.status)}</span>` : ''}
                                     </div>
-                                    <p class="text-sm font-bold text-slate-900 mb-3 line-clamp-2">${escapeHtml(task.taskDesc || 'Task details unavailable')}</p>
-                                    <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-50">
-                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${escapeHtml(task.client || 'No Client')}</span>
-                                        <span class="live-task-timer text-xs font-black text-slate-700 font-mono" 
+                                    <p class="text-sm font-bold text-slate-900 dark:text-white mb-3 line-clamp-2">${escapeHtml(task.taskDesc || 'Task details unavailable')}</p>
+                                    <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-50 dark:border-slate-800">
+                                        <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">${escapeHtml(task.client || 'No Client')}</span>
+                                        <span class="live-task-timer text-xs font-black text-slate-700 dark:text-slate-200 font-mono" 
                                               data-started="${task.startedAt || 0}" 
                                               data-state="${task.state || 'idle'}">${elapsed}</span>
                                     </div>
                                 </div>` : `
-                                <div class="bg-white rounded-2xl border border-dashed border-slate-200 p-4 text-center">
-                                    <p class="text-xs text-slate-400 font-medium">No current task selected.</p>
+                                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center">
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">No current task selected.</p>
                                 </div>`}
                         </div>`;
                 }).join('');
@@ -34643,7 +35083,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
             }
 
-            function refreshEmployeeCurrentTasks() {
+            function refreshEmployeeCurrentTasks(silent = false) {
                 const btn = document.getElementById('btn-refresh-current-work');
                 if (btn) {
                     btn.classList.add('animate-spin');
@@ -34662,10 +35102,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             return aActive - bActive || (a.name || '').localeCompare(b.name || '');
                         });
                     renderEmployeeCurrentTasks();
-                    toast('Employee tasks refreshed', 'success');
+                    if (!silent) toast('Employee tasks refreshed', 'success');
                 }).catch(err => {
                     console.error('Failed to refresh employee tasks:', err);
-                    toast('Failed to refresh', 'error');
+                    if (!silent) toast('Failed to refresh', 'error');
                 });
             }
 
@@ -35303,6 +35743,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderWorkloadChart() {
+                if (window.OneDeskDashboard && typeof window.OneDeskBridge === 'function') {
+                    window.OneDeskDashboard.renderWorkloadAnalytics();
+                    return;
+                }
                 const chart = document.getElementById('workload-chart');
                 const totalEl = document.getElementById('workload-total');
                 if (!chart || !totalEl || !isAdmin()) return;
@@ -35344,10 +35788,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return `
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <p class="text-xs font-bold text-slate-700">${item.name}</p>
-                            <p class="text-xs font-black text-slate-900">${item.count}</p>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">${item.name}</p>
+                            <p class="text-xs font-black text-slate-900 dark:text-white">${item.count}</p>
                         </div>
-                        <div class="h-3 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div class="h-full ${palette[idx % palette.length]} rounded-full transition-all duration-700" style="width:${width}%"></div>
                         </div>
                     </div>`;
@@ -35461,45 +35905,59 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderRecentTasks() {
+                if (window.OneDeskDashboard && typeof window.OneDeskBridge === 'function') {
+                    window.OneDeskDashboard.renderRecentlySynced();
+                    return;
+                }
                 const el = document.getElementById('recent-tasks');
+                if (!el) return;
                 const recentTasksContainer = el.parentElement;
                 const header = recentTasksContainer.querySelector('h3');
 
                 if (isAdmin()) {
                     if (header) header.textContent = 'Recently Synced';
-                    if (!tasks.length) { el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No tasks synced.</p>`; return; }
+                    if (!tasks.length) { el.innerHTML = `<p class="p-5 text-center text-xs text-slate-500 dark:text-slate-400 italic">No tasks synced.</p>`; return; }
 
                     el.innerHTML = tasks.slice(0, 5).map(t => {
-                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${t.id}</a>`;
+                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors" title="Open in Jira">${t.id}</a>`;
                         return `
-                    <div class="flex items-center justify-between p-3 hover:bg-slate-50 transition-all rounded-xl">
+                    <div class="flex items-center justify-between gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all rounded-xl">
                         <div class="flex items-center gap-3 overflow-hidden">
-                            <span class="text-[10px] font-mono font-bold text-indigo-600 shrink-0">${taskKeyHtml}</span>
-                            <p class="text-xs text-slate-700 whitespace-normal break-words font-medium leading-snug">${escapeHtml(t.desc)}</p>
+                            <span class="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 shrink-0">${taskKeyHtml}</span>
+                            <p class="text-xs text-slate-700 dark:text-slate-300 whitespace-normal break-words font-medium leading-snug">${escapeHtml(t.desc)}</p>
                         </div>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusClass(t.status)}">${t.status}</span>
                     </div>`;
                     }).join('');
                 } else {
                     if (header) header.textContent = 'My Assigned Work';
                     const myTasks = tasks.filter(t =>
                         assigneeMatches(t, 'me') &&
-                        ['Design To Do', 'Design In Progress'].includes(t.status)
+                        !isDone(t.status) &&
+                        !isInternalDone(t.status) &&
+                        !isTaskCompletedStatus(t.status)
                     );
 
                     if (!myTasks.length) {
-                        el.innerHTML = `<p class="p-5 text-center text-xs text-slate-400 italic">No assigned tasks in Design To Do or In Progress.</p>`;
+                        el.innerHTML = `<p class="p-5 text-center text-xs text-slate-500 dark:text-slate-400 italic">No active assigned tasks.</p>`;
                         return;
                     }
                     el.innerHTML = myTasks.slice(0, 10).map(t => {
-                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${t.id}</a>`;
+                        const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors" title="Open in Jira">${t.id}</a>`;
+                        const isActive = typeof activeTaskId !== 'undefined' && activeTaskId === t.id;
+                        const startBtn = typeof window.toggleActiveTask === 'function'
+                            ? `<button type="button" onclick="window.toggleActiveTask('${escapeHtml(t.id)}')" class="text-[10px] font-bold px-2.5 py-1 rounded-full ${isActive ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'} transition-all shrink-0">${isActive ? 'Stop' : '⚡ Start'}</button>`
+                            : '';
                         return `
-                    <div class="flex items-center justify-between p-3 hover:bg-slate-50 transition-all rounded-xl">
-                        <div class="flex items-center gap-3 overflow-hidden">
-                            <span class="text-[10px] font-mono font-bold text-indigo-600 shrink-0">${taskKeyHtml}</span>
-                            <p class="text-xs text-slate-700 whitespace-normal break-words font-medium leading-snug">${escapeHtml(t.desc)}</p>
+                    <div class="flex items-center justify-between gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all rounded-xl">
+                        <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                            <span class="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 shrink-0">${taskKeyHtml}</span>
+                            <p class="text-xs text-slate-700 dark:text-slate-300 whitespace-normal break-words font-medium leading-snug">${escapeHtml(t.desc)}</p>
                         </div>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(t.status)}">${t.status}</span>
+                            ${startBtn}
+                        </div>
                     </div>`;
                     }).join('');
                 }
@@ -67764,6 +68222,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
     <script src="js/oneReportEngine.js"></script>
     <script src="js/oneReport.js"></script>
     <script src="js/appUsage.js"></script>
+    <script src="js/dashboard-redesign.js"></script>
 
 
 </body>
