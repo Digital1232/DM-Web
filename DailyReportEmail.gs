@@ -24,7 +24,7 @@
 
 var REPORT_DEFAULTS = {
   dbUrl: 'https://worksync-vilpower-default-rtdb.firebaseio.com',
-  recipients: 'vildigitalseo@gmail.com, palanivilpower@gmail.com',
+  recipients: 'vildigitalseo@gmail.com, palanivilpower@gmail.com, nanjil@vilpower.com',
   hour: 19,
   senderName: 'One Desk Reports'
 };
