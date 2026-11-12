@@ -15,8 +15,8 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
   
-  // Disable caching for service worker & version to prevent stale cache during local dev
-  if (req.path === '/sw.js' || req.path === '/version.txt') {
+  // Disable caching for service worker, version & config to prevent stale cache during local dev
+  if (req.path === '/sw.js' || req.path === '/version.txt' || req.path === '/config.js') {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
   

@@ -23,7 +23,6 @@ export const USERS = [
     { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
     { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
     { email: '123', name: 'Demo User', role: 'Administrator', avatar: 'Demo' }
-    { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' }
 ];
 
 export function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
