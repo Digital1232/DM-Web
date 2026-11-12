@@ -6,6 +6,7 @@
 const admin = require('firebase-admin');
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
+const { applyCors } = require('./_auth');
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -83,8 +84,9 @@ async function uploadFileToDrive(fileName, fileBuffer, mimeType, conversationId,
         let parentFolderId = chatFolderId;
 
         // Create conversation folder if it doesn't exist
+        const safeConvQuery = String(conversationId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const existingFolders = await drive.files.list({
-            q: `name='${conversationId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            q: `name='${safeConvQuery}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
             spaces: 'drive',
             fields: 'files(id, name)',
             pageSize: 1,
@@ -191,7 +193,7 @@ async function handleUpload(req, res, decodedToken) {
         );
 
         // Store reference in Firebase
-        const msgRef = await db.collection('worksync').collection('drive_uploads').add({
+        const msgRef = await db.collection('worksync_drive_uploads').add({
             userId: decodedToken.uid,
             userEmail: decodedToken.email,
             conversationId,
@@ -320,8 +322,9 @@ async function listConversationFiles(req, res, decodedToken) {
         const chatFolderId = process.env.GOOGLE_DRIVE_CHAT_FOLDER_ID || 'root';
 
         // Find conversation folder
+        const safeConvQuery = String(conversationId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const folders = await drive.files.list({
-            q: `name='${conversationId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            q: `name='${safeConvQuery}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
             spaces: 'drive',
             fields: 'files(id)',
             pageSize: 1,
@@ -360,11 +363,12 @@ async function listConversationFiles(req, res, decodedToken) {
 // ════════════════════════════════════════════════════════════════════
 
 module.exports = async (req, res) => {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization');
+    // Enable CORS (allowlist only, never reflect arbitrary origins with credentials)
+    applyCors(req, res, {
+        methods: 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+        headers: 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization',
+        credentials: true
+    });
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();

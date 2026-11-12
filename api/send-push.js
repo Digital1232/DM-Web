@@ -4,6 +4,7 @@
  */
 
 const admin = require('firebase-admin');
+const { ensureFirebaseAdmin, applyCors, verifyFirebaseBearer } = require('./_auth');
 
 // Initialize Firebase Admin SDK if not already initialized
 if (!admin.apps.length) {
@@ -19,6 +20,7 @@ if (!admin.apps.length) {
             token_uri: process.env.FIREBASE_TOKEN_URI || 'https://oauth2.googleapis.com/token',
             auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_X509_CERT_URL || 'https://www.googleapis.com/oauth2/v1/certs',
         };
+        const admin = ensureFirebaseAdmin();
 
         if (serviceAccount.private_key && serviceAccount.client_email) {
             admin.initializeApp({
@@ -38,6 +40,7 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    applyCors(req, res, { methods: 'POST, OPTIONS', headers: 'Content-Type, Authorization' });
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -45,6 +48,12 @@ module.exports = async (req, res) => {
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    try {
+        await verifyFirebaseBearer(req);
+    } catch (authErr) {
+        return res.status(401).json({ error: authErr.message });
     }
 
     try {
@@ -58,6 +67,9 @@ module.exports = async (req, res) => {
 
         // If userKey provided, fetch stored FCM tokens from Firebase Realtime DB
         if ((!targetTokens || targetTokens.length === 0) && userKey) {
+            if (!/^[a-zA-Z0-9_-]+$/.test(String(userKey))) {
+                return res.status(400).json({ error: 'Invalid userKey format.' });
+            }
             try {
                 const db = admin.database();
                 const snapshot = await db.ref(`worksync/fcm_tokens/${userKey}`).once('value');

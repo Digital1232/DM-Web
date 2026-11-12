@@ -765,6 +765,7 @@
     <!-- Standalone Chat Engine -->
     <script type="module">
         import { FB_CONFIG, USERS, knownUserByEmail } from './config.js';
+        import { FB_CONFIG, USERS, ADMIN_EMAILS, ADMIN_ROLES, knownUserByEmail } from './config.js';
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
         import { getDatabase, ref, onValue, onChildAdded, onChildChanged, off, set, push, update, remove, query, limitToLast, get, onDisconnect, orderByKey, endBefore, startAt } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js';
@@ -790,6 +791,12 @@
         let activeView = 'chat';
 
         function isAdmin() { return currentUser && (currentUser.role === 'System Admin' || currentUser.role === 'Administrator' || (currentUser.email && currentUser.email.toLowerCase().includes('admin'))); }
+        function isAdmin() {
+            if (!currentUser) return false;
+            const role = (currentUser.role || '').trim();
+            const email = (currentUser.email || '').toLowerCase();
+            return ADMIN_EMAILS.some(e => e.toLowerCase() === email) || ADMIN_ROLES.includes(role);
+        }
         function isManager() { return currentUser && (isAdmin() || (currentUser.role && currentUser.role.includes('Manager'))); }
         function getUserAvatarSrc(u) {
             if (!u) return 'https://api.dicebear.com/7.x/initials/svg?seed=U';

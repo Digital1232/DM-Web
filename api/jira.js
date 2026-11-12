@@ -1,14 +1,10 @@
+const { applyCors, verifyFirebaseBearer } = require('./_auth');
+
 const JIRA_DOMAIN = process.env.JIRA_DOMAIN || 'vilpowerdigitalmarketing.atlassian.net';
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
-function sendJson(res, statusCode, payload) {
+function sendJson(req, res, statusCode, payload) {
   res.statusCode = statusCode;
-  setCorsHeaders(res);
+  applyCors(req, res, { methods: 'GET,POST,OPTIONS', headers: 'Content-Type, Authorization' });
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(payload));
 }
@@ -16,27 +12,33 @@ function sendJson(res, statusCode, payload) {
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
-    setCorsHeaders(res);
+    applyCors(req, res, { methods: 'GET,POST,OPTIONS', headers: 'Content-Type, Authorization' });
     return res.end();
   }
 
   if (req.method === 'GET') {
-    return sendJson(res, 200, {
+    return sendJson(req, res, 200, {
       success: true,
       status: 200,
-      message: 'Jira proxy is live. Send POST requests to proxy Jira API calls.'
+      message: 'Jira proxy is live. Send authenticated POST requests to proxy Jira API calls.'
     });
   }
 
   if (req.method !== 'POST') {
-    return sendJson(res, 405, { success: false, status: 405, error: 'Method not allowed' });
+    return sendJson(req, res, 405, { success: false, status: 405, error: 'Method not allowed' });
+  }
+
+  try {
+    await verifyFirebaseBearer(req);
+  } catch (authErr) {
+    return sendJson(req, res, 401, { success: false, status: 401, error: authErr.message });
   }
 
   const authEmail = process.env.JIRA_AUTH_EMAIL || 'digitalmarketing@vilpower.com';
   const token = process.env.JIRA_TOKEN;
 
   if (!token) {
-    return sendJson(res, 500, {
+    return sendJson(req, res, 500, {
       success: false,
       status: 500,
       error: 'Missing JIRA_TOKEN environment variable'
@@ -49,12 +51,12 @@ module.exports = async function handler(req, res) {
     const method = (body && body.method ? body.method : 'get').toUpperCase();
 
     if (!jiraUrl) {
-      return sendJson(res, 400, { success: false, status: 400, error: 'Missing jiraUrl' });
+      return sendJson(req, res, 400, { success: false, status: 400, error: 'Missing jiraUrl' });
     }
 
     const target = new URL(jiraUrl);
     if (target.hostname !== JIRA_DOMAIN) {
-      return sendJson(res, 400, { success: false, status: 400, error: 'Invalid Jira domain' });
+      return sendJson(req, res, 400, { success: false, status: 400, error: 'Invalid Jira domain' });
     }
 
     const fetchOptions = {
@@ -80,13 +82,13 @@ module.exports = async function handler(req, res) {
       data = { raw: responseText };
     }
 
-    return sendJson(res, 200, {
+    return sendJson(req, res, 200, {
       success: jiraResponse.ok,
       status: jiraResponse.status,
       data
     });
   } catch (error) {
-    return sendJson(res, 500, {
+    return sendJson(req, res, 500, {
       success: false,
       status: 500,
       error: error.message

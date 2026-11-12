@@ -319,12 +319,12 @@
                 (raw.month ? toTs(`${raw.month}-01`) : 0);
             if (!dateTs) { undated++; return; }
 
-            const key = raw.id || `${raw.taskId || raw.taskDesc}_${start || dateTs}_${email}`;
+            const key = raw.id || `${String(raw.taskId || raw.taskDesc || '').trim().toLowerCase()}_${start || dateTs}_${email}`;
             if (seen.has(key)) return;
             seen.add(key);
 
             const taskId = String(raw.taskId || '').trim();
-            const task = taskId ? taskMap.get(taskId) : null;
+            const task = taskId ? taskMap.get(taskId.toLowerCase()) : null;
             const desc = String(raw.taskDesc || raw.taskName || raw.title || (task && (task.desc || task.summary)) || '').trim();
             const client = cleanClient(raw.client || raw.clientName || (task && task.client));
             const category = deriveCategory(desc, task);
@@ -352,7 +352,71 @@
             });
         });
 
-        // Remove overlap between sessions of the same person so time is never counted twice.
+        // Build earliest check-in map & merged disjoint break intervals per user BEFORE overlap sweep
+        const checkInByDate = {};
+        const rawBreaksByUser = {};
+        (ctx.attendanceEvents || []).forEach(e => {
+            if (!e) return;
+            const em = normEmail(e.userId || e.email);
+            if (!em) return;
+            const ts = toTs(e.timestamp);
+            if (e.type === 'check_in' && ts) {
+                const d = localDateStr(ts);
+                const k = `${em}|${d}`;
+                if (!checkInByDate[k] || ts < checkInByDate[k]) checkInByDate[k] = ts;
+            } else if (e.type === 'break_end' && e.duration && ts) {
+                const bDur = Math.floor(Number(e.duration) / 1000);
+                const bStart = ts - bDur * 1000;
+                if (bStart > 0 && ts > bStart) {
+                    (rawBreaksByUser[em] = rawBreaksByUser[em] || []).push({ start: bStart, end: ts });
+                }
+            }
+        });
+
+        const mergedBreaksByUser = {};
+        Object.keys(rawBreaksByUser).forEach(em => {
+            const sorted = rawBreaksByUser[em].sort((a, b) => a.start - b.start);
+            const merged = [];
+            sorted.forEach(b => {
+                if (!merged.length || b.start >= merged[merged.length - 1].end) {
+                    merged.push({ start: b.start, end: b.end });
+                } else {
+                    merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, b.end);
+                }
+            });
+            mergedBreaksByUser[em] = merged;
+        });
+
+        // Remove accidental ghost sessions and clamp sessions to first check-in BEFORE overlap trimming
+        const filteredOut = [];
+        out.forEach(l => {
+            if (l.entryType === 'Session' && l.start) {
+                const d = localDateStr(l.start);
+                const chk = checkInByDate[`${l.email}|${d}`];
+                if (chk) {
+                    const startH = new Date(l.start).getHours();
+                    const chkH = new Date(chk).getHours();
+                    if (chkH >= 8 && startH <= 6) return; // Ghost overnight session
+                    const origEnd = l.end && l.end > l.start ? l.end : l.start + l.rawSeconds * 1000;
+                    if (l.start < chk) {
+                        if (origEnd <= chk) return; // Entirely prior to check-in
+                        l.start = chk;
+                        l.end = origEnd;
+                        l.dateTs = chk;
+                        l.date = localDateStr(chk);
+                        const clampedSec = Math.floor((origEnd - chk) / 1000);
+                        l.rawSeconds = Math.min(l.rawSeconds, clampedSec);
+                        l.seconds = Math.min(l.seconds, clampedSec);
+                        l.remarks = l.remarks ? `${l.remarks} | Clamped to check-in` : 'Clamped to check-in';
+                    }
+                }
+            }
+            filteredOut.push(l);
+        });
+        out.length = 0;
+        filteredOut.forEach(l => out.push(l));
+
+        // Remove overlap between sessions AND deduct disjoint break overlaps only from non-overlapping slices
         const byUser = {};
         out.filter(l => l.entryType === 'Session' && l.start).forEach(l => (byUser[l.email] = byUser[l.email] || []).push(l));
         let overlapSecondsRemoved = 0;
@@ -361,7 +425,8 @@
             let cursor = 0;
             list.forEach(l => {
                 const end = l.end && l.end > l.start ? l.end : l.start + l.rawSeconds * 1000;
-                if (cursor && l.start < cursor) {
+                const effStart = cursor ? Math.max(l.start, cursor) : l.start;
+                if (effStart > l.start) {
                     const overlap = Math.floor((Math.min(end, cursor) - l.start) / 1000);
                     if (overlap > 0) {
                         const cut = Math.min(overlap, l.seconds);
@@ -371,41 +436,23 @@
                     }
                 }
                 cursor = Math.max(cursor, end);
-            });
-        });
 
-        // Break-deduction logic: Deduct overlapping break events from task sessions so break time is never counted as work
-        const breakEventsByUser = {};
-        (ctx.attendanceEvents || []).forEach(e => {
-            if (e && e.type === 'break_end' && e.duration && e.timestamp) {
-                const em = normEmail(e.userId || e.email);
-                const bEnd = toTs(e.timestamp);
-                const bDur = Math.floor(Number(e.duration) / 1000);
-                const bStart = bEnd - bDur * 1000;
-                if (bStart > 0 && bEnd > bStart) {
-                    breakEventsByUser[em] = breakEventsByUser[em] || [];
-                    breakEventsByUser[em].push({ start: bStart, end: bEnd, dur: bDur });
-                }
-            }
-        });
-
-        out.forEach(l => {
-            if (l.entryType === 'Session' && l.start && l.seconds > 0) {
-                const lEnd = l.end && l.end > l.start ? l.end : l.start + l.seconds * 1000;
-                const userBreaks = breakEventsByUser[l.email] || [];
-                userBreaks.forEach(b => {
-                    if (b.end > l.start && b.start < lEnd) {
-                        const overlapStart = Math.max(l.start, b.start);
-                        const overlapEnd = Math.min(lEnd, b.end);
-                        const overlapSec = Math.floor((overlapEnd - overlapStart) / 1000);
-                        if (overlapSec > 0) {
-                            l.seconds = Math.max(0, l.seconds - overlapSec);
-                            const prevRemark = l.remarks ? l.remarks + ' | ' : '';
-                            l.remarks = `${prevRemark}Break (${Math.round(overlapSec / 60)}m) deducted`;
+                if (effStart < end && l.seconds > 0) {
+                    const userBreaks = mergedBreaksByUser[l.email] || [];
+                    let breakOverlapSec = 0;
+                    userBreaks.forEach(b => {
+                        if (b.end > effStart && b.start < end) {
+                            breakOverlapSec += Math.floor((Math.min(end, b.end) - Math.max(effStart, b.start)) / 1000);
                         }
+                    });
+                    if (breakOverlapSec > 0) {
+                        const bCut = Math.min(breakOverlapSec, l.seconds);
+                        l.seconds = Math.max(0, l.seconds - bCut);
+                        const prevRemark = l.remarks ? l.remarks + ' | ' : '';
+                        l.remarks = `${prevRemark}Break (${Math.round(bCut / 60)}m) deducted`;
                     }
-                });
-            }
+                }
+            });
         });
 
         return { logs: out, breaksExcluded, undated, overlapSecondsRemoved };
@@ -707,44 +754,18 @@
 
         const dir = buildDirectory(ctx);
         const taskMap = new Map();
-        (ctx.tasks || []).forEach(t => { if (t && (t.id || t.taskId)) taskMap.set(String(t.id || t.taskId), t); });
+        (ctx.tasks || []).forEach(t => { if (t && (t.id || t.taskId)) taskMap.set(String(t.id || t.taskId).trim().toLowerCase(), t); });
 
         const norm = normalizeLogs(ctx, taskMap, dir);
 
         // 1. Permission scope → 2. period → 3. user filters
-        // For multi-day or overnight sessions, clamp work session start and end to the selected period bounds
-        // so that pre-day / post-day phantom time is never attributed to this period.
+        // Ghost filtering & check-in clamping already ran in normalizeLogs before overlap trimming.
         const scopedLogs = norm.logs.filter(l => inScope(scope, l.email));
-        // Filter out accidental overnight/ghost logs started early morning before arrival (e.g. 4:39 AM)
-        const checkInByDate = {}; // "email|YYYY-MM-DD" -> earliest checkIn ts
-        (ctx.attendanceEvents || []).forEach(e => {
-            if (e && e.type === 'check_in' && e.timestamp) {
-                const em = normEmail(e.userId || e.email);
-                const d = localDateStr(toTs(e.timestamp));
-                const k = `${em}|${d}`;
-                const ts = toTs(e.timestamp);
-                if (!checkInByDate[k] || ts < checkInByDate[k]) checkInByDate[k] = ts;
-            }
-        });
-
         const periodLogs = scopedLogs.filter(l => {
             if (l.start && l.end && l.end > l.start) {
-                // Must intersect with selected period
-                if (!(l.start <= period.toTs && l.end >= period.fromTs)) return false;
-            } else {
-                if (!(l.dateTs >= period.fromTs && l.dateTs <= period.toTs)) return false;
+                return l.start <= period.toTs && l.end >= period.fromTs;
             }
-            // Check-in arrival clamp: discard ghost sessions started before 6:30 AM when check-in was normal daytime
-            if (l.start) {
-                const d = localDateStr(l.start);
-                const chk = checkInByDate[`${l.email}|${d}`];
-                if (chk) {
-                    const startH = new Date(l.start).getHours();
-                    const chkH = new Date(chk).getHours();
-                    if (chkH >= 8 && startH <= 6) return false; // Ghost session
-                }
-            }
-            return true;
+            return l.dateTs >= period.fromTs && l.dateTs <= period.toTs;
         }).map(l => {
             if (l.entryType === 'Session' && l.start && l.end && l.end > l.start) {
                 const effectiveStart = Math.max(l.start, period.fromTs);

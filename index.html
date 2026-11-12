@@ -15736,97 +15736,80 @@
             });
 
             get = async (...args) => {
-                const isMock = currentUser && currentUser.uid === 'mock-uid-nanjil';
                 const hasAuth = auth && auth.currentUser;
-                if (isMock || !hasAuth) {
-                    const path = args[0] ? args[0]._path?.toString() || '' : '';
-                    if (path.includes('users/nanjil_vilpower_com')) {
-                        return mockSnap(currentUser);
-                    }
-                    if (path.includes('users')) {
-                        const usersObj = {};
-                        USERS.forEach(u => {
-                            const k = u.email.replace(/[@.]/g, '_');
-                            usersObj[k] = u;
-                        });
-                        return mockSnap(usersObj);
-                    }
+                if (!hasAuth) {
                     return mockSnap(null);
                 }
                 try {
                     return await _origGet(...args);
                 } catch (e) {
-                    console.warn("Firebase get fallback mock:", e?.message || e);
+                    console.warn("Firebase get fallback:", e?.message || e);
                     return mockSnap(null);
                 }
             };
 
             set = async (...args) => {
-                const isMock = currentUser && currentUser.uid === 'mock-uid-nanjil';
                 const hasAuth = auth && auth.currentUser;
-                if (isMock || !hasAuth) return Promise.resolve();
+                if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origSet(...args);
                 } catch (e) {
-                    console.error("Firebase set fallback mock:", e);
+                    console.error("Firebase set error:", e);
                     return Promise.resolve();
                 }
             };
 
             update = async (...args) => {
-                const isMock = currentUser && currentUser.uid === 'mock-uid-nanjil';
                 const hasAuth = auth && auth.currentUser;
-                if (isMock || !hasAuth) return Promise.resolve();
+                if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origUpdate(...args);
                 } catch (e) {
-                    console.error("Firebase update fallback mock:", e);
+                    console.error("Firebase update error:", e);
                     return Promise.resolve();
                 }
             };
 
             push = (...args) => {
-                const isMock = currentUser && currentUser.uid === 'mock-uid-nanjil';
                 const hasAuth = auth && auth.currentUser;
-                if (isMock || !hasAuth) {
-                    return { key: 'mock-key', set: () => Promise.resolve() };
+                if (!hasAuth) {
+                    return { key: null, set: () => Promise.resolve() };
                 }
                 try {
                     return _origPush(...args);
                 } catch (e) {
-                    console.error("Firebase push fallback mock:", e);
-                    return { key: 'mock-key', set: () => Promise.resolve() };
+                    console.error("Firebase push error:", e);
+                    return { key: null, set: () => Promise.resolve() };
                 }
             };
 
             remove = async (...args) => {
-                const isMock = currentUser && currentUser.uid === 'mock-uid-nanjil';
                 const hasAuth = auth && auth.currentUser;
-                if (isMock || !hasAuth) return Promise.resolve();
+                if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origRemove(...args);
                 } catch (e) {
-                    console.error("Firebase remove fallback mock:", e);
+                    console.error("Firebase remove error:", e);
                     return Promise.resolve();
                 }
             };
 
             onValue = (...args) => {
-                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => { };
+                if (!(auth && auth.currentUser)) return () => { };
                 try {
                     return _origOnValue(...args);
                 } catch (e) {
-                    console.error("Firebase onValue fallback mock:", e);
+                    console.error("Firebase onValue error:", e);
                     return () => { };
                 }
             };
 
             onChildAdded = (...args) => {
-                if (currentUser && currentUser.uid === 'mock-uid-nanjil') return () => { };
+                if (!(auth && auth.currentUser)) return () => { };
                 try {
                     return _origOnChildAdded(...args);
                 } catch (e) {
-                    console.error("Firebase onChildAdded fallback mock:", e);
+                    console.error("Firebase onChildAdded error:", e);
                     return () => { };
                 }
             };
@@ -16703,20 +16686,71 @@
             let allTimeLogsUnsub = null;
 
             function getPeriodTimeLogs(fromTs, toTs, email = 'all') {
-                let rawLogs = allTimeLogs.filter(log => {
-                    const time = log.endTime || log.startTime || 0;
-                    if (time < fromTs || time >= toTs) return false;
-                    if (email !== 'all' && log.userId && log.userId.toLowerCase() !== email.toLowerCase()) return false;
-                    return true;
+                const nowTs = Date.now();
+                const effTo = Number.isFinite(toTs) ? toTs : Infinity;
+                const emailLower = email && email !== 'all' ? String(email).toLowerCase() : 'all';
+
+                const firstCheckInMap = new Map();
+                const rawBreakIntervalsMap = new Map();
+                if (typeof attendanceEvents !== 'undefined' && Array.isArray(attendanceEvents)) {
+                    const breakStartsMap = new Map();
+                    const sortedAtt = [...attendanceEvents].sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                    sortedAtt.forEach(evt => {
+                        const uEmail = String(evt.userId || '').toLowerCase();
+                        const ts = Number(evt.timestamp || 0);
+                        if (!uEmail || !ts) return;
+                        if (emailLower !== 'all' && uEmail !== emailLower) return;
+                        const dayKey = evt.date || new Date(ts).toLocalYMD();
+                        const userDayKey = `${uEmail}|${dayKey}`;
+
+                        if (evt.type === 'check_in') {
+                            const prev = firstCheckInMap.get(userDayKey);
+                            if (!prev || ts < prev) firstCheckInMap.set(userDayKey, ts);
+                        } else if (evt.type === 'break_start') {
+                            breakStartsMap.set(userDayKey, ts);
+                        } else if (evt.type === 'break_end') {
+                            let bStart = breakStartsMap.get(userDayKey) || (evt.duration ? ts - Number(evt.duration) : 0);
+                            breakStartsMap.delete(userDayKey);
+                            if (bStart > 0 && ts > bStart) {
+                                if (!rawBreakIntervalsMap.has(uEmail)) rawBreakIntervalsMap.set(uEmail, []);
+                                rawBreakIntervalsMap.get(uEmail).push([bStart, ts]);
+                            }
+                        }
+                    });
+                }
+
+                // Merge overlapping/duplicate break intervals per user so breaks are never double-deducted
+                const mergedBreaksMap = new Map();
+                rawBreakIntervalsMap.forEach((intervals, uEmail) => {
+                    intervals.sort((a, b) => a[0] - b[0]);
+                    const merged = [];
+                    intervals.forEach(([s, e]) => {
+                        if (!merged.length || s > merged[merged.length - 1][1]) {
+                            merged.push([s, e]);
+                        } else {
+                            merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], e);
+                        }
+                    });
+                    mergedBreaksMap.set(uEmail, merged);
                 });
 
-                // Deduplicate and adjust any cumulative logs with identical or overlapping start times for the same task & user
+                const rawLogs = allTimeLogs.filter(log => {
+                    if (!log || log.isBreakLog || String(log.taskId || '').toUpperCase().startsWith('BREAK-')) return false;
+                    const uEmail = String(log.userId || '').toLowerCase();
+                    if (emailLower !== 'all' && uEmail !== emailLower) return false;
+                    const end = Number(log.endTime || log.startTime || 0);
+                    const dur = Number(log.durationSeconds || 0);
+                    const start = Number(log.startTime || (dur > 0 ? end - dur * 1000 : end));
+                    return start <= effTo && end >= fromTs;
+                });
+
+                // Sort per user + case-insensitive taskId + startTime + endTime so cumulative repeats align
                 rawLogs.sort((a, b) => {
                     const uA = String(a.userId || '').toLowerCase();
                     const uB = String(b.userId || '').toLowerCase();
                     if (uA !== uB) return uA.localeCompare(uB);
-                    const tA = String(a.taskId || '');
-                    const tB = String(b.taskId || '');
+                    const tA = String(a.taskId || '').trim().toUpperCase();
+                    const tB = String(b.taskId || '').trim().toUpperCase();
                     if (tA !== tB) return tA.localeCompare(tB);
                     const sA = Number(a.startTime || 0);
                     const sB = Number(b.startTime || 0);
@@ -16724,82 +16758,148 @@
                     return Number(a.endTime || 0) - Number(b.endTime || 0);
                 });
 
-                const logs = [];
+                // Deduplicate cumulative timer saves (handle 2, 3, N repeats via lastRawCumSec)
+                const dedupedLogs = [];
+                let lastGroupKey = '';
+                let lastGroupStart = -Infinity;
+                let lastRawCumSec = 0;
+                let lastEnd = 0;
                 for (let i = 0; i < rawLogs.length; i++) {
                     const cur = rawLogs[i];
-                    const prev = logs.length > 0 ? logs[logs.length - 1] : null;
                     const curUser = String(cur.userId || '').toLowerCase();
-                    const prevUser = prev ? String(prev.userId || '').toLowerCase() : '';
-                    const curTask = String(cur.taskId || '');
-                    const prevTask = prev ? String(prev.taskId || '') : '';
+                    const curTask = String(cur.taskId || '').trim().toUpperCase();
+                    const groupKey = `${curUser}|${curTask}`;
+                    const curEnd = Number(cur.endTime || cur.startTime || 0);
+                    const curStart = Number(cur.startTime || curEnd);
+                    let curSec = Number(cur.durationSeconds || 0);
+                    if ((!Number.isFinite(curSec) || curSec <= 0) && curEnd > curStart) {
+                        curSec = Math.round((curEnd - curStart) / 1000);
+                    }
 
-                    // Check if current log is a cumulative repeat of previous log (nearly identical startTime < 5s)
-                    if (prev && curUser === prevUser && curTask === prevTask && Math.abs(Number(cur.startTime || 0) - Number(prev.startTime || 0)) < 5000) {
-                        const curSec = Number(cur.durationSeconds || 0);
-                        const prevSec = Number(prev.durationSeconds || 0);
-                        if (curSec > prevSec) {
-                            const segSec = curSec - prevSec;
-                            logs.push({
+                    if (groupKey === lastGroupKey && Math.abs(curStart - lastGroupStart) < 5000) {
+                        if (curSec > lastRawCumSec) {
+                            const segSec = curSec - lastRawCumSec;
+                            const segStart = lastEnd > 0 ? Math.max(curStart, lastEnd) : curStart;
+                            const segEnd = curEnd > segStart ? curEnd : (segStart + segSec * 1000);
+                            dedupedLogs.push({
                                 ...cur,
-                                startTime: prev.endTime || cur.startTime,
+                                startTime: segStart,
+                                endTime: segEnd,
                                 durationSeconds: segSec,
                                 durationFormatted: formatTime(segSec)
                             });
+                            lastRawCumSec = curSec;
+                            lastEnd = segEnd;
                         }
-                        // If curSec <= prevSec, it is a duplicate, skip it
                     } else {
-                        logs.push({ ...cur });
+                        dedupedLogs.push({
+                            ...cur,
+                            startTime: curStart,
+                            endTime: curEnd,
+                            durationSeconds: curSec,
+                            durationFormatted: formatTime(curSec)
+                        });
+                        lastGroupKey = groupKey;
+                        lastGroupStart = curStart;
+                        lastRawCumSec = curSec;
+                        lastEnd = curEnd;
                     }
                 }
 
+                // Append live running timers (only state === 'working') clamped to [fromTs, effTo]
                 if (typeof currentWorkUsers !== 'undefined' && Array.isArray(currentWorkUsers)) {
                     currentWorkUsers.forEach(u => {
-                        const uEmail = (u.email || '').toLowerCase();
+                        const uEmail = String(u.email || '').toLowerCase();
                         if (!uEmail) return;
-                        if (email !== 'all' && uEmail !== email.toLowerCase()) return;
+                        if (emailLower !== 'all' && uEmail !== emailLower) return;
 
                         let curTask = u.currentTask;
-                        if (currentUser && uEmail === currentUser.email.toLowerCase() && activeTaskId) {
+                        if (currentUser && uEmail === String(currentUser.email || '').toLowerCase() && activeTaskId) {
                             curTask = {
                                 taskId: activeTaskId,
                                 taskDesc: activeTaskDetails().desc,
                                 client: activeTaskDetails().client,
                                 state: taskOnHold ? 'on_hold' : 'working',
-                                startedAt: taskStartTime || Date.now(),
-                                currentSeconds: (!taskOnHold && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : (taskSeconds || 0)
+                                startedAt: taskStartTime || nowTs,
+                                currentSeconds: (!taskOnHold && taskStartTime) ? Math.max(0, Math.floor((nowTs - taskStartTime) / 1000)) : (taskSeconds || 0)
                             };
                         }
 
-                        // Only running tasks have an unlogged active session; held tasks are already logged in allTimeLogs
                         if (curTask && curTask.taskId && curTask.state === 'working') {
-                            let duration = 0;
-                            if (curTask.startedAt) {
-                                duration = Math.max(0, Math.floor((Date.now() - curTask.startedAt) / 1000));
-                            } else {
-                                duration = curTask.currentSeconds || 0;
-                            }
+                            const rawStart = curTask.startedAt || (nowTs - (Number(curTask.currentSeconds || 0) * 1000));
+                            const effEnd = Math.min(nowTs, effTo);
+                            const effStart = Math.max(rawStart, fromTs);
+                            const duration = Math.max(0, Math.floor((effEnd - effStart) / 1000));
 
                             if (duration > 0) {
-                                const logStart = curTask.startedAt || fromTs;
-                                if (logStart <= toTs && Date.now() >= fromTs) {
-                                    const uName = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get(uEmail)?.name) || u.name || uEmail;
-                                    logs.push({
-                                        taskId: curTask.taskId,
-                                        taskDesc: curTask.taskDesc || '',
-                                        client: curTask.client || 'Other',
-                                        userId: u.email,
-                                        userName: uName,
-                                        startTime: logStart,
-                                        endTime: Date.now(),
-                                        durationSeconds: duration,
-                                        durationFormatted: formatTime(duration),
-                                        isVirtual: true
-                                    });
-                                }
+                                const uName = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.get(uEmail)?.name) || u.name || uEmail;
+                                dedupedLogs.push({
+                                    taskId: curTask.taskId,
+                                    taskDesc: curTask.taskDesc || '',
+                                    client: curTask.client || 'Other',
+                                    userId: u.email,
+                                    userName: uName,
+                                    startTime: effStart,
+                                    endTime: effEnd,
+                                    durationSeconds: duration,
+                                    durationFormatted: formatTime(duration),
+                                    isVirtual: true
+                                });
                             }
                         }
                     });
                 }
+
+                // Clamp to check-in & [fromTs, effTo], trim overlaps, and deduct breaks per user chronologically
+                const byUser = new Map();
+                dedupedLogs.forEach(log => {
+                    const uEmail = String(log.userId || '').toLowerCase();
+                    if (!byUser.has(uEmail)) byUser.set(uEmail, []);
+                    byUser.get(uEmail).push(log);
+                });
+
+                const logs = [];
+                byUser.forEach((userLogs, uEmail) => {
+                    userLogs.sort((a, b) => Number(a.startTime || 0) - Number(b.startTime || 0) || Number(a.endTime || 0) - Number(b.endTime || 0));
+                    const breaks = mergedBreaksMap.get(uEmail) || [];
+                    let cursor = 0;
+
+                    userLogs.forEach(log => {
+                        let s = Math.max(Number(log.startTime || 0), fromTs);
+                        let e = Math.min(Number(log.endTime || s), effTo);
+                        if (e <= s) return;
+
+                        const dayKey = new Date(s).toLocalYMD();
+                        const ci = firstCheckInMap.get(`${uEmail}|${dayKey}`);
+                        if (ci) {
+                            if (e <= ci) return;
+                            if (s < ci) s = ci;
+                        }
+
+                        const effStart = Math.max(s, cursor);
+                        if (e <= effStart) return;
+
+                        let spanMs = e - effStart;
+                        for (let b = 0; b < breaks.length; b++) {
+                            const os = Math.max(effStart, breaks[b][0]);
+                            const oe = Math.min(e, breaks[b][1]);
+                            if (oe > os) spanMs -= (oe - os);
+                        }
+                        cursor = Math.max(cursor, e);
+
+                        const netSec = Math.max(0, Math.round(spanMs / 1000));
+                        if (netSec <= 0) return;
+
+                        logs.push({
+                            ...log,
+                            startTime: effStart,
+                            endTime: e,
+                            durationSeconds: netSec,
+                            durationFormatted: formatTime(netSec)
+                        });
+                    });
+                });
+
                 return logs;
             }
 
@@ -19206,20 +19306,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const btn = document.getElementById('login-btn');
                 if (!email || !pass) { document.getElementById('error-text').textContent = 'Enter both fields.'; errEl.classList.remove('hidden'); return; }
 
-                if (email === 'nanjil@vilpower.com' && pass === 'bypass') {
-                    currentUser = {
-                        email: 'nanjil@vilpower.com',
-                        name: 'Nanjil Manohar S',
-                        role: 'Head of Operations',
-                        avatar: 'Nanjil',
-                        uid: 'mock-uid-nanjil'
-                    };
-                    localStorage.setItem('worksync_user', JSON.stringify(currentUser));
-                    errEl.classList.add('hidden');
-                    await finishLogin();
-                    return;
-                }
-
                 document.getElementById('btn-text').textContent = 'Signing in...';
                 document.getElementById('btn-icon').setAttribute('icon', 'svg-spinners:ring-resize');
                 btn.disabled = true;
@@ -20400,9 +20486,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // Icon and label for document file types
 
             // ── PDF URL Safe Helper ──
+            function isSafeWebOrMediaUrl(url) {
+                if (!url) return false;
+                const s = String(url).trim();
+                if (!s) return false;
+                if (s.startsWith('/') && !s.startsWith('//')) return true;
+                if (/^https?:\/\//i.test(s)) return true;
+                if (/^data:(image\/(png|jpeg|jpg|gif|webp)|application\/pdf);base64,/i.test(s)) return true;
+                return false;
+            }
+
             function getSafePdfUrl(url, name) {
-                if (!url) return '';
-                let strUrl = String(url);
+                if (!isSafeWebOrMediaUrl(url)) return '#';
+                let strUrl = String(url).trim();
                 if (strUrl.startsWith('data:')) return strUrl;
                 const isPdf = (name || strUrl).toLowerCase().includes('.pdf');
                 // For Cloudinary image-uploaded PDFs, add fl_attachment to force download instead of inline render
@@ -20424,6 +20520,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function openPdfUrl(url) {
                 if (!url) return;
                 const safeUrl = getSafePdfUrl(url);
+                if (safeUrl === '#') return;
                 window.open(safeUrl, '_blank', 'noopener,noreferrer');
             }
 
@@ -21116,7 +21213,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem('worksync_totalBreakDuration', '0');
                 localStorage.removeItem('worksync_breakStartTime');
                 setTimerState('running');
-                syncActiveSessionToFirebase('running');
                 timerRef = setInterval(tickTimer, 1000);
                 logAttendanceEvent('check_in');
                 syncActiveSessionToFirebase('running');
@@ -21210,9 +21306,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 syncActiveSessionToFirebase('paused');
                 // Auto-hold any active task when going on break
                 if (activeTaskId && !taskOnHold) {
+                    try { localStorage.setItem('worksync_paused_by_break', String(activeTaskId)); } catch (e) { }
                     holdTask();
                     toast('Break started — active task put on hold', 'info');
                 } else {
+                    try { localStorage.removeItem('worksync_paused_by_break'); } catch (e) { }
                     toast('Break session started', 'info');
                 }
 
@@ -21269,40 +21367,48 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 stopBreakTimer();
 
+                let pausedByBreakTaskId = null;
                 try {
-                    if (currentUser && typeof get === 'function' && typeof ref === 'function' && db) {
-                        const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
-                        const currentTaskData = snap.val();
-                        if (currentTaskData && currentTaskData.taskId) {
-                            activeTaskId = currentTaskData.taskId;
-                            taskSeconds = 0; // Fresh segment begins; prior time was logged at break start
-                            taskOnHold = false;
-                            taskStartTime = Date.now();
-                            if (typeof startTaskTimer === 'function') startTaskTimer();
-                            if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
-                            // Ensure internal task status is restored to 'In Progress' after break
-                            const activeInternalTask = tasks.find(t => t.id === activeTaskId);
-                            if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
-                                activeInternalTask.isOnHold = false;
-                                if (typeof updateInternalTaskStatus === 'function') {
-                                    const resumeStatus = (typeof isShootTask === 'function' && isShootTask(activeInternalTask)) ? 'Shoot In Progress' : 'In Progress';
-                                    updateInternalTaskStatus(activeTaskId, resumeStatus);
-                                }
-                            }
+                    pausedByBreakTaskId = localStorage.getItem('worksync_paused_by_break');
+                    localStorage.removeItem('worksync_paused_by_break');
+                } catch (e) { }
 
-                            if (typeof renderTasks === 'function') renderTasks();
-                            if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
-                            if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
-                            if (typeof renderDailyPlan === 'function') renderDailyPlan();
-                            toast('Paused task auto-resumed', 'success');
+                if (pausedByBreakTaskId) {
+                    try {
+                        if (currentUser && typeof get === 'function' && typeof ref === 'function' && db) {
+                            const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
+                            const currentTaskData = snap.val();
+                            if (currentTaskData && currentTaskData.taskId && String(currentTaskData.taskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase()) {
+                                activeTaskId = currentTaskData.taskId;
+                                taskSeconds = 0; // Fresh segment begins; prior time was logged at break start
+                                taskOnHold = false;
+                                taskStartTime = Date.now();
+                                if (typeof startTaskTimer === 'function') startTaskTimer();
+                                if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
+                                // Ensure internal task status is restored to 'In Progress' after break
+                                const activeInternalTask = tasks.find(t => String(t.id || '').toUpperCase() === String(activeTaskId).toUpperCase());
+                                if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
+                                    activeInternalTask.isOnHold = false;
+                                    if (typeof updateInternalTaskStatus === 'function') {
+                                        const resumeStatus = (typeof isShootTask === 'function' && isShootTask(activeInternalTask)) ? 'Shoot In Progress' : 'In Progress';
+                                        updateInternalTaskStatus(activeTaskId, resumeStatus);
+                                    }
+                                }
+
+                                if (typeof renderTasks === 'function') renderTasks();
+                                if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
+                                if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
+                                if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                                toast('Paused task auto-resumed', 'success');
+                            }
+                        } else if (activeTaskId && taskOnHold && String(activeTaskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase() && typeof resumeTaskTimer === 'function') {
+                            resumeTaskTimer();
                         }
-                    } else if (activeTaskId && taskOnHold && typeof resumeTaskTimer === 'function') {
-                        resumeTaskTimer();
-                    }
-                } catch (err) {
-                    console.error('Failed to auto-resume task:', err);
-                    if (activeTaskId && taskOnHold && typeof resumeTaskTimer === 'function') {
-                        resumeTaskTimer();
+                    } catch (err) {
+                        console.error('Failed to auto-resume task:', err);
+                        if (activeTaskId && taskOnHold && String(activeTaskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase() && typeof resumeTaskTimer === 'function') {
+                            resumeTaskTimer();
+                        }
                     }
                 }
             }
@@ -21320,12 +21426,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
-            function executeCheckOut() {
+            async function executeCheckOut() {
                 clearInterval(timerRef);
                 isCheckedIn = false;
-                if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) { try { holdTask(); } catch (e) { } } if (typeof clearCurrentTask === 'function') { clearCurrentTask().catch(() => { }); }
+                const endTime = Date.now();
+                const effectiveBreakStart = breakStartTime || parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
+                if (effectiveBreakStart) {
+                    const breakDuration = Math.max(0, endTime - effectiveBreakStart);
+                    totalBreakDuration += breakDuration;
+                    logAttendanceEvent('break_end', breakDuration);
+                    breakStartTime = null;
+                }
+                if (typeof holdActiveTaskForCheckout === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                    try { await holdActiveTaskForCheckout(endTime); } catch (e) { }
+                } else if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                    try { await holdTask(endTime); } catch (e) { }
+                }
+                if (typeof clearCurrentTask === 'function') {
+                    try { await clearCurrentTask(); } catch (e) { }
+                }
+                activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null; activeTimerSessionId = null;
                 if (checkInTime) {
-                    const totalDuration = Date.now() - checkInTime;
+                    const totalDuration = Math.max(0, (endTime - checkInTime) - totalBreakDuration);
                     logAttendanceEvent('check_out', totalDuration);
                     checkInTime = null;
                 }
@@ -21335,6 +21457,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.removeItem('worksync_checkInTime');
                 localStorage.removeItem('worksync_totalBreakDuration');
                 localStorage.removeItem('worksync_breakStartTime');
+                localStorage.removeItem('worksync_paused_by_break');
                 resetTimerUI();
                 updateSessionStatus();
                 toast('Checked Out - Great job today!', 'success');
@@ -21478,10 +21601,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
             }
 
-            function autoCheckOut() {
+            async function autoCheckOut() {
                 if (!isCheckedIn) return;
                 clearInterval(timerRef);
                 isCheckedIn = false;
+                let endTime = Date.now();
                 if (checkInTime) {
                     const ciDate = new Date(checkInTime);
                     const now = new Date();
@@ -21499,13 +21623,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         limitDate.setHours(limit.hours, limit.mins, 0, 0);
                     }
 
-                    let endTime = Date.now();
                     if (checkInTime < limitDate.getTime() && endTime > limitDate.getTime()) {
                         endTime = limitDate.getTime();
                     }
 
-                    if (breakStartTime) {
-                        const breakDuration = Math.max(0, endTime - breakStartTime);
+                    const effectiveBreakStart = breakStartTime || parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
+                    if (effectiveBreakStart) {
+                        const breakDuration = Math.max(0, endTime - effectiveBreakStart);
+                        totalBreakDuration += breakDuration;
                         logAttendanceEvent('break_end', breakDuration);
                         breakStartTime = null;
                     }
@@ -21514,12 +21639,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     logAttendanceEvent('check_out', totalDuration);
                     checkInTime = null;
                 }
-                if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) { try { holdTask(); } catch (e) { } } if (typeof clearCurrentTask === 'function') { clearCurrentTask().catch(() => { }); }
+                if (typeof holdActiveTaskForCheckout === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                    try { await holdActiveTaskForCheckout(endTime); } catch (e) { }
+                } else if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                    try { await holdTask(endTime); } catch (e) { }
+                }
+                if (typeof clearCurrentTask === 'function') {
+                    try { await clearCurrentTask(); } catch (e) { }
+                }
+                activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null; activeTimerSessionId = null;
                 setTimerState('idle');
+                syncActiveSessionToFirebase('idle');
                 localStorage.removeItem('worksync_timerState');
                 localStorage.removeItem('worksync_checkInTime');
                 localStorage.removeItem('worksync_totalBreakDuration');
                 localStorage.removeItem('worksync_breakStartTime');
+                localStorage.removeItem('worksync_paused_by_break');
                 resetTimerUI();
                 toast('Auto-checked out at end of shift', 'info');
 
@@ -28922,7 +29057,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function jiraProxyFetch(proxyUrl, fetchOptions) {
                 let r;
                 try {
-                    r = await fetch(proxyUrl, fetchOptions);
+                    const opts = { ...(fetchOptions || {}) };
+                    if (proxyUrl === JIRA.apiUrl && auth && auth.currentUser) {
+                        const token = await auth.currentUser.getIdToken();
+                        opts.headers = { ...(opts.headers || {}), Authorization: `Bearer ${token}` };
+                    }
+                    r = await fetch(proxyUrl, opts);
                 } catch (err) {
                     throw new Error(`Cannot reach Jira proxy ${proxyUrl}: ${err.message}`);
                 }
@@ -33415,20 +33555,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             // Saves the running session's time as its own time log and restarts the counter at 0,
             // so a task held today and resumed tomorrow logs each day's work on the right day.
-            function logHeldSegment() {
-                if (taskOnHold || !activeTaskId || !currentUser || !taskStartTime) return;
-                taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+            function logHeldSegment(customEndTime = null) {
+                if (taskOnHold || !activeTaskId || !currentUser || !taskStartTime) return Promise.resolve();
+                const endTs = (typeof customEndTime === 'number' && Number.isFinite(customEndTime))
+                    ? Math.min(customEndTime, Date.now())
+                    : Date.now();
+                taskSeconds = Math.max(0, Math.floor((endTs - taskStartTime) / 1000));
+                let writePromise = Promise.resolve();
                 if (taskSeconds > 0 && db) {
                     const t = findRealTask(activeTaskId);
                     const details = activeTaskDetails();
-                    push(ref(db, 'worksync/timelogs'), {
+                    writePromise = push(ref(db, 'worksync/timelogs'), {
                         taskId: activeTaskId,
                         taskDesc: t?.desc || details.desc,
                         client: t?.client || details.client,
                         userId: currentUser.email,
                         userName: currentUser.name,
                         startTime: taskStartTime,
-                        endTime: Date.now(),
+                        endTime: endTs,
                         durationSeconds: taskSeconds,
                         durationFormatted: formatTime(taskSeconds),
                         timerSessionId: activeTimerSessionId || null
@@ -33436,10 +33580,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 taskSeconds = 0;
                 taskStartTime = null;
+                return writePromise;
             }
 
-            function holdTask() {
-                logHeldSegment();
+            function holdTask(customEndTime = null) {
+                const writePromise = logHeldSegment(customEndTime);
                 stopTaskTimer();
                 taskOnHold = true;
                 if (activeTaskId) {
@@ -33457,11 +33602,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 renderActiveTaskCard();
                 renderDailyPlan();
                 toast('Task on hold', 'info');
+                return writePromise;
             }
 
-            function holdActiveTaskForCheckout() {
-                if (!activeTaskId) return;
-                logHeldSegment();
+            function holdActiveTaskForCheckout(customEndTime = null) {
+                if (!activeTaskId) return Promise.resolve();
+                const writePromise = logHeldSegment(customEndTime);
                 stopTaskTimer();
                 taskOnHold = true;
                 const task = findRealTask(activeTaskId);
@@ -33475,9 +33621,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (isInternalTabActive()) renderInternalTasks();
                 renderActiveTaskCard();
                 renderDailyPlan();
+                return writePromise;
             }
 
             function resumeTaskTimer() {
+                if (!isCheckedIn) {
+                    toast('Please check in before resuming a task', 'error');
+                    return;
+                }
+                if (!taskOnHold || !activeTaskId) return;
                 taskOnHold = false;
                 taskSeconds = 0;
                 taskStartTime = Date.now();
@@ -33500,67 +33652,74 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 toast('Task resumed', 'success');
             }
 
+            let isEndingTask = false;
             async function endTask() {
-                if (!activeTaskId || !currentUser) return;
-                stopTaskTimer();
+                if (isEndingTask || !activeTaskId || !currentUser) return;
+                isEndingTask = true;
+                try {
+                    stopTaskTimer();
 
-                // Final clock-based validation of total time
-                if (!taskOnHold && taskStartTime) {
-                    taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
-                }
+                    // Final clock-based validation of total time
+                    if (!taskOnHold && taskStartTime) {
+                        taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+                    }
 
-                const t = findRealTask(activeTaskId);
-                const userRole = (currentUser?.role || '').toLowerCase();
-                const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
+                    const t = findRealTask(activeTaskId);
+                    const userRole = (currentUser?.role || '').toLowerCase();
+                    const isVideoEditorOrDesigner = userRole.includes('video editor') || userRole.includes('designer');
 
-                if (t && isMorningLearningTask(t)) {
-                    await completeMorningLearningTask(t);
-                    // AUTO-MOVE TO QUALITY CHECK DISABLED — re-enable by uncommenting below
-                    // } else if (t && isVideoEditorOrDesigner) {
-                    //     if (isInternalTask(t)) {
-                    //         await updateInternalTaskStatus(activeTaskId, 'Quality Check');
-                    //     } else {
-                    //         await updateTaskStatus(activeTaskId, 'Quality Check');
-                    //     }
-                } else if (t && isInternalTask(t)) {
-                    await updateInternalTaskStatus(activeTaskId, 'Completed');
-                }
+                    if (t && isMorningLearningTask(t)) {
+                        await completeMorningLearningTask(t);
+                        // AUTO-MOVE TO QUALITY CHECK DISABLED — re-enable by uncommenting below
+                        // } else if (t && isVideoEditorOrDesigner) {
+                        //     if (isInternalTask(t)) {
+                        //         await updateInternalTaskStatus(activeTaskId, 'Quality Check');
+                        //     } else {
+                        //         await updateTaskStatus(activeTaskId, 'Quality Check');
+                        //     }
+                    } else if (t && isInternalTask(t)) {
+                        await updateInternalTaskStatus(activeTaskId, 'Completed');
+                    }
 
-                // If this is a discussion task, mark the discussion as completed in Firebase so it ends for all participants!
-                if (t && (t.discussionId || t.isDiscussionTask || String(t.id || '').startsWith('DISC-'))) {
-                    const discId = t.discussionId || (String(t.id || '').startsWith('DISC-') ? t.id : null);
-                    if (discId) {
-                        try {
-                            await update(ref(db, `worksync/discussions/${discId}`), { status: 'completed' });
-                        } catch (discErr) {
-                            console.error('Failed to update discussion status on endTask:', discErr);
+                    // If this is a discussion task, mark the discussion as completed in Firebase so it ends for all participants!
+                    if (t && (t.discussionId || t.isDiscussionTask || String(t.id || '').startsWith('DISC-'))) {
+                        const discId = t.discussionId || (String(t.id || '').startsWith('DISC-') ? t.id : null);
+                        if (discId) {
+                            try {
+                                await update(ref(db, `worksync/discussions/${discId}`), { status: 'completed' });
+                            } catch (discErr) {
+                                console.error('Failed to update discussion status on endTask:', discErr);
+                            }
                         }
                     }
-                }
 
-                if (taskSeconds > 0) {
-                    const log = {
-                        taskId: activeTaskId,
-                        taskDesc: t?.desc || activeTaskDetails().desc,
-                        client: t?.client || activeTaskDetails().client,
-                        userId: currentUser.email,
-                        userName: currentUser.name,
-                        startTime: taskStartTime || Date.now(),
-                        endTime: Date.now(),
-                        durationSeconds: taskSeconds,
-                        durationFormatted: formatTime(taskSeconds),
-                        timerSessionId: activeTimerSessionId || null
-                    };
-                    await push(ref(db, 'worksync/timelogs'), log);
-                    toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
-                } else {
-                    toast('Task ended', 'success');
+                    if (!taskOnHold && taskSeconds > 0) {
+                        const log = {
+                            taskId: activeTaskId,
+                            taskDesc: t?.desc || activeTaskDetails().desc,
+                            client: t?.client || activeTaskDetails().client,
+                            userId: currentUser.email,
+                            userName: currentUser.name,
+                            startTime: taskStartTime || Date.now(),
+                            endTime: Date.now(),
+                            durationSeconds: taskSeconds,
+                            durationFormatted: formatTime(taskSeconds),
+                            timerSessionId: activeTimerSessionId || null
+                        };
+                        await push(ref(db, 'worksync/timelogs'), log);
+                        toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
+                    } else {
+                        toast('Task ended', 'success');
+                    }
+                    activeTimerSessionId = null;
+                    try { localStorage.removeItem('worksync_paused_by_break'); } catch (e) { }
+                    await clearCurrentTask();
+                    activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
+                    lastTaskEndTime = Date.now(); // Record idle baseline after task completion
+                    updateSessionStatus();
+                } finally {
+                    isEndingTask = false;
                 }
-                activeTimerSessionId = null;
-                await clearCurrentTask();
-                activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null;
-                lastTaskEndTime = Date.now(); // Record idle baseline after task completion
-                updateSessionStatus();
                 // Batch render calls instead of sequential
                 PerfOptimizer.queueRender(() => renderTasks(), 'high');
                 if (isInternalTabActive()) PerfOptimizer.queueRender(() => renderInternalTasks(), 'high');
@@ -34888,28 +35047,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             <div class="flex items-start justify-between gap-4 mb-4">
                                 <div class="flex items-center gap-3 min-w-0">
                                     <div class="relative shrink-0">
-                                        <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
+                                        <img src="${escapeHtml(getSafePdfUrl(u.profilePicture || getUserAvatarSrc(u)))}" class="w-11 h-11 rounded-xl bg-white border border-slate-200 object-cover">
                                         <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-50 ${online ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
                                     </div>
                                     <div class="min-w-0">
-                                        <p class="text-sm font-black text-slate-900 truncate">${u.name || u.email}</p>
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${u.role || 'Employee'}</p>
+                                        <p class="text-sm font-black text-slate-900 truncate">${escapeHtml(u.name || u.email)}</p>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${escapeHtml(u.role || 'Employee')}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1.5">
                             <span class="text-[10px] font-bold px-2.5 py-1 rounded-full border ${stateClass}">${stateLabel}</span>
-                            ${(isAdmin() || isManager()) && task ? `<button onclick="adminClearUserCurrentTask('${u.email}')" class="text-[9px] font-bold text-rose-600 hover:bg-rose-100 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 transition-all shadow-sm" title="Clear Stale Task">Clear</button>` : ''}
+                            ${(isAdmin() || isManager()) && task ? `<button data-user-email="${escapeHtml(u.email)}" onclick="adminClearUserCurrentTask(this.dataset.userEmail)" class="text-[9px] font-bold text-rose-600 hover:bg-rose-100 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 transition-all shadow-sm" title="Clear Stale Task">Clear</button>` : ''}
                         </div>
                             </div>
                             ${task ? `
                                 <div class="bg-white rounded-2xl border border-slate-100 p-4">
                                     <div class="flex items-center gap-2 mb-2">
-                                        <span class="text-[10px] font-mono font-black text-indigo-600">${task.taskId.startsWith('M-') ? task.taskId : `<a href="https://${JIRA.domain}/browse/${task.taskId}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${task.taskId}</a>`}</span>
-                                        ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(task.status)}">${task.status}</span>` : ''}
+                                        <span class="text-[10px] font-mono font-black text-indigo-600">${task.taskId.startsWith('M-') ? escapeHtml(task.taskId) : `<a href="https://${JIRA.domain}/browse/${encodeURIComponent(task.taskId)}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors" title="Open in Jira">${escapeHtml(task.taskId)}</a>`}</span>
+                                        ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(task.status)}">${escapeHtml(task.status)}</span>` : ''}
                                     </div>
-                                    <p class="text-sm font-bold text-slate-900 mb-3 line-clamp-2">${task.taskDesc || 'Task details unavailable'}</p>
+                                    <p class="text-sm font-bold text-slate-900 mb-3 line-clamp-2">${escapeHtml(task.taskDesc || 'Task details unavailable')}</p>
                                     <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-50">
-                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${task.client || 'No Client'}</span>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${escapeHtml(task.client || 'No Client')}</span>
                                         <span class="live-task-timer text-xs font-black text-slate-700 font-mono" 
                                               data-started="${task.startedAt || 0}" 
                                               data-state="${task.state || 'idle'}">${elapsed}</span>
@@ -35228,9 +35387,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return rows.get(key);
                 };
 
-                todayTimeLogs.forEach(log => {
+                const todayStart = todayStartTs();
+                const nowTs = Date.now();
+                const cleanTodayLogs = (typeof getPeriodTimeLogs === 'function')
+                    ? getPeriodTimeLogs(todayStart, nowTs, 'all').filter(log => !log.isVirtual)
+                    : todayTimeLogs;
+
+                cleanTodayLogs.forEach(log => {
                     const row = ensure(log.userId, log.userName);
-                    const task = tasks.find(t => t.id === log.taskId);
+                    const task = tasks.find(t => String(t.id || '').toUpperCase() === String(log.taskId || '').toUpperCase());
                     if (task && (task.status === 'Learnings' || task.status === 'Learning')) return;
 
                     row.completedTasks++;
@@ -35248,12 +35413,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 const row = rows.get(userEmail);
                                 if (row) {
                                     row.breakSeconds += Math.floor((evt.duration || 0) / 1000);
-                                    console.log(`✓ Break time added for ${userEmail}: ${Math.floor((evt.duration || 0) / 1000)}s`);
                                 } else {
                                     // Create new row if user not found
                                     const newRow = ensure(evt.userId, evt.userName || 'Unknown User');
                                     newRow.breakSeconds += Math.floor((evt.duration || 0) / 1000);
-                                    console.log(`✓ New user added for break time: ${userEmail}: ${Math.floor((evt.duration || 0) / 1000)}s`);
                                 }
                             }
                         }
@@ -35266,7 +35429,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     row.online = !!u.online;
                     if (u.currentTask) {
                         row.activeTask = u.currentTask;
-                        row.activeSeconds = Math.max(Math.floor((Date.now() - (u.currentTask.startedAt || Date.now())) / 1000), 0);
+                        if (u.currentTask.state === 'working') {
+                            const startedAt = Math.max(todayStart, u.currentTask.startedAt || Date.now());
+                            row.activeSeconds = Math.max(Math.floor((Date.now() - startedAt) / 1000), 0);
+                        } else {
+                            row.activeSeconds = 0;
+                        }
                     }
 
                     const ut = tasks.filter(t => assigneeMatches(t, u.email) && t.status !== 'Learnings' && t.status !== 'Learning');
@@ -38641,14 +38809,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             : 'max-w-[240px]';
                         attachmentHtml += `<div class="${text ? 'mb-2' : ''} ${gridClass}">` +
                             imageAttachments.map((a, i) => `
-                            <img src="${a.url}" onclick="openChatImageGallery('${id}', ${i})"
+                            <img src="${escapeHtml(getSafePdfUrl(a.url, a.name))}" onclick="openChatImageGallery('${escapeHtml(id)}', ${i})"
                                 class="w-full rounded-2xl cursor-pointer hover:opacity-90 transition-opacity object-cover shadow-2xs ${imageAttachments.length > 1 ? 'max-h-32' : 'max-h-60'}"
                                 alt="${escapeHtml(a.name || 'Attached image')}" role="button" tabindex="0">`
                             ).join('') + `</div>`;
                     }
 
                     fileAttachments.forEach(a => {
-                        const safeUrl = getSafePdfUrl(a.url, a.name);
+                        const safeUrl = escapeHtml(getSafePdfUrl(a.url, a.name));
                         const meta = docFileIcon(a.type, a.name);
                         const bgClass = isMe
                             ? 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border-indigo-200 dark:border-indigo-900/60'
@@ -38664,7 +38832,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             <div class="inline-flex items-center gap-2.5 p-2.5 ${bgClass} rounded-2xl border transition-all shadow-2xs"
                                style="text-decoration:none">
                                 <iconify-icon icon="${meta.icon}" width="24" style="color:${meta.color};flex-shrink:0"></iconify-icon>
-                                <div class="min-w-0 pr-1 cursor-pointer" onclick="window.open('${safeUrl}', '_blank', 'noopener,noreferrer')">
+                                <div class="min-w-0 pr-1 cursor-pointer" data-open-url="${safeUrl}" onclick="openPdfUrl(this.dataset.openUrl)">
                                     <p class="text-xs font-bold ${textClass} truncate max-w-[170px] hover:text-indigo-600 transition-colors" title="${safeName}">${safeName}</p>
                                     <p class="text-[9px] ${subClass}">${meta.label}${sizeTxt ? ' · ' + sizeTxt : ''}</p>
                                 </div>
@@ -38754,7 +38922,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const senderEmailNorm = (msg.senderEmail || '').toLowerCase().trim();
                 const senderUser = senderEmailNorm ? (allUsersMap.get(senderEmailNorm) || (typeof knownUserByEmail === 'function' && knownUserByEmail(senderEmailNorm))) : null;
                 const senderAvatar = (senderUser && (senderUser.profilePicture || senderUser.photoURL || senderUser.photo)) || getUserAvatarSrc(senderUser || msg.senderEmail || msg.senderName);
-                const safeSenderName = (msg.senderName || msg.senderEmail || '?').replace(/'/g, "\\'");
+                const safeSenderNameAttr = escapeHtml(msg.senderName || msg.senderEmail || '?');
 
                 if (senderEmailNorm && (!senderUser || !(senderUser.profilePicture || senderUser.photoURL))) {
                     if (typeof fetchAndCacheUserAvatar === 'function') fetchAndCacheUserAvatar(senderEmailNorm);
@@ -38762,7 +38930,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const avatarMarkup = `
                     <div class="w-8 h-8 rounded-xl overflow-hidden shrink-0 mb-1 shadow-2xs">
-                        <img src="${senderAvatar}" data-sender-email="${senderEmailNorm}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${safeSenderName}')" class="w-full h-full object-cover bg-slate-100 border border-slate-200 dark:border-slate-700" title="${escapeHtml(msg.senderName || '')}">
+                        <img src="${escapeHtml(getSafePdfUrl(senderAvatar))}" data-sender-email="${escapeHtml(senderEmailNorm)}" data-sender-name="${safeSenderNameAttr}" onerror="window.handleAvatarError && window.handleAvatarError(this, this.dataset.senderName)" class="w-full h-full object-cover bg-slate-100 border border-slate-200 dark:border-slate-700" title="${escapeHtml(msg.senderName || '')}">
                     </div>
                 `;
 
@@ -43242,8 +43410,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function showReportQcDetails(email, userName) {
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 const nameToEmailMap = {};
                 if (typeof allUsersMap !== 'undefined' && allUsersMap) {
@@ -43295,8 +43463,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (countsContainer) countsContainer.innerHTML = `<p class="text-center text-slate-400 text-sm py-8">Please select a date range to view the report.</p>`;
                     return;
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo).getTime() + 86400000;
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000;
 
                 // --- Task Counts & Deliverables Logic ---
                 if (countsContainer) {
@@ -43588,14 +43756,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-10 text-center text-slate-400 text-sm">Please select a date range.</td></tr>`;
                     return;
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo).getTime() + 86400000;
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000;
 
                 let periodAttendanceEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTs);
                 let periodTimeLogs = getPeriodTimeLogs(fromTs, toTs, reportSelectedUser);
 
                 if (reportSelectedUser !== 'all') {
-                    periodAttendanceEvents = periodAttendanceEvents.filter(e => e.userId === reportSelectedUser);
+                    const selLower = reportSelectedUser.toLowerCase();
+                    periodAttendanceEvents = periodAttendanceEvents.filter(e => (e.userId || '').toLowerCase() === selLower);
                 }
 
                 if (!periodAttendanceEvents.length && !periodTimeLogs.length) {
@@ -43644,16 +43813,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     chartDiv.innerHTML = `<p class="text-center text-slate-400 text-sm py-8 col-span-2">Please select a date range.</p>`;
                     return;
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo);
-                toTs.setDate(toTs.getDate() + 1);
-                const toTimestamp = toTs.getTime();
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTimestamp = parseLocalDate(reportDateTo).getTime() + 86400000;
 
-                let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTs);
+                let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTimestamp);
                 let periodTimeLogs = getPeriodTimeLogs(fromTs, toTimestamp, reportSelectedUser);
 
                 if (reportSelectedUser !== 'all') {
-                    periodEvents = periodEvents.filter(e => e.userId === reportSelectedUser);
+                    const selLower = reportSelectedUser.toLowerCase();
+                    periodEvents = periodEvents.filter(e => (e.userId || '').toLowerCase() === selLower);
                 }
 
                 // --- New Metric Calculations ---
@@ -43666,25 +43834,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     .filter(e => e.type === 'break_end' && e.duration)
                     .reduce((sum, e) => sum + Math.floor(e.duration / 1000), 0);
 
-                // 3. Total Active Time (from check-in to check-out)
-                const eventsByDay = periodEvents.reduce((acc, evt) => {
-                    const day = evt.date;
-                    if (!acc[day]) acc[day] = [];
-                    acc[day].push(evt);
+                // 3. Total Active Time (from check-in to check-out, grouped per user per day)
+                const eventsByUserDay = periodEvents.reduce((acc, evt) => {
+                    const day = evt.date || new Date(evt.timestamp).toLocalYMD();
+                    const uEmail = (evt.userId || 'unknown').toLowerCase();
+                    const key = `${uEmail}|${day}`;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(evt);
                     return acc;
                 }, {});
 
                 let totalActiveSeconds = 0;
-                for (const day in eventsByDay) {
-                    const dayEvents = eventsByDay[day].sort((a, b) => a.timestamp - b.timestamp);
+                for (const key in eventsByUserDay) {
+                    const dayEvents = eventsByUserDay[key].sort((a, b) => a.timestamp - b.timestamp);
                     const checkIn = dayEvents.find(e => e.type === 'check_in');
                     const checkOut = dayEvents.findLast(e => e.type === 'check_out');
                     if (checkIn && checkOut) {
-                        totalActiveSeconds += Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000);
+                        totalActiveSeconds += Math.max(0, Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000));
                     } else if (checkIn) {
                         // If still checked in, calculate up to now or end of period, whichever is earlier
                         const endOfPeriod = Math.min(Date.now(), toTimestamp);
-                        totalActiveSeconds += Math.floor((endOfPeriod - checkIn.timestamp) / 1000);
+                        totalActiveSeconds += Math.max(0, Math.floor((endOfPeriod - checkIn.timestamp) / 1000));
                     }
                 }
 
@@ -44298,8 +44468,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!reportDateFrom || !reportDateTo) {
                     return toast('Please select a date range to export.', 'error');
                 }
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo).getTime() + 86400000;
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000;
                 const period = `${reportDateFrom}_to_${reportDateTo}`;
                 let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTs);
 
@@ -44357,8 +44527,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return toast('Please select a date range to export.', 'error');
                 }
 
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo).getTime() + 86400000;
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000;
                 const period = `${reportDateFrom}_to_${reportDateTo}`;
 
                 let periodTasks = tasks.filter(t => {
@@ -44463,16 +44633,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function exportSummaryReport() {
                 if (!reportDateFrom || !reportDateTo) return toast('Please select date range', 'error');
 
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toDate = new Date(reportDateTo);
-                toDate.setDate(toDate.getDate() + 1);
-                const toTs = toDate.getTime();
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000;
 
                 let periodTimeLogs = getPeriodTimeLogs(fromTs, toTs, reportSelectedUser);
                 let periodEvents = attendanceEvents.filter(e => e.timestamp >= fromTs && e.timestamp < toTs);
 
                 if (reportSelectedUser !== 'all') {
-                    periodEvents = periodEvents.filter(e => e.userId === reportSelectedUser);
+                    const selLower = reportSelectedUser.toLowerCase();
+                    periodEvents = periodEvents.filter(e => (e.userId || '').toLowerCase() === selLower);
                 }
 
                 // Total Logged Time
@@ -44483,29 +44652,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     .filter(e => e.type === 'break_end' && e.duration)
                     .reduce((sum, e) => sum + Math.floor(e.duration / 1000), 0);
 
-                // Active Time
-                const eventsByDay = periodEvents.reduce((acc, evt) => {
-                    const day = evt.date;
-                    if (!acc[day]) acc[day] = [];
-                    acc[day].push(evt);
+                // Active Time (grouped per user per day)
+                const eventsByUserDay = periodEvents.reduce((acc, evt) => {
+                    const day = evt.date || new Date(evt.timestamp).toLocalYMD();
+                    const uEmail = (evt.userId || 'unknown').toLowerCase();
+                    const key = `${uEmail}|${day}`;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(evt);
                     return acc;
                 }, {});
 
                 let totalActiveSeconds = 0;
-                for (const day in eventsByDay) {
-                    const dayEvents = eventsByDay[day].sort((a, b) => a.timestamp - b.timestamp);
+                for (const key in eventsByUserDay) {
+                    const dayEvents = eventsByUserDay[key].sort((a, b) => a.timestamp - b.timestamp);
                     const checkIn = dayEvents.find(e => e.type === 'check_in');
                     const checkOut = dayEvents.findLast(e => e.type === 'check_out');
                     if (checkIn && checkOut) {
-                        totalActiveSeconds += Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000);
+                        totalActiveSeconds += Math.max(0, Math.floor((checkOut.timestamp - checkIn.timestamp) / 1000));
                     } else if (checkIn) {
                         const endOfPeriod = Math.min(Date.now(), toTs);
-                        totalActiveSeconds += Math.floor((endOfPeriod - checkIn.timestamp) / 1000);
+                        totalActiveSeconds += Math.max(0, Math.floor((endOfPeriod - checkIn.timestamp) / 1000));
                     }
                 }
 
                 if (totalActiveSeconds === 0) {
-                    totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds + 3600;
+                    totalActiveSeconds = totalLoggedSeconds + totalBreakSeconds;
                 }
 
                 const holdTasksCount = tasks.filter(t => (t.status === 'Hold' || t.status === 'On Hold' || t.status === 'Design Hold' || t.isOnHold) && (reportSelectedUser === 'all' || assigneeMatches(t, reportSelectedUser))).length;
@@ -44657,8 +44828,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return toast('Please select a date range to export.', 'error');
                 }
 
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
                 const period = `${reportDateFrom}_to_${reportDateTo}`;
 
                 let periodTimeLogs = getPeriodTimeLogs(fromTs, toTs, reportSelectedUser);
@@ -44999,8 +45170,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 // Filter tasks by date range
                 let filtered = tasks.filter(t => t.client && t.client.trim());
@@ -45181,8 +45352,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 titleEl.textContent = `${clientName} — ${categoryLabels[category] || 'Tasks'}`;
 
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 // Filter tasks by date range and clientName exactly like renderClientWideReport does
                 let filtered = tasks.filter(t => t.client && resolveClientLabel(t.client) === resolveClientLabel(clientName));
@@ -45283,8 +45454,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 let periodTimeLogs = getPeriodTimeLogs(fromTs, toTs, reportSelectedUser);
 
@@ -45395,8 +45566,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function exportClientReport() {
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
                 let filteredTasks = tasks;
                 if (reportDateFrom && reportDateTo) {
                     filteredTasks = tasks.filter(t => { if (!t.duedate) return true; const dTs = new Date(t.duedate).getTime(); return dTs >= fromTs && dTs < toTs; });
@@ -45940,7 +46111,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     let usersToProcess = Array.from(usersMap.values());
                     if (!isAdmin()) {
-                        usersToProcess = usersToProcess.filter(u => u.email === currentUser.email);
+                        const curLower = String(currentUser.email || '').toLowerCase();
+                        usersToProcess = usersToProcess.filter(u => String(u.email || '').toLowerCase() === curLower);
                     }
 
                     const sortedUsers = usersToProcess.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -45955,11 +46127,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     let contentAdded = false;
 
                     sortedUsers.forEach(user => {
-                        if (approvedLeaves.includes((user.email || '').toLowerCase())) {
+                        const userLower = String(user.email || '').toLowerCase();
+                        if (approvedLeaves.includes(userLower)) {
                             return; // Skip user completely because they are on approved leave today
                         }
 
-                        const userLogs = todayTimeLogs.filter(log => log.userId === user.email); //
+                        const userLogs = todayTimeLogs.filter(log => String(log.userId || '').toLowerCase() === userLower); //
                         const current = user.currentTask;
 
                         if (userLogs.length === 0 && !current) return;
@@ -45968,12 +46141,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const processedTaskIds = new Set();
 
                         userLogs.forEach(log => {
-                            if (processedTaskIds.has(log.taskId)) return;
-                            const task = tasks.find(t => t.id === log.taskId);
+                            const normTaskId = String(log.taskId || '').trim().toUpperCase();
+                            if (processedTaskIds.has(normTaskId)) return;
+                            const task = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
                             const taskStatus = task?.status || '';
                             // Skip ALL learning/morning-learning tasks
                             const isLearningLog = isMorningLearningTask(task || { id: log.taskId })
-                                || String(log.taskId || '').startsWith('LEARN-')
+                                || normTaskId.startsWith('LEARN-')
                                 || String(log.taskDesc || '').toLowerCase().includes('morning learning')
                                 || String(log.taskDesc || '').toLowerCase().startsWith('learning')
                                 || (task && (task.status === 'Learnings' || task.status === 'Learning'))
@@ -45981,9 +46155,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (isLearningLog) return;
                             // Skip tasks still sitting at "To do" — not actually worked
                             if (taskStatus.toLowerCase() === 'to do') return;
-                            processedTaskIds.add(log.taskId);
+                            processedTaskIds.add(normTaskId);
                             let client = log.client || 'Additional Tasks';
-                            if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                            if (userLower === 'murugeshvilpower@gmail.com') {
                                 if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
                                 else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
                                 else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
@@ -46000,7 +46174,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
                                 // Also strip any remaining trailing " - ClientName" that may have been
                                 // re-introduced if the desc itself contained the client mid-string (e.g. Murugesh/Ajith recurring)
-                                const task2 = tasks.find(t => t.id === log.taskId);
+                                const task2 = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
                                 if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false)) {
                                     // For recurring client tasks, the base title is everything before " - ClientName"
                                     // Strip all " - X" trailing segments that match any known client
@@ -46008,7 +46182,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 }
                             }
 
-                            const snehaSel = snehaSelections.find(s => s.taskId === log.taskId && s.userId === user.email);
+                            const snehaSel = snehaSelections.find(s => String(s.taskId || '').trim().toUpperCase() === normTaskId && String(s.userId || '').toLowerCase() === userLower);
                             if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                 itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
                             } else {
@@ -46018,12 +46192,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             clientGroups[client].push(itemDesc);
                         });
 
-                        if (current && !processedTaskIds.has(current.taskId)) {
-                            const task = tasks.find(t => t.id === current.taskId);
+                        const curNormId = current ? String(current.taskId || '').trim().toUpperCase() : '';
+                        if (current && !processedTaskIds.has(curNormId)) {
+                            const task = tasks.find(t => String(t.id || '').trim().toUpperCase() === curNormId);
                             const taskStatus = task?.status || '';
                             // Skip ALL learning/morning-learning tasks — same rules as logs block
                             const isLearningCurrent = isMorningLearningTask(task || { id: current.taskId })
-                                || String(current.taskId || '').startsWith('LEARN-')
+                                || curNormId.startsWith('LEARN-')
                                 || String(current.taskDesc || '').toLowerCase().includes('morning learning')
                                 || String(current.taskDesc || '').toLowerCase().startsWith('learning')
                                 || (task && (task.status === 'Learnings' || task.status === 'Learning'))
@@ -46032,7 +46207,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const isTodoTask = taskStatus.toLowerCase() === 'to do';
                             if (!isLearningCurrent && !isTodoTask) {
                                 let client = current.client || 'Additional Tasks';
-                                if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                                if (userLower === 'murugeshvilpower@gmail.com') {
                                     if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
                                     else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
                                     else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
@@ -46048,7 +46223,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
                                 }
 
-                                const snehaSel = snehaSelections.find(s => s.taskId === current.taskId && s.userId === user.email);
+                                const snehaSel = snehaSelections.find(s => String(s.taskId || '').trim().toUpperCase() === curNormId && String(s.userId || '').toLowerCase() === userLower);
                                 if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                     itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
                                 } else {
@@ -46230,7 +46405,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     let totalSeconds = 0;
 
                     activeUsers.forEach(user => {
-                        const userLogs = emailTimeLogs.filter(log => log.userId === user.email);
+                        const userLower = String(user.email || '').toLowerCase();
+                        const userLogs = emailTimeLogs.filter(log =>
+                            !log.isBreakLog
+                            && !String(log.taskId || '').toUpperCase().startsWith('BREAK-')
+                            && String(log.userId || '').toLowerCase() === userLower
+                        );
                         const current = user.currentTask;
 
                         if (userLogs.length === 0 && !current) return;
@@ -46238,24 +46418,41 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const clientGroups = {};
                         const processedTaskIds = new Set();
 
-                        userLogs.forEach(log => {
-                            if (processedTaskIds.has(log.taskId)) return;
-                            const task = tasks.find(t => t.id === log.taskId);
+                        let lastGrpTask = '', lastGrpStart = -Infinity, lastGrpCumSec = 0;
+                        const chronologicalLogs = [...userLogs].sort((a, b) => Number(a.startTime || 0) - Number(b.startTime || 0) || Number(a.endTime || 0) - Number(b.endTime || 0));
+                        chronologicalLogs.forEach(log => {
+                            const normTaskId = String(log.taskId || '').trim().toUpperCase();
+                            const task = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
                             const taskStatus = task?.status || '';
                             const isLearningLog = isMorningLearningTask(task || { id: log.taskId })
-                                || String(log.taskId || '').startsWith('LEARN-')
+                                || normTaskId.startsWith('LEARN-')
                                 || String(log.taskDesc || '').toLowerCase().includes('morning learning')
                                 || String(log.taskDesc || '').toLowerCase().startsWith('learning')
                                 || (task && (task.status === 'Learnings' || task.status === 'Learning'))
                                 || String(taskStatus).toLowerCase() === 'design to do';
                             if (isLearningLog) return;
                             if (taskStatus.toLowerCase() === 'to do') return;
-                            processedTaskIds.add(log.taskId);
+
+                            const curStart = Number(log.startTime || log.endTime || 0);
+                            const curSec = Number(log.durationSeconds || 0);
+                            if (normTaskId === lastGrpTask && Math.abs(curStart - lastGrpStart) < 5000) {
+                                if (curSec > lastGrpCumSec) {
+                                    totalSeconds += (curSec - lastGrpCumSec);
+                                    lastGrpCumSec = curSec;
+                                }
+                            } else {
+                                totalSeconds += curSec;
+                                lastGrpTask = normTaskId;
+                                lastGrpStart = curStart;
+                                lastGrpCumSec = curSec;
+                            }
+
+                            if (processedTaskIds.has(normTaskId)) return;
+                            processedTaskIds.add(normTaskId);
                             loggedTasksCount++;
-                            totalSeconds += Number(log.durationSeconds || 0);
 
                             let client = log.client || 'Additional Tasks';
-                            if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                            if (userLower === 'murugeshvilpower@gmail.com') {
                                 if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
                                 else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
                                 else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
@@ -46268,13 +46465,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 const suffixRegex = new RegExp(`\\s*-\\s*${escapedClient}\\s*$`, 'i');
                                 const prefixRegex = new RegExp(`^${escapedClient}\\s*-\\s*`, 'i');
                                 itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
-                                const task2 = tasks.find(t => t.id === log.taskId);
+                                const task2 = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
                                 if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false)) {
                                     itemDesc = itemDesc.replace(suffixRegex, '').trim();
                                 }
                             }
 
-                            const snehaSel = snehaSelections.find(s => s.taskId === log.taskId && s.userId === user.email);
+                            const snehaSel = snehaSelections.find(s => String(s.taskId || '').trim().toUpperCase() === normTaskId && String(s.userId || '').toLowerCase() === userLower);
                             if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                 itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
                             } else {
@@ -46284,11 +46481,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             clientGroups[client].push(itemDesc);
                         });
 
-                        if (current && !processedTaskIds.has(current.taskId)) {
-                            const task = tasks.find(t => t.id === current.taskId);
+                        const curNormId = current ? String(current.taskId || '').trim().toUpperCase() : '';
+                        if (current && !processedTaskIds.has(curNormId)) {
+                            const task = tasks.find(t => String(t.id || '').trim().toUpperCase() === curNormId);
                             const taskStatus = task?.status || '';
                             const isLearningCurrent = isMorningLearningTask(task || { id: current.taskId })
-                                || String(current.taskId || '').startsWith('LEARN-')
+                                || curNormId.startsWith('LEARN-')
                                 || String(current.taskDesc || '').toLowerCase().includes('morning learning')
                                 || String(current.taskDesc || '').toLowerCase().startsWith('learning')
                                 || (task && (task.status === 'Learnings' || task.status === 'Learning'))
@@ -46296,7 +46494,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const isTodoTask = taskStatus.toLowerCase() === 'to do';
                             if (!isLearningCurrent && !isTodoTask) {
                                 let client = current.client || 'Additional Tasks';
-                                if (user.email.toLowerCase() === 'murugeshvilpower@gmail.com') {
+                                if (userLower === 'murugeshvilpower@gmail.com') {
                                     if (client.toLowerCase() === 'internal') client = 'Recurring Tasks';
                                     else if (client.toLowerCase() === 'vilpower') client = 'Vilpower DM';
                                     else if (taskStatus === 'Client Sent') client = 'Vilpower DM';
@@ -46311,7 +46509,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
                                 }
 
-                                const snehaSel = snehaSelections.find(s => s.taskId === current.taskId && s.userId === user.email);
+                                const snehaSel = snehaSelections.find(s => String(s.taskId || '').trim().toUpperCase() === curNormId && String(s.userId || '').toLowerCase() === userLower);
                                 if (snehaSel && snehaSel.selectedItems && snehaSel.selectedItems.length) {
                                     itemDesc += ` - [ ${snehaSel.selectedItems.join(', ')} ]`;
                                 } else {
@@ -46322,7 +46520,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             }
                         }
 
-                        if (current) {
+                        if (current && current.state === 'working') {
                             const activeSeconds = Math.max(Math.floor((Date.now() - (current.startedAt || Date.now())) / 1000), 0);
                             totalSeconds += activeSeconds;
                         }
@@ -52819,8 +53017,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const filterLabels = { all: 'All Tasks', planned: 'Planned Tasks', pending: 'Pending Tasks', done: 'Completed Tasks', missed: 'Missed Tasks (Posters/Videos)' };
                 titleEl.textContent = `${clientName} — ${filterLabels[filterType_] || 'All Tasks'}`;
 
-                const fromTs = reportDateFrom ? new Date(reportDateFrom).getTime() : 0;
-                const toTs = reportDateTo ? new Date(reportDateTo).getTime() + 86400000 : Infinity;
+                const fromTs = reportDateFrom ? parseLocalDate(reportDateFrom).getTime() : 0;
+                const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 let clientTasks = tasks.filter(t => {
                     if (t.client !== clientName) return false;
@@ -58792,26 +58990,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         document.documentElement.classList.add('has-user');
                         await finishLogin();
                     } else {
-                        // User is signed out in Firebase Auth.
-                        const isExplicitLogout = window._isExplicitLoggingOut || (sessionStorage.getItem('worksync_explicit_logout') === 'true');
-                        const hasCachedSession = !!localStorage.getItem('worksync_user');
-                        if (isExplicitLogout || !hasCachedSession || !currentUser || !currentUser.email) {
-                            window._isExplicitLoggingOut = false;
-                            try { sessionStorage.removeItem('worksync_explicit_logout'); } catch(e){}
-                            document.documentElement.classList.remove('has-user', 'app-ready');
-                            document.documentElement.classList.add('no-user');
-                            document.getElementById('dashboard-view')?.classList.add('hidden');
-                            document.getElementById('login-view')?.classList.remove('hidden');
-                            if (typeof hideInitialLoading === 'function') hideInitialLoading();
-                            await logout();
-                        } else {
-                            console.log('[Auth] Firebase reported null fbUser, preserving valid cached session for:', currentUser.email);
-                            document.documentElement.classList.add('has-user');
-                            document.documentElement.classList.remove('auth-pending');
-                            if (!appInitialized) {
-                                await finishLogin();
-                            }
-                        }
+                        // User is signed out in Firebase Auth — never trust unverified localStorage alone.
+                        window._isExplicitLoggingOut = false;
+                        try { sessionStorage.removeItem('worksync_explicit_logout'); } catch(e){}
+                        localStorage.removeItem('worksync_user');
+                        currentUser = null;
+                        document.documentElement.classList.remove('has-user', 'app-ready');
+                        document.documentElement.classList.add('no-user');
+                        document.getElementById('dashboard-view')?.classList.add('hidden');
+                        document.getElementById('login-view')?.classList.remove('hidden');
+                        if (typeof hideInitialLoading === 'function') hideInitialLoading();
+                        await logout();
                     }
                     populateAssigneeFilter(); // Populate filters after user is set
                     populateClientFilter();   // Populate filters after user is set
@@ -59507,8 +59696,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 // Third pass: Fetch and aggregate actual logged hours from Firebase timelogs in the period
-                const fromTs = new Date(reportDateFrom).getTime();
-                const toTs = new Date(reportDateTo).getTime() + 86400000; // +1 day to include end date
+                const fromTs = parseLocalDate(reportDateFrom).getTime();
+                const toTs = parseLocalDate(reportDateTo).getTime() + 86400000; // +1 day to include end date
                 const periodTimeLogs = typeof getPeriodTimeLogs === 'function' ? getPeriodTimeLogs(fromTs, toTs) : [];
 
                 periodTimeLogs.forEach(log => {
@@ -64958,10 +65147,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     var imgBorder = isDark ? '#253347' : '#e2e8f0';
                     var avatarBg = isDark ? '#1e2a4a' : '#eef2ff';
                     var avatarColor = isDark ? '#818cf8' : '#4f46e5';
-                    var avatarHtml = (typeof g.profilePicture === 'string' && g.profilePicture)
-                        ? '<img src="' + g.profilePicture + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid ' + imgBorder + ';flex-shrink:0;">'
+                    var avatarHtml = (typeof g.profilePicture === 'string' && g.profilePicture && (typeof isSafeWebOrMediaUrl !== 'function' || isSafeWebOrMediaUrl(g.profilePicture)))
+                        ? '<img src="' + _fcpEH(g.profilePicture) + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid ' + imgBorder + ';flex-shrink:0;">'
                         : '<div style="width:36px;height:36px;background:' + avatarBg + ';border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:' + avatarColor + ';flex-shrink:0;">' + _fcpEH(name.charAt(0)) + '</div>';
-                    return '<button onclick="fcpOpenConv(\'' + id + '\',\'' + safeName + '\',\'group\',\'\')" '
+                    return '<button data-conv-id="' + _fcpEH(id) + '" data-conv-name="' + _fcpEH(name) + '" onclick="fcpOpenConv(this.dataset.convId,this.dataset.convName,\'group\',\'\')" '
                         + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;background:transparent;border:none;cursor:pointer;text-align:left;" '
                         + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'transparent\'">'
                         + avatarHtml
@@ -64976,7 +65165,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             } catch (e) {
                 console.error("Error in fcpRenderGroupList:", e);
                 var el = document.getElementById('fcp-group-list');
-                if (el) el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#ef4444;font-style:italic;">Error: ' + e.message + '</p>';
+                if (el) el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#ef4444;font-style:italic;">Error: ' + _fcpEH(e.message) + '</p>';
             }
         }
 
@@ -65011,8 +65200,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             var avatarEl = document.getElementById('fcp-conv-avatar');
             if (avatarEl) {
                 var fcpAvatarSrc = avatar || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(name) : '');
-                if (fcpAvatarSrc && !fcpAvatarSrc.startsWith('data:image/svg+xml')) {
-                    avatarEl.innerHTML = '<img src="' + fcpAvatarSrc + '" style="width:100%;height:100%;border-radius:10px;object-fit:cover;">';
+                if (fcpAvatarSrc && !fcpAvatarSrc.startsWith('data:image/svg+xml') && (typeof isSafeWebOrMediaUrl !== 'function' || isSafeWebOrMediaUrl(fcpAvatarSrc))) {
+                    avatarEl.innerHTML = '<img src="' + _fcpEH(fcpAvatarSrc) + '" style="width:100%;height:100%;border-radius:10px;object-fit:cover;">';
                 } else {
                     avatarEl.innerHTML = '';
                     avatarEl.textContent = name.charAt(0).toUpperCase();
@@ -65087,8 +65276,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 var attBorder = isDark ? '#334155' : '#e2e8f0';
                 var attachHtml = allAtts.map(function (a) {
+                    var safeUrl = typeof getSafePdfUrl === 'function' ? getSafePdfUrl(a.url, a.name) : '#';
                     if ((a.type || '').startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)/i.test(a.url || '')) {
-                        return '<img src="' + a.url + '" style="max-width:180px;border-radius:8px;border:1px solid ' + attBorder + ';display:block;margin-top:4px;cursor:pointer;" onclick="typeof openImagePreview===\'function\'&&openImagePreview(\'' + a.url + '\',\'' + _fcpEH(a.name || 'Image') + '\')">';
+                        return '<img src="' + _fcpEH(safeUrl) + '" data-preview-url="' + _fcpEH(safeUrl) + '" data-preview-name="' + _fcpEH(a.name || 'Image') + '" style="max-width:180px;border-radius:8px;border:1px solid ' + attBorder + ';display:block;margin-top:4px;cursor:pointer;" onclick="typeof openImagePreview===\'function\'&&openImagePreview(this.dataset.previewUrl,this.dataset.previewName)">';
                     }
                     // Document / PDF pill
                     var dType = (a.type || '').toLowerCase();
@@ -65104,7 +65294,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     var pillBorder = isMe ? 'rgba(255,255,255,0.2)' : attBorder;
                     var pillText = isMe ? '#fff' : (isDark ? '#e2e8f0' : '#1e293b');
                     var pillSub = isMe ? 'rgba(255,255,255,0.5)' : '#94a3b8';
-                    return '<a href="' + (typeof getSafePdfUrl === 'function' ? getSafePdfUrl(a.url) : a.url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:7px 10px;margin-top:5px;background:' + pillBg + ';border:1px solid ' + pillBorder + ';border-radius:10px;text-decoration:none;max-width:200px;">'
+                    return '<a href="' + _fcpEH(safeUrl) + '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:7px 10px;margin-top:5px;background:' + pillBg + ';border:1px solid ' + pillBorder + ';border-radius:10px;text-decoration:none;max-width:200px;">'
                         + '<span style="font-size:16px;flex-shrink:0;color:' + dColor + ';">📄</span>'
                         + '<span style="min-width:0;">'
                         + '<span style="display:block;font-size:10px;font-weight:700;color:' + pillText + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;">' + _fcpEH(a.name || 'File') + '</span>'
@@ -65127,7 +65317,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 var senderColor = isDark ? '#94a3b8' : '#64748b';
                 var timeColor = isDark ? '#64748b' : '#94a3b8';
                 var senderAvatarSrc = typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(m.senderEmail || m.senderName) : '';
-                var avatarImg = senderAvatarSrc ? '<img src="' + senderAvatarSrc + '" style="width:24px;height:24px;border-radius:8px;object-fit:cover;flex-shrink:0;' + (isMe ? 'margin-left:6px;' : 'margin-right:6px;') + '" title="' + _fcpEH(m.senderName || '') + '">' : '';
+                var avatarImg = (senderAvatarSrc && (typeof isSafeWebOrMediaUrl !== 'function' || isSafeWebOrMediaUrl(senderAvatarSrc))) ? '<img src="' + _fcpEH(senderAvatarSrc) + '" style="width:24px;height:24px;border-radius:8px;object-fit:cover;flex-shrink:0;' + (isMe ? 'margin-left:6px;' : 'margin-right:6px;') + '" title="' + _fcpEH(m.senderName || '') + '">' : '';
 
                 return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;">'
                     + (!isMe ? '<span style="font-size:9px;font-weight:700;color:' + senderColor + ';padding:0 4px;">' + _fcpEH(m.senderName || '') + '</span>' : '')
@@ -67143,7 +67333,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         uploadArea.innerHTML = `
                             <div class="flex items-center justify-center gap-2 text-slate-500">
                                 <iconify-icon icon="svg-spinners:ring-resize" width="24"></iconify-icon>
-                                <span class="text-sm">Uploading ${file.name}...</span>
+                                <span class="text-sm">Uploading ${typeof escapeHtml === 'function' ? escapeHtml(file.name) : String(file.name).replace(/[<>&"']/g, '')}...</span>
                             </div>
                         `;
                     }
@@ -67206,16 +67396,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             list.innerHTML = attachments.map((att, idx) => {
                 const icon = getFileIcon(att.name);
+                const safeAttName = String(att.name || 'File').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                const safeAttUrl = (typeof getSafePdfUrl === 'function' ? getSafePdfUrl(att.url, att.name) : '#').replace(/"/g, '&quot;');
                 return `
                     <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                         <iconify-icon icon="${icon.icon}" width="20" style="color: ${icon.color}"></iconify-icon>
                         
                         <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-slate-700 truncate">${att.name}</p>
+                            <p class="text-xs font-bold text-slate-700 truncate">${safeAttName}</p>
                             <p class="text-[9px] text-slate-400">${formatFileSize(att.size)}</p>
                         </div>
                         
-                        <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" rel="noopener noreferrer"
+                        <a href="${safeAttUrl}" target="_blank" rel="noopener noreferrer"
                             class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
                             title="Open file">
                             <iconify-icon icon="solar:link-circle-bold" width="18"></iconify-icon>
@@ -67257,12 +67449,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     <div class="flex flex-wrap gap-2">
                         ${attachments.map(att => {
                 const icon = getFileIcon(att.name);
+                const safeAttName = String(att.name || 'File').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                const safeAttUrl = (typeof getSafePdfUrl === 'function' ? getSafePdfUrl(att.url, att.name) : '#').replace(/"/g, '&quot;');
                 return `
-                                <a href="${getSafePdfUrl(att.url)}" target="_blank" rel="noopener noreferrer" rel="noopener noreferrer"
+                                <a href="${safeAttUrl}" target="_blank" rel="noopener noreferrer"
                                     class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors text-[9px] font-bold text-indigo-700 truncate max-w-xs"
-                                    title="${att.name}">
+                                    title="${safeAttName}">
                                     <iconify-icon icon="${icon.icon}" width="14"></iconify-icon>
-                                    <span class="truncate">${att.name}</span>
+                                    <span class="truncate">${safeAttName}</span>
                                 </a>
                             `;
             }).join('')}

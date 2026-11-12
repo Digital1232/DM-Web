@@ -7,6 +7,7 @@
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
+const { applyCors } = require('./_auth');
 
 // ════════════════════════════════════════════════════════════════════
 // INITIALIZATION
@@ -218,6 +219,13 @@ async function handleCallback(req, res) {
 
         // Clean up used state token
         await stateDoc.docs[0].ref.delete();
+
+        if (stateData.expiresAt && Date.now() > Number(stateData.expiresAt)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Expired state token',
+            });
+        }
 
         // Exchange code for access token
         const tokenResponse = await fetch(
@@ -453,11 +461,12 @@ async function handleDisconnect(req, res, decodedToken) {
 module.exports = async (req, res) => {
     console.log('[META] Request:', { method: req.method, url: req.url });
     
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization');
+    // Enable CORS (allowlist only, never reflect arbitrary origins with credentials)
+    applyCors(req, res, {
+        methods: 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+        headers: 'X-CSRF-Token,X-Requested-With,Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,X-Api-Version,Authorization',
+        credentials: true
+    });
 
     if (req.method === 'OPTIONS') {
         console.log('[META] OPTIONS request');

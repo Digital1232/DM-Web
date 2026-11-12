@@ -408,43 +408,115 @@
             const rawLogs = (typeof window.allTimeLogs !== 'undefined' && Array.isArray(window.allTimeLogs))
                 ? window.allTimeLogs
                 : ((typeof window.timeLogs !== 'undefined' && Array.isArray(window.timeLogs)) ? window.timeLogs : []);
+            const rawEvents = (typeof window.attendanceEvents !== 'undefined' && Array.isArray(window.attendanceEvents))
+                ? window.attendanceEvents : [];
 
-            const result = [];
+            const checkInByDate = {};
+            const rawBreaksByUser = {};
+            rawEvents.forEach(e => {
+                if (!e) return;
+                const em = this.normalizeEmail(e.userId || e.email);
+                const ts = this.parseTimestamp(e.timestamp);
+                if (!em || !ts) return;
+                if (e.type === 'check_in') {
+                    const d = this.formatLocalDate(new Date(ts));
+                    const k = `${em}|${d}`;
+                    if (!checkInByDate[k] || ts < checkInByDate[k]) checkInByDate[k] = ts;
+                } else if (e.type === 'break_end' && e.duration) {
+                    const bDur = Math.floor(Number(e.duration) / 1000);
+                    const bStart = ts - bDur * 1000;
+                    if (bStart > 0 && ts > bStart) {
+                        (rawBreaksByUser[em] = rawBreaksByUser[em] || []).push({ start: bStart, end: ts });
+                    }
+                }
+            });
+            const mergedBreaksByUser = {};
+            Object.keys(rawBreaksByUser).forEach(em => {
+                const sorted = rawBreaksByUser[em].sort((a, b) => a.start - b.start);
+                const merged = [];
+                sorted.forEach(b => {
+                    if (!merged.length || b.start >= merged[merged.length - 1].end) merged.push({ start: b.start, end: b.end });
+                    else merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, b.end);
+                });
+                mergedBreaksByUser[em] = merged;
+            });
+
+            const parseDur = (log, start, end) => {
+                let d = Number(log.durationSeconds);
+                if (!isNaN(d) && d > 0) return Math.floor(d);
+                if (log.duration !== undefined && !isNaN(Number(log.duration))) {
+                    const rawD = Number(log.duration);
+                    return Math.floor(rawD > 86400 ? rawD / 1000 : rawD);
+                }
+                if (log.hours !== undefined && !isNaN(Number(log.hours))) {
+                    return Math.floor(Number(log.hours) * 3600);
+                }
+                if (start && end && end > start) return Math.floor((end - start) / 1000);
+                return 0;
+            };
+
+            const candidates = [];
             const seenLogKeys = new Set();
 
-            // 1. Historical closed logs within range
+            // 1. Historical closed logs intersecting [fromTs, toTs]
             rawLogs.forEach(log => {
-                if (!this.matchesUser(log, selectedUser)) return;
+                if (!log || !this.matchesUser(log, selectedUser)) return;
+                const tidLower = String(log.taskId || '').trim().toLowerCase();
+                const descLower = String(log.taskDesc || log.taskName || '').toLowerCase();
+                if (log.isBreak || log.type === 'break' || tidLower.startsWith('break') || descLower === 'break') return;
 
                 const start = this.parseTimestamp(log.startTime || log.startedAt || log.timestamp);
-                const end = this.parseTimestamp(log.endTime || log.completedAt || log.timestamp) || (start + (log.durationSeconds || 0) * 1000);
+                const rawEnd = this.parseTimestamp(log.endTime || log.completedAt);
+                const durationSec = parseDur(log, start, rawEnd);
+                const end = rawEnd || (start ? start + durationSec * 1000 : 0);
+                const s = start || end;
+                const e = Math.max(s, end || s);
+                if (!s || e < fromTs || s > toTs) return;
 
-                // Check overlap with the [fromTs, toTs] period
-                const logTime = end || start;
-                if (logTime < fromTs || logTime > toTs) return;
+                const em = this.normalizeEmail(log.userId || log.email);
+                const key = log.id || `${tidLower || descLower}_${s}_${em}`;
+                if (seenLogKeys.has(key)) return;
+                seenLogKeys.add(key);
 
-                const durationSec = Math.max(0, log.durationSeconds || Math.floor((end - start) / 1000) || 0);
-                const key = `${log.taskId || log.taskDesc}_${start}_${log.userId || log.email}`;
+                candidates.push({
+                    id: key,
+                    taskId: String(log.taskId || '').trim(),
+                    _tidLower: tidLower,
+                    taskName: log.taskName || log.taskDesc || log.title || 'General Task',
+                    client: log.client || log.clientName || 'General',
+                    userId: em,
+                    userName: log.userName || log.name || log.userId || 'Team Member',
+                    startTime: s,
+                    endTime: e,
+                    durationSeconds: durationSec,
+                    isLive: false,
+                    anomaly: null
+                });
+            });
 
-                if (!seenLogKeys.has(key)) {
-                    seenLogKeys.add(key);
-                    result.push({
-                        id: log.id || key,
-                        taskId: log.taskId || '',
-                        taskName: log.taskName || log.taskDesc || log.title || 'General Task',
-                        client: log.client || log.clientName || 'General',
-                        userId: this.normalizeEmail(log.userId || log.email),
-                        userName: log.userName || log.name || log.userId || 'Team Member',
-                        startTime: start,
-                        endTime: end,
-                        durationSeconds: durationSec,
-                        isLive: false,
-                        anomaly: null
-                    });
+            // Deduplicate <5s cumulative repeats
+            candidates.sort((a, b) => a.userId.localeCompare(b.userId) || a._tidLower.localeCompare(b._tidLower) || (a.startTime - b.startTime) || (a.endTime - b.endTime));
+            const cleanLogs = [];
+            let lastGk = '', lastCum = 0, lastSt = 0, lastEnd = 0;
+            candidates.forEach(cur => {
+                const gk = `${cur.userId}|${cur._tidLower}`;
+                if (gk === lastGk && Math.abs(cur.startTime - lastSt) < 5000) {
+                    if (cur.durationSeconds > lastCum) {
+                        const segSec = cur.durationSeconds - lastCum;
+                        cleanLogs.push(Object.assign({}, cur, { startTime: lastEnd || cur.startTime, durationSeconds: segSec }));
+                        lastCum = cur.durationSeconds;
+                        lastEnd = cur.endTime || lastEnd;
+                    }
+                } else {
+                    cleanLogs.push(cur);
+                    lastGk = gk;
+                    lastCum = cur.durationSeconds;
+                    lastSt = cur.startTime;
+                    lastEnd = cur.endTime;
                 }
             });
 
-            // 2. Append currently running live sessions from currentWorkUsers / active user timer
+            // 2. Append currently running live sessions clamped to [fromTs, toTs]
             if (typeof window.currentWorkUsers !== 'undefined' && Array.isArray(window.currentWorkUsers)) {
                 const now = Date.now();
                 window.currentWorkUsers.forEach(u => {
@@ -455,7 +527,7 @@
 
                     // If viewing the current logged-in user, check activeTaskId and local timer
                     if (window.currentUser && uEmail === this.normalizeEmail(window.currentUser.email) && window.activeTaskId) {
-                        const curTaskObj = (window.tasks || []).find(t => t.id === window.activeTaskId);
+                        const curTaskObj = (window.tasks || []).find(t => String(t.id || '').toLowerCase() === String(window.activeTaskId).toLowerCase());
                         curTask = {
                             taskId: window.activeTaskId,
                             taskDesc: curTaskObj?.desc || curTaskObj?.title || '',
@@ -467,22 +539,24 @@
                     }
 
                     if (curTask && curTask.taskId && curTask.state === 'working') {
-                        const start = curTask.startedAt || now;
-                        // Only add if active within range
+                        const start = Number(curTask.startedAt || now);
                         if (start <= toTs && now >= fromTs) {
-                            const curSec = Math.max(0, curTask.currentSeconds || Math.floor((now - start) / 1000));
-                            const key = `LIVE_${curTask.taskId}_${start}_${uEmail}`;
-                            if (!seenLogKeys.has(key)) {
+                            const effStart = Math.max(start, fromTs);
+                            const effEnd = Math.min(now, toTs);
+                            const curSec = Math.max(0, Math.floor((effEnd - effStart) / 1000));
+                            const key = `LIVE_${String(curTask.taskId).toLowerCase()}_${start}_${uEmail}`;
+                            if (!seenLogKeys.has(key) && curSec > 0) {
                                 seenLogKeys.add(key);
-                                result.push({
+                                cleanLogs.push({
                                     id: key,
                                     taskId: curTask.taskId,
+                                    _tidLower: String(curTask.taskId).toLowerCase(),
                                     taskName: curTask.taskDesc || 'Active Task',
                                     client: curTask.client || 'General',
                                     userId: uEmail,
                                     userName: u.name || uEmail,
-                                    startTime: start,
-                                    endTime: now,
+                                    startTime: effStart,
+                                    endTime: effEnd,
                                     durationSeconds: curSec,
                                     isLive: true,
                                     anomaly: null
@@ -493,26 +567,60 @@
                 });
             }
 
-            // 3. Anomaly Detection: Detect overlapping sessions and abnormal durations (>12h)
-            result.sort((a, b) => a.startTime - b.startTime);
-            for (let i = 0; i < result.length; i++) {
-                const item = result[i];
-                if (item.durationSeconds > 43200) { // >12 hours
-                    item.anomaly = 'Abnormal Duration (>12h)';
-                }
-                for (let j = i + 1; j < result.length; j++) {
-                    const next = result[j];
-                    if (next.userId === item.userId && next.startTime < item.endTime) {
-                        // Check if overlap is significant (> 1 minute)
-                        if ((item.endTime - next.startTime) > 60000) {
-                            next.anomaly = 'Overlapping Session';
-                        }
-                    } else if (next.startTime >= item.endTime) {
-                        break;
+            // 3. Apply ghost filter, check-in clamping, [fromTs, toTs] clamping, overlap trim & break deduction
+            const result = [];
+            const byUser = {};
+            cleanLogs.forEach(l => {
+                let s = l.startTime;
+                let e = l.endTime;
+                const dStr = this.formatLocalDate(new Date(s));
+                const chk = checkInByDate[`${l.userId}|${dStr}`];
+                if (chk) {
+                    if (new Date(chk).getHours() >= 8 && new Date(s).getHours() <= 6) return;
+                    if (s < chk) {
+                        if (e <= chk) return;
+                        s = chk;
                     }
                 }
-            }
+                s = Math.max(s, fromTs);
+                e = Math.min(e, toTs);
+                if (e <= s) return;
+                const maxSpan = Math.floor((e - s) / 1000);
+                l.startTime = s;
+                l.endTime = e;
+                l.durationSeconds = Math.min(l.durationSeconds || maxSpan, maxSpan);
+                (byUser[l.userId] = byUser[l.userId] || []).push(l);
+            });
 
+            Object.entries(byUser).forEach(([em, list]) => {
+                list.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+                let cursor = 0;
+                const uBreaks = mergedBreaksByUser[em] || [];
+                list.forEach(item => {
+                    if (item.durationSeconds > 43200) item.anomaly = 'Abnormal Duration (>12h)';
+                    const effStart = cursor ? Math.max(item.startTime, cursor) : item.startTime;
+                    if (effStart > item.startTime && (effStart - item.startTime) > 60000) {
+                        item.anomaly = 'Overlapping Session';
+                    }
+                    cursor = Math.max(cursor, item.endTime);
+                    if (effStart >= item.endTime) {
+                        item.durationSeconds = 0;
+                    } else {
+                        let netSec = Math.min(item.durationSeconds, Math.floor((item.endTime - effStart) / 1000));
+                        let bOverlap = 0;
+                        uBreaks.forEach(b => {
+                            if (b.end > effStart && b.start < item.endTime) {
+                                bOverlap += Math.floor((Math.min(item.endTime, b.end) - Math.max(effStart, b.start)) / 1000);
+                            }
+                        });
+                        item.durationSeconds = Math.max(0, netSec - bOverlap);
+                    }
+                    delete item._tidLower;
+                    result.push(item);
+                });
+            });
+
+            result.sort((a, b) => a.startTime - b.startTime);
             return result;
         },
 

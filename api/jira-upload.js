@@ -1,3 +1,6 @@
+const path = require('path');
+const { applyCors, verifyFirebaseBearer } = require('./_auth');
+
 const JIRA_DOMAIN = process.env.JIRA_DOMAIN || 'vilpowerdigitalmarketing.atlassian.net';
 
 function setCorsHeaders(res) {
@@ -7,8 +10,10 @@ function setCorsHeaders(res) {
 }
 
 function sendJson(res, statusCode, payload) {
+function sendJson(req, res, statusCode, payload) {
   res.statusCode = statusCode;
   setCorsHeaders(res);
+  applyCors(req, res, { methods: 'POST,OPTIONS', headers: 'Content-Type, Authorization' });
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(payload));
 }
@@ -17,11 +22,19 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     setCorsHeaders(res);
+    applyCors(req, res, { methods: 'POST,OPTIONS', headers: 'Content-Type, Authorization' });
     return res.end();
   }
 
   if (req.method !== 'POST') {
     return sendJson(res, 405, { success: false, status: 405, error: 'Method not allowed' });
+    return sendJson(req, res, 405, { success: false, status: 405, error: 'Method not allowed' });
+  }
+
+  try {
+    await verifyFirebaseBearer(req);
+  } catch (authErr) {
+    return sendJson(req, res, 401, { success: false, status: 401, error: authErr.message });
   }
 
   const authEmail = process.env.JIRA_AUTH_EMAIL || 'digitalmarketing@vilpower.com';
@@ -29,6 +42,7 @@ module.exports = async function handler(req, res) {
 
   if (!token) {
     return sendJson(res, 500, {
+    return sendJson(req, res, 500, {
       success: false,
       status: 500,
       error: 'Missing JIRA_TOKEN environment variable'
@@ -55,11 +69,14 @@ module.exports = async function handler(req, res) {
 
     if (!issueKey || !fileName || !fileData) {
       return sendJson(res, 400, {
+      return sendJson(req, res, 400, {
         success: false,
         status: 400,
         error: 'Missing required parameters: issueKey, fileName, or fileData'
       });
     }
+
+    const safeFileName = path.basename(String(fileName)).replace(/[\r\n"\\]/g, '_');
 
     // Extract base64 content
     let base64Content = fileData;
@@ -71,6 +88,7 @@ module.exports = async function handler(req, res) {
     // Build multipart/form-data body
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     const postDataHeader = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+    const postDataHeader = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${safeFileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
     const postDataFooter = `\r\n--${boundary}--\r\n`;
 
     const postData = Buffer.concat([
@@ -101,12 +119,14 @@ module.exports = async function handler(req, res) {
     }
 
     return sendJson(res, 200, {
+    return sendJson(req, res, 200, {
       success: jiraResponse.ok,
       status: jiraResponse.status,
       data
     });
   } catch (error) {
     return sendJson(res, 500, {
+    return sendJson(req, res, 500, {
       success: false,
       status: 500,
       error: error.message

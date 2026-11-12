@@ -88,9 +88,9 @@
                 if (!currentUser || !token) return;
 
                 const userKey = currentUser.uid || (currentUser.email ? currentUser.email.replace(/[.@]/g, '_') : 'anonymous');
-                if (window.db && window.ref && window.set) {
+                if (window.db && window.rtdb && typeof window.rtdb.ref === 'function' && typeof window.rtdb.set === 'function') {
                     const tokenPath = `worksync/fcm_tokens/${userKey}/${token.replace(/[.#$[\]]/g, '_')}`;
-                    await window.set(window.ref(window.db, tokenPath), {
+                    await window.rtdb.set(window.rtdb.ref(window.db, tokenPath), {
                         token: token,
                         updatedAt: Date.now(),
                         platform: 'android',
@@ -111,8 +111,12 @@
                 if (data.view && typeof window.switchView === 'function') {
                     window.switchView(data.view);
                 }
-                if (data.conversationId && typeof window.openConversationById === 'function') {
-                    window.openConversationById(data.conversationId);
+                if (data.conversationId) {
+                    if (typeof window.openConversationById === 'function') {
+                        window.openConversationById(data.conversationId);
+                    } else if (typeof window.openConversation === 'function') {
+                        window.openConversation(data.conversationId, data.name || 'Chat', data.type || 'dm', data.profilePicture || '');
+                    }
                 }
             } catch (e) {
                 console.warn('[PushManager] Error routing from notification tap:', e);
@@ -133,9 +137,15 @@
                     return { success: false, reason: 'skipped_local_dev' };
                 }
 
+                const headers = { 'Content-Type': 'application/json' };
+                if (window.auth && window.auth.currentUser && typeof window.auth.currentUser.getIdToken === 'function') {
+                    const idToken = await window.auth.currentUser.getIdToken();
+                    headers['Authorization'] = `Bearer ${idToken}`;
+                }
+
                 const response = await fetch('/api/send-push', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         userKey,
                         title,

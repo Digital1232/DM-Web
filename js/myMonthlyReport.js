@@ -596,49 +596,142 @@
             } catch (e) { }
         }
 
-        // Build first check-in map per user per day so phantom pre-arrival hours (e.g. 4:39 AM ghost timers) are never counted
+        // Build first check-in map & merged break intervals per user per day
         const rawAttendanceAll = Array.isArray(window.attendanceEvents) ? window.attendanceEvents : ((typeof attendanceEvents !== 'undefined' && Array.isArray(attendanceEvents)) ? attendanceEvents : []);
         const firstCheckInMap = {}; // "email|YYYY-MM-DD" -> earliest check-in timestamp
+        const rawBreaksByUser = {};
         rawAttendanceAll.forEach(evt => {
-            if (evt && evt.type === 'check_in' && evt.timestamp) {
-                const em = (evt.userId || evt.email || '').toLowerCase().trim();
-                const dStr = Engine.formatLocalDate(new Date(evt.timestamp));
+            if (!evt || !evt.timestamp) return;
+            const em = (evt.userId || evt.email || '').toLowerCase().trim();
+            if (!em) return;
+            const ts = Engine.parseTimestamp(evt.timestamp);
+            if (!ts) return;
+            if (evt.type === 'check_in') {
+                const dStr = Engine.formatLocalDate(new Date(ts));
                 const key = `${em}|${dStr}`;
-                if (!firstCheckInMap[key] || evt.timestamp < firstCheckInMap[key]) {
-                    firstCheckInMap[key] = evt.timestamp;
+                if (!firstCheckInMap[key] || ts < firstCheckInMap[key]) {
+                    firstCheckInMap[key] = ts;
+                }
+            } else if (evt.type === 'break_end' && evt.duration) {
+                const bDur = Math.floor(Number(evt.duration) / 1000);
+                const bStart = ts - bDur * 1000;
+                if (bStart > 0 && ts > bStart) {
+                    (rawBreaksByUser[em] = rawBreaksByUser[em] || []).push({ start: bStart, end: ts });
                 }
             }
+        });
+        const mergedBreaksByUser = {};
+        Object.keys(rawBreaksByUser).forEach(em => {
+            const sorted = rawBreaksByUser[em].sort((a, b) => a.start - b.start);
+            const merged = [];
+            sorted.forEach(b => {
+                if (!merged.length || b.start >= merged[merged.length - 1].end) merged.push({ start: b.start, end: b.end });
+                else merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, b.end);
+            });
+            mergedBreaksByUser[em] = merged;
         });
 
         const userLogs = isAll ? allLogs : allLogs.filter(matchesTargetEmployee);
 
-        // Filter logs strictly within period and filter out phantom hours prior to check-in
-        const periodLogs = userLogs.filter(l => {
-            const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
-            const durSec = getLogDurationSec(l);
-            const end = Engine.parseTimestamp(l.endTime || l.completedAt) || (start + durSec * 1000);
-            return (start >= period.fromTs && start <= period.toTs) || (end >= period.fromTs && end <= period.toTs);
-        }).filter(l => {
-            // Check if log start was prior to first check-in of that day
-            const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
-            const end = Engine.parseTimestamp(l.endTime || l.completedAt);
-            if (start) {
+        function buildNormalizedPeriodLogs(rawList, pFrom, pTo) {
+            // 1. Exclude breaks, parse timestamps, filter to period intersection
+            const candidates = [];
+            const seenExact = new Set();
+            rawList.forEach(l => {
+                if (!l) return;
+                const rawTid = String(l.taskId || '').trim().toLowerCase();
+                const rawDesc = String(l.taskDesc || l.taskName || '').toLowerCase();
+                if (l.isBreak || l.type === 'break' || rawTid.startsWith('break') || rawDesc === 'break') return;
+                const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
+                const durSec = getLogDurationSec(l);
+                const end = Engine.parseTimestamp(l.endTime || l.completedAt) || (start ? start + durSec * 1000 : 0);
+                if (!start && !end) return;
+                const s = start || end;
+                const e = Math.max(s, end || s);
+                if (e < pFrom || s > pTo) return;
                 const em = (l.userId || l.email || l.userEmail || '').toLowerCase().trim();
-                const dStr = Engine.formatLocalDate(new Date(start));
-                const checkIn = firstCheckInMap[`${em}|${dStr}`];
-                if (checkIn && start < checkIn) {
-                    // If the entire session finished before check-in, discard completely (ghost overnight session)
-                    if (end && end <= checkIn) return false;
-                    // If it started early in the morning before check-in (e.g. 4:39 AM when checkin was 9:15 AM)
-                    const checkInHour = new Date(checkIn).getHours();
-                    const startHour = new Date(start).getHours();
-                    if (checkInHour >= 8 && startHour <= 6) {
-                        return false; // Accidental overnight / ghost session
+                const dedupKey = l.id || `${rawTid || rawDesc}_${s}_${em}`;
+                if (seenExact.has(dedupKey)) return;
+                seenExact.add(dedupKey);
+                candidates.push(Object.assign({}, l, { _em: em, _tid: rawTid, _s: s, _e: e, _dur: durSec }));
+            });
+
+            // 2. Deduplicate <5s cumulative repeats accurately
+            candidates.sort((a, b) => a._em.localeCompare(b._em) || a._tid.localeCompare(b._tid) || (a._s - b._s) || (a._e - b._e));
+            const clean = [];
+            let lastKey = '';
+            let lastCumSec = 0;
+            let lastStart = 0;
+            let lastEnd = 0;
+            for (const cur of candidates) {
+                const gk = `${cur._em}|${cur._tid}`;
+                if (gk === lastKey && Math.abs(cur._s - lastStart) < 5000) {
+                    if (cur._dur > lastCumSec) {
+                        const segSec = cur._dur - lastCumSec;
+                        clean.push(Object.assign({}, cur, { _s: lastEnd || cur._s, _dur: segSec, startTime: lastEnd || cur._s, durationSeconds: segSec }));
+                        lastCumSec = cur._dur;
+                        lastEnd = cur._e || lastEnd;
                     }
+                } else {
+                    clean.push(cur);
+                    lastKey = gk;
+                    lastCumSec = cur._dur;
+                    lastStart = cur._s;
+                    lastEnd = cur._e;
                 }
             }
-            return true;
-        });
+
+            // 3. Ghost filter, check-in clamping, and [pFrom, pTo] clamping
+            const clamped = [];
+            clean.forEach(l => {
+                let s = l._s;
+                let e = l._e;
+                const dStr = Engine.formatLocalDate(new Date(s));
+                const chk = firstCheckInMap[`${l._em}|${dStr}`];
+                if (chk) {
+                    if (new Date(chk).getHours() >= 8 && new Date(s).getHours() <= 6) return;
+                    if (s < chk) {
+                        if (e <= chk) return;
+                        s = chk;
+                    }
+                }
+                s = Math.max(s, pFrom);
+                e = Math.min(e, pTo);
+                if (e <= s) return;
+                const maxSpanSec = Math.floor((e - s) / 1000);
+                clamped.push(Object.assign({}, l, { _s: s, _e: e, _dur: Math.min(l._dur || maxSpanSec, maxSpanSec), startTime: s, endTime: e }));
+            });
+
+            // 4. Trim overlaps & deduct merged breaks per user
+            const byUser = {};
+            clamped.forEach(l => (byUser[l._em] = byUser[l._em] || []).push(l));
+            const out = [];
+            Object.entries(byUser).forEach(([em, list]) => {
+                list.sort((a, b) => a._s - b._s || a._e - b._e);
+                let cursor = 0;
+                const uBreaks = mergedBreaksByUser[em] || [];
+                list.forEach(l => {
+                    const effStart = cursor ? Math.max(l._s, cursor) : l._s;
+                    cursor = Math.max(cursor, l._e);
+                    if (effStart >= l._e) {
+                        out.push(Object.assign({}, l, { durationSeconds: 0 }));
+                        return;
+                    }
+                    let netSec = Math.min(l._dur, Math.floor((l._e - effStart) / 1000));
+                    let breakOverlap = 0;
+                    uBreaks.forEach(b => {
+                        if (b.end > effStart && b.start < l._e) {
+                            breakOverlap += Math.floor((Math.min(l._e, b.end) - Math.max(effStart, b.start)) / 1000);
+                        }
+                    });
+                    netSec = Math.max(0, netSec - breakOverlap);
+                    out.push(Object.assign({}, l, { startTime: effStart, endTime: l._e, durationSeconds: netSec }));
+                });
+            });
+            return out;
+        }
+
+        const periodLogs = buildNormalizedPeriodLogs(userLogs, period.fromTs, period.toTs);
 
         // Task sessions map: taskId -> logs (case-insensitive)
         const taskLogsMap = new Map();
@@ -702,7 +795,7 @@
         // Include live timer if logged-in user is viewing their own current month report
         const isCurrentPeriod = (period.fromTs <= Date.now() && Date.now() <= period.toTs);
         const isSelf = window.currentUser && String(window.currentUser.email || '').toLowerCase() === normalizedTarget;
-        if (isCurrentPeriod && isSelf && window.activeTaskId && typeof window.taskSeconds === 'number' && window.taskSeconds > 0) {
+        if (isCurrentPeriod && isSelf && window.activeTaskId && !window.taskOnHold && typeof window.taskSeconds === 'number' && window.taskSeconds > 0) {
             const liveTask = allTasks.find(t => String(t.id).toLowerCase() === String(window.activeTaskId).toLowerCase());
             const liveLog = {
                 taskId: window.activeTaskId,
@@ -895,22 +988,33 @@
         });
 
         const periodAttendance = userAttendance.filter(e => {
-            const ts = e.timestamp || 0;
+            const ts = e.timestamp || (e.date ? Engine.parseTimestamp(e.date) : 0);
             return ts >= period.fromTs && ts <= period.toTs;
         });
 
-        // Daily calendar map (YYYY-MM-DD)
+        // Daily calendar map (YYYY-MM-DD) + per-employee-day map for accurate 'all' aggregation
         const dailyAttendanceMap = {};
+        const perUserDayMap = {}; // "email|YYYY-MM-DD" -> { email, date, checkIns, checkOuts, totalWorkSec, totalBreakSec, workLogs }
         let totalBreakSeconds = 0;
         let totalAttendanceSeconds = 0;
         let lateCheckInCount = 0;
         let earlyCheckOutCount = 0;
         const breakSessions = [];
 
+        const ensureUserDay = (em, dateStr) => {
+            const k = `${em}|${dateStr}`;
+            if (!perUserDayMap[k]) {
+                perUserDayMap[k] = { email: em, date: dateStr, checkIns: [], checkOuts: [], totalWorkSec: 0, totalBreakSec: 0, workLogs: [] };
+            }
+            return perUserDayMap[k];
+        };
+
         // Step A: Process attendance events (check-ins, check-outs, breaks)
         periodAttendance.forEach(evt => {
             const dateStr = evt.timestamp ? Engine.formatLocalDate(new Date(evt.timestamp)) : (evt.date || '');
             if (!dateStr) return;
+            const em = (evt.userId || evt.email || '').toLowerCase().trim() || normalizedTarget;
+            const uDay = ensureUserDay(em, dateStr);
             if (!dailyAttendanceMap[dateStr]) {
                 dailyAttendanceMap[dateStr] = {
                     date: dateStr,
@@ -926,28 +1030,22 @@
             }
 
             const dayObj = dailyAttendanceMap[dateStr];
-            if (evt.type === 'check_in') {
+            if (evt.type === 'check_in' && evt.timestamp) {
                 dayObj.checkIns.push(evt.timestamp);
-                const checkInDate = new Date(evt.timestamp);
-                if (checkInDate.getHours() > 10 || (checkInDate.getHours() === 10 && checkInDate.getMinutes() > 15)) {
-                    lateCheckInCount++;
-                    dayObj.isLate = true;
-                }
-            } else if (evt.type === 'check_out') {
+                uDay.checkIns.push(evt.timestamp);
+            } else if (evt.type === 'check_out' && evt.timestamp) {
                 dayObj.checkOuts.push(evt.timestamp);
-                const checkOutDate = new Date(evt.timestamp);
-                if (checkOutDate.getHours() < 18 || (checkOutDate.getHours() === 18 && checkOutDate.getMinutes() < 30)) {
-                    earlyCheckOutCount++;
-                    dayObj.isEarly = true;
-                }
+                uDay.checkOuts.push(evt.timestamp);
             } else if (evt.type === 'break_end' && evt.duration) {
                 const bSec = Math.floor(evt.duration / 1000);
                 dayObj.totalBreakSec += bSec;
+                uDay.totalBreakSec += bSec;
                 totalBreakSeconds += bSec;
+                const endTs = evt.timestamp || (Engine.parseTimestamp(dateStr) + bSec * 1000);
                 const bObj = {
                     date: dateStr,
-                    start: evt.timestamp - evt.duration,
-                    end: evt.timestamp,
+                    start: endTs - evt.duration,
+                    end: endTs,
                     durationSeconds: bSec
                 };
                 dayObj.breaks.push(bObj);
@@ -961,6 +1059,8 @@
             if (!startTs) return;
             const durSec = getLogDurationSec(log);
             const dateStr = Engine.formatLocalDate(new Date(startTs));
+            const em = (log.userId || log.email || log.userEmail || '').toLowerCase().trim() || normalizedTarget;
+            const uDay = ensureUserDay(em, dateStr);
 
             if (!dailyAttendanceMap[dateStr]) {
                 dailyAttendanceMap[dateStr] = {
@@ -980,41 +1080,55 @@
             const dayObj = dailyAttendanceMap[dateStr];
             dayObj.workLogs.push(log);
             dayObj.totalWorkSec += durSec;
+            uDay.workLogs.push(log);
+            uDay.totalWorkSec += durSec;
         });
 
-        // Step C: Ensure every day with work logs has check-in and check-out bounds
+        // Step C: Evaluate each employee-day individually (firstIn/lastOut, late/early once per employee-day)
         let presentDaysCount = 0;
-        Object.values(dailyAttendanceMap).forEach(day => {
-            if (day.checkIns.length === 0 && day.workLogs.length > 0) {
-                const starts = day.workLogs.map(l => Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp)).filter(Boolean);
-                const ends = day.workLogs.map(l => {
+        const todayStr = Engine.formatLocalDate(new Date());
+        Object.values(perUserDayMap).forEach(uDay => {
+            if (uDay.checkIns.length === 0 && uDay.workLogs.length > 0) {
+                const starts = uDay.workLogs.map(l => Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp)).filter(Boolean);
+                const ends = uDay.workLogs.map(l => {
                     const s = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
                     const d = getLogDurationSec(l);
                     return Engine.parseTimestamp(l.endTime || l.completedAt) || (s + d * 1000);
                 }).filter(Boolean);
-                if (starts.length > 0) day.checkIns.push(Math.min(...starts));
-                if (ends.length > 0) day.checkOuts.push(Math.max(...ends));
+                if (starts.length > 0) uDay.checkIns.push(Math.min(...starts));
+                if (ends.length > 0) uDay.checkOuts.push(Math.max(...ends));
             }
+            uDay.checkIns.sort((a, b) => a - b);
+            uDay.checkOuts.sort((a, b) => a - b);
+            const firstIn = uDay.checkIns[0];
+            const lastOut = uDay.checkOuts[uDay.checkOuts.length - 1];
+            const dayObj = dailyAttendanceMap[uDay.date];
+            if (!firstIn) return;
 
+            presentDaysCount++;
+            const firstInDate = new Date(firstIn);
+            if (firstInDate.getHours() * 60 + firstInDate.getMinutes() > 585) { // > 9:45 AM (aligned with One Report)
+                lateCheckInCount++;
+                if (dayObj) dayObj.isLate = true;
+            }
+            let dayAttSec = 0;
+            if (lastOut && lastOut > firstIn) {
+                const lastOutDate = new Date(lastOut);
+                if (lastOutDate.getHours() < 18 || (lastOutDate.getHours() === 18 && lastOutDate.getMinutes() < 30)) {
+                    earlyCheckOutCount++;
+                    if (dayObj) dayObj.isEarly = true;
+                }
+                dayAttSec = Math.max(uDay.totalWorkSec, Math.max(0, Math.floor((lastOut - firstIn) / 1000) - uDay.totalBreakSec));
+            } else if (uDay.date === todayStr) {
+                dayAttSec = Math.max(uDay.totalWorkSec, Math.max(0, Math.floor((Date.now() - firstIn) / 1000) - uDay.totalBreakSec));
+            }
+            if (dayObj) dayObj.attendanceSec += dayAttSec;
+            totalAttendanceSeconds += dayAttSec;
+        });
+
+        Object.values(dailyAttendanceMap).forEach(day => {
             day.checkIns.sort((a, b) => a - b);
             day.checkOuts.sort((a, b) => a - b);
-            const firstIn = day.checkIns[0];
-            const lastOut = day.checkOuts[day.checkOuts.length - 1];
-
-            if (firstIn) {
-                presentDaysCount++;
-                if (lastOut && lastOut > firstIn) {
-                    day.attendanceSec = Math.max(day.totalWorkSec, Math.floor((lastOut - firstIn) / 1000));
-                } else {
-                    const todayStr = Engine.formatLocalDate(new Date());
-                    if (day.date === todayStr) {
-                        day.attendanceSec = Math.max(day.totalWorkSec, Math.floor((Date.now() - firstIn) / 1000));
-                    } else {
-                        day.attendanceSec = Math.max(day.totalWorkSec, 28800); // Standard 8 hours or actual work
-                    }
-                }
-            }
-            totalAttendanceSeconds += day.attendanceSec;
         });
 
         // Calculate work days: for current month, only count days elapsed to date
@@ -1124,11 +1238,8 @@
         });
         const deliveryScorePct = completedDeliverables.length > 0 ? Math.round((onTimeCount / completedDeliverables.length) * 100) : 100;
 
-        // 7. Previous Period Comparison (Deltas)
-        const prevLogs = userLogs.filter(l => {
-            const start = Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp);
-            return start >= period.prevFromTs && start <= period.prevToTs;
-        });
+        // 7. Previous Period Comparison (Deltas) — uses the exact same normalization rules
+        const prevLogs = buildNormalizedPeriodLogs(userLogs, period.prevFromTs, period.prevToTs);
         const prevWorkedSec = prevLogs.reduce((sum, l) => sum + getLogDurationSec(l), 0);
         const prevCompletedCount = userTasks.filter(t => {
             const compTs = Engine.parseTimestamp(t.completedAt || t.lastCompletedDate);
