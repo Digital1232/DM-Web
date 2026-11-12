@@ -29939,13 +29939,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (secs <= 0) continue;
                     const id = String(log.taskId);
                     let e = map.get(id);
-                    if (!e) { e = { total: 0, today: 0, sessions: 0 }; map.set(id, e); }
+                    if (!e) { e = { total: 0, today: 0, sessions: 0, todaySessions: 0 }; map.set(id, e); }
                     e.total += secs;
                     e.sessions += 1;
-                    if ((Number(log.endTime) || Number(log.startTime) || 0) >= todayStart) e.today += secs;
+                    const endTs = Number(log.endTime) || 0;
+                    const startTs = Number(log.startTime) || 0;
+                    if ((endTs || startTs) >= todayStart) {
+                        const todaySecs = (endTs && startTs && startTs < todayStart)
+                            ? Math.min(secs, Math.max(0, Math.floor((endTs - todayStart) / 1000)))
+                            : secs;
+                        if (todaySecs > 0) {
+                            e.today += todaySecs;
+                            e.todaySessions += 1;
+                        }
+                    }
                 }
                 _taskTimeCache = { src: logs, len: logs.length, day, map };
                 return map;
+            }
+
+            function isDailyRecurringTask(t) {
+                if (!t) return false;
+                if (t.learningSession || t.recurring || t.murugeshTask || t.ajithTask || t.palaniTask) return true;
+                if (typeof isMorningLearningTask === 'function' && isMorningLearningTask(t)) return true;
+                const id = String(t.id || '').toUpperCase();
+                return id.startsWith('LEARN-') || /^P-[A-Z0-9]+-\d+$/.test(id);
             }
 
             function formatShortDuration(s) {
@@ -29957,14 +29975,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderTaskTimeCell(t) {
-                const e = getTaskTimeTotals().get(String(t.id)) || { total: 0, today: 0, sessions: 0 };
-                if (activeTaskId && t.id === activeTaskId) {
-                    const sessions = e.sessions + 1;
-                    const tip = `Logged earlier: ${formatShortDuration(e.total)} · ${sessions} session${sessions > 1 ? 's' : ''}`;
+                const e = getTaskTimeTotals().get(String(t.id)) || { total: 0, today: 0, sessions: 0, todaySessions: 0 };
+                const recurring = isDailyRecurringTask(t);
+                // Daily recurring tasks share one ID across days, so only today's logged time applies to today's timer.
+                const baseSec = recurring ? e.today : e.total;
+                if (activeTaskId && isSameTaskId(activeTaskId, t.id)) {
+                    const sessions = (recurring ? e.todaySessions : e.sessions) + 1;
+                    const tip = recurring
+                        ? `Today so far: ${formatShortDuration(e.today)} (${sessions} session${sessions > 1 ? 's' : ''} today) · All-time: ${formatShortDuration(e.total)}`
+                        : `Logged earlier: ${formatShortDuration(e.total)} · ${sessions} session${sessions > 1 ? 's' : ''}`;
                     if (taskOnHold) {
-                        return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-amber-600" title="On hold · ${tip}"><iconify-icon icon="solar:pause-circle-bold" width="12"></iconify-icon>${formatTime(e.total + (taskSeconds || 0))}</span>`;
+                        return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-amber-600" title="On hold · ${tip}"><iconify-icon icon="solar:pause-circle-bold" width="12"></iconify-icon>${formatTime(baseSec + (taskSeconds || 0))}</span>`;
                     }
-                    return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-600" title="Running · ${tip}"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span><span class="task-live-time" data-base="${e.total}">${formatTime(e.total + (taskSeconds || 0))}</span></span>`;
+                    return `<span class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-600" title="Running · ${tip}"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span><span class="task-live-time" data-base="${baseSec}">${formatTime(baseSec + (taskSeconds || 0))}</span></span>`;
+                }
+                if (recurring) {
+                    if (!e.today && !e.total) return '<span class="text-xs text-slate-300">—</span>';
+                    const tip = `Today ${formatShortDuration(e.today)} (${e.todaySessions} session${e.todaySessions === 1 ? '' : 's'}) · All-time ${formatShortDuration(e.total)} (${e.sessions} total)`;
+                    const primary = e.today ? `${formatShortDuration(e.today)} today` : '0m today';
+                    return `<span class="text-xs font-semibold ${e.today ? 'text-slate-700' : 'text-slate-400'}" title="${tip}">${primary}</span>${e.total ? `<div class="text-[10px] text-slate-400">${formatShortDuration(e.total)} all-time</div>` : ''}`;
                 }
                 if (!e.total) return '<span class="text-xs text-slate-300">—</span>';
                 const tip = `Today ${formatShortDuration(e.today)} · ${e.sessions} session${e.sessions > 1 ? 's' : ''}`;
@@ -31292,6 +31321,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 });
 
                 if (isInternalTabActive()) renderInternalTasks();
+                else if (typeof scheduleTasksHubRefresh === 'function') scheduleTasksHubRefresh();
                 if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
             }
 
@@ -31901,6 +31931,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     if (isInternalTabActive()) renderInternalTasks();
+                    else if (typeof scheduleTasksHubRefresh === 'function') scheduleTasksHubRefresh();
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
 
                 } catch (err) {
@@ -31962,6 +31993,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     PerfOptimizer.invalidateCache('filterTasks');
                     if (isInternalTabActive()) renderInternalTasks();
+                    else if (typeof scheduleTasksHubRefresh === 'function') scheduleTasksHubRefresh();
                     if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
                 } catch (err) {
                     console.warn('Morning learning setup failed:', err);
