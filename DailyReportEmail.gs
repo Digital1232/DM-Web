@@ -303,11 +303,6 @@ function buildDailyReport_(now) {
     var rawDesc = String(cur.taskDesc || cur.taskName || '').toLowerCase();
     if (cur.isBreak || cur.type === 'break' || rawTaskId.indexOf('break') === 0 || rawDesc === 'break') continue;
 
-    if (prev && curUser === prevUser && curTask === prevTask && Math.abs(Number((cur && cur.startTime) || 0) - Number((prev && prev.startTime) || 0)) < 5000) {
-      var curSec = Number((cur && cur.durationSeconds) || 0);
-      var prevSec = Number((prev && prev.durationSeconds) || 0);
-      if (curSec > prevSec) {
-        var segSec = curSec - prevSec;
     var curUser = String(cur.userId || '').trim().toLowerCase();
     var curTask = rawTaskId.trim();
     var curStart = Number(cur.startTime || 0);
@@ -318,7 +313,6 @@ function buildDailyReport_(now) {
       if (curSec > lastRawCumSec) {
         var segSec = curSec - lastRawCumSec;
         var segLog = JSON.parse(JSON.stringify(cur));
-        segLog.startTime = prev.endTime || cur.startTime;
         segLog.startTime = lastRawEnd || curStart;
         segLog.durationSeconds = segSec;
         cleanLogs.push(segLog);
@@ -344,22 +338,18 @@ function buildDailyReport_(now) {
   // Task-breakdown seconds are added using the GROSS per-log duration (they may sum to
   // more than the merged total when sessions overlap, which is the same behaviour that
   // tools like One Report use).
-  var userIntervals = {}; // email → [{start, end}]  (ms timestamps, today's window only)
   // ── Collect today's work intervals (logged + live running), clamped to check-in ──
   var userIntervals = {}; // email → [{start, end, taskId, taskDesc, client, running}]
 
   cleanLogs.forEach(function (log) {
-    var email = String(log.userId || '').toLowerCase();
     var email = String(log.userId || '').trim().toLowerCase();
     if (!email) return;
     if (!people[email]) {
       people[email] = { email: email, name: log.userName || email, currentTask: null, tasks: {}, seconds: 0, breakSeconds: 0 };
     }
 
-    var endTs  = Number(log.endTime  || 0);
     var startTs = Number(log.startTime || 0);
     var durSec = Number(log.durationSeconds || 0);
-    var startTs = Number(log.startTime || 0);
     var endTs = Number(log.endTime || 0) || (startTs && durSec > 0 ? startTs + durSec * 1000 : 0);
 
     // Must have an end-time within today to place the interval
@@ -378,16 +368,11 @@ function buildDailyReport_(now) {
     }
     if (todaySec <= 0) return;
 
-    var ivEnd   = clampedEnd;
+    var ivEnd = clampedEnd;
     var ivStart = ivEnd - todaySec * 1000;
 
-    // Clamp to employee's check-in time so phantom hours prior to check-in (e.g. 4:39 AM) are never counted
     // Discard overnight ghost sessions (started <= 6 AM when check-in >= 8 AM) and clamp to firstCheckIn
     var checkInTs = firstCheckIns[email];
-    if (checkInTs && checkInTs > dayStart && ivStart < checkInTs) {
-      if (ivEnd <= checkInTs) return; // Entire session was before check-in
-      ivStart = checkInTs;
-      todaySec = Math.floor((ivEnd - ivStart) / 1000);
     if (checkInTs && checkInTs > dayStart) {
       var origStart = startTs || ivStart;
       var startHour = Number(Utilities.formatDate(new Date(origStart), tz, 'H'));
@@ -401,10 +386,6 @@ function buildDailyReport_(now) {
     if (ivEnd <= ivStart) return;
 
     if (!userIntervals[email]) userIntervals[email] = [];
-    userIntervals[email].push({ start: ivStart, end: ivEnd });
-
-    // Task breakdown
-    addTaskTime_(people[email], log.taskId, log.taskDesc, log.client, todaySec, false);
     userIntervals[email].push({
       start: ivStart,
       end: ivEnd,
@@ -435,18 +416,11 @@ function buildDailyReport_(now) {
       return;
     }
 
-    var timerStart = Math.max(startedAt || nowTs, dayStart);
-    var running    = Math.max(0, Math.floor((nowTs - timerStart) / 1000));
-    if (running <= 0) return;
     var checkInTs = firstCheckIns[email];
     var timerStart = Math.max(startedAt || nowTs, dayStart, (checkInTs && checkInTs > dayStart) ? checkInTs : 0);
     if (nowTs <= timerStart) return;
 
     if (!userIntervals[email]) userIntervals[email] = [];
-    userIntervals[email].push({ start: timerStart, end: nowTs });
-
-    // Task breakdown: non-running portion only accumulates once
-    addTaskTime_(p, ct.taskId, ct.taskDesc, ct.client, running, true);
     userIntervals[email].push({
       start: timerStart,
       end: nowTs,
@@ -457,34 +431,22 @@ function buildDailyReport_(now) {
     });
   });
 
-  // ── Merge overlapping intervals and DEDUCT BREAKS → pure net work seconds ──
   // ── Deduct breaks, remove overlaps via cursor sweep, and attribute net time per task ──
   Object.keys(people).forEach(function (email) {
-    var ivs = (userIntervals[email] || []).slice().sort(function (a, b) { return a.start - b.start; });
-    var merged = [];
-    ivs.forEach(function (iv) {
-      if (!merged.length || iv.start >= merged[merged.length - 1].end) {
-        merged.push({ start: iv.start, end: iv.end });
     var rawBreaks = (breakIntervals[email] || []).slice().sort(function (a, b) { return a.start - b.start; });
     var mergedBreaks = [];
     rawBreaks.forEach(function (b) {
       if (!mergedBreaks.length || b.start >= mergedBreaks[mergedBreaks.length - 1].end) {
         mergedBreaks.push({ start: b.start, end: b.end });
       } else {
-        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, iv.end);
         mergedBreaks[mergedBreaks.length - 1].end = Math.max(mergedBreaks[mergedBreaks.length - 1].end, b.end);
       }
     });
 
-    // Deduct any break intervals that overlap with task intervals
-    var userBreaks = (breakIntervals[email] || []).slice().sort(function (a, b) { return a.start - b.start; });
     var netWorkSec = 0;
     var ivs = (userIntervals[email] || []).slice().sort(function (a, b) { return a.start - b.start || a.end - b.end; });
     var cursor = 0;
 
-    merged.forEach(function (taskIv) {
-      var segments = [{ start: taskIv.start, end: taskIv.end }];
-      userBreaks.forEach(function (bIv) {
     ivs.forEach(function (iv) {
       var effStart = Math.max(iv.start, cursor);
       if (effStart >= iv.end) {
@@ -499,16 +461,8 @@ function buildDailyReport_(now) {
         var nextSegments = [];
         segments.forEach(function (seg) {
           if (bIv.end <= seg.start || bIv.start >= seg.end) {
-            // No overlap
             nextSegments.push(seg);
           } else {
-            // Overlap: split segment around break
-            if (bIv.start > seg.start) {
-              nextSegments.push({ start: seg.start, end: bIv.start });
-            }
-            if (bIv.end < seg.end) {
-              nextSegments.push({ start: bIv.end, end: seg.end });
-            }
             if (bIv.start > seg.start) nextSegments.push({ start: seg.start, end: bIv.start });
             if (bIv.end < seg.end) nextSegments.push({ start: bIv.end, end: seg.end });
           }
@@ -518,9 +472,9 @@ function buildDailyReport_(now) {
 
       var netTaskSec = 0;
       segments.forEach(function (seg) {
-        netWorkSec += Math.floor((seg.end - seg.start) / 1000);
         netTaskSec += Math.floor((seg.end - seg.start) / 1000);
       });
+      netWorkSec += netTaskSec;
       if (netTaskSec > 0 || iv.running) {
         addTaskTime_(people[email], iv.taskId, iv.taskDesc, iv.client, netTaskSec, iv.running);
       }
@@ -536,13 +490,12 @@ function buildDailyReport_(now) {
   var worked = available.filter(function (p) { return p.seconds > 0 || Object.keys(p.tasks).length > 0; });
   var noTime = available.filter(function (p) { return worked.indexOf(p) < 0; });
 
-  worked.forEach(function (p) { p.breakSeconds = breaks[p.email] || 0; });
+  worked.sort(byName_);
   worked.sort(function (a, b) { return b.seconds - a.seconds; });
   noTime.sort(byName_);
   leaveList.sort(byName_);
 
   var totalSeconds = worked.reduce(function (s, p) { return s + p.seconds; }, 0);
-  var totalBreak = worked.reduce(function (s, p) { return s + p.breakSeconds; }, 0);
   var totalBreak = available.reduce(function (s, p) { return s + p.breakSeconds; }, 0);
   var totalTasks = worked.reduce(function (s, p) { return s + Object.keys(p.tasks).length; }, 0);
 
@@ -561,10 +514,6 @@ function buildDailyReport_(now) {
 }
 
 function addTaskTime_(person, taskId, taskDesc, client, seconds, running) {
-  var id = String(taskId || taskDesc || 'unknown');
-  if (!person.tasks[id]) {
-    person.tasks[id] = {
-      id: String(taskId || ''),
   var idKey = String(taskId || taskDesc || 'unknown').trim().toLowerCase();
   if (!person.tasks[idKey]) {
     person.tasks[idKey] = {
@@ -575,11 +524,8 @@ function addTaskTime_(person, taskId, taskDesc, client, seconds, running) {
       running: false
     };
   }
-  person.tasks[id].seconds += seconds;
-  person.tasks[id].running = person.tasks[id].running || running;
   person.tasks[idKey].seconds += seconds;
   person.tasks[idKey].running = person.tasks[idKey].running || running;
-  person.seconds += seconds;
 }
 
 /** Task name without the "Client - " / " - Client" decoration; falls back to the ID. */
