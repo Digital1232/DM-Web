@@ -425,17 +425,28 @@ html.dark #${PANEL_ID}{--au-card:#1a2236;--au-border:#1e2a3a;--au-muted:#94a3b8;
         setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     }
 
+    function hasAccess() {
+        return norm((window.currentUser || {}).email) === 'digitalmarketing@vilpower.com';
+    }
+
     function refresh() {
+        if (!hasAccess()) return;
         subscribe(dateRange());
         render();
     }
 
     function init() {
+        if (!hasAccess()) {
+            const p = $(PANEL_ID);
+            if (p) p.innerHTML = '<div class="au-card au-empty">Access restricted to digitalmarketing@vilpower.com.</div>';
+            return;
+        }
         shell();
         refresh();
         // Re-render every 30 s so "Live" / "last seen" stay current while the view is open.
         if (!state.tick) {
             state.tick = setInterval(() => {
+                if (!hasAccess()) return;
                 const p = $(PANEL_ID);
                 if (p && !p.classList.contains('hidden') && p.offsetParent !== null) render();
             }, 30000);

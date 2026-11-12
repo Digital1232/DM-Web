@@ -3911,10 +3911,10 @@
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         One Report
                     </button>
-                    <!-- APP USAGE (desktop tracker data, role-scoped) -->
+                    <!-- APP USAGE (desktop tracker data, email-restricted) -->
                     <button onclick="switchView('app-usage')" id="nav-app-usage"
                         data-label="App Usage" aria-label="App Usage"
-                        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:monitor-smartphone-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         App Usage
@@ -15978,6 +15978,10 @@
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
             function canViewMonthlyPlan() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
+            function canViewAppUsage() {
+                if (!currentUser) return false;
+                return (currentUser.email || '').trim().toLowerCase() === 'digitalmarketing@vilpower.com';
+            }
             function canViewMetaAds() {
                 if (!currentUser) return false;
                 const email = (currentUser.email || '').toLowerCase();
@@ -19378,7 +19382,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     loadInternalBoardSettings();
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
-                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'my-monthly-report', 'one-report', 'app-usage'];
+                    const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'my-monthly-report', 'one-report'];
+                    if (canViewAppUsage()) validViews.push('app-usage');
                     if (canViewProjects()) validViews.push('projects');
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
@@ -19848,6 +19853,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('nav-sales-hub')?.classList.toggle('hidden', !canViewSalesHub());
                 document.getElementById('nav-plan-tracking')?.classList.toggle('hidden', !canViewPlanTracking());
                 document.getElementById('nav-dailyplan')?.classList.toggle('hidden', !canViewDailyPlanTeamAccess());
+                document.getElementById('nav-app-usage')?.classList.toggle('hidden', !canViewAppUsage());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
                 document.getElementById('report-export-btn')?.classList.remove('hidden');
                 document.getElementById('report-group-client')?.classList.remove('hidden');
@@ -22390,6 +22396,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'plan-tracking' && !canViewPlanTracking()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
+                if (view === 'app-usage' && !canViewAppUsage()) { view = 'dashboard'; panelId = 'dashboard'; }
 
                 const prevView = activeView;
                 activeView = view;
