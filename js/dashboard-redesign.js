@@ -564,16 +564,59 @@
 
         let users = (c.currentWorkUsers || []).slice();
 
-        // Admin sees all users. Others only see their own tasks alone.
+        // Admin sees all users. Others only see their own task alone.
         const isAdminUser = typeof c.isAdmin === 'function' ? c.isAdmin() : (typeof window.isAdmin === 'function' ? window.isAdmin() : false);
         const myEmail = (c.currentUser?.email || window.currentUser?.email || '').toLowerCase().trim();
 
-        if (!isAdminUser) {
+        // Toggle UI controls based on Admin status
+        const titleEl = document.getElementById('admin-current-work-title');
+        const subtitleEl = document.getElementById('admin-current-work-subtitle');
+        const searchWrap = document.getElementById('team-search-wrap') || document.getElementById('team-search-input')?.parentElement;
+        const sortSelect = document.getElementById('team-sort-select');
+        const pillsWrap = document.getElementById('team-filter-pills');
+
+        if (isAdminUser) {
+            if (titleEl) titleEl.textContent = 'Live Team Overview';
+            if (subtitleEl) subtitleEl.textContent = 'Real-time employee availability, active tasks & session timers';
+            if (searchWrap) searchWrap.classList.remove('hidden');
+            if (sortSelect) sortSelect.classList.remove('hidden');
+            if (pillsWrap) pillsWrap.classList.remove('hidden');
+            list.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5';
+        } else {
             users = users.filter(u => (u.email || '').toLowerCase().trim() === myEmail);
+            if (users.length === 0 && c.currentUser) {
+                users = [{
+                    email: c.currentUser.email,
+                    name: c.currentUser.name || c.currentUser.email,
+                    role: c.currentUser.role || 'Team Member',
+                    profilePicture: c.currentUser.profilePicture || null,
+                    online: true,
+                    currentTask: c.activeTaskId ? {
+                        taskId: c.activeTaskId,
+                        taskDesc: c.activeTaskSnapshot?.desc || 'Current Active Task',
+                        client: c.activeTaskSnapshot?.client || '',
+                        status: c.activeTaskSnapshot?.status || 'In Progress',
+                        startedAt: window.taskStartTime || Date.now(),
+                        state: window.taskOnHold ? 'paused' : 'working'
+                    } : null
+                }];
+            }
+            if (titleEl) titleEl.textContent = 'My Live Status';
+            if (subtitleEl) subtitleEl.textContent = 'Real-time availability, active task & session timer';
+            if (searchWrap) searchWrap.classList.add('hidden');
+            if (sortSelect) sortSelect.classList.add('hidden');
+            if (pillsWrap) pillsWrap.classList.add('hidden');
+            list.className = 'flex flex-col gap-3.5';
         }
 
         const activeCount = users.filter(u => deriveUserState(u) === 'working').length;
-        countEl.textContent = `${activeCount} Working`;
+        if (isAdminUser) {
+            countEl.textContent = `${activeCount} Working`;
+        } else {
+            const myState = users[0] ? deriveUserState(users[0]) : 'idle';
+            const stateLabels = { working: 'Working', paused: 'Paused', break: 'On Break', idle: 'Idle', checkedout: 'Checked Out' };
+            countEl.textContent = stateLabels[myState] || 'Active';
+        }
 
         const search = state.team.search.trim().toLowerCase();
         const stFilter = state.team.state;
@@ -585,33 +628,36 @@
             taskCountsByEmail.set(em, (taskCountsByEmail.get(em) || 0) + 1);
         });
 
-        let filtered = users.filter(u => {
-            const st = deriveUserState(u);
-            if (stFilter !== 'all' && st !== stFilter) return false;
-            if (search) {
-                const hay = `${u.name || ''} ${u.email || ''} ${u.role || ''} ${u.currentTask?.taskId || ''}`.toLowerCase();
-                if (!hay.includes(search)) return false;
-            }
-            return true;
-        });
+        let filtered = users;
+        if (isAdminUser) {
+            filtered = users.filter(u => {
+                const st = deriveUserState(u);
+                if (stFilter !== 'all' && st !== stFilter) return false;
+                if (search) {
+                    const hay = `${u.name || ''} ${u.email || ''} ${u.role || ''} ${u.currentTask?.taskId || ''}`.toLowerCase();
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
 
-        filtered.sort((a, b) => {
-            if (state.team.sort === 'name') return (a.name || '').localeCompare(b.name || '');
-            if (state.team.sort === 'duration') {
-                const da = a.currentTask?.startedAt ? Date.now() - a.currentTask.startedAt : 0;
-                const db = b.currentTask?.startedAt ? Date.now() - b.currentTask.startedAt : 0;
-                return db - da;
-            }
-            if (state.team.sort === 'workload') {
-                return (taskCountsByEmail.get(String(b.email).toLowerCase()) || 0) - (taskCountsByEmail.get(String(a.email).toLowerCase()) || 0);
-            }
-            const order = { working: 0, paused: 1, break: 2, idle: 3, checkedout: 4 };
-            return (order[deriveUserState(a)] ?? 9) - (order[deriveUserState(b)] ?? 9) || (a.name || '').localeCompare(b.name || '');
-        });
+            filtered.sort((a, b) => {
+                if (state.team.sort === 'name') return (a.name || '').localeCompare(b.name || '');
+                if (state.team.sort === 'duration') {
+                    const da = a.currentTask?.startedAt ? Date.now() - a.currentTask.startedAt : 0;
+                    const db = b.currentTask?.startedAt ? Date.now() - b.currentTask.startedAt : 0;
+                    return db - da;
+                }
+                if (state.team.sort === 'workload') {
+                    return (taskCountsByEmail.get(String(b.email).toLowerCase()) || 0) - (taskCountsByEmail.get(String(a.email).toLowerCase()) || 0);
+                }
+                const order = { working: 0, paused: 1, break: 2, idle: 3, checkedout: 4 };
+                return (order[deriveUserState(a)] ?? 9) - (order[deriveUserState(b)] ?? 9) || (a.name || '').localeCompare(b.name || '');
+            });
 
-        if (!filtered.length) {
-            list.innerHTML = `<p class="md:col-span-2 xl:col-span-3 p-6 text-center text-xs text-[#718096] dark:text-slate-400">No employees match the selected filter.</p>`;
-            return;
+            if (!filtered.length) {
+                list.innerHTML = `<p class="md:col-span-2 xl:col-span-3 p-6 text-center text-xs text-[#718096] dark:text-slate-400">No employees match the selected filter.</p>`;
+                return;
+            }
         }
 
         const badgeMap = {
@@ -621,6 +667,58 @@
             idle: { label: 'Idle', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700' },
             checkedout: { label: 'Checked Out', cls: 'bg-slate-50 dark:bg-slate-900 text-slate-400 border-slate-200/60 dark:border-slate-800' }
         };
+
+        if (!isAdminUser) {
+            list.innerHTML = filtered.map(u => {
+                const st = deriveUserState(u);
+                const b = badgeMap[st] || badgeMap.idle;
+                const task = u.currentTask;
+                const elapsed = task?.startedAt ? fmtTime(Math.max(0, Math.floor((Date.now() - task.startedAt) / 1000))) : '00:00:00';
+                const avatar = typeof c.getSafePdfUrl === 'function' && typeof c.getUserAvatarSrc === 'function'
+                    ? c.getSafePdfUrl(u.profilePicture || c.getUserAvatarSrc(u))
+                    : '';
+
+                return `
+                    <div class="rounded-2xl border border-[#E8EDF4] dark:border-slate-800 p-4 sm:p-5 bg-[#F5F7FA]/70 dark:bg-slate-800/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5 min-w-[220px]">
+                            <div class="relative shrink-0">
+                                <img src="${esc(avatar)}" alt="${esc(u.name || u.email)}" class="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-[#E8EDF4] dark:border-slate-700 object-cover shadow-xs">
+                                <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${u.online ? 'bg-[#10B981]' : 'bg-slate-300 dark:bg-slate-600'}"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <p class="text-sm font-extrabold text-[#171D32] dark:text-white truncate">${esc(u.name || u.email)}</p>
+                                    <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${b.cls}">${b.label}</span>
+                                </div>
+                                <p class="text-[11px] font-semibold text-[#718096] dark:text-slate-400 uppercase tracking-wider mt-0.5 truncate">${esc(u.role || 'Team Member')}</p>
+                            </div>
+                        </div>
+
+                        ${task ? `
+                            <div class="flex-1 bg-white dark:bg-slate-900 rounded-xl border border-[#E8EDF4] dark:border-slate-800 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-mono font-extrabold text-[#5845F5] dark:text-indigo-400">${esc(task.taskId)}</span>
+                                        ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${c.statusClass ? c.statusClass(task.status) : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}">${esc(task.status)}</span>` : ''}
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[#718096] dark:text-slate-400">${esc(task.client || 'Internal')}</span>
+                                    </div>
+                                    <p class="text-xs font-bold text-[#171D32] dark:text-slate-200 truncate">${esc(task.taskDesc || 'Task in progress')}</p>
+                                </div>
+                                <div class="flex items-center gap-2.5 sm:border-l sm:border-slate-100 dark:sm:border-slate-800 sm:pl-4 shrink-0">
+                                    <span class="relative flex h-2.5 w-2.5 ${st === 'working' ? 'inline-flex' : 'hidden'}">
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                    </span>
+                                    <span class="live-task-timer font-mono text-base font-black text-[#171D32] dark:text-white" data-started="${task.startedAt || 0}" data-state="${task.state || 'idle'}">${elapsed}</span>
+                                </div>
+                            </div>` : `
+                            <div class="flex-1 bg-white/70 dark:bg-slate-900/50 rounded-xl border border-dashed border-[#E8EDF4] dark:border-slate-800 p-3.5 text-center flex items-center justify-center">
+                                <p class="text-xs text-[#718096] dark:text-slate-400 font-medium">No active task running · Select a task from your queue below to start tracking</p>
+                            </div>`}
+                    </div>`;
+            }).join('');
+            return;
+        }
 
         list.innerHTML = filtered.map(u => {
             const st = deriveUserState(u);
