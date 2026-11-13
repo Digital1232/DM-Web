@@ -22438,6 +22438,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     }
                     else if (view === 'tasks' || view === 'internal-tasks' || view === 'dailyplan') {
+                        if (typeof refreshAllClientDropdowns === 'function') refreshAllClientDropdowns();
                         const targetTab = activeTasksTab || (view === 'internal-tasks' ? 'internal' : (view === 'dailyplan' ? 'dailyplan' : 'jira'));
                         switchTasksTab(targetTab, true);
                     }
@@ -29196,9 +29197,187 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function getClientCatalog() {
-                const resolved = customClients.map(c => normalizeClientName(c)).filter(Boolean);
-                return [...new Set(resolved)].sort((a, b) => a.localeCompare(b));
+                const clientSet = new Set();
+
+                // 1. Base canonical CLIENTS array
+                if (typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS)) {
+                    CLIENTS.forEach(c => {
+                        const norm = normalizeClientName(c);
+                        if (norm) clientSet.add(norm);
+                    });
+                }
+
+                // 2. Custom clients array from Firebase settings
+                if (typeof customClients !== 'undefined' && Array.isArray(customClients)) {
+                    customClients.forEach(c => {
+                        const norm = normalizeClientName(c);
+                        if (norm) clientSet.add(norm);
+                    });
+                }
+
+                // 3. Client label map display names from Firebase settings
+                if (typeof clientLabelMap !== 'undefined' && clientLabelMap && typeof clientLabelMap === 'object') {
+                    Object.values(clientLabelMap).forEach(c => {
+                        const norm = normalizeClientName(c);
+                        if (norm) clientSet.add(norm);
+                    });
+                }
+
+                // 4. Any client existing across all loaded tasks (Jira, Internal, Manual)
+                if (typeof tasks !== 'undefined' && Array.isArray(tasks)) {
+                    tasks.forEach(t => {
+                        if (t && t.client) {
+                            const norm = normalizeClientName(t.client);
+                            if (norm) clientSet.add(norm);
+                        }
+                    });
+                }
+
+                // 5. Canonical list from normalizeClientName
+                const canonicalClients = [
+                    '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'DreamDaa', 'Einstein',
+                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Mopower',
+                    'Mr.Millet', 'Muva Herbals', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
+                    'Ramachandran', 'SalesNaany', 'SES', 'SKM', 'University',
+                    'VilPower', 'Vilpower DM', 'VTM'
+                ];
+                canonicalClients.forEach(c => {
+                    const norm = normalizeClientName(c);
+                    if (norm) clientSet.add(norm);
+                });
+
+                return [...clientSet].sort((a, b) => a.localeCompare(b));
             }
+            window.getClientCatalog = getClientCatalog;
+
+            function refreshAllClientDropdowns() {
+                try {
+                    const catalog = getClientCatalog();
+
+                    // 1. Jira Task Board Client Filter
+                    if (typeof populateClientFilter === 'function') populateClientFilter();
+
+                    // 2. Internal Task Board Client Filter
+                    if (typeof populateInternalClientFilter === 'function') populateInternalClientFilter();
+
+                    // 3. All Tasks Client Filter
+                    const allClientSel = document.getElementById('all-client-filter');
+                    if (allClientSel) {
+                        const cur = allClientSel.value || 'all';
+                        allClientSel.innerHTML = `<option value="all">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        allClientSel.value = [...allClientSel.options].some(o => o.value === cur) ? cur : 'all';
+                    }
+
+                    // 4. Matrix Planner Client Filter
+                    const matrixFilter = document.getElementById('matrix-filter-client');
+                    if (matrixFilter) {
+                        const cur = matrixFilter.value || 'All';
+                        matrixFilter.innerHTML = `<option value="All">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        matrixFilter.value = [...matrixFilter.options].some(o => o.value === cur) ? cur : 'All';
+                    }
+
+                    // 5. Operations ETA Client Filter
+                    const opsClientSel = document.getElementById('ops-client-filter');
+                    if (opsClientSel) {
+                        const cur = opsClientSel.value || 'ALL';
+                        opsClientSel.innerHTML = `<option value="ALL">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        opsClientSel.value = [...opsClientSel.options].some(o => o.value === cur) ? cur : 'ALL';
+                    }
+
+                    // 6. Social Analytics Client Filter
+                    const saClientSel = document.getElementById('sa-client-filter');
+                    if (saClientSel) {
+                        const cur = saClientSel.value || 'all';
+                        saClientSel.innerHTML = `<option value="all">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        saClientSel.value = [...saClientSel.options].some(o => o.value === cur) ? cur : 'all';
+                    }
+
+                    // 7. Assign Plan Modal Client Filter & Assign Monthly Plan Filter
+                    const apClientSel = document.getElementById('ap-client-filter');
+                    if (apClientSel) {
+                        const cur = apClientSel.value || '';
+                        apClientSel.innerHTML = `<option value="">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        apClientSel.value = [...apClientSel.options].some(o => o.value === cur) ? cur : '';
+                    }
+                    const ampClientSel = document.getElementById('amp-client-filter');
+                    if (ampClientSel) {
+                        const cur = ampClientSel.value || '';
+                        ampClientSel.innerHTML = `<option value="">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        ampClientSel.value = [...ampClientSel.options].some(o => o.value === cur) ? cur : '';
+                    }
+                    const ampClient = document.getElementById('amp-client');
+                    if (ampClient) {
+                        const cur = ampClient.value || '';
+                        ampClient.innerHTML = `<option value="">Select client...</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        ampClient.value = [...ampClient.options].some(o => o.value === cur) ? cur : '';
+                    }
+
+                    // 8. Client Performance Filter
+                    if (typeof populateClientPerfFilter === 'function') {
+                        populateClientPerfFilter();
+                    }
+
+                    // 9. Employee Client Timing Report Client Filter
+                    const ecttClientSel = document.getElementById('ectt-client-filter');
+                    if (ecttClientSel) {
+                        const cur = ecttClientSel.value || 'all';
+                        ecttClientSel.innerHTML = `<option value="all">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        ecttClientSel.value = [...ecttClientSel.options].some(o => o.value === cur) ? cur : 'all';
+                    }
+
+                    // 10. File Manager Client Filter & Folder Select
+                    const fmCrClientSel = document.getElementById('fm-cr-client-filter');
+                    if (fmCrClientSel) {
+                        const cur = fmCrClientSel.value || '';
+                        fmCrClientSel.innerHTML = `<option value="">All Clients</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        fmCrClientSel.value = [...fmCrClientSel.options].some(o => o.value === cur) ? cur : '';
+                    }
+                    const fmFolderClient = document.getElementById('fm-folder-client');
+                    if (fmFolderClient) {
+                        const cur = fmFolderClient.value || '';
+                        fmFolderClient.innerHTML = `<option value="">Select Client</option>` +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        fmFolderClient.value = [...fmFolderClient.options].some(o => o.value === cur) ? cur : '';
+                    }
+
+                    // 11. Task Modals (Add Task modal #mt-client, Drawer #drawer-task-client, etc.)
+                    const mtClient = document.getElementById('mt-client');
+                    if (mtClient && typeof populateClientSelect === 'function') populateClientSelect(mtClient, mtClient.value, 'Select client...');
+                    const drawerClient = document.getElementById('drawer-task-client');
+                    if (drawerClient && typeof populateClientSelect === 'function') populateClientSelect(drawerClient, drawerClient.value, 'Select client...');
+                    const strategyClient = document.getElementById('strategy-client');
+                    if (strategyClient && typeof populateClientSelect === 'function') populateClientSelect(strategyClient, strategyClient.value, 'Select client...');
+
+                    // 12. Strategy Calendar Client Tabs & Dropdown
+                    if (typeof populateStrategyClientDropdown === 'function') {
+                        populateStrategyClientDropdown(typeof activeStrategyClientFilter !== 'undefined' ? activeStrategyClientFilter : '');
+                    }
+                    if (document.getElementById('strategy-client-tabs-container') && typeof renderStrategyClientTabs === 'function') {
+                        renderStrategyClientTabs();
+                    }
+
+                    // 13. Murugesh & Ajith Client Modals
+                    const murugeshSelect = document.getElementById('murugesh-client-select');
+                    if (murugeshSelect) {
+                        const cur = murugeshSelect.value || '';
+                        murugeshSelect.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        if (cur) murugeshSelect.value = cur;
+                    }
+                } catch (e) {
+                    console.warn('[refreshAllClientDropdowns] Error:', e);
+                }
+            }
+            window.refreshAllClientDropdowns = refreshAllClientDropdowns;
 
             function populateClientSelect(selectEl, selectedValue = '', emptyLabel = 'Select client...') {
                 if (!selectEl) return;
@@ -29238,8 +29417,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                 });
                 if (changed) safeSetLocalStorage('worksync_tasks', JSON.stringify(tasks));
-                populateClientFilter();
-                populateInternalClientFilter();
+                refreshAllClientDropdowns();
                 if (activeView === 'tasks') renderTasks();
                 if (isInternalTabActive()) renderInternalTasks();
                 if ((activeView === 'dailyplan' || isDailyPlanTabActive())) renderDailyPlan();
@@ -29253,9 +29431,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     console.time('[PERF] preloadCustomClients');
                     const snap = await get(ref(db, 'worksync/settings/custom_clients'));
                     if (snap.exists() && Array.isArray(snap.val())) {
-                        customClients = snap.val();
+                        const list = snap.val();
+                        customClients = [...new Set([...list, ...(typeof CLIENTS !== 'undefined' ? CLIENTS : [])])];
                         console.timeEnd('[PERF] preloadCustomClients');
                         console.log('[Preload] CustomClients loaded:', customClients.length, 'clients');
+                        refreshAllClientDropdowns();
                         return true;
                     }
                     console.timeEnd('[PERF] preloadCustomClients');
@@ -29276,7 +29456,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const settings = snap.val() || {};
                     clientLabelMap = settings.client_label_map || {};
                     if (Array.isArray(settings.custom_clients) && settings.custom_clients.length) {
-                        customClients = settings.custom_clients;
+                        customClients = [...new Set([...settings.custom_clients, ...(typeof CLIENTS !== 'undefined' ? CLIENTS : [])])];
                     }
                     if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
                         // Keep NOV (active) + OCT (reporting-only); strip any other stale keys
@@ -29307,16 +29487,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     refreshAllTaskClientDisplay();
+                    refreshAllClientDropdowns();
                     if (activeView === 'clients-admin') loadClientNamesAdmin();
                 });
             }
 
             async function ensureCustomClientsSeeded() {
                 if (!db) return;
-                const snap = await get(ref(db, 'worksync/settings/custom_clients'));
-                if (!snap.exists() || !Array.isArray(snap.val()) || !snap.val().length) {
-                    await set(ref(db, 'worksync/settings/custom_clients'), [...CLIENTS]);
-                    customClients = [...CLIENTS];
+                try {
+                    const snap = await get(ref(db, 'worksync/settings/custom_clients'));
+                    const existing = snap.exists() && Array.isArray(snap.val()) ? snap.val() : [];
+                    const base = typeof CLIENTS !== 'undefined' && Array.isArray(CLIENTS) ? CLIENTS : [];
+                    const merged = [...new Set([...existing, ...base])].sort((a, b) => a.localeCompare(b));
+                    if (merged.length !== existing.length) {
+                        await set(ref(db, 'worksync/settings/custom_clients'), merged);
+                        customClients = merged;
+                        refreshAllClientDropdowns();
+                    } else if (existing.length) {
+                        customClients = existing;
+                    }
+                } catch (e) {
+                    console.warn('[ensureCustomClientsSeeded] error:', e);
                 }
             }
 
@@ -29390,6 +29581,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 await set(ref(db, 'worksync/settings/client_label_map'), nextMap);
                 clientLabelMap = nextMap;
                 refreshAllTaskClientDisplay();
+                refreshAllClientDropdowns();
                 loadClientNamesAdmin();
                 toast(`Imported ${added} label${added === 1 ? '' : 's'} — edit display names as needed`, 'success');
             }
@@ -29427,6 +29619,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 clientLabelMap = nextMap;
                 document.getElementById('clientMapModal').close();
                 refreshAllTaskClientDisplay();
+                refreshAllClientDropdowns();
                 loadClientNamesAdmin();
                 toast('Label mapping saved', 'success');
             }
@@ -29439,6 +29632,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 await set(ref(db, 'worksync/settings/client_label_map'), nextMap);
                 clientLabelMap = nextMap;
                 refreshAllTaskClientDisplay();
+                refreshAllClientDropdowns();
                 loadClientNamesAdmin();
                 toast('Mapping removed', 'info');
             }
@@ -29473,8 +29667,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 await set(ref(db, 'worksync/settings/custom_clients'), next);
                 customClients = next;
                 document.getElementById('customClientModal').close();
-                populateClientFilter();
-                populateInternalClientFilter();
+                refreshAllClientDropdowns();
                 loadClientNamesAdmin();
                 toast('Client saved', 'success');
             }
@@ -29487,8 +29680,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 await set(ref(db, 'worksync/settings/custom_clients'), next);
                 customClients = next;
                 loadClientNamesAdmin();
-                populateClientFilter();
-                populateInternalClientFilter();
+                refreshAllClientDropdowns();
                 toast('Client removed', 'info');
             }
 
@@ -29753,9 +29945,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     populateAssigneeFilter();
                     PerfOptimizer.queueRender(() => renderTasks(), 'high');
                     PerfOptimizer.queueRender(() => updateStats(), 'normal');
-                    populateClientFilter(); // Call after renderTasks to ensure task data is updated
-                    populateInternalAssigneeFilter();
-                    populateInternalClientFilter();
+                    refreshAllClientDropdowns();
                     // Re-render strategy calendar client tabs now that Jira tasks are loaded
                     if (typeof renderStrategyClientTabs === 'function') {
                         renderStrategyClientTabs();
@@ -30086,7 +30276,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 if (cSel) {
                     const cur = cSel.value || 'all';
-                    const clients = [...new Set(pool.map(t => t.client).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+                    const clients = getClientCatalog();
                     cSel.innerHTML = `<option value="all">All Clients</option>` +
                         clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                     cSel.value = [...cSel.options].some(o => o.value === cur) ? cur : 'all';
@@ -30383,7 +30573,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 if (currentAssigneeFilter !== 'all') filtered = filtered.filter(t => assigneeMatches(t, currentAssigneeFilter) || (activeTaskId && t.id === activeTaskId));
                 if (currentClientFilter !== 'all') {
-                    filtered = filtered.filter(t => t.client === currentClientFilter || (activeTaskId && t.id === activeTaskId));
+                    filtered = filtered.filter(t => t.client === currentClientFilter || (normalizeClientName(t.client) === normalizeClientName(currentClientFilter)) || (activeTaskId && t.id === activeTaskId));
                 }
                 if (currentDueDateFromRange || currentDueDateToRange) {
                     // Custom date range filtering
@@ -30793,7 +30983,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         : (activeTaskId ? tasks.filter(t => (isWorking(t) || t.id === activeTaskId) && isInternalTask(t)) : []);
                 }
                 if (currentInternalAssigneeFilter !== 'all') filtered = filtered.filter(t => (activeTaskId && t.id === activeTaskId) || assigneeMatches(t, currentInternalAssigneeFilter));
-                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => isWorking(t) || t.client === currentInternalClientFilter);
+                if (currentInternalClientFilter !== 'all') filtered = filtered.filter(t => isWorking(t) || t.client === currentInternalClientFilter || (normalizeClientName(t.client) === normalizeClientName(currentInternalClientFilter)));
 
                 if (currentInternalDueDateFromRange || currentInternalDueDateToRange) {
                     // Custom date range filtering
@@ -30934,7 +31124,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 if (!currentInternalStatusFilter.map(s => s.toLowerCase()).includes((t.status || '').toLowerCase())) return false;
                             }
                             // Client filter
-                            if (currentInternalClientFilter !== 'all' && t.client !== currentInternalClientFilter) return false;
+                            if (currentInternalClientFilter !== 'all' && t.client !== currentInternalClientFilter && (normalizeClientName(t.client) !== normalizeClientName(currentInternalClientFilter))) return false;
                             // Due date filter
                             if (currentInternalDueDateFilter !== 'all') {
                                 const todayF = new Date(); todayF.setHours(0, 0, 0, 0);
@@ -33166,6 +33356,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         await set(ref(db, 'worksync/settings/custom_clients'), next);
                         customClients = next;
                         client = name;
+                        if (typeof refreshAllClientDropdowns === 'function') refreshAllClientDropdowns();
                         toast(`Client "${name}" added to list`, 'success');
                     }
                 }
@@ -52902,11 +53093,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const existingValue = sel.value;
                 const allClients = getClientCatalog();
 
-                if (sel.dataset.clientCount === String(allClients.length) && sel.options.length > 1) {
+                const sig = allClients.join('|');
+                if (sel.dataset.clientSig === sig && sel.options.length > 1) {
                     sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
                     return;
                 }
-                sel.dataset.clientCount = String(allClients.length);
+                sel.dataset.clientSig = sig;
 
                 sel.innerHTML = `<option value="all">All Clients</option>`;
                 allClients.forEach(c => {
@@ -52924,12 +53116,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const existingValue = sel.value;
                 const allClients = getClientCatalog();
 
-                if (sel.dataset.clientCount === String(allClients.length) && sel.options.length > 1) {
+                const sig = allClients.join('|');
+                if (sel.dataset.clientSig === sig && sel.options.length > 1) {
                     sel.value = [...sel.options].some(o => o.value === existingValue) ? existingValue : 'all';
                     currentInternalClientFilter = sel.value;
                     return;
                 }
-                sel.dataset.clientCount = String(allClients.length);
+                sel.dataset.clientSig = sig;
 
                 sel.innerHTML = `<option value="all">All Clients</option>`;
                 allClients.forEach(c => {

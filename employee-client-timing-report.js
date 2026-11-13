@@ -30,10 +30,13 @@ function populateEcttEmployeeFilter() {
 function populateEcttClientFilter() {
     const select = document.getElementById('ectt-client-filter');
     if (!select) return;
-    const clients = Array.from(new Set((window.tasks || []).filter(t => t.client).map(t => t.client)))
-        .sort((a, b) => a.localeCompare(b));
+    const cur = select.value || 'all';
+    const clients = typeof window.getClientCatalog === 'function'
+        ? window.getClientCatalog()
+        : Array.from(new Set((window.tasks || []).filter(t => t.client).map(t => t.client))).sort((a, b) => a.localeCompare(b));
     select.innerHTML = '<option value="all">All Clients</option>' + 
         clients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (clients.includes(cur) || cur === 'all') select.value = cur;
 }
 
 function getEcttFilters() {
