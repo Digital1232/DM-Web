@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.0.78">
+    <meta name="app-version" content="1.1.04">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -17260,7 +17260,7 @@
                 const reviewNumber = previousReviews.length + 1;
 
                 const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                const isManualTask = task.manual || String(task.id).startsWith('M-');
+                const isManualTask = task.manual || String(task.id).startsWith('M-') || String(task.id).startsWith('A-') || String(task.id).startsWith('P-');
                 if (isManualTask) {
                     document.getElementById('qc-task-id').textContent = `${task.id} (Review #${reviewNumber})`;
                 } else {
@@ -17602,7 +17602,7 @@
                 list.innerHTML = visible.map(r => {
                     const scoreColor = r.qcScore >= 85 ? 'text-emerald-600' : r.qcScore >= 60 ? 'text-amber-500' : 'text-rose-500';
                     const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                    const isManualReport = r.manual || String(r.taskId || '').startsWith('M-');
+                    const isManualReport = r.manual || String(r.taskId || '').startsWith('M-') || String(r.taskId || '').startsWith('A-') || String(r.taskId || '').startsWith('P-');
                     const taskIdHtml = isManualReport
                         ? `<span class="text-indigo-600 font-mono mr-2">${escapeHtml(r.taskId || '')}</span>`
                         : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(r.taskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="text-indigo-600 hover:text-indigo-800 hover:underline font-mono inline-flex items-center gap-0.5 mr-2 cursor-pointer" title="Open Jira Task Details">${escapeHtml(r.taskId || '')} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
@@ -18056,7 +18056,7 @@
                 if (!issueKey || !commentText) return false;
                 try {
                     // Post comment if issue is a Jira task key (e.g. JIRA-123 or AUG-1007)
-                    if (issueKey.includes('-') && !issueKey.startsWith('M-')) {
+                    if (issueKey.includes('-') && !issueKey.startsWith('M-') && !issueKey.startsWith('A-') && !issueKey.startsWith('P-') && !issueKey.startsWith('LEARN-') && !issueKey.startsWith('DISC-')) {
                         const jiraUrl = `${JIRA.host}/rest/api/2/issue/${encodeURIComponent(issueKey)}/comment`;
                         const res = await jiraRequest(jiraUrl, 'post', { body: commentText });
                         if (res && res.success !== false) {
@@ -18459,7 +18459,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                const isManualReportTask = report.manual || String(report.taskId || '').startsWith('M-');
+                const isManualReportTask = report.manual || String(report.taskId || '').startsWith('M-') || String(report.taskId || '').startsWith('A-') || String(report.taskId || '').startsWith('P-');
                 const reportTaskIdHtml = isManualReportTask
                     ? escapeHtml(report.taskId)
                     : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(report.taskId)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 cursor-pointer" title="Open in Jira">${escapeHtml(report.taskId)} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
@@ -31138,7 +31138,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function isInternalTask(t) {
                 if (!t) return false;
                 const tId = String(t.id || t.taskId || '').toUpperCase().trim();
-                if (tId.startsWith('M-') || tId.startsWith('LEARN-') || tId.startsWith('MP-') || tId.startsWith('DISC-') || tId.startsWith('P-')) return true;
+                if (tId.startsWith('M-') || tId.startsWith('A-') || tId.startsWith('LEARN-') || tId.startsWith('MP-') || tId.startsWith('DISC-') || tId.startsWith('P-')) return true;
                 if (t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true') return true;
                 return typeof isJiraCloudTask === 'function' ? !isJiraCloudTask(t) : false;
             }
@@ -31552,10 +31552,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 { title: "GMB Analysis and Uploads", needsClient: true, client: null },
                 { title: "Ads Campaign Analysis and Updates", needsClient: true, client: null },
                 { title: "Monthly Report Updates", needsClient: true, client: null },
-                { title: "Daily Followers Updates", needsClient: false, client: "Internal" },
-                { title: "Weekly Report Updates", needsClient: false, client: "Internal" },
+                { title: "Daily Followers Updates", needsClient: true, client: null },
+                { title: "Weekly Report Updates", needsClient: true, client: null },
                 { title: "IVN Amazon Order Tracking", needsClient: true, client: "IVN" },
-                { title: "Post Comments Replies", needsClient: false, client: "NTT" }
+                { title: "Post Comments Replies", needsClient: true, client: "NTT" }
             ];
 
             let ajithTasksEnsureStarted = false;
@@ -31628,7 +31628,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const assigneeName = 'Ajith';
 
                     // Invalidate session cache if configuration changed
-                    const ajithConfigSig = 'v2_20261104_ajith_recurring';
+                    const ajithConfigSig = 'v3_20261113_ajith_recurring';
                     if (sessionStorage.getItem('ajithTasks_configSig') !== ajithConfigSig) {
                         sessionStorage.removeItem('ajithTasks_lastRun');
                         sessionStorage.setItem('ajithTasks_configSig', ajithConfigSig);
@@ -33041,9 +33041,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function showAjithClientPopup(taskId) {
-                const task = tasks.find(t => t.id === taskId);
+                const task = tasks.find(t => isSameTaskId(t.id, taskId));
                 if (!task) return;
-                pendingAjithTaskId = taskId;
+                pendingAjithTaskId = task.id;
 
                 const nameEl = document.getElementById('ajith-task-name');
                 if (nameEl) nameEl.textContent = task.id + ' — ' + (task.desc || '');
@@ -33053,38 +33053,44 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const baseClients = (customClients && customClients.length ? customClients : CLIENTS)
                         .slice().sort((a, b) => a.localeCompare(b));
 
-                    const isGmbTask = task.desc && (task.desc.includes('GMB') || task.desc.toLowerCase().includes('gmb'));
-                    const isIvnTask = task.desc && (task.desc.includes('IVN') || task.desc.toLowerCase().includes('ivn'));
+                    const descLower = (task.desc || '').toLowerCase();
+                    const isGmbTask = descLower.includes('gmb');
+                    const isIvnTask = descLower.includes('ivn');
+                    const isPostCommentsTask = descLower.includes('post comments') || descLower.includes('comment');
                     let optionsHtml = '<option value="" disabled selected>Select a client...</option>';
 
+                    let priorityDefaults = [];
                     if (isIvnTask) {
-                        // Task 7: IVN Amazon Order Tracking - Option to choose the IVN Client Only
-                        const ivnClients = baseClients.filter(c => c.toLowerCase().includes('ivn'));
-                        if (ivnClients.length === 0) ivnClients.push('IVN');
-                        optionsHtml = ivnClients.map((c, idx) => `<option value="${c}" ${idx === 0 ? 'selected' : ''}>${c}</option>`).join('');
+                        priorityDefaults = ['IVN'];
                     } else if (isGmbTask) {
-                        const gmbDefaults = ['Einstein', 'NTT', 'Nivya'];
-                        const matchedDefaults = gmbDefaults.map(def => {
+                        priorityDefaults = ['Einstein', 'NTT', 'Nivya'];
+                    } else if (isPostCommentsTask) {
+                        priorityDefaults = ['NTT'];
+                    }
+
+                    if (priorityDefaults.length > 0) {
+                        const matchedDefaults = priorityDefaults.map(def => {
                             const found = baseClients.find(c => c.toLowerCase() === def.toLowerCase());
                             return found || def;
                         });
 
-                        optionsHtml += matchedDefaults.map(c => `<option value="${c}">${c}</option>`).join('');
+                        optionsHtml += matchedDefaults.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                         optionsHtml += '<option value="" disabled>──────────</option>';
                         optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
 
-                        const rest = baseClients.filter(c => !matchedDefaults.includes(c));
+                        const rest = baseClients.filter(c => !matchedDefaults.some(m => m.toLowerCase() === c.toLowerCase()));
                         if (rest.length > 0) {
                             optionsHtml += '<option value="" disabled>──────────</option>';
-                            optionsHtml += rest.map(c => `<option value="${c}">${c}</option>`).join('');
+                            optionsHtml += rest.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                         }
                     } else {
-                        optionsHtml += baseClients.map(c => `<option value="${c}">${c}</option>`).join('');
+                        optionsHtml += baseClients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                         optionsHtml += '<option value="" disabled>──────────</option>';
                         optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
                     }
 
                     select.innerHTML = optionsHtml;
+                    select.value = '';
                 }
 
                 document.getElementById('ajithClientModal').showModal();
@@ -33093,7 +33099,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function confirmAjithClientStart() {
                 if (!pendingAjithTaskId) return;
                 const select = document.getElementById('ajith-client-select');
-                let client = select.value;
+                let client = select ? select.value : '';
 
                 if (!client) return toast('Please select a client', 'error');
 
@@ -33118,24 +33124,47 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 document.getElementById('ajithClientModal').close();
 
-                const baseTask = tasks.find(t => t.id === pendingAjithTaskId);
+                const taskIdToUse = pendingAjithTaskId;
                 pendingAjithTaskId = null;
+
+                const baseTask = tasks.find(t => isSameTaskId(t.id, taskIdToUse));
+                if (!baseTask) {
+                    return toast('Could not find original recurring task', 'error');
+                }
 
                 // Create a new manual task for this specific client
                 const newTaskId = `A-${Math.floor(Math.random() * 900000) + 100000}`;
+                const baseTitle = baseTask.desc || baseTask.title || 'Task';
+                const cleanBaseTitle = baseTitle.replace(/\s*-\s*[^-]+$/, '').trim();
+                const taskDesc = `${cleanBaseTitle} - ${client}`;
+
                 const newTask = {
                     ...baseTask,
                     id: newTaskId,
-                    desc: `${baseTask.desc} - ${client}`,
+                    desc: taskDesc,
                     client: client,
+                    manual: true,
+                    taskType: 'internal',
                     ajithTask: false, // Don't treat it as the base recurring task anymore
                     needsClient: false,
                     status: 'In Progress',
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    duedate: todayIso()
                 };
 
-                const ownerKey = eKey(newTask.userId || currentUser.email);
-                await set(ref(db, `worksync/manual_tasks/${ownerKey}/${newTaskId}`), newTask);
+                const targetOwnerKeys = ['ajithvilpower_gmail_com', 'ajith_vilpower_com'];
+                const currentUserKey = currentUser?.email ? eKey(currentUser.email) : null;
+                const keysToSave = new Set([...targetOwnerKeys]);
+                if (currentUserKey) keysToSave.add(currentUserKey);
+                if (newTask.userId) keysToSave.add(eKey(newTask.userId));
+
+                for (const ok of keysToSave) {
+                    try {
+                        await set(ref(db, `worksync/manual_tasks/${ok}/${newTaskId}`), newTask);
+                    } catch (err) {
+                        console.warn(`Failed to save task to ${ok}:`, err);
+                    }
+                }
                 tasks.unshift(newTask);
 
                 // Start the new task immediately
@@ -33172,14 +33201,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // ────────────────────────────────────────────────────────────────
 
                 // Murugesh client selection for specific tasks
-                const task = tasks.find(t => t.id === id);
+                const task = tasks.find(t => isSameTaskId(t.id, id));
                 if (task && task.murugeshTask && task.needsClient) {
                     showMurugeshClientPopup(id);
                     return; // Don't start yet, wait for client selection
                 }
 
                 // Ajith client selection for specific tasks
-                if (task && task.ajithTask && task.needsClient) {
+                if (task && (task.ajithTask || String(task.id || '').startsWith('A-')) && task.needsClient) {
                     showAjithClientPopup(id);
                     return; // Wait for client selection
                 }
@@ -34817,6 +34846,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     assigneeName,
                     knownUserByEmail,
                     canViewDailySummary,
+                    isAdmin: typeof isAdmin === 'function' ? isAdmin : () => false,
+                    isManager: typeof isManager === 'function' ? isManager : () => false,
                     getSafePdfUrl: typeof getSafePdfUrl === 'function' ? getSafePdfUrl : null,
                     getUserAvatarSrc: typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc : null
                 };
@@ -34988,13 +35019,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const countEl = document.getElementById('admin-current-work-count');
                 if (!list || !countEl) return;
 
-                // Filter users based on current user's role
+                // Filter users based on current user's role: Admin sees all users; others see their tasks alone
                 let filteredUsers = currentWorkUsers;
-                if (!isAdmin() && currentUser?.email?.toLowerCase() !== 'murugeshvilpower@gmail.com') {
-                    // Non-admin and non-Murugesh users see only their own task
-                    filteredUsers = currentWorkUsers.filter(u => u.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+                if (!isAdmin()) {
+                    filteredUsers = currentWorkUsers.filter(u => (u.email || '').toLowerCase().trim() === (currentUser?.email || '').toLowerCase().trim());
                 }
-                // Admin and Murugesh see all users
 
                 const activeCount = filteredUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
                 countEl.textContent = `${activeCount} Active`;
@@ -46162,7 +46191,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 // Also strip any remaining trailing " - ClientName" that may have been
                                 // re-introduced if the desc itself contained the client mid-string (e.g. Murugesh/Ajith recurring)
                                 const task2 = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
-                                if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false)) {
+                                if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false || task2.ajithTask === false || String(task2.id || '').startsWith('A-') || String(task2.id || '').startsWith('M-'))) {
                                     // For recurring client tasks, the base title is everything before " - ClientName"
                                     // Strip all " - X" trailing segments that match any known client
                                     itemDesc = itemDesc.replace(suffixRegex, '').trim();
@@ -46453,7 +46482,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 const prefixRegex = new RegExp(`^${escapedClient}\\s*-\\s*`, 'i');
                                 itemDesc = itemDesc.replace(suffixRegex, '').replace(prefixRegex, '').trim();
                                 const task2 = tasks.find(t => String(t.id || '').trim().toUpperCase() === normTaskId);
-                                if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false)) {
+                                if (task2 && (task2.murugeshTask || task2.ajithTask || task2.murugeshTask === false || task2.ajithTask === false || String(task2.id || '').startsWith('A-') || String(task2.id || '').startsWith('M-'))) {
                                     itemDesc = itemDesc.replace(suffixRegex, '').trim();
                                 }
                             }
@@ -60658,7 +60687,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.exportOperationEtaCsv = exportOperationEtaCsv;
 
             window.confirmSnehaTaskStart = confirmSnehaTaskStart;
+            window.showMurugeshClientPopup = showMurugeshClientPopup;
             window.confirmMurugeshClientStart = confirmMurugeshClientStart;
+            window.showAjithClientPopup = showAjithClientPopup;
             window.confirmAjithClientStart = confirmAjithClientStart;
             window.populateIndivPerfUserFilter = populateIndivPerfUserFilter; window.renderIndivPerfReport = renderIndivPerfReport;
             window.populateClientPerfFilter = populateClientPerfFilter; window.renderClientPerfReport = renderClientPerfReport;

@@ -562,7 +562,16 @@
         const c = ctx();
         if (!c.canViewDailySummary?.()) return;
 
-        const users = (c.currentWorkUsers || []).slice();
+        let users = (c.currentWorkUsers || []).slice();
+
+        // Admin sees all users. Others only see their own tasks alone.
+        const isAdminUser = typeof c.isAdmin === 'function' ? c.isAdmin() : (typeof window.isAdmin === 'function' ? window.isAdmin() : false);
+        const myEmail = (c.currentUser?.email || window.currentUser?.email || '').toLowerCase().trim();
+
+        if (!isAdminUser) {
+            users = users.filter(u => (u.email || '').toLowerCase().trim() === myEmail);
+        }
+
         const activeCount = users.filter(u => deriveUserState(u) === 'working').length;
         countEl.textContent = `${activeCount} Working`;
 
