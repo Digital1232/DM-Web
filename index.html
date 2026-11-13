@@ -15731,8 +15731,8 @@
             // Firebase records are deleted the next time an admin loads the app. Add IDs here only.
             const REMOVED_TASK_IDS = ['M-1765325424735', 'M-1765404722358', 'M-1765404722803', 'M-1779279416802', 'M-1777551877624', 'M-1779272466504'];
             window.REMOVED_TASK_IDS = REMOVED_TASK_IDS;
-            const ADMIN_ROLES = ['System Admin', 'Administrator'];
-            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
+            const ADMIN_ROLES = ['System Admin', 'Administrator', 'Head of Operations'];
+            const ADMIN_EMAILS = ['digitalmarketing@vilpower.com', 'nanjil@vilpower.com', 'nanjilvilpower@gmail.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
             const MANAGER_EMAILS = ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
             const CLIENT_WIDE_ACCESS_EMAILS = ['ajithvilpower@gmail.com', 'ajith@vilpower.com', 'murugeshvilpower@gmail.com', 'murugesh@vilpower.com'];
 
@@ -36028,6 +36028,79 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.getAltDmId = getAltDmId;
 
+            function isGroupMember(c, userOrEmail) {
+                if (!c || c.type !== 'group') return false;
+                let user = null;
+                let email = '';
+                let role = '';
+                if (typeof userOrEmail === 'string') {
+                    email = (userOrEmail || '').toLowerCase().trim();
+                    user = (typeof allUsersMap !== 'undefined' && allUsersMap.get(email)) ||
+                        (typeof knownUserByEmail === 'function' && knownUserByEmail(email)) ||
+                        (typeof USERS !== 'undefined' && USERS.find(u => u.email.toLowerCase() === email)) ||
+                        { email };
+                    role = (user.role || '').trim();
+                } else if (userOrEmail && typeof userOrEmail === 'object') {
+                    user = userOrEmail;
+                    email = (user.email || '').toLowerCase().trim();
+                    role = (user.role || '').trim();
+                } else if (typeof currentUser !== 'undefined' && currentUser) {
+                    user = currentUser;
+                    email = (user.email || '').toLowerCase().trim();
+                    role = (user.role || '').trim();
+                }
+                if (!email) return false;
+
+                // 1. Head of Operations / Admins have company-wide visibility to all workspace groups
+                const isAdminUser = (typeof isAdmin === 'function' && isAdmin()) ||
+                    (typeof ADMIN_EMAILS !== 'undefined' && ADMIN_EMAILS.some(e => e.toLowerCase() === email)) ||
+                    (typeof ADMIN_ROLES !== 'undefined' && ADMIN_ROLES.includes(role)) ||
+                    role.toLowerCase().includes('operations') ||
+                    role.toLowerCase().includes('admin') ||
+                    email === 'nanjil@vilpower.com' ||
+                    email === 'nanjilvilpower@gmail.com' ||
+                    email === 'digitalmarketing@vilpower.com';
+                if (isAdminUser) return true;
+
+                // 2. Creator of the group
+                if (c.createdBy && c.createdBy.toLowerCase().trim() === email) return true;
+
+                if (!c.members) return false;
+
+                // 3. Normalized key variants (handles raw email, eKey, and common alias variations)
+                const normalizedKey = email.replace(/[@.]/g, '_');
+                const userKeys = [
+                    email,
+                    normalizedKey,
+                    (typeof eKey === 'function' ? eKey(email) : normalizedKey)
+                ];
+                if (email === 'nanjil@vilpower.com' || email === 'nanjilvilpower@gmail.com') {
+                    userKeys.push('nanjil_vilpower_com', 'nanjilvilpower_gmail_com', 'nanjil@vilpower.com', 'nanjilvilpower@gmail.com');
+                }
+                if (email === 'digitalmarketing@vilpower.com' || email === 'palanivilpower@gmail.com' || email === 'palani@vilpower.com') {
+                    userKeys.push('digitalmarketing_vilpower_com', 'palanivilpower_gmail_com', 'palani_vilpower_com', 'digitalmarketing@vilpower.com');
+                }
+
+                // Array format check
+                if (Array.isArray(c.members)) {
+                    return c.members.some(m => userKeys.includes((m || '').toLowerCase().trim()));
+                }
+
+                // Object/Map format check
+                if (typeof c.members === 'object') {
+                    for (const k of userKeys) {
+                        if (c.members[k]) return true;
+                    }
+                    const memberKeys = Object.keys(c.members).map(k => k.toLowerCase().trim());
+                    for (const k of userKeys) {
+                        if (memberKeys.includes(k)) return true;
+                    }
+                }
+
+                return false;
+            }
+            window.isGroupMember = isGroupMember;
+
             function registerOnline() {
                 if (!db || !currentUser) return;
                 const userRef = ref(db, `worksync/users/${eKey(currentUser.email)}`);
@@ -36377,7 +36450,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     Object.entries(chatConversations).forEach(([id, c]) => {
                         if (!c) return;
-                        const isMember = (c.members && c.members[myKey]) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
+                        const isMember = (c.type === 'group' ? isGroupMember(c, currentUser) : (c.members && c.members[myKey])) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
                         if (!isMember) return;
                         const lastTs = c.lastTimestamp || 0;
                         const lastSender = (c.lastSenderEmail || '').toLowerCase();
@@ -36472,7 +36545,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const convsToWatch = new Map();
                     Object.entries(chatConversations).forEach(([id, c]) => {
                         if (!c) return;
-                        if ((c.members && c.members[myKey]) || (id.includes(myKey) && (id.startsWith('dm_') || id.includes('_')))) {
+                        if ((c.type === 'group' ? isGroupMember(c, currentUser) : (c.members && c.members[myKey])) || (id.includes(myKey) && (id.startsWith('dm_') || id.includes('_')))) {
                             convsToWatch.set(id, c);
                         }
                     });
@@ -36598,7 +36671,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         countedConvs.add(id);
                         if (altId) countedConvs.add(altId);
 
-                        const isMember = (c.members && c.members[myKey]) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
+                        const isMember = (c.type === 'group' ? isGroupMember(c, currentUser) : (c.members && c.members[myKey])) || (id.startsWith('dm_') && id.includes(myKey)) || (id.includes('_') && id.includes(myKey));
                         if (isMember) {
                             const unread = Math.max(unreadCounts[id] || 0, altId ? (unreadCounts[altId] || 0) : 0);
                             total += unread;
@@ -37260,7 +37333,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // 2. Gather Group Items
                 const groupEntries = (typeof chatConversations !== 'undefined')
-                    ? Object.entries(chatConversations).filter(([, c]) => c && c.type === 'group' && c.members && c.members[myKey])
+                    ? Object.entries(chatConversations).filter(([, c]) => isGroupMember(c, currentUser))
                     : [];
                 const groupItems = groupEntries.map(([id, g]) => {
                     const isPinned = pinnedList.includes(id);
@@ -37513,7 +37586,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 renderChatBadge();
                 renderDmList();
                 if (currentUser) {
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => isGroupMember(c, currentUser));
                     renderGroupList(groups);
                 }
             }
@@ -37543,7 +37616,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 renderDmList();
                 if (currentUser) {
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => isGroupMember(c, currentUser));
                     renderGroupList(groups);
                 }
             }
@@ -37573,7 +37646,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 renderDmList();
                 if (currentUser) {
-                    const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && c.members[myKey]);
+                    const groups = Object.entries(chatConversations).filter(([, c]) => isGroupMember(c, currentUser));
                     renderGroupList(groups);
                 }
             }
@@ -37754,7 +37827,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     convCreator = cachedConv.createdBy;
                     if (allUsersMap && allUsersMap.size) {
                         const allUsers = Array.from(allUsersMap.values());
-                        activeGroupMembers = allUsers.filter(u => cachedConv.members && cachedConv.members[eKey(u.email)]);
+                        activeGroupMembers = allUsers.filter(u => isGroupMember(cachedConv, u));
                     }
                     if (statusEl) statusEl.textContent = `${activeGroupMembers.length || Object.keys(cachedConv.members || {}).length || 1} members`;
                     if (onlineDot) onlineDot.classList.add('hidden');
@@ -37859,7 +37932,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             convCreator = conv.createdBy;
                             if (allUsersMap && allUsersMap.size) {
                                 const allUsers = Array.from(allUsersMap.values());
-                                activeGroupMembers = allUsers.filter(u => conv.members && conv.members[eKey(u.email)]);
+                                activeGroupMembers = allUsers.filter(u => isGroupMember(conv, u));
                             }
                             if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
                             if (actions && (isAdmin() || convCreator === (currentUser && currentUser.email))) {
@@ -37899,7 +37972,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Re-render sidebar highlights
                 renderDmList();
-                const groups = Object.entries(chatConversations).filter(([, c]) => c.type === 'group' && c.members && (myKey ? c.members[myKey] : true));
+                const groups = Object.entries(chatConversations).filter(([, c]) => isGroupMember(c, currentUser));
                 renderGroupList(groups);
 
                 // Check in-memory message cache for INSTANT render
@@ -40211,7 +40284,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 list.innerHTML = allMembers.map(u => {
-                    const isMember = group.members && group.members[eKey(u.email)];
+                    const isMember = isGroupMember(group, u);
                     return `
                 <label class="flex items-center gap-3 p-2 hover:bg-white rounded-xl cursor-pointer transition-all">
                     <input type="checkbox" value="${u.email}" class="w-4 h-4 rounded-md text-indigo-600" ${isMember ? 'checked' : ''}>
@@ -64396,12 +64469,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window._fcpGetCurrentUser = function () { return typeof currentUser !== 'undefined' ? currentUser : null; };
             window._fcpGetAllUsersMap = function () { return typeof allUsersMap !== 'undefined' ? allUsersMap : {}; };
             window._fcpSetAllUsersMap = function (m) { if (typeof allUsersMap !== 'undefined') allUsersMap = m; };
-            window._fcpGetChatConvs = function () { return typeof chatConversations !== 'undefined' ? chatConversations : []; };
+            window._fcpGetChatConvs = function () { return typeof chatConversations !== 'undefined' ? chatConversations : {}; };
             window._fcpGetUnreadCounts = function () { return typeof unreadCounts !== 'undefined' ? unreadCounts : {}; };
             safeExpose('_fcpGetAllUsers', () => getAllUsers);
             safeExpose('_fcpEKey', () => eKey);
             safeExpose('_fcpDmId', () => dmId);
             safeExpose('_fcpEscapeHtml', () => escapeHtml);
+            safeExpose('_fcpIsGroupMember', () => isGroupMember);
             window._fcpDb = function () { return typeof db !== 'undefined' ? db : null; };
             window._fcpRef = function (path) { return typeof db !== 'undefined' && typeof ref !== 'undefined' ? ref(db, path) : null; };
             safeExpose('_fcpOnValue', () => onValue);
@@ -65256,6 +65330,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
         function _fcpEK(e) { return window._fcpEKey ? window._fcpEKey(e) : (e || '').toLowerCase().replace(/[@.]/g, '_'); }
         function _fcpDM(a, b) { return window._fcpDmId ? window._fcpDmId(a, b) : ('dm_' + [_fcpEK(a), _fcpEK(b)].sort().join('_')); }
         function _fcpEH(s) { return window._fcpEscapeHtml ? window._fcpEscapeHtml(s) : String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]); }); }
+        function _fcpGM(c, u) { return window._fcpIsGroupMember ? window._fcpIsGroupMember(c, u) : (window.isGroupMember ? window.isGroupMember(c, u) : false); }
         // Firebase bridge helpers
         function _db() { return window._fcpDb ? window._fcpDb() : (typeof db !== 'undefined' ? db : null); }
         function _ref(p) { return window._fcpRef ? window._fcpRef(p) : (typeof ref !== 'undefined' ? ref(typeof db !== 'undefined' ? db : null, p) : null); }
@@ -65520,10 +65595,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                var _eKey = window._fcpEKey || function (e) { return (e || '').toLowerCase().replace(/[@.]/g, '_'); };
-                var myKey = _eKey(cu.email);
+                var _isGroupMember = window.isGroupMember || function (c, u) {
+                    if (!c || c.type !== 'group') return false;
+                    var email = (u && u.email ? u.email : '').toLowerCase().trim();
+                    if (!email) return false;
+                    var role = (u && u.role ? u.role : '').toLowerCase().trim();
+                    if (email === 'nanjil@vilpower.com' || email === 'nanjilvilpower@gmail.com' || email === 'digitalmarketing@vilpower.com' || role.includes('operations') || role.includes('admin')) return true;
+                    if (c.createdBy && c.createdBy.toLowerCase().trim() === email) return true;
+                    if (!c.members) return false;
+                    var k1 = email.replace(/[@.]/g, '_');
+                    var k2 = email;
+                    if (Array.isArray(c.members)) return c.members.includes(k1) || c.members.includes(k2);
+                    if (typeof c.members === 'object') return !!(c.members[k1] || c.members[k2] || (email.includes('nanjil') && (c.members['nanjil_vilpower_com'] || c.members['nanjilvilpower_gmail_com'])));
+                    return false;
+                };
+
                 var groups = Object.entries(_fcpCC() || {})
-                    .filter(function (e) { return e[1].type === 'group' && e[1].members && e[1].members[myKey]; })
+                    .filter(function (e) { return (typeof _fcpGM === 'function' ? _fcpGM(e[1], cu) : _isGroupMember(e[1], cu)); })
                     .sort(function (a, b) { return (b[1].lastTimestamp || 0) - (a[1].lastTimestamp || 0); });
 
                 if (fcpSearchQuery) {
