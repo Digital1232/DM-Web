@@ -10135,7 +10135,7 @@
                                         <div class="relative flex items-center">
                                             <iconify-icon icon="solar:user-bold" width="14"
                                                 class="absolute left-3 text-slate-400 z-10"></iconify-icon>
-                                            <select id="indiv-perf-user-select" onchange="renderIndivPerfReport()"
+                                            <select id="indiv-perf-user-select" onchange="onIndivPerfUserChange(this.value)"
                                                 class="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl pl-9 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none cursor-pointer text-slate-700 min-w-[180px]">
                                             </select>
                                             <iconify-icon icon="solar:alt-arrow-down-linear" width="12"
@@ -40729,9 +40729,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 reportDateTo = toInput.value;
                 const userInput = document.getElementById('report-user-filter');
                 const weeklyUserInput = document.getElementById('weekly-report-user-filter');
+                const indivUserInput = document.getElementById('indiv-perf-user-select');
 
                 if (userInput && weeklyUserInput && userInput.value !== weeklyUserInput.value) {
                     weeklyUserInput.value = userInput.value;
+                }
+
+                if (userInput && indivUserInput && userInput.value && userInput.value !== 'all') {
+                    if ([...indivUserInput.options].some(o => o.value.toLowerCase() === userInput.value.toLowerCase())) {
+                        indivUserInput.value = userInput.value.toLowerCase();
+                    }
                 }
 
                 reportSelectedUser = userInput ? userInput.value : (weeklyUserInput ? weeklyUserInput.value : 'all');
@@ -47250,13 +47257,103 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function populateIndivPerfUserFilter() {
                 const sel = document.getElementById('indiv-perf-user-select');
                 if (!sel) return;
-                if (sel.options.length > 0) return; // Only populate once to prevent losing selection
                 const users = getLearningEmployees();
-                sel.innerHTML = users.map(u => `<option value="${u.email.toLowerCase()}">${escapeHtml(u.name || u.email)}</option>`).join('');
-                if (users.length > 0) {
+                if (sel.options.length === 0) {
+                    sel.innerHTML = users.map(u => `<option value="${u.email.toLowerCase()}">${escapeHtml(u.name || u.email)}</option>`).join('');
+                }
+
+                // Two-way synchronization with global report filter or current user
+                const globalUserSelect = document.getElementById('report-user-filter');
+                let targetEmail = '';
+                if (globalUserSelect && globalUserSelect.value && globalUserSelect.value !== 'all') {
+                    targetEmail = globalUserSelect.value.toLowerCase();
+                } else if (!isAdmin() && !isManager() && currentUser && currentUser.email) {
+                    targetEmail = currentUser.email.toLowerCase();
+                } else if (sel.value) {
+                    targetEmail = sel.value.toLowerCase();
+                } else if (currentUser && currentUser.email) {
+                    targetEmail = currentUser.email.toLowerCase();
+                }
+
+                if (targetEmail && [...sel.options].some(o => o.value.toLowerCase() === targetEmail)) {
+                    sel.value = targetEmail;
+                } else if (users.length > 0 && !sel.value) {
                     sel.value = users[0].email.toLowerCase();
                 }
             }
+
+            function onIndivPerfUserChange(val) {
+                const globalUserSelect = document.getElementById('report-user-filter');
+                if (globalUserSelect && val && [...globalUserSelect.options].some(o => o.value.toLowerCase() === val.toLowerCase())) {
+                    globalUserSelect.value = val;
+                    reportSelectedUser = val;
+                }
+                renderIndivPerfReport();
+            }
+            window.onIndivPerfUserChange = onIndivPerfUserChange;
+
+            window.indivPerfTaskFilter = 'all';
+            window.indivPerfTaskSearch = '';
+
+            function setIndivPerfTaskFilter(filter) {
+                window.indivPerfTaskFilter = filter;
+                filterIndivPerfTaskList();
+            }
+            window.setIndivPerfTaskFilter = setIndivPerfTaskFilter;
+
+            function onIndivPerfTaskSearch(query) {
+                window.indivPerfTaskSearch = (query || '').trim().toLowerCase();
+                filterIndivPerfTaskList();
+            }
+            window.onIndivPerfTaskSearch = onIndivPerfTaskSearch;
+
+            function filterIndivPerfTaskList() {
+                const items = document.querySelectorAll('.indiv-perf-task-item');
+                let visibleCount = 0;
+                items.forEach(el => {
+                    const status = (el.dataset.status || '').toLowerCase();
+                    const text = (el.dataset.search || '').toLowerCase();
+                    const isCompleted = el.dataset.completed === 'true';
+                    const isHold = status.includes('hold');
+                    const isRework = status.includes('rework');
+                    const isInProgress = !isCompleted && !isHold && !isRework;
+
+                    let matchesFilter = true;
+                    if (window.indivPerfTaskFilter === 'completed') matchesFilter = isCompleted;
+                    else if (window.indivPerfTaskFilter === 'inprogress') matchesFilter = isInProgress;
+                    else if (window.indivPerfTaskFilter === 'hold') matchesFilter = isHold;
+                    else if (window.indivPerfTaskFilter === 'rework') matchesFilter = isRework;
+
+                    let matchesSearch = true;
+                    if (window.indivPerfTaskSearch) {
+                        matchesSearch = text.includes(window.indivPerfTaskSearch);
+                    }
+
+                    if (matchesFilter && matchesSearch) {
+                        el.style.display = '';
+                        visibleCount++;
+                    } else {
+                        el.style.display = 'none';
+                    }
+                });
+
+                const countEl = document.getElementById('indiv-perf-task-visible-count');
+                if (countEl) countEl.textContent = `${visibleCount} visible`;
+
+                const noMatchEl = document.getElementById('indiv-perf-task-no-match');
+                if (noMatchEl) noMatchEl.style.display = (visibleCount === 0 && items.length > 0) ? 'block' : 'none';
+
+                // Update active pill button styles
+                document.querySelectorAll('.indiv-task-pill').forEach(btn => {
+                    const f = btn.dataset.filter;
+                    if (f === window.indivPerfTaskFilter) {
+                        btn.className = 'indiv-task-pill px-2.5 py-1 text-[10px] font-black rounded-lg bg-indigo-600 text-white shadow-xs cursor-pointer transition-all';
+                    } else {
+                        btn.className = 'indiv-task-pill px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer transition-all';
+                    }
+                });
+            }
+            window.filterIndivPerfTaskList = filterIndivPerfTaskList;
 
             // ════ WEEK-OVER-WEEK COMPARISON HELPERS ════
             function generateAIInsights(curr, prev, user) {
@@ -48900,6 +48997,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         window.indivPerfTaskStats[email].completedVideos = completedVideoTasks;
                     }
 
+                    let videoEditorBreakdownHtml = '';
+                    if (isVideoEditor) {
+                        videoEditorBreakdownHtml = `
+                        <!-- Video Deliverables Breakdown -->
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                            <div class="flex justify-between items-center border-b border-slate-50 dark:border-slate-800/80 pb-2.5">
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Video Deliverables</h4>
+                                <span class="px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-full bg-blue-50 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300">Video Output</span>
+                            </div>
+                            <div onclick="showIndivPerfTasks('${email}', 'completedVideos', '${escapeHtml(user.name)} - Completed Videos')" class="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 hover:border-blue-300 rounded-2xl p-4 cursor-pointer hover:shadow-md transition-all">
+                                <p class="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                    <span>Completed Video Tasks</span>
+                                    <i class="fa-solid font-normal fa-arrow-up-right-from-square text-[9px] opacity-40"></i>
+                                </p>
+                                <p class="text-3xl font-black text-slate-900 dark:text-slate-100">${completedVideoCount}</p>
+                                <p class="text-[9px] text-slate-400 font-bold mt-1">click to view completed videos list</p>
+                            </div>
+                        </div>
+                        `;
+                    }
+
                     // ── Generate Achievements & Strengths (using finalized metrics) ──
                     const achievements = getDetailedAchievementsPool({
                         userQc,
@@ -49318,157 +49436,255 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         `;
                     }
 
+                    // ── Executive KPI Calculations ──
+                    const allAssignedTasks = (window.indivPerfTaskStats && window.indivPerfTaskStats[email]?.allAssigned) || [...currStats.completed, ...currStats.assigned, ...currStats.hold];
+                    const allAssignedCount = allAssignedTasks.length;
+                    const inProgressTasks = (window.indivPerfTaskStats && window.indivPerfTaskStats[email]?.assigned || currStats.assigned).filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status)));
+                    const activeInProgressCount = inProgressTasks.length;
+                    const holdTasks = (window.indivPerfTaskStats && window.indivPerfTaskStats[email]?.hold) || currStats.hold || [];
+                    const holdCount = holdTasks.length;
+                    const reworkTasks = currStats.rework || [];
+                    const reworkCount = reworkTasks.length;
+                    const totalFlags = holdCount + reworkCount;
+                    const closeoutPct = allAssignedCount > 0 ? Math.round((userCompleted / allAssignedCount) * 100) : (userCompleted > 0 ? 100 : 0);
+
+                    // Trend badge builder
+                    const buildTrendBadge = (diff, percent, higherIsGood = true, unit = '') => {
+                        if (diff === 0) {
+                            return `<span class="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">→ Flat</span>`;
+                        }
+                        const isGood = (higherIsGood && diff > 0) || (!higherIsGood && diff < 0);
+                        const arrow = diff > 0 ? '▲' : '▼';
+                        const sign = diff > 0 ? '+' : '';
+                        const badgeColor = isGood
+                            ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800'
+                            : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800';
+                        return `<span class="inline-flex items-center gap-0.5 text-[9px] font-black ${badgeColor} px-1.5 py-0.5 rounded-md">${arrow} ${sign}${diff}${unit} (${Math.abs(percent)}%)</span>`;
+                    };
+
+                    const completedDiff = userCompleted - prevUserCompleted;
+                    const completedPct = prevUserCompleted > 0 ? Math.round((completedDiff / prevUserCompleted) * 100) : 0;
+                    const completedTrendBadge = buildTrendBadge(completedDiff, completedPct, true);
+
+                    const loggedDiffSec = userLogged - prevStats.loggedSec;
+                    const loggedDiffHours = Math.round(Math.abs(loggedDiffSec) / 3600 * 10) / 10;
+                    const loggedPct = prevStats.loggedSec > 0 ? Math.round((loggedDiffSec / prevStats.loggedSec) * 100) : 0;
+                    const loggedTrendBadge = buildTrendBadge(loggedDiffSec > 0 ? loggedDiffHours : -loggedDiffHours, loggedPct, true, 'h');
+
+                    const qcDiff = userQc - (prevStats.avgQc || 0);
+                    const qcTrendBadge = buildTrendBadge(qcDiff, Math.abs(qcDiff), true, '%');
+
+                    const completedTasksList = workedTasks.filter(t => isTaskCompletedStatus(t.status));
+                    const jiraCount = completedTasksList.filter(t => !t.manual && !isInternalTask(t)).length;
+                    const internalCount = completedTasksList.filter(t => t.manual || isInternalTask(t)).length;
+                    const videoDeliverableCount = completedTasksList.filter(t =>
+                        (t.issueType || '').toLowerCase().includes('video') ||
+                        (t.desc || '').toLowerCase().includes('video edit') ||
+                        (t.desc || '').toLowerCase().includes('video production') ||
+                        (t.desc || '').toLowerCase().startsWith('video')
+                    ).length;
+                    const shootDeliverableCount = completedTasksList.filter(t =>
+                        (t.issueType || '').toLowerCase().includes('shoot') ||
+                        (t.desc || '').toLowerCase().includes('shoot') ||
+                        (t.client || '').toLowerCase().includes('shoot')
+                    ).length;
+
+                    const deliverablePills = [
+                        { label: 'Jira', val: jiraCount, color: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-900' },
+                        { label: 'Internal', val: internalCount, color: 'bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border-violet-100 dark:border-violet-900' },
+                        ...(videoDeliverableCount > 0 ? [{ label: 'Video', val: videoDeliverableCount, color: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900' }] : []),
+                        ...(shootDeliverableCount > 0 ? [{ label: 'Shoot', val: shootDeliverableCount, color: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-900' }] : [])
+                    ];
+
                     let html = `
                 ${comparisonHeader}
                 
-                <!-- KPI Comparison Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
-                    ${kpiCardsHtml}
-                </div>
-
-                <!-- AI Performance Insights -->
-                ${insightsHtml}
-
-                <!-- Original Performance Dashboard -->
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    <!-- Left: Performance Score & Core Metrics -->
-                    <div class="xl:col-span-1 space-y-6">
-                        <!-- Core Metrics Grid -->
-                        <div class="grid grid-cols-2 gap-4">
-                            <!-- Completed Tasks (Clickable) -->
-                            <div class="bg-emerald-50/30 border border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
-                                 onclick="showIndivPerfTasks('${email}', 'completed', '${escapeHtml(user.name)}')">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1">Completed Tasks</p>
-                                    <iconify-icon icon="solar:eye-bold" class="text-emerald-400 group-hover:text-emerald-600 transition-colors" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-slate-900">${userCompleted}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${prevUserCompleted} prev period</p>
-                                ${(() => {
-                            const videoEditors = ['barathvilpower@gmail.com', 'muthuvilpower@gmail.com', 'immanuelvilpower@gmail.com', 'karthikavilpower@gmail.com'];
-                            const shootCountUsers = ['immanuelvilpower@gmail.com', 'ajithvilpower@gmail.com'];
-                            if (!videoEditors.includes(email) && !shootCountUsers.includes(email)) return '';
-                            const completedTasks = workedTasks.filter(t => isTaskCompletedStatus(t.status));
-                            const jiraCount = completedTasks.filter(t => !t.manual && !isInternalTask(t)).length;
-                            const internalCount = completedTasks.filter(t => t.manual || isInternalTask(t)).length;
-                            const videoCount = completedTasks.filter(t =>
-                                (t.issueType || '').toLowerCase().includes('video') ||
-                                (t.desc || '').toLowerCase().includes('video edit') ||
-                                (t.desc || '').toLowerCase().includes('video production') ||
-                                (t.desc || '').toLowerCase().startsWith('video')
-                            ).length;
-                            const shootCount = shootCountUsers.includes(email)
-                                ? completedTasks.filter(t =>
-                                    (t.issueType || '').toLowerCase().includes('shoot') ||
-                                    (t.desc || '').toLowerCase().includes('shoot') ||
-                                    (t.client || '').toLowerCase().includes('shoot')
-                                ).length
-                                : 0;
-                            const pills = [
-                                { label: 'Jira', val: jiraCount, color: 'bg-indigo-100 text-indigo-700' },
-                                { label: 'Internal', val: internalCount, color: 'bg-violet-100 text-violet-700' },
-                                ...(videoCount > 0 ? [{ label: 'Video', val: videoCount, color: 'bg-blue-100 text-blue-700' }] : []),
-                                ...(shootCount > 0 ? [{ label: 'Shoot', val: shootCount, color: 'bg-amber-100 text-amber-700' }] : []),
-                            ];
-                            return `<div class="flex flex-wrap gap-1 mt-2">${pills.map(p => `<span class="text-[8px] font-black ${p.color} px-1.5 py-0.5 rounded-full">${p.label}: ${p.val}</span>`).join('')}</div>`;
-                        })()}
+                <!-- Sleek Executive KPI Strip (Consolidated 6 Metrics) -->
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+                    <!-- 1. Completed Deliverables -->
+                    <div onclick="showIndivPerfTasks('${email}', 'completed', '${escapeHtml(user.name)}')"
+                         class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 rounded-2xl p-4 shadow-xs transition-all cursor-pointer group flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Completed</span>
+                                <iconify-icon icon="solar:check-circle-bold" class="text-emerald-500 opacity-60 group-hover:opacity-100 transition-opacity" width="14"></iconify-icon>
                             </div>
-                            
-                            ${email === 'snehavilpower@gmail.com' ? `
-                            <!-- Sneha: Content Tasks tile -->
-                            <div class="bg-indigo-50/30 border border-indigo-100 rounded-2xl p-4 shadow-sm">
-                                <p class="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">Content Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaContentCount || 0)}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">Poster · Video · Captions</p>
-                            </div>
-                            <!-- Sneha: QC Tasks tile -->
-                            <div class="bg-violet-50/30 border border-violet-100 rounded-2xl p-4 shadow-sm">
-                                <p class="text-[9px] font-black text-violet-600 uppercase tracking-wider mb-1">QC Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaQcCount || 0)}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">completed reviews</p>
-                            </div>
-                            <!-- Sneha: Thumbnail Tasks tile -->
-                            <div class="bg-pink-50/30 border border-pink-100 rounded-2xl p-4 shadow-sm">
-                                <p class="text-[9px] font-black text-pink-600 uppercase tracking-wider mb-1">Thumbnail Tasks</p>
-                                <p class="text-xl font-black text-slate-900">${(snehaThumbnailCount || 0)}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">unique tasks</p>
-                            </div>
-                            ` : `
-                            <!-- Assigned Tasks (Clickable) -->
-                            <div class="bg-sky-50/30 border border-sky-100 hover:border-sky-300 hover:bg-sky-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
-                                 onclick="showIndivPerfTasks('${email}', 'allAssigned', '${escapeHtml(user.name)}')">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-sky-600 uppercase tracking-wider mb-1">${email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks' : 'Assigned Tasks'}</p>
-                                    <iconify-icon icon="solar:eye-bold" class="text-sky-400 group-hover:text-sky-600 transition-colors" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.allAssigned || [...currStats.completed, ...currStats.assigned, ...currStats.hold]).length}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${email === 'karthikavilpower@gmail.com' ? prevKarthikaDailyPlanCount : (prevStats.completed.length + prevStats.assigned.length + prevStats.hold.length)} prev period</p>
-                            </div>
-                            <!-- In Progress Tasks -->
-                            <div class="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 shadow-sm">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">In Progress</p>
-                                    <iconify-icon icon="solar:play-circle-bold" class="text-amber-400" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-slate-900">${(window.indivPerfTaskStats[email]?.assigned || currStats.assigned).filter(t => isInProgress(t.status) || (isInternalTask(t) && isInternalInProgress(t.status))).length}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">currently active</p>
-                            </div>
-                            <!-- Hold Tasks (Clickable) -->
-                            <div class="bg-rose-50/30 border border-rose-100 hover:border-rose-300 hover:bg-rose-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
-                                 onclick="showIndivPerfTasks('${email}', 'hold', '${escapeHtml(user.name)}')">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-rose-600 uppercase tracking-wider mb-1">Hold Tasks</p>
-                                    <iconify-icon icon="solar:eye-bold" class="text-rose-400 group-hover:text-rose-600 transition-colors" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-rose-600">${(window.indivPerfTaskStats[email]?.hold || currStats.hold).length}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.hold.length} prev period</p>
-                            </div>
-                            <!-- Reworked Tasks (Clickable) -->
-                            <div class="bg-amber-50/30 border border-amber-100 hover:border-amber-300 hover:bg-amber-50/60 rounded-2xl p-4 transition-all cursor-pointer shadow-sm relative group"
-                                 onclick="showIndivPerfTasks('${email}', 'rework', '${escapeHtml(user.name)}')">
-                                <div class="flex justify-between items-start">
-                                    <p class="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">Reworked Tasks</p>
-                                    <iconify-icon icon="solar:eye-bold" class="text-amber-400 group-hover:text-amber-600 transition-colors" width="12"></iconify-icon>
-                                </div>
-                                <p class="text-xl font-black text-amber-600">${currStats.rework.length}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${prevStats.rework.length} prev period</p>
-                            </div>
-                            `}
-
-                            <!-- QC / Delivery Score -->
-                            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">${isMurugesh ? 'Delivery Score' : 'QC Score'}</p>
-                                <p class="text-xl font-black ${userQc >= 85 ? 'text-emerald-600' : userQc >= 65 ? 'text-amber-500' : 'text-rose-500'}">${userQc}%</p>
-                                <p class="text-[9px] text-slate-400 font-bold">${isMurugesh ? 'Avg Delivery Rating' : (userQcIsAi ? 'Productivity AI' : 'Verified QC')}</p>
-                            </div>
-
-                            <!-- Work Logged -->
-                            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Work Logged</p>
-                                <p class="text-xl font-black text-slate-900">${fmtDuration(userLogged)}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">${fmtDuration(Math.round(userLogged / currDays))}/day avg</p>
-                            </div>
-
-                            <!-- Daily Breaks -->
-                            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 col-span-2">
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Daily Breaks</p>
-                                <p class="text-xl font-black text-slate-900">${fmtDuration(userAvgBreak)}</p>
-                                <p class="text-[9px] text-slate-400 font-bold">vs ${fmtDuration(prevStats.breakSec / prevDays)} prev</p>
-                            </div>
+                            <p class="text-3xl font-black text-slate-900 dark:text-slate-100 leading-tight">${userCompleted}</p>
+                            <div class="mt-1">${completedTrendBadge}</div>
                         </div>
-                        ${snehaBreakdownHtml}
-                        ${karthikaBreakdownHtml}
+                        <div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            ${deliverablePills.map(p => `<span class="text-[8px] font-black px-1.5 py-0.5 rounded border ${p.color}">${p.label}: ${p.val}</span>`).join('')}
+                        </div>
                     </div>
 
-                    <!-- Right: Extended Tasks Worked Log Table (2-column layout) -->
-                    <div class="xl:col-span-2 bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
-                        <div class="flex justify-between items-center border-b border-slate-50 pb-2.5">
+                    <!-- 2. Work Logged -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 rounded-2xl p-4 shadow-xs transition-all flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">Work Logged</span>
+                                <iconify-icon icon="solar:clock-circle-bold" class="text-blue-500 opacity-60" width="14"></iconify-icon>
+                            </div>
+                            <p class="text-3xl font-black text-slate-900 dark:text-slate-100 leading-tight">${fmtDuration(userLogged)}</p>
+                            <div class="mt-1">${loggedTrendBadge}</div>
+                        </div>
+                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            ${fmtDuration(Math.round(userLogged / currDays))}/day avg
+                        </p>
+                    </div>
+
+                    <!-- 3. Quality & Turnaround Score -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-700 rounded-2xl p-4 shadow-xs transition-all flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">${isMurugesh ? 'Delivery Rating' : 'QC Quality'}</span>
+                                <iconify-icon icon="solar:star-bold" class="text-purple-500 opacity-60" width="14"></iconify-icon>
+                            </div>
+                            <p class="text-3xl font-black ${userQc >= 85 ? 'text-emerald-600 dark:text-emerald-400' : userQc >= 65 ? 'text-amber-500 dark:text-amber-400' : 'text-rose-500 dark:text-rose-400'} leading-tight">${userQc}%</p>
+                            <div class="mt-1">${qcTrendBadge}</div>
+                        </div>
+                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            ${isMurugesh ? 'Turnaround Score' : (userQcIsAi ? 'Productivity AI' : 'Verified QC')}
+                        </p>
+                    </div>
+
+                    <!-- 4. Active Pipeline -->
+                    <div onclick="showIndivPerfTasks('${email}', 'allAssigned', '${escapeHtml(user.name)}')"
+                         class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-sky-300 dark:hover:border-sky-700 rounded-2xl p-4 shadow-xs transition-all cursor-pointer group flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400">Pipeline</span>
+                                <iconify-icon icon="solar:play-circle-bold" class="text-sky-500 opacity-60 group-hover:opacity-100 transition-opacity" width="14"></iconify-icon>
+                            </div>
+                            <p class="text-3xl font-black text-slate-900 dark:text-slate-100 leading-tight">${activeInProgressCount}</p>
+                            <div class="mt-1">
+                                <span class="inline-flex items-center gap-0.5 text-[9px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 px-1.5 py-0.5 rounded-md">
+                                    ${allAssignedCount} assigned
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[9px] font-bold text-slate-400">
+                            <span>Closeout:</span>
+                            <span class="font-black text-slate-700 dark:text-slate-200">${closeoutPct}%</span>
+                        </div>
+                    </div>
+
+                    <!-- 5. Flags & Attention -->
+                    <div onclick="showIndivPerfTasks('${email}', 'hold', '${escapeHtml(user.name)}')"
+                         class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-700 rounded-2xl p-4 shadow-xs transition-all cursor-pointer group flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider ${totalFlags > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}">Attention</span>
+                                <iconify-icon icon="solar:danger-triangle-bold" class="${totalFlags > 0 ? 'text-rose-500' : 'text-slate-400'} opacity-60 group-hover:opacity-100 transition-opacity" width="14"></iconify-icon>
+                            </div>
+                            <p class="text-3xl font-black ${totalFlags > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'} leading-tight">${totalFlags}</p>
+                            <div class="mt-1 flex items-center gap-1">
+                                <span class="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded-md">${holdCount} hold</span>
+                                <span class="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded-md">${reworkCount} rework</span>
+                            </div>
+                        </div>
+                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            Click to view hold tasks
+                        </p>
+                    </div>
+
+                    <!-- 6. Daily Breaks -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-700 rounded-2xl p-4 shadow-xs transition-all flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Daily Breaks</span>
+                                <iconify-icon icon="solar:cup-bold" class="text-amber-500 opacity-60" width="14"></iconify-icon>
+                            </div>
+                            <p class="text-3xl font-black text-slate-900 dark:text-slate-100 leading-tight">${fmtDuration(userAvgBreak)}</p>
+                            <div class="mt-1">
+                                <span class="inline-flex items-center text-[9px] font-bold ${userAvgBreak <= 3600 ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60' : userAvgBreak <= 5400 ? 'text-amber-700 bg-amber-50 dark:bg-amber-950/60' : 'text-rose-700 bg-rose-50 dark:bg-rose-950/60'} px-1.5 py-0.5 rounded-md">
+                                    ${userAvgBreak <= 3600 ? 'Healthy' : userAvgBreak <= 5400 ? 'Standard' : 'Elevated'}
+                                </span>
+                            </div>
+                        </div>
+                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            vs ${fmtDuration(prevStats.breakSec / prevDays)} prev
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 2-Column Responsive Layout -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <!-- Left: AI Performance Insights & Role Breakdown Tiles -->
+                    <div class="xl:col-span-1 space-y-5">
+                        <!-- AI Performance Insights -->
+                        ${insightsHtml}
+
+                        <!-- Role-Specific Breakdown Tiles -->
+                        ${videoEditorBreakdownHtml}
+                        ${snehaBreakdownHtml}
+                        ${karthikaBreakdownHtml}
+
+                        ${!videoEditorBreakdownHtml && !snehaBreakdownHtml && !karthikaBreakdownHtml ? `
+                        <!-- Member Summary & Efficiency -->
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400">
+                                    ${escapeHtml((user.name || user.email || 'U').charAt(0).toUpperCase())}
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(user.name || user.email)}</h4>
+                                    <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">${escapeHtml(user.role || 'Team Member')}</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px]">
+                                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                                    <p class="text-slate-400 font-bold uppercase text-[8px]">Daily Output</p>
+                                    <p class="text-base font-black text-slate-800 dark:text-slate-200">${(userCompleted / currDays).toFixed(1)} <span class="text-[9px] font-normal text-slate-400">tasks/day</span></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                                    <p class="text-slate-400 font-bold uppercase text-[8px]">Efficiency</p>
+                                    <p class="text-base font-black text-emerald-600 dark:text-emerald-400">${userCompleted > 0 && userLogged > 0 ? (userLogged / 3600 / userCompleted).toFixed(1) + 'h' : '—'} <span class="text-[9px] font-normal text-slate-400">/ task</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Right: Extended Tasks Worked Log with Live Search & Status Filter Pills -->
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                        <!-- Header with Title, Live Count, Search & Filter Pills -->
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                             <div>
-                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">${email === 'snehavilpower@gmail.com' ? 'Content Worked Log' : email === 'karthikavilpower@gmail.com' ? 'Daily Plan Tasks Log' : 'Tasks Worked Log'}</h4>
+                                    <span id="indiv-perf-task-visible-count" class="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/60">${workedTasks.length} visible</span>
+                                </div>
                                 <p class="text-[9px] text-slate-400 font-semibold mt-0.5">${email === 'snehavilpower@gmail.com' ? 'Content tasks worked on by Sneha' : email === 'karthikavilpower@gmail.com' ? 'Tasks from Karthika\'s daily plan in this period' : 'Tasks worked, logged, or assigned in period'}</p>
                             </div>
-                            <span class="px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-600">${workedTasks.length} ${email === 'snehavilpower@gmail.com' ? 'worked' : 'tasks'}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${workedTasks.length} Total</span>
+                            </div>
                         </div>
+
+                        <!-- Filter & Search Bar -->
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                            <!-- Status Filter Pills -->
+                            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                                <button type="button" class="indiv-task-pill px-2.5 py-1 text-[10px] font-black rounded-lg bg-indigo-600 text-white shadow-xs cursor-pointer transition-all" data-filter="all" onclick="setIndivPerfTaskFilter('all')">All</button>
+                                <button type="button" class="indiv-task-pill px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer transition-all" data-filter="completed" onclick="setIndivPerfTaskFilter('completed')">Completed</button>
+                                <button type="button" class="indiv-task-pill px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer transition-all" data-filter="inprogress" onclick="setIndivPerfTaskFilter('inprogress')">In Progress</button>
+                                <button type="button" class="indiv-task-pill px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer transition-all" data-filter="hold" onclick="setIndivPerfTaskFilter('hold')">Hold</button>
+                                <button type="button" class="indiv-task-pill px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer transition-all" data-filter="rework" onclick="setIndivPerfTaskFilter('rework')">Rework</button>
+                            </div>
+                            <!-- Search Input -->
+                            <div class="relative min-w-[200px]">
+                                <iconify-icon icon="solar:magnifer-linear" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" width="13"></iconify-icon>
+                                <input type="text" id="indiv-perf-task-search" oninput="onIndivPerfTaskSearch(this.value)" placeholder="Search tasks by ID, client, or summary..." class="w-full pl-7 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+
+                        <!-- Empty State for Search Filter -->
+                        <div id="indiv-perf-task-no-match" style="display:none;" class="p-8 text-center bg-slate-50/60 dark:bg-slate-950/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                            <iconify-icon icon="solar:minimalistic-magnifer-broken" class="text-slate-400 mx-auto mb-2" width="28"></iconify-icon>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No tasks match your filter or search query</p>
+                            <p class="text-[10px] text-slate-400 mt-1">Try selecting "All" or clearing the search text.</p>
+                        </div>
+
                         <div class="overflow-y-auto max-h-[580px] -mx-6 px-6">
                             ${workedTasks.length > 0 ? `
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -49479,6 +49695,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             const taskKeyHtml = t.manual ? t.id : `<a href="https://${JIRA.domain}/browse/${t.id}" target="_blank" class="hover:underline hover:text-indigo-800 transition-colors inline-flex items-center gap-1">${t.id} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
                             const badgeClass = getStatusBadgeClass(t.status);
                             const taskLoggedTime = taskTimeMap.get(t.id) || 0;
+                            const isCompleted = isTaskCompletedStatus(t.status);
+                            const searchIndex = `${t.id || ''} ${t.client || ''} ${t.desc || t.summary || ''} ${t.status || ''}`.toLowerCase();
 
                             const snehaTagsHtml = (t.snehaItems && t.snehaItems.length > 0) ? `
                                             <div class="flex flex-wrap gap-1 mt-2 mb-1">
@@ -49495,17 +49713,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                         ` : '';
 
                             return `
-                                        <div class="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all cursor-pointer" onclick="openEditTaskModal('${t.id}')">
+                                        <div class="indiv-perf-task-item border border-slate-100 dark:border-slate-800/80 rounded-2xl p-4 bg-slate-50/50 dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 transition-all cursor-pointer"
+                                             data-status="${escapeHtml(t.status || '')}"
+                                             data-completed="${isCompleted ? 'true' : 'false'}"
+                                             data-search="${escapeHtml(searchIndex)}"
+                                             onclick="openEditTaskModal('${t.id}')">
                                             <div class="flex justify-between items-center gap-2 mb-1.5">
-                                                <span class="text-[10px] font-mono font-bold text-indigo-600">${taskKeyHtml}</span>
+                                                <span class="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">${taskKeyHtml}</span>
                                                 <span class="px-2 py-0.5 text-[9px] font-bold border rounded-full ${badgeClass}">${t.status || 'No Status'}</span>
                                             </div>
-                                            <p class="text-xs font-bold text-slate-900 mb-1.5 leading-snug">${escapeHtml(t.desc || t.summary || '')}</p>
+                                            <p class="text-xs font-bold text-slate-900 dark:text-slate-100 mb-1.5 leading-snug">${escapeHtml(t.desc || t.summary || '')}</p>
                                             ${snehaTagsHtml}
-                                            <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-t border-slate-100/60 pt-1.5">
+                                            <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-t border-slate-100/60 dark:border-slate-800/60 pt-1.5">
                                                 <span>Client: ${escapeHtml(t.client || '—')}</span>
                                                 <div class="flex items-center gap-2">
-                                                    ${taskLoggedTime > 0 ? `<span class="text-indigo-600 font-semibold"><iconify-icon icon="solar:clock-circle-bold" class="inline align-text-bottom mr-0.5"></iconify-icon>${fmtDuration(taskLoggedTime)}</span>` : ''}
+                                                    ${taskLoggedTime > 0 ? `<span class="text-indigo-600 dark:text-indigo-400 font-semibold"><iconify-icon icon="solar:clock-circle-bold" class="inline align-text-bottom mr-0.5"></iconify-icon>${fmtDuration(taskLoggedTime)}</span>` : ''}
                                                     ${qcScoreVal !== null ? `<span class="${qcColor} font-black">QC: ${qcScoreVal}%</span>` : ''}
                                                 </div>
                                             </div>
