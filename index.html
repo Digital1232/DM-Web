@@ -1027,6 +1027,35 @@
             box-shadow: 0 8px 40px rgba(0, 0, 0, .45) !important;
         }
 
+        html.dark #float-chat-headsup {
+            background: #1a2236 !important;
+            border-color: #253347 !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .5) !important;
+        }
+
+        html.dark #fcp-hu-title {
+            color: #f1f5f9 !important;
+        }
+
+        html.dark #fcp-hu-body {
+            color: #94a3b8 !important;
+        }
+
+        html.dark #fcp-search-wrap {
+            background: #1a2236 !important;
+            border-bottom-color: #253347 !important;
+        }
+
+        html.dark #fcp-search-input {
+            background: #131929 !important;
+            border-color: #253347 !important;
+            color: #f1f5f9 !important;
+        }
+
+        html.dark #fcp-search-input::placeholder {
+            color: #64748b !important;
+        }
+
         html.dark #fcp-dm-list,
         html.dark #fcp-group-list {
             background: #1a2236 !important;
@@ -1655,6 +1684,22 @@
             visibility: hidden !important;
             pointer-events: none !important;
             z-index: -9998 !important;
+        }
+
+        @keyframes floatChatPulse {
+            0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            70% { box-shadow: 0 0 0 16px rgba(79, 70, 229, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+        }
+        .chat-pulse-active {
+            animation: floatChatPulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1) !important;
+        }
+        @keyframes floatChatSlideUp {
+            from { opacity: 0; transform: translateY(14px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .chat-panel-slidein {
+            animation: floatChatSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
         }
 
         .hidden-sidebar {
@@ -15335,7 +15380,7 @@
 
     <!-- Floating Break Reminder -->
     <div id="breakFloatingReminder" onclick="openBreakPopup()"
-        class="hidden fixed bottom-6 right-6 z-[9999] cursor-pointer bg-white/95 dark:bg-slate-900/95 border border-slate-200/50 dark:border-slate-850/80 rounded-2xl shadow-xl px-4 py-3 flex items-center gap-4 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl">
+        class="hidden fixed bottom-6 right-[90px] z-[9997] cursor-pointer bg-white/95 dark:bg-slate-900/95 border border-slate-200/50 dark:border-slate-850/80 rounded-2xl shadow-xl px-4 py-3 flex items-center gap-4 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl">
         <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 text-base">
                 ☕</div>
@@ -36817,6 +36862,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (!isChatActiveAndVisible) {
                     toast(`New message from ${title}: ${msg.text ? msg.text.substring(0, 45) : 'Attachment'}`, 'info', openAction, 4500);
+
+                    // Auto-open or pulse floating chat if user is elsewhere in the app
+                    if (typeof window.fcpAutoOpenMessage === 'function') {
+                        try {
+                            window.fcpAutoOpenMessage(convId, conv, msg);
+                        } catch (fcpErr) {
+                            console.warn("fcpAutoOpenMessage error:", fcpErr);
+                        }
+                    }
                 }
 
                 if (typeof playNotificationSound === 'function') {
@@ -64804,6 +64858,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:999px;min-width:16px;text-align:center;border:2px solid #fff;pointer-events:none;"></span>
     </button>
 
+    <!-- Floating Chat Heads-Up Preview -->
+    <div id="float-chat-headsup" onclick="fcpOpenFromHeadsUp()"
+        style="display:none;position:fixed;bottom:90px;right:24px;z-index:9998;max-width:320px;background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);border:1px solid #e2e8f0;padding:10px 14px;cursor:pointer;align-items:center;gap:10px;animation:floatChatSlideUp .22s cubic-bezier(0.16,1,0.3,1) forwards;">
+        <img id="fcp-hu-avatar" src="" style="width:34px;height:34px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#f1f5f9;" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=Chat'">
+        <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                <span id="fcp-hu-title" style="font-size:11px;font-weight:800;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                <span style="font-size:9px;color:#4f46e5;font-weight:700;">Open →</span>
+            </div>
+            <p id="fcp-hu-body" style="font-size:10px;color:#64748b;margin:1px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+        </div>
+        <button type="button" onclick="event.stopPropagation();fcpDismissHeadsUp();" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:2px;font-size:12px;line-height:1;" title="Dismiss">✕</button>
+    </div>
+
     <div id="float-chat-panel"
         style="display:none;position:fixed;bottom:90px;right:24px;z-index:9998;width:320px;background:#fff;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.18);border:1px solid #e2e8f0;flex-direction:column;overflow:hidden;height:480px;max-height:calc(100vh - 110px);">
 
@@ -64817,6 +64885,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     <span style="color:white;font-size:13px;font-weight:900;">Team Chat</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:4px;">
+                    <button type="button" id="fcp-auto-open-btn" onclick="toggleFloatChatAutoOpen()"
+                        style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 7px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;"
+                        title="Auto-open on incoming message (Active)">
+                        <iconify-icon id="fcp-auto-open-icon" icon="solar:bolt-bold" width="13" style="color:#fbbf24;"></iconify-icon>
+                    </button>
                     <button type="button" onclick="if (typeof markAllChatsAsRead === 'function') markAllChatsAsRead();"
                         style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;"
                         title="Mark all as read">
@@ -64837,6 +64910,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     style="flex:1;padding:10px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;font-size:11px;font-weight:700;color:#94a3b8;display:flex;align-items:center;justify-content:center;gap:4px;">
                     <iconify-icon icon="solar:users-group-rounded-bold" width="13"></iconify-icon>Groups
                 </button>
+            </div>
+            <!-- Search bar -->
+            <div id="fcp-search-wrap" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;background:#fff;flex-shrink:0;">
+                <div style="position:relative;display:flex;align-items:center;">
+                    <iconify-icon icon="solar:magnifer-linear" width="14" style="position:absolute;left:8px;color:#94a3b8;pointer-events:none;"></iconify-icon>
+                    <input type="text" id="fcp-search-input" placeholder="Search teammates..." oninput="fcpFilterList(this.value)"
+                        style="width:100%;padding:6px 26px 6px 28px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:11px;color:#1e293b;outline:none;font-family:inherit;">
+                    <button id="fcp-clear-search" onclick="fcpClearSearch()" style="display:none;position:absolute;right:8px;border:none;background:none;color:#94a3b8;cursor:pointer;padding:0;font-size:11px;">✕</button>
+                </div>
             </div>
             <!-- Lists -->
             <div id="fcp-dm-list" style="flex:1;overflow-y:auto;"></div>
@@ -64860,8 +64942,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         style="color:rgba(255,255,255,.6);font-size:9px;font-weight:700;margin:0;text-transform:uppercase;letter-spacing:.05em;">
                     </p>
                 </div>
-                <button onclick="toggleFloatChat()"
-                    style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;">−</button>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button type="button" onclick="fcpExpandToFullChat()"
+                        style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 7px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;"
+                        title="Expand to full chat page">
+                        <iconify-icon icon="solar:maximize-square-linear" width="14"></iconify-icon>
+                    </button>
+                    <button onclick="toggleFloatChat()"
+                        style="background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:white;font-size:16px;line-height:1;"
+                        title="Minimise">−</button>
+                </div>
             </div>
             <!-- Messages -->
             <div id="fcp-messages"
@@ -64977,6 +65067,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             var panel = document.getElementById('float-chat-panel');
             if (panel) panel.style.setProperty('display', 'none', 'important');
             fcpOpen = false;
+            if (typeof fcpDismissHeadsUp === 'function') fcpDismissHeadsUp();
         }
 
         function toggleFloatChat() {
@@ -64992,12 +65083,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             fcpOpen = !fcpOpen;
             var panel = document.getElementById('float-chat-panel');
+            var btn = document.getElementById('float-chat-btn');
+            if (btn) btn.classList.remove('chat-pulse-active');
+            fcpDismissHeadsUp();
             if (fcpOpen) {
                 panel.style.display = 'flex';
+                panel.classList.add('chat-panel-slidein');
+                setTimeout(function () { panel.classList.remove('chat-panel-slidein'); }, 300);
                 fcpRenderList();
             } else {
                 panel.style.display = 'none';
             }
+        }
+
+        var fcpSearchQuery = '';
+
+        function fcpFilterList(val) {
+            fcpSearchQuery = (val || '').trim().toLowerCase();
+            var clearBtn = document.getElementById('fcp-clear-search');
+            if (clearBtn) clearBtn.style.display = fcpSearchQuery ? 'block' : 'none';
+            if (fcpActiveTab === 'dm') {
+                fcpRenderDmList();
+            } else {
+                fcpRenderGroupList();
+            }
+        }
+
+        function fcpClearSearch() {
+            var input = document.getElementById('fcp-search-input');
+            if (input) input.value = '';
+            fcpFilterList('');
         }
 
         function switchFloatTab(tab) {
@@ -65006,6 +65121,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             var grp = document.getElementById('fcp-group-list');
             var btnDm = document.getElementById('fct-dm');
             var btnGrp = document.getElementById('fct-group');
+            var searchInp = document.getElementById('fcp-search-input');
             if (tab === 'dm') {
                 dm.style.display = 'block';
                 grp.style.display = 'none';
@@ -65013,6 +65129,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 btnDm.style.color = '#4f46e5';
                 btnGrp.style.borderBottomColor = 'transparent';
                 btnGrp.style.color = '#94a3b8';
+                if (searchInp) searchInp.placeholder = 'Search teammates...';
+                fcpRenderDmList();
             } else {
                 grp.style.display = 'block';
                 dm.style.display = 'none';
@@ -65020,7 +65138,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 btnGrp.style.color = '#4f46e5';
                 btnDm.style.borderBottomColor = 'transparent';
                 btnDm.style.color = '#94a3b8';
+                if (searchInp) searchInp.placeholder = 'Search groups...';
+                fcpRenderGroupList();
             }
+        }
+
+        function fcpFormatTime(ts) {
+            if (!ts) return '';
+            var d = new Date(ts);
+            var now = new Date();
+            if (d.toDateString() === now.toDateString()) {
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            var diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
+            return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
         }
 
         function fcpRenderList() {
@@ -65028,34 +65161,42 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             fcpRenderGroupList();
         }
 
-        function fcpUserRow(email, name, role, avatarSrc, cid, lastMsg, unread) {
+        function fcpUserRow(email, name, role, avatarSrc, cid, lastMsg, unread, lastTimestamp) {
             avatarSrc = typeof avatarSrc === 'string' ? avatarSrc : '';
             var safeName = String(name || email || '').replace(/'/g, "&#39;");
             var isDark = document.documentElement.classList.contains('dark');
             var hoverBg = isDark ? '#253347' : '#f8fafc';
             var nameTxtColor = isDark ? '#f1f5f9' : '#1e293b';
-            var subTxtColor = isDark ? '#64748b' : '#94a3b8';
+            var subTxtColor = (unread > 0) ? (isDark ? '#e2e8f0' : '#334155') : (isDark ? '#64748b' : '#94a3b8');
+            var timeTxtColor = isDark ? '#64748b' : '#94a3b8';
             var imgBorder = isDark ? '#253347' : '#e2e8f0';
             var imgBg = isDark ? '#131929' : '#f1f5f9';
             var dotBorder = isDark ? '#1a2236' : 'white';
+            var timeStr = fcpFormatTime(lastTimestamp);
+            var displaySnippet = lastMsg || role || 'Team Member';
+            var rowBg = (unread > 0) ? (isDark ? 'rgba(79,70,229,0.12)' : 'rgba(79,70,229,0.05)') : 'transparent';
+            var nameWeight = (unread > 0) ? '800' : '700';
+
             return '<button onclick="fcpOpenConv(\'' + cid + '\',\'' + safeName + '\',\'dm\',\'' + (avatarSrc || '').replace(/'/g, "\\'") + '\')" '
-                + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;background:transparent;border:none;cursor:pointer;text-align:left;" '
-                + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'transparent\'">'
+                + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;background:' + rowBg + ';border:none;cursor:pointer;text-align:left;transition:background .15s;" '
+                + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'' + rowBg + '\'">'
                 + '<div style="position:relative;flex-shrink:0;">'
                 + '<img src="' + avatarSrc + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid ' + imgBorder + ';background:' + imgBg + ';" onerror="this.src=\'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(name || email) + '\'">'
                 + '<div id="fcp-online-' + _fcpEK(email) + '" style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid ' + dotBorder + ';background:#94a3b8;"></div>'
                 + '</div>'
                 + '<div style="flex:1;min-width:0;">'
-                + '<div style="display:flex;align-items:center;justify-content:space-between;">'
-                + '<span style="font-size:11px;font-weight:700;color:' + nameTxtColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(name || email) + '</span>'
+                + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">'
+                + '<span style="font-size:11px;font-weight:' + nameWeight + ';color:' + nameTxtColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(name || email) + '</span>'
+                + (timeStr ? '<span style="font-size:9px;color:' + timeTxtColor + ';flex-shrink:0;">' + timeStr + '</span>' : '')
+                + '</div>'
+                + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px;">'
+                + '<p style="font-size:10px;color:' + subTxtColor + ';font-weight:' + (unread > 0 ? '600' : '400') + ';margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">' + _fcpEH(displaySnippet) + '</p>'
                 + (unread > 0 ? '<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:999px;flex-shrink:0;">' + unread + '</span>' : '')
                 + '</div>'
-                + '<p style="font-size:9px;color:' + subTxtColor + ';margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(lastMsg || role || 'Member') + '</p>'
                 + '</div></button>';
         }
 
         function fcpRenderDmList() {
-
             try {
                 var el = document.getElementById('fcp-dm-list');
                 if (!el) return;
@@ -65065,7 +65206,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                // Guard: allUsersMap not ready
                 if (!_fcpUM() || _fcpUM().size === 0) {
                     el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">Loading users…</p>';
                     var _getAllUsers = window._fcpGetAllUsers; if (_getAllUsers) _getAllUsers().then(function (map) {
@@ -65074,33 +65214,48 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }).catch(function (err) {
                         console.error("FCP DMs: failed to get users map:", err);
                     });
-
                     return;
                 }
 
                 var others = Array.from(_fcpUM().values())
                     .filter(function (u) { return u.email && u.email !== cu.email && u.email !== '123'; });
 
+                if (fcpSearchQuery) {
+                    others = others.filter(function (u) {
+                        var n = (u.name || '').toLowerCase();
+                        var e = (u.email || '').toLowerCase();
+                        var r = (u.role || '').toLowerCase();
+                        return n.includes(fcpSearchQuery) || e.includes(fcpSearchQuery) || r.includes(fcpSearchQuery);
+                    });
+                }
+
                 if (!others.length) {
-                    el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No users found</p>';
+                    el.innerHTML = fcpSearchQuery
+                        ? '<p style="padding:24px 16px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No teammates found matching &ldquo;' + _fcpEH(fcpSearchQuery) + '&rdquo;</p>'
+                        : '<p style="padding:20px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No users found</p>';
                     return;
                 }
 
                 others.sort(function (a, b) {
                     var cidA = _fcpDM(cu.email, a.email);
                     var cidB = _fcpDM(cu.email, b.email);
+                    var unreadA = _fcpUC()[cidA] || 0;
+                    var unreadB = _fcpUC()[cidB] || 0;
+                    if (unreadB !== unreadA) return unreadB - unreadA; // Unread first
                     var tsA = (_fcpCC()[cidA] || {}).lastTimestamp || 0;
                     var tsB = (_fcpCC()[cidB] || {}).lastTimestamp || 0;
-                    return tsB - tsA || (a.name || '').localeCompare(b.name || '');
+                    if (tsB !== tsA) return tsB - tsA; // Most recent active first
+                    return (a.name || '').localeCompare(b.name || '');
                 });
 
                 el.innerHTML = others.map(function (u) {
                     var cid = _fcpDM(cu.email, u.email);
                     var conv = _fcpCC()[cid] || {};
-                    var lastMsg = conv.lastMessage ? conv.lastMessage.slice(0, 30) + (conv.lastMessage.length > 30 ? '…' : '') : '';
+                    var lastMsg = conv.lastMessage ? conv.lastMessage.slice(0, 36) + (conv.lastMessage.length > 36 ? '…' : '') : '';
                     var unread = _fcpUC()[cid] || 0;
+                    var lastTimestamp = conv.lastTimestamp || 0;
                     var avatarSrc = u.profilePicture || (window.getUserAvatarSrc ? window.getUserAvatarSrc(u) : (window.getInitialsAvatar ? window.getInitialsAvatar(u.name || u.email) : ''));
-                    return fcpUserRow(u.email, u.name, u.role, avatarSrc, cid, lastMsg, unread);
+                    return fcpUserRow(u.email, u.name, u.role, avatarSrc, cid, lastMsg, unread, lastTimestamp);
                 }).join('');
 
                 // Online dots
@@ -65149,45 +65304,233 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     .filter(function (e) { return e[1].type === 'group' && e[1].members && e[1].members[myKey]; })
                     .sort(function (a, b) { return (b[1].lastTimestamp || 0) - (a[1].lastTimestamp || 0); });
 
+                if (fcpSearchQuery) {
+                    groups = groups.filter(function (entry) {
+                        var name = (entry[1].name || '').toLowerCase();
+                        return name.includes(fcpSearchQuery);
+                    });
+                }
+
+                var isDark = document.documentElement.classList.contains('dark');
+                var nameTxtColor = isDark ? '#f1f5f9' : '#1e293b';
+
                 if (!groups.length) {
-                    el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No groups yet</p>';
+                    if (fcpSearchQuery) {
+                        el.innerHTML = '<p style="padding:24px 16px;text-align:center;font-size:11px;color:#94a3b8;font-style:italic;">No groups found matching &ldquo;' + _fcpEH(fcpSearchQuery) + '&rdquo;</p>';
+                    } else {
+                        el.innerHTML = '<div style="padding:32px 16px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;">'
+                            + '<div style="width:46px;height:46px;border-radius:14px;background:rgba(99,102,241,0.12);color:#6366f1;display:flex;align-items:center;justify-content:center;margin-bottom:12px;">'
+                            + '<iconify-icon icon="solar:users-group-rounded-bold" width="24"></iconify-icon>'
+                            + '</div>'
+                            + '<p style="font-size:12px;font-weight:800;color:' + nameTxtColor + ';margin:0 0 4px;">No groups yet</p>'
+                            + '<p style="font-size:10px;color:#94a3b8;margin:0 0 16px;line-height:1.4;max-width:210px;">Create channels to collaborate and chat with multiple teammates</p>'
+                            + '<button onclick="if(typeof openNewGroupModal===\'function\')openNewGroupModal();" '
+                            + 'style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;border:none;border-radius:10px;cursor:pointer;box-shadow:0 2px 10px rgba(79,70,229,0.35);transition:transform .1s;" '
+                            + 'onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">'
+                            + '<iconify-icon icon="solar:add-circle-bold" width="14"></iconify-icon> Create New Group'
+                            + '</button>'
+                            + '</div>';
+                    }
                     return;
                 }
 
-                el.innerHTML = groups.map(function (entry) {
+                var hoverBg = isDark ? '#253347' : '#f8fafc';
+                var subTxtColor = isDark ? '#64748b' : '#94a3b8';
+                var imgBorder = isDark ? '#253347' : '#e2e8f0';
+                var avatarBg = isDark ? '#1e2a4a' : '#eef2ff';
+                var avatarColor = isDark ? '#818cf8' : '#4f46e5';
+
+                var topActionHtml = '<div style="padding:6px 12px;display:flex;justify-content:flex-end;border-bottom:1px solid ' + (isDark ? '#253347' : '#f1f5f9') + ';">'
+                    + '<button onclick="if(typeof openNewGroupModal===\'function\')openNewGroupModal();" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(79,70,229,0.1);color:#4f46e5;font-size:10px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">'
+                    + '<iconify-icon icon="solar:add-circle-bold" width="12"></iconify-icon> New Group'
+                    + '</button>'
+                    + '</div>';
+
+                var listHtml = groups.map(function (entry) {
                     var id = entry[0], g = entry[1];
                     var unread = _fcpUC()[id] || 0;
                     var name = g.name || 'Group';
-                    var lastMsg = g.lastMessage ? g.lastMessage.slice(0, 30) + (g.lastMessage.length > 30 ? '…' : '') : '';
-                    var safeName = name.replace(/'/g, "&#39;");
-                    var isDark = document.documentElement.classList.contains('dark');
-                    var hoverBg = isDark ? '#253347' : '#f8fafc';
-                    var nameTxtColor = isDark ? '#f1f5f9' : '#1e293b';
-                    var subTxtColor = isDark ? '#64748b' : '#94a3b8';
-                    var imgBorder = isDark ? '#253347' : '#e2e8f0';
-                    var avatarBg = isDark ? '#1e2a4a' : '#eef2ff';
-                    var avatarColor = isDark ? '#818cf8' : '#4f46e5';
+                    var lastMsg = g.lastMessage ? g.lastMessage.slice(0, 36) + (g.lastMessage.length > 36 ? '…' : '') : '';
+                    var lastTimestamp = g.lastTimestamp || 0;
+                    var timeStr = fcpFormatTime(lastTimestamp);
+                    var rowBg = (unread > 0) ? (isDark ? 'rgba(79,70,229,0.12)' : 'rgba(79,70,229,0.05)') : 'transparent';
+                    var nameWeight = (unread > 0) ? '800' : '700';
+
                     var avatarHtml = (typeof g.profilePicture === 'string' && g.profilePicture && (typeof isSafeWebOrMediaUrl !== 'function' || isSafeWebOrMediaUrl(g.profilePicture)))
                         ? '<img src="' + _fcpEH(g.profilePicture) + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid ' + imgBorder + ';flex-shrink:0;">'
                         : '<div style="width:36px;height:36px;background:' + avatarBg + ';border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:' + avatarColor + ';flex-shrink:0;">' + _fcpEH(name.charAt(0)) + '</div>';
+
                     return '<button data-conv-id="' + _fcpEH(id) + '" data-conv-name="' + _fcpEH(name) + '" onclick="fcpOpenConv(this.dataset.convId,this.dataset.convName,\'group\',\'\')" '
-                        + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;background:transparent;border:none;cursor:pointer;text-align:left;" '
-                        + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'transparent\'">'
+                        + 'style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;background:' + rowBg + ';border:none;cursor:pointer;text-align:left;transition:background .15s;" '
+                        + 'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'' + rowBg + '\'">'
                         + avatarHtml
                         + '<div style="flex:1;min-width:0;">'
-                        + '<div style="display:flex;align-items:center;justify-content:space-between;">'
-                        + '<span style="font-size:11px;font-weight:700;color:' + nameTxtColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(name) + '</span>'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">'
+                        + '<span style="font-size:11px;font-weight:' + nameWeight + ';color:' + nameTxtColor + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(name) + '</span>'
+                        + (timeStr ? '<span style="font-size:9px;color:' + subTxtColor + ';flex-shrink:0;">' + timeStr + '</span>' : '')
+                        + '</div>'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px;">'
+                        + '<p style="font-size:10px;color:' + subTxtColor + ';margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">' + _fcpEH(lastMsg || 'Team Group') + '</p>'
                         + (unread > 0 ? '<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:999px;flex-shrink:0;">' + unread + '</span>' : '')
                         + '</div>'
-                        + '<p style="font-size:9px;color:' + subTxtColor + ';margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _fcpEH(lastMsg || 'Team Group') + '</p>'
                         + '</div></button>';
                 }).join('');
+
+                el.innerHTML = topActionHtml + listHtml;
             } catch (e) {
                 console.error("Error in fcpRenderGroupList:", e);
                 var el = document.getElementById('fcp-group-list');
                 if (el) el.innerHTML = '<p style="padding:20px;text-align:center;font-size:11px;color:#ef4444;font-style:italic;">Error: ' + _fcpEH(e.message) + '</p>';
             }
         }
+
+        // ── Auto-Open & Heads-Up Notification Logic ─────────────────────────────────
+        var fcpHeadsUpTimer = null;
+        var fcpPendingHeadsUpConv = null;
+
+        function toggleFloatChatAutoOpen() {
+            var cur = localStorage.getItem('worksync_chat_auto_open') !== 'false';
+            var next = !cur;
+            localStorage.setItem('worksync_chat_auto_open', next ? 'true' : 'false');
+            updateFloatChatAutoOpenUI();
+            if (typeof toast === 'function') {
+                toast(next ? '⚡ Auto-open incoming chats: Enabled' : '🔕 Auto-open incoming chats: Disabled (preview only)', 'info');
+            }
+        }
+        window.toggleFloatChatAutoOpen = toggleFloatChatAutoOpen;
+
+        function updateFloatChatAutoOpenUI() {
+            var on = localStorage.getItem('worksync_chat_auto_open') !== 'false';
+            var icon = document.getElementById('fcp-auto-open-icon');
+            var btn = document.getElementById('fcp-auto-open-btn');
+            if (icon) {
+                icon.style.color = on ? '#fbbf24' : 'rgba(255,255,255,0.4)';
+            }
+            if (btn) {
+                btn.title = on ? 'Auto-open on incoming message: ON (click to disable)' : 'Auto-open on incoming message: OFF (click to enable)';
+            }
+        }
+
+        function fcpAutoOpenMessage(convId, conv, msg) {
+            var isChatView = (typeof activeView !== 'undefined' && activeView === 'chat');
+            var chatPanel = document.getElementById('view-chat-panel');
+            if (!isChatView && chatPanel) {
+                var isVisible = !chatPanel.classList.contains('hidden') && chatPanel.style.display !== 'none';
+                if (isVisible) isChatView = true;
+            }
+            if (isChatView) return; // Full chat view is already active
+
+            var cu = _fcpCU();
+            if (!cu || !cu.email) return;
+
+            var isGroup = conv?.type === 'group' || (!convId.startsWith('dm_') && conv?.type !== 'dm');
+            var convName = isGroup ? (conv?.name || 'Group') : (msg.senderName || 'Teammate');
+            var convType = isGroup ? 'group' : 'dm';
+            var avatar = conv?.profilePicture || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(msg.senderEmail || convName) : '');
+
+            // Ensure floating button is visible and pulsing
+            var btn = document.getElementById('float-chat-btn');
+            if (btn) {
+                btn.style.display = 'flex';
+                btn.classList.add('chat-pulse-active');
+            }
+
+            var autoOpen = localStorage.getItem('worksync_chat_auto_open') !== 'false';
+            if (autoOpen) {
+                fcpDismissHeadsUp();
+                var panel = document.getElementById('float-chat-panel');
+                if (panel) {
+                    panel.style.display = 'flex';
+                    fcpOpen = true;
+                    panel.classList.add('chat-panel-slidein');
+                    setTimeout(function () { panel.classList.remove('chat-panel-slidein'); }, 300);
+                    fcpOpenConv(convId, convName, convType, avatar);
+                }
+            } else {
+                fcpShowHeadsUp(convId, convName, convType, avatar, msg);
+            }
+        }
+        window.fcpAutoOpenMessage = fcpAutoOpenMessage;
+
+        function fcpShowHeadsUp(convId, convName, convType, avatar, msg) {
+            if (fcpOpen) return;
+            var hu = document.getElementById('float-chat-headsup');
+            if (!hu) return;
+            fcpPendingHeadsUpConv = { convId: convId, name: convName, type: convType, avatar: avatar };
+            var titleEl = document.getElementById('fcp-hu-title');
+            var bodyEl = document.getElementById('fcp-hu-body');
+            var avEl = document.getElementById('fcp-hu-avatar');
+            if (titleEl) titleEl.textContent = convName;
+            if (bodyEl) bodyEl.textContent = msg.text || (msg.attachmentName ? ('📎 ' + msg.attachmentName) : 'New message');
+            if (avEl) {
+                var safeSrc = avatar || (typeof getUserAvatarSrc === 'function' ? getUserAvatarSrc(msg.senderEmail || convName) : '');
+                if (safeSrc && (typeof isSafeWebOrMediaUrl !== 'function' || isSafeWebOrMediaUrl(safeSrc))) {
+                    avEl.src = safeSrc;
+                } else {
+                    avEl.src = 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(convName);
+                }
+            }
+            hu.style.display = 'flex';
+            if (fcpHeadsUpTimer) clearTimeout(fcpHeadsUpTimer);
+            fcpHeadsUpTimer = setTimeout(fcpDismissHeadsUp, 6000);
+        }
+
+        function fcpDismissHeadsUp() {
+            if (fcpHeadsUpTimer) { clearTimeout(fcpHeadsUpTimer); fcpHeadsUpTimer = null; }
+            var hu = document.getElementById('float-chat-headsup');
+            if (hu) hu.style.display = 'none';
+            fcpPendingHeadsUpConv = null;
+        }
+        window.fcpDismissHeadsUp = fcpDismissHeadsUp;
+
+        function fcpOpenFromHeadsUp() {
+            var pending = fcpPendingHeadsUpConv;
+            fcpDismissHeadsUp();
+            var btn = document.getElementById('float-chat-btn');
+            if (btn) btn.classList.remove('chat-pulse-active');
+            if (pending) {
+                var panel = document.getElementById('float-chat-panel');
+                if (panel) {
+                    panel.style.display = 'flex';
+                    fcpOpen = true;
+                    panel.classList.add('chat-panel-slidein');
+                    setTimeout(function () { panel.classList.remove('chat-panel-slidein'); }, 300);
+                    fcpOpenConv(pending.convId, pending.name, pending.type, pending.avatar);
+                }
+            } else {
+                toggleFloatChat();
+            }
+        }
+        window.fcpOpenFromHeadsUp = fcpOpenFromHeadsUp;
+
+        function fcpExpandToFullChat() {
+            var cId = fcpConvId;
+            var cType = fcpConvType;
+            var cName = fcpConvName;
+            if (fcpOpen) toggleFloatChat();
+            if (typeof switchView === 'function') switchView('chat');
+            if (cId) {
+                setTimeout(function () {
+                    if (cType === 'dm') {
+                        var cu = _fcpCU();
+                        var parts = cId.replace('dm_', '').split('_');
+                        var myKey = _fcpEK(cu?.email);
+                        var otherKey = parts.find(function (p) { return p !== myKey; }) || parts[0];
+                        var otherUser = Array.from(_fcpUM() ? _fcpUM().values() : []).find(function (u) { return _fcpEK(u.email) === otherKey; });
+                        if (otherUser && typeof openDm === 'function') {
+                            openDm(otherUser.email);
+                        } else if (typeof openConversation === 'function') {
+                            openConversation(cId, cName, 'dm');
+                        }
+                    } else {
+                        if (typeof openConversation === 'function') {
+                            openConversation(cId, cName, 'group');
+                        }
+                    }
+                }, 150);
+            }
+        }
+        window.fcpExpandToFullChat = fcpExpandToFullChat;
 
         function fcpOpenConv(convId, name, type, avatar) {
             fcpConvId = convId;
@@ -65486,6 +65829,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             fcpConvId = null;
             fcpStagedAttachments = [];
             fcpUpdateAttachmentPreview();
+            fcpClearSearch();
             document.getElementById('fcp-conv-view').style.display = 'none';
             document.getElementById('fcp-list-view').style.display = 'flex';
             fcpRenderList();
@@ -65569,6 +65913,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
         window.floatChatBack = floatChatBack;
         window.showFloatBtn = showFloatBtn;
         window.hideFloatBtn = hideFloatBtn;
+        window.fcpFilterList = fcpFilterList;
+        window.fcpClearSearch = fcpClearSearch;
+        window.toggleFloatChatAutoOpen = toggleFloatChatAutoOpen;
+        window.fcpAutoOpenMessage = fcpAutoOpenMessage;
+        window.fcpOpenFromHeadsUp = fcpOpenFromHeadsUp;
+        window.fcpDismissHeadsUp = fcpDismissHeadsUp;
+        window.fcpExpandToFullChat = fcpExpandToFullChat;
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', updateFloatChatAutoOpenUI);
+        } else {
+            updateFloatChatAutoOpenUI();
+        }
     </script>
 
     <!-- ═══════════════════════════════════════════════════════
