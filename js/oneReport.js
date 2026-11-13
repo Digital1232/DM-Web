@@ -101,24 +101,61 @@
         return list;
     }
 
-    function loadRequests() {
-        if (state.requests || state.requestsLoading) return;
+    function ensureRequestsLoaded() {
+        if (state.requests) return Promise.resolve(state.requests);
         const rtdb = window.rtdb;
-        if (!window.db || !rtdb || typeof rtdb.onValue !== 'function') return;
+        if (!window.db || !rtdb) return Promise.resolve(null);
         state.requestsLoading = true;
-        try {
-            rtdb.onValue(rtdb.ref(window.db, 'worksync/requests'), snap => {
-                const val = snap.val() || {};
+        return new Promise(resolve => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    state.requestsLoading = false;
+                    resolve(state.requests || null);
+                }
+            }, 4500);
+
+            const handleSnap = snap => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                const val = (snap && typeof snap.val === 'function' ? snap.val() : snap) || {};
                 state.requests = Object.values(val).filter(r => r && (r.type === 'leave' || r.type === 'saturday'));
                 state.requestsLoading = false;
-                refresh();
-            }, err => {
+                resolve(state.requests);
+            };
+
+            const handleErr = err => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
                 console.warn('[OneReport] Leave requests unavailable:', err && err.message);
                 state.requestsLoading = false;
-            }, { onlyOnce: true });
-        } catch (e) {
-            state.requestsLoading = false;
-        }
+                resolve(null);
+            };
+
+            try {
+                if (typeof rtdb.get === 'function') {
+                    rtdb.get(rtdb.ref(window.db, 'worksync/requests'))
+                        .then(handleSnap)
+                        .catch(handleErr);
+                } else if (typeof rtdb.onValue === 'function') {
+                    rtdb.onValue(rtdb.ref(window.db, 'worksync/requests'), handleSnap, handleErr, { onlyOnce: true });
+                } else {
+                    handleErr(new Error('No RTDB reader'));
+                }
+            } catch (e) {
+                handleErr(e);
+            }
+        });
+    }
+
+    function loadRequests() {
+        if (state.requests || state.requestsLoading) return;
+        ensureRequestsLoaded().then(() => {
+            refresh();
+        });
     }
 
     function buildModel() {
@@ -674,8 +711,9 @@
     // CSV
     // ─────────────────────────────────────────────────────────────
 
-    function exportCsv() {
-        const m = state.model || buildModel();
+    async function exportCsv() {
+        if (!state.requests) await ensureRequestsLoaded();
+        const m = buildModel() || state.model;
         if (!m) return;
         const q = v => {
             let s = v === null || v === undefined ? '' : String(v);
@@ -699,8 +737,15 @@
     // ─────────────────────────────────────────────────────────────
 
     async function exportExcel() {
-        const m = state.model || buildModel();
-        if (!m) return;
+        if (!state.requests) {
+            setBusy('or-btn-xlsx', true, 'Loading leaves…');
+            await ensureRequestsLoaded();
+        }
+        const m = buildModel() || state.model;
+        if (!m) {
+            setBusy('or-btn-xlsx', false);
+            return;
+        }
         setBusy('or-btn-xlsx', true, 'Building…');
         try {
             await loadScript(LIBS.exceljs);
@@ -1200,8 +1245,15 @@
     };
 
     async function exportPdf() {
-        const m = state.model || buildModel();
-        if (!m) return;
+        if (!state.requests) {
+            setBusy('or-btn-pdf', true, 'Loading leaves…');
+            await ensureRequestsLoaded();
+        }
+        const m = buildModel() || state.model;
+        if (!m) {
+            setBusy('or-btn-pdf', false);
+            return;
+        }
         setBusy('or-btn-pdf', true, 'Building…');
         try {
             await loadScript(LIBS.jspdf);
@@ -1531,6 +1583,7 @@
             if (typeof window.loadAllTimeLogs === 'function') window.loadAllTimeLogs();
             if (typeof window.loadAttendanceEvents === 'function') window.loadAttendanceEvents();
             if (typeof window.loadQcReports === 'function') window.loadQcReports();
+            loadRequests();
             render();
         },
         refresh() { if ($(PANEL_ID) && !$(PANEL_ID).classList.contains('hidden')) refresh(); },
