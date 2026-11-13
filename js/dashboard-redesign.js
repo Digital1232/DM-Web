@@ -235,10 +235,14 @@
     // ─────────────────────────────────────────────────────────────
     function findTaskById(id, c) {
         if (!id) return null;
+        const targetStr = String(id).toUpperCase();
         const lists = [c.tasks || [], window.internalTasks || [], window.manualTasks || []];
         for (const list of lists) {
-            const found = list.find(t => String(t.id) === String(id));
+            const found = list.find(t => String(t.id).toUpperCase() === targetStr);
             if (found) return found;
+        }
+        if (c.activeTaskSnapshot && String(c.activeTaskSnapshot.id).toUpperCase() === targetStr) {
+            return c.activeTaskSnapshot;
         }
         return null;
     }
@@ -247,9 +251,39 @@
         const el = document.getElementById('active-task-card');
         if (!el) return;
         const c = ctx();
-        const targetId = c.activeTaskId || state.selectedFocusTaskId;
+        let targetId = c.activeTaskId || state.selectedFocusTaskId;
 
-        if (!targetId) {
+        let t = targetId ? findTaskById(targetId, c) : null;
+        if (!t && state.selectedFocusTaskId && !c.activeTaskId) {
+            state.selectedFocusTaskId = null;
+            targetId = null;
+        }
+
+        if (!targetId || !t) {
+            if (targetId && !t && c.activeTaskId) {
+                // Active task is known by ID, but full task data is still loading or synchronizing
+                el.innerHTML = `
+                    <div class="bg-[#F5F7FA] dark:bg-slate-800/50 rounded-xl p-5 border border-[#E8EDF4] dark:border-slate-700/60 space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono font-extrabold text-[#5845F5] dark:text-indigo-400">${esc(targetId)}</span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-[#5845F5]">Active Task</span>
+                            </div>
+                            <button type="button" onclick="toggleActiveTask('${esc(targetId)}')" class="text-slate-400 hover:text-[#F04465] p-1 rounded-lg transition-colors cursor-pointer shrink-0">
+                                <iconify-icon icon="solar:close-circle-bold" width="18"></iconify-icon>
+                            </button>
+                        </div>
+                        <p class="text-xs text-[#718096] dark:text-slate-400">Loading task details...</p>
+                        <div class="flex items-center justify-between pt-2 border-t border-[#E8EDF4] dark:border-slate-700/60">
+                            <span id="task-timer-display" class="text-2xl font-black text-[#171D32] dark:text-white font-mono tabular-nums">${fmtTime(c.taskSeconds)}</span>
+                            <button type="button" onclick="endTask()" class="inline-flex items-center gap-1.5 bg-[#10B981] hover:bg-emerald-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all cursor-pointer">
+                                <iconify-icon icon="solar:check-circle-bold" width="15"></iconify-icon> End Task
+                            </button>
+                        </div>
+                    </div>`;
+                return;
+            }
+
             el.innerHTML = `
                 <div class="bg-[#F5F7FA] dark:bg-slate-800/50 rounded-xl p-6 border border-dashed border-[#E8EDF4] dark:border-slate-700 text-center flex flex-col items-center justify-center min-h-[210px]">
                     <div class="w-11 h-11 rounded-2xl bg-[#5845F5]/10 text-[#5845F5] dark:text-indigo-400 flex items-center justify-center mb-3">
@@ -272,13 +306,6 @@
                         </button>
                     </div>
                 </div>`;
-            return;
-        }
-
-        const t = findTaskById(targetId, c);
-        if (!t) {
-            state.selectedFocusTaskId = null;
-            renderTaskFocus();
             return;
         }
 

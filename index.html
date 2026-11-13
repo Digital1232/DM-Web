@@ -28,7 +28,7 @@
     <link rel="preconnect" href="https://www.gstatic.com">
     <!-- Tailwind CSS v4, prebuilt from src/input.css (npm run build:css). This file styles the app;
          the cdn.tailwindcss.com script was removed because it generated no CSS. -->
-    <link rel="stylesheet" href="dist/output.css?v=1.1.01">
+    <link rel="stylesheet" href="dist/output.css?v=1.1.02">
     <link rel="stylesheet" href="mobile-app.css">
     <link rel="stylesheet" href="app-realistic-ui.css">
     <script>
@@ -3844,7 +3844,7 @@
                         <div class="relative">
                             <iconify-icon icon="solar:lock-password-linear"
                                 class="absolute left-3.5 top-3 text-slate-400" width="20"></iconify-icon>
-                            <input id="password-input" type="password" placeholder="••••••••" required
+                            <input id="password-input" type="password" placeholder="••••••••" required autocomplete="current-password"
                                 class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none">
                         </div>
                     </div>
@@ -3917,14 +3917,6 @@
                         <iconify-icon icon="solar:document-text-linear" width="20"
                             class="group-hover:scale-110 transition-transform"></iconify-icon>
                         One Report
-                    </button>
-                    <!-- APP USAGE (desktop tracker data, email-restricted) -->
-                    <button onclick="switchView('app-usage')" id="nav-app-usage"
-                        data-label="App Usage" aria-label="App Usage"
-                        class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
-                        <iconify-icon icon="solar:monitor-smartphone-linear" width="20"
-                            class="group-hover:scale-110 transition-transform"></iconify-icon>
-                        App Usage
                     </button>
                     <button onclick="switchView('shoots')" id="nav-shoots" data-label="Shoot Calendar"
                         aria-label="Shoot Calendar"
@@ -9192,13 +9184,14 @@
                         </div>
                         <div class="p-6 space-y-4">
                             <!-- Token Input -->
-                            <div class="space-y-1.5">
+                            <form onsubmit="return false;" autocomplete="off" class="space-y-1.5">
                                 <label class="text-xs font-bold text-slate-600 uppercase tracking-wider">System
                                     User
                                     Access Token</label>
                                 <div class="relative">
                                     <input type="password" id="meta-access-token-input"
                                         placeholder="Paste EAAZ... access token"
+                                        autocomplete="off"
                                         class="w-full pl-3 pr-10 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all" />
                                     <button type="button" onclick="toggleMetaTokenVisibility()"
                                         class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
@@ -9212,7 +9205,7 @@
                                     grants access to your
                                     Facebook marketing campaigns.
                                 </p>
-                            </div>
+                            </form>
 
                             <!-- Status feedback message -->
                             <div id="meta-settings-status"
@@ -10529,9 +10522,6 @@
 
                 <!-- ════ ONE REPORT VIEW (content rendered by js/oneReport.js) ════ -->
                 <div id="view-one-report-panel" class="hidden fade-in space-y-6 overflow-y-auto"></div>
-
-                <!-- ════ APP USAGE VIEW (content rendered by js/appUsage.js) ════ -->
-                <div id="view-app-usage-panel" class="hidden fade-in space-y-6 overflow-y-auto"></div>
 
                 <!-- ════ MONTHLY REPORT VIEW ════ -->
                 <div id="view-my-monthly-report-panel" class="hidden fade-in space-y-6 overflow-y-auto">
@@ -15828,10 +15818,6 @@
             function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
             function canViewMonthlyPlan() { return isAdmin() || isManager(); }
             function canViewProjects() { return isAdmin() || isManager(); }
-            function canViewAppUsage() {
-                if (!currentUser) return false;
-                return (currentUser.email || '').trim().toLowerCase() === 'digitalmarketing@vilpower.com';
-            }
             function canViewMetaAds() {
                 if (!currentUser) return false;
                 const email = (currentUser.email || '').toLowerCase();
@@ -19233,7 +19219,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const lastView = localStorage.getItem('worksync_activeView') || 'dashboard';
                     const validViews = ['dashboard', 'tasks', 'internal-tasks', 'dailyplan', 'monthly-plan', 'shoots', 'qc', 'notes', 'dpr', 'hr', 'chat', 'announcements', 'my-monthly-report', 'one-report'];
-                    if (canViewAppUsage()) validViews.push('app-usage');
                     if (canViewProjects()) validViews.push('projects');
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
@@ -19704,7 +19689,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 document.getElementById('nav-strategy-calendar')?.classList.toggle('hidden', !canViewStrategyCalendar());
                 document.getElementById('nav-sales-hub')?.classList.toggle('hidden', !canViewSalesHub());
                 document.getElementById('nav-dailyplan')?.classList.toggle('hidden', !canViewDailyPlanTeamAccess());
-                document.getElementById('nav-app-usage')?.classList.toggle('hidden', !canViewAppUsage());
                 document.getElementById('nav-files-manager')?.classList.remove('hidden');
                 document.getElementById('report-export-btn')?.classList.remove('hidden');
                 document.getElementById('report-group-client')?.classList.remove('hidden');
@@ -20282,14 +20266,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             // ── Web Audio API Notification Sound Synthesizer & Auto-Unlock ──
             let sharedAudioCtx = null;
-            function getSharedAudioContext() {
-                if (!sharedAudioCtx) {
+            function getSharedAudioContext(userInitiated = false) {
+                if (!sharedAudioCtx && userInitiated) {
                     const AudioCtx = window.AudioContext || window.webkitAudioContext;
                     if (AudioCtx) {
                         try { sharedAudioCtx = new AudioCtx(); } catch (e) { }
                     }
                 }
-                if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+                if (sharedAudioCtx && userInitiated && sharedAudioCtx.state === 'suspended') {
                     try { sharedAudioCtx.resume().catch(() => { }); } catch (e) { }
                 }
                 return sharedAudioCtx;
@@ -20297,8 +20281,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // Proactively unlock audio on first user gesture anywhere in document
             ['click', 'touchstart', 'keydown'].forEach(evt => {
                 document.addEventListener(evt, () => {
-                    getSharedAudioContext();
-                }, { once: false, passive: true });
+                    getSharedAudioContext(true);
+                }, { once: true, passive: true });
             });
 
             function playNotificationSound() {
@@ -20313,7 +20297,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // 2. Synthesize chime tone via Web Audio API
                 try {
-                    const ctx = getSharedAudioContext();
+                    const ctx = getSharedAudioContext(true);
                     if (!ctx) return;
                     if (ctx.state === 'suspended') {
                         ctx.resume().catch(() => { });
@@ -22253,7 +22237,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'plan-tracking') { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
-                if (view === 'app-usage' && !canViewAppUsage()) { view = 'dashboard'; panelId = 'dashboard'; }
 
                 const prevView = activeView;
                 activeView = view;
@@ -22322,7 +22305,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'social-analytics', 'users', 'clients-admin', 'daily-summary', 'event-org',
                     'leave-org', 'learnings-org', 'workplace-org', 'organisers-admin', 'dm-content-org',
                     'strategy-calendar', 'discussions', 'files-manager', 'meta-ads',
-                    'marketing-hub', 'meta-integration', 'my-monthly-report', 'one-report', 'app-usage'
+                    'marketing-hub', 'meta-integration', 'my-monthly-report', 'one-report'
                 ];
 
                 allPanelIds.forEach(id => {
@@ -22386,8 +22369,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'files-manager': 'Files Manager',
                     discussions: 'Discussion History & Schedule',
                     'my-monthly-report': 'Monthly Report',
-                    'one-report': 'One Report',
-                    'app-usage': 'App Usage'
+                    'one-report': 'One Report'
                 };
                 document.getElementById('view-title').textContent = titles[view] || 'One Desk';
 
@@ -22497,9 +22479,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     else if (view === 'meta-integration') { initMetaIntegration(); }
                     else if (view === 'one-report') {
                         if (window.OneReport) window.OneReport.init();
-                    }
-                    else if (view === 'app-usage') {
-                        if (window.AppUsage) window.AppUsage.init();
                     }
                     else if (view === 'my-monthly-report') {
                         if (typeof window.loadAttendanceEvents === 'function') loadAttendanceEvents();
@@ -34817,6 +34796,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     currentUser,
                     currentWorkUsers: typeof currentWorkUsers !== 'undefined' ? currentWorkUsers : [],
                     activeTaskId,
+                    activeTaskSnapshot: typeof activeTaskSnapshot !== 'undefined' ? activeTaskSnapshot : null,
                     taskSeconds,
                     taskOnHold,
                     isCheckedIn,
@@ -35848,7 +35828,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         singleMode: false,
                         format: 'DD MMM, YYYY',
                         numberOfMonths: 2,
-                        plugins: ['mobilefriendly'],
+                        mobileFriendly: true,
                         setup: (picker) => {
                             picker.on('selected', (date1, date2) => {
                                 fromInput.value = formatLocalDate(date1);
@@ -40585,7 +40565,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         singleMode: false,
                         format: 'DD MMM, YYYY',
                         numberOfMonths: 2,
-                        plugins: ['mobilefriendly'],
+                        mobileFriendly: true,
                         setup: (picker) => {
                             picker.on('selected', (date1, date2) => {
                                 fromInput.value = formatLocalDate(date1);
@@ -52339,7 +52319,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         format: 'DD MMM, YYYY',
                         numberOfMonths: 1,
                         autoApply: true,
-                        plugins: ['mobilefriendly'],
+                        mobileFriendly: true,
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
                                 const d1 = getNativeDate(date1);
@@ -52507,7 +52487,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         format: 'DD MMM, YYYY',
                         numberOfMonths: 1,
                         autoApply: true,
-                        plugins: ['mobilefriendly'],
+                        mobileFriendly: true,
                         setup: (litepicker) => {
                             litepicker.on('selected', (date1, date2) => {
                                 const d1 = getNativeDate(date1);
@@ -68221,7 +68201,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
     <script src="js/myMonthlyReport.js"></script>
     <script src="js/oneReportEngine.js"></script>
     <script src="js/oneReport.js"></script>
-    <script src="js/appUsage.js"></script>
     <script src="js/dashboard-redesign.js"></script>
 
 
