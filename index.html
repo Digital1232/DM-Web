@@ -36229,7 +36229,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 let role = '';
                 if (typeof userOrEmail === 'string') {
                     email = (userOrEmail || '').toLowerCase().trim();
-                    user = (typeof allUsersMap !== 'undefined' && allUsersMap.get(email)) ||
+                    user = (typeof allUsersMap !== 'undefined' && allUsersMap && (typeof allUsersMap.get === 'function' ? allUsersMap.get(email) : allUsersMap[email])) ||
                         (typeof knownUserByEmail === 'function' && knownUserByEmail(email)) ||
                         (typeof USERS !== 'undefined' && USERS.find(u => u.email.toLowerCase() === email)) ||
                         { email };
@@ -40378,7 +40378,28 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } catch (err) { toast('Upload failed: ' + err.message, 'error'); }
             }
 
-            async function openNewGroupModal() {
+                        function getChatSafeUsersList() {
+                let list = [];
+                if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                    if (allUsersMap instanceof Map && allUsersMap.size > 0) {
+                        list = Array.from(allUsersMap.values());
+                    } else if (Array.isArray(allUsersMap) && allUsersMap.length > 0) {
+                        list = allUsersMap;
+                    } else if (typeof allUsersMap === 'object' && Object.keys(allUsersMap).length > 0) {
+                        list = Object.values(allUsersMap);
+                    }
+                }
+                if (!list.length && typeof users !== 'undefined' && Array.isArray(users) && users.length > 0) {
+                    list = users;
+                }
+                if (!list.length && typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                    list = USERS;
+                }
+                return list.filter(u => u && u.email);
+            }
+            window.getChatSafeUsersList = getChatSafeUsersList;
+
+async function openNewGroupModal() {
                 const list = document.getElementById('group-members-list');
                 const nameInput = document.getElementById('group-name-input');
                 if (nameInput) nameInput.value = '';
@@ -40390,7 +40411,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 list.innerHTML = `<p class="p-3 text-center text-xs text-slate-400 italic">Loading members...</p>`;
                 document.getElementById('newGroupModal').showModal();
 
-                let people = Array.from(allUsersMap.values()); // Use allUsersMap
+                let people = getChatSafeUsersList();
                 try {
                     // No need to fetch again, allUsersMap is already merged
                 } catch (err) {
@@ -40464,7 +40485,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 list.innerHTML = `<p class="p-3 text-center text-xs text-slate-400 italic">Loading members...</p>`;
                 document.getElementById('editGroupModal').showModal();
 
-                let people = Array.from(allUsersMap.values()); // Use allUsersMap
+                let people = getChatSafeUsersList();
                 try {
                     // No need to fetch again, allUsersMap is already merged
                 } catch (err) {
