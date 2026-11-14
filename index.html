@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.1.05">
+    <meta name="app-version" content="1.1.12">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -15503,7 +15503,7 @@
         let getStorage, sRef, uploadBytes, getDownloadURL;
 
         // Helper: import with timeout to prevent indefinite hanging on slow/blocked CDN
-        function importWithTimeout(url, timeoutMs = 4000) {
+        function importWithTimeout(url, timeoutMs = 15000) {
             return Promise.race([
                 import(url),
                 new Promise((_, reject) => setTimeout(() => reject(new Error(`Import timed out after ${timeoutMs}ms: ${url}`)), timeoutMs))
@@ -15586,9 +15586,48 @@
             console.error('Failed to load Firebase modules:', err);
         }
 
-        // CRITICAL: Always define handleLogin on window, even if Firebase failed.
-        // This prevents "handleLogin is not defined" when users click Sign In.
+        // CRITICAL: Always define handleLogin & stub Firebase services safely if Firebase failed to import
+        // This prevents runtime crashes, freezes, or "is not a function" exceptions.
         if (!initializeApp) {
+            initializeApp = () => ({});
+            getDatabase = () => ({});
+            getAuth = () => ({ currentUser: null });
+            ref = () => ({});
+            onValue = () => () => {};
+            onChildAdded = () => () => {};
+            off = () => {};
+            set = async () => {};
+            push = () => ({ key: 'temp_' + Date.now() });
+            update = async () => {};
+            remove = async () => {};
+            onDisconnect = () => ({ set: async () => {}, remove: async () => {} });
+            query = (...args) => args[0] || {};
+            orderByChild = () => ({});
+            orderByKey = () => ({});
+            equalTo = () => ({});
+            limitToLast = () => ({});
+            endAt = () => ({});
+            endBefore = () => ({});
+            get = async () => ({ exists: () => false, val: () => null });
+            signInWithEmailAndPassword = async () => { throw new Error('Cannot connect to server. Please check your internet connection.'); };
+            signOut = async () => {};
+            onAuthStateChanged = (a, callback) => {
+                setTimeout(() => {
+                    const cu = localStorage.getItem('worksync_user');
+                    try {
+                        const p = cu ? JSON.parse(cu) : null;
+                        callback(p ? { email: p.email, uid: p.uid || 'cached', displayName: p.name } : null);
+                    } catch (e) {
+                        callback(null);
+                    }
+                }, 50);
+                return () => {};
+            };
+            getStorage = () => ({});
+            sRef = () => ({});
+            uploadBytes = async () => {};
+            getDownloadURL = async () => '';
+
             window.handleLogin = function () {
                 const errEl = document.getElementById('login-error');
                 const errorTextEl = document.getElementById('error-text');
@@ -19668,6 +19707,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
                     if (loaded.length) {
                         tasks = loaded;
+                        invalidateClientCatalog();
                         pruneTasksByProjectKeys();
                         try { populateClientFilter(); populateAssigneeFilter(); } catch (e) { }
                         try { populateInternalClientFilter(); populateInternalAssigneeFilter(); } catch (e) { }
@@ -29145,6 +29185,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return String(label || '').trim().toLowerCase();
             }
 
+            let _cachedClientCatalog = null;
+            let _cachedCatalogSearchMap = null;
+            let _cachedCatalogSortedByLength = null;
+
+            function invalidateClientCatalog() {
+                _cachedClientCatalog = null;
+                _cachedCatalogSearchMap = null;
+                _cachedCatalogSortedByLength = null;
+            }
+            window.invalidateClientCatalog = invalidateClientCatalog;
+
             function resolveClientLabel(label) {
                 const trimmed = String(label || '').trim();
                 if (!trimmed) return '';
@@ -29155,11 +29206,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (normalized !== trimmed) return normalized;
 
                 const normalizedSearch = trimmed.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
-                const catalog = getClientCatalog();
-                const matched = catalog.find(c => {
-                    const normCat = c.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
-                    return normCat === normalizedSearch;
-                });
+                if (!_cachedCatalogSearchMap) getClientCatalog();
+                const matched = _cachedCatalogSearchMap ? _cachedCatalogSearchMap.get(normalizedSearch) : null;
                 return matched || trimmed;
             }
 
@@ -29178,12 +29226,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function detectClientFromSummary(summary) {
                 if (!summary) return '';
                 const summaryLower = summary.toLowerCase();
-                const catalog = getClientCatalog();
-                const sorted = [...catalog].sort((a, b) => b.length - a.length);
-                for (const client of sorted) {
+                if (!_cachedCatalogSortedByLength) getClientCatalog();
+                const sorted = _cachedCatalogSortedByLength || [];
+                for (let i = 0; i < sorted.length; i++) {
+                    const client = sorted[i];
                     if (!client) continue;
-                    if (['others', 'client', 'discussion', 'learning'].includes(client.toLowerCase())) continue;
-                    if (summaryLower.includes(client.toLowerCase())) {
+                    const clLower = client.toLowerCase();
+                    if (clLower === 'others' || clLower === 'client' || clLower === 'discussion' || clLower === 'learning') continue;
+                    if (summaryLower.includes(clLower)) {
                         return client;
                     }
                 }
@@ -29196,7 +29246,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return [...new Set(raw.split(',').map(s => resolveClientLabel(s.trim())).filter(Boolean))].join(', ');
             }
 
-            function getClientCatalog() {
+            function getClientCatalog(forceRefresh = false) {
+                if (!forceRefresh && _cachedClientCatalog) {
+                    return _cachedClientCatalog;
+                }
                 const clientSet = new Set();
 
                 // 1. Base canonical CLIENTS array
@@ -29246,13 +29299,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (norm) clientSet.add(norm);
                 });
 
-                return [...clientSet].sort((a, b) => a.localeCompare(b));
+                const catalog = [...clientSet].sort((a, b) => a.localeCompare(b));
+                _cachedClientCatalog = catalog;
+
+                const searchMap = new Map();
+                catalog.forEach(c => {
+                    const normCat = c.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+                    searchMap.set(normCat, c);
+                });
+                _cachedCatalogSearchMap = searchMap;
+                _cachedCatalogSortedByLength = [...catalog].sort((a, b) => b.length - a.length);
+
+                return catalog;
             }
             window.getClientCatalog = getClientCatalog;
 
             function refreshAllClientDropdowns() {
                 try {
-                    const catalog = getClientCatalog();
+                    invalidateClientCatalog();
+                    const catalog = getClientCatalog(true);
 
                     // 1. Jira Task Board Client Filter
                     if (typeof populateClientFilter === 'function') populateClientFilter();
@@ -29392,6 +29457,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function refreshAllTaskClientDisplay() {
                 let changed = false;
+                getClientCatalog(true);
                 tasks.forEach(t => {
                     if (t.manual) return;
                     let next = t.clientComponents?.length
@@ -45721,7 +45787,8 @@ async function openNewGroupModal() {
                 const toTs = reportDateTo ? (parseLocalDate(reportDateTo).getTime() + 86400000) : Infinity;
 
                 // Filter tasks by date range and clientName exactly like renderClientWideReport does
-                let filtered = tasks.filter(t => t.client && resolveClientLabel(t.client) === resolveClientLabel(clientName));
+                const targetClientNorm = resolveClientLabel(clientName);
+                let filtered = tasks.filter(t => t.client && resolveClientLabel(t.client) === targetClientNorm);
                 if (reportDateFrom && reportDateTo) {
                     const dateFiltered = filtered.filter(t => {
                         if (!t.duedate) return true;
@@ -50041,19 +50108,7 @@ async function openNewGroupModal() {
                 const sel = document.getElementById('client-perf-select');
                 if (!sel) return;
 
-                const clientSet = new Set();
-                const catalog = getClientCatalog();
-                catalog.forEach(c => {
-                    const norm = resolveClientLabel(c);
-                    if (norm) clientSet.add(norm);
-                });
-                tasks.forEach(t => {
-                    if (t.client && t.client.trim()) {
-                        const norm = resolveClientLabel(t.client);
-                        if (norm) clientSet.add(norm);
-                    }
-                });
-                const clientList = Array.from(clientSet).sort((a, b) => a.localeCompare(b));
+                const clientList = getClientCatalog();
 
                 const existingValue = sel.value;
                 sel.innerHTML = clientList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
