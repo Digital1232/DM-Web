@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.1.12">
+    <meta name="app-version" content="1.1.13">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -16401,11 +16401,26 @@
 
             // Starting list only: the live client list is worksync/settings/custom_clients,
             // managed from Admin > Client Names. Edit clients there, not here.
-            const CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Vilpower', 'Others', 'Vilpower DM', 'Quade', 'Discussion', 'Learning', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'Client', 'SKM', 'Ramachandran', 'Ashmithasree'];
+            const CLIENTS = [
+                '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'Client', 'Discussion',
+                'DreamDaa', 'Einstein', 'Genesys', 'GVR', 'Hanith Citroen', 'Iniya',
+                'Internal', 'IVN', 'Juliet', 'Learning', 'Modren Precast', 'Mopower',
+                'Mr.Millet', 'Muva Herbals', 'Nivetha', 'Nivetha Interior', 'Nivya',
+                'NTT', 'Others', 'PG Constructions', 'Quade', 'Ramachandran',
+                'SalesNaany', 'SES', 'SKM', 'University', 'UTM', 'Vilpower',
+                'Vilpower DM', 'VTM', 'Vyan'
+            ];
             window.CLIENTS = CLIENTS;
 
-            // Sub-clients managed under Vilpower DM — used for Murugesh daily task client selection
-            const VILPOWER_DM_CLIENTS = ['NTT', 'Einstein', 'IVN', 'DreamDaa', 'Aladi Ezhilvanan', 'Nivya', 'Mr.Millet', 'Mopower', 'Iniya', '3Jo Toys', 'SalesNaany', 'University', 'SKM', 'Quade', 'Ramachandran'];
+            // Sub-clients managed under Vilpower DM — used for Murugesh & Ajith daily task client selection
+            const VILPOWER_DM_CLIENTS = [
+                '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'DreamDaa', 'Einstein',
+                'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'IVN', 'Juliet',
+                'Modren Precast', 'Mopower', 'Mr.Millet', 'Muva Herbals', 'Nivetha',
+                'Nivetha Interior', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
+                'Ramachandran', 'SalesNaany', 'SES', 'SKM', 'University', 'UTM',
+                'Vilpower DM', 'VTM', 'Vyan'
+            ];
 
             let clientLabelMap = {};
             let customClients = [...CLIENTS];
@@ -17013,18 +17028,31 @@
                 'post done'
             ]);
 
-            function isDailyPlanCompletedTask(status) {
+            function isDailyPlanCompletedTask(status, userEmail = null) {
                 if (!status) return false;
                 const s = String(status).trim().toLowerCase();
+                const normUser = (userEmail || '').toLowerCase();
+                const isAjith = typeof AJITH_EMAILS !== 'undefined'
+                    ? (AJITH_EMAILS.some(e => normUser.includes(e.split('@')[0])) || normUser.includes('ajith'))
+                    : (normUser.includes('ajith'));
+
+                if (isAjith) {
+                    // For Ajith (Social Media Executive), Client Approved / Client Sent / Design Completed are ACTIVE tasks to be posted!
+                    if (s.includes('client approved') || s.includes('client sent') || s.includes('design completed') || s.includes('ready for posting')) {
+                        return false;
+                    }
+                    return s === 'posted' || s.startsWith('posted') || s === 'done' || s.startsWith('done') || s === 'completed' || s.startsWith('completed') || s === 'resolved' || s === 'closed';
+                }
+
                 return DAILY_PLAN_COMPLETED_STATUS_SET.has(s) ||
                     s.startsWith('done') ||
                     s.startsWith('posted') ||
                     s.startsWith('completed');
             }
 
-            function isDailyPlanBeforeQcStatus(status) {
+            function isDailyPlanBeforeQcStatus(status, userEmail = null) {
                 if (!status) return true;
-                return !isDailyPlanCompletedTask(status);
+                return !isDailyPlanCompletedTask(status, userEmail);
             }
 
             const DAILY_PLAN_CARRY_STATUSES = ['To Do', 'To do', 'In Progress', 'Content In Progress', 'Client Content Approval', 'Design To Do', 'Design In Progress', 'Design Hold', 'Hold', 'On Hold', 'Rework Designs', 'Rework', 'Thumbnail Waiting', 'Thumbnail', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress'];
@@ -18871,9 +18899,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function taskEligibleForDailyPlanAllocation(task) {
                 if (!task) return false;
                 if (typeof isLearningTask === 'function' && isLearningTask(task)) return false;
-                if (isDailyPlanCompletedTask(task.status)) return false;
                 const s = (task.status || '').trim().toLowerCase();
-                if (s === 'cancelled' || s === 'wont do' || s === "won't do") return false;
+                if (s === 'cancelled' || s === 'wont do' || s === "won't do" || s === 'closed' || s === 'resolved') return false;
+                // Only block strictly finished/posted tasks; allow Client Approved, Client Sent, Design Completed, To Do, In Progress, etc.
+                if (s === 'completed' || s === 'done' || s === 'posted') return false;
                 return true;
             }
 
@@ -19112,8 +19141,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     const isExactDate = (planDateTime === selectedTime) || (planData.date && planData.date.slice(0, 10) === dateStr.slice(0, 10));
-                    const isCarryOver = planDateTime < selectedTime && isDailyPlanBeforeQcStatus(effectiveTask.status);
-                    const isCompleted = isDailyPlanCompletedTask(effectiveTask.status);
+                    const isCarryOver = planDateTime < selectedTime && isDailyPlanBeforeQcStatus(effectiveTask.status, userEmail);
+                    const isCompleted = isDailyPlanCompletedTask(effectiveTask.status, userEmail);
 
                     if (isExactDate || (isCarryOver && !isCompleted)) {
                         plannedTasks.push({
@@ -23412,10 +23441,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     'ses': 'SES',
                     'ntt': 'NTT',
                     'vtm': 'VTM',
+                    'utm': 'VTM',
+                    'vtm upvc': 'VTM',
+                    'utm upvc': 'VTM',
                     'ivn': 'IVN',
                     'quade': 'Quade',
                     'nivya': 'Nivya',
                     'university': 'University',
+                    'modren precast': 'Modren Precast',
+                    'modren_precast': 'Modren Precast',
+                    'modrenprecast': 'Modren Precast',
+                    'modern precast': 'Modren Precast',
+                    'modern_precast': 'Modren Precast',
+                    'modernprecast': 'Modren Precast',
+                    'mpc': 'Modren Precast',
+                    'nivetha': 'Nivetha Interior',
+                    'nivedha': 'Nivetha Interior',
+                    'nivetha interior': 'Nivetha Interior',
+                    'nivetha_interior': 'Nivetha Interior',
+                    'nivedha interior': 'Nivetha Interior',
+                    'nivedha_interior': 'Nivetha Interior',
+                    'vyan': 'Vyan',
+                    'vy an': 'Vyan',
+                    'vyan academy': 'Vyan',
+                    'juliet': 'Juliet',
+                    'juliet dental': 'Juliet',
                     'recurring tasks': 'Recurring Tasks'
                 };
 
@@ -23424,10 +23474,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const canonicalClients = [
                     '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'DreamDaa', 'Einstein',
-                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Mopower',
-                    'Mr.Millet', 'Muva Herbals', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
+                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Juliet',
+                    'Modren Precast', 'Mopower', 'Mr.Millet', 'Muva Herbals', 'Nivetha',
+                    'Nivetha Interior', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
                     'Ramachandran', 'Recurring Tasks', 'SalesNaany', 'SES', 'SKM', 'University',
-                    'VilPower', 'Vilpower DM', 'VTM'
+                    'UTM', 'VilPower', 'Vilpower DM', 'VTM', 'Vyan'
                 ];
 
                 const matched = canonicalClients.find(c => {
@@ -23439,6 +23490,50 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return trimmed.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             }
             window.normalizeClientName = normalizeClientName;
+
+            function isMatchingClient(taskClient, filterClient) {
+                if (!filterClient || filterClient === 'All' || filterClient === 'all' || filterClient === 'ALL') return true;
+                if (!taskClient) return false;
+                const rawA = String(taskClient).trim();
+                const rawB = String(filterClient).trim();
+                if (rawA.toLowerCase() === rawB.toLowerCase()) return true;
+
+                const normA = normalizeClientName(rawA).toLowerCase();
+                const normB = normalizeClientName(rawB).toLowerCase();
+                if (normA === normB) return true;
+
+                const compA = rawA.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const compB = rawB.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (compA === compB) return true;
+
+                // Equivalence checks:
+                // 1. UTM and VTM
+                if ((compA === 'utm' || compA === 'vtm' || compA.startsWith('vtm') || compA.startsWith('utm')) &&
+                    (compB === 'utm' || compB === 'vtm' || compB.startsWith('vtm') || compB.startsWith('utm'))) return true;
+
+                // 2. Nivetha and Nivetha Interior / Nivedha
+                const isNiv = c => c.includes('nivetha') || c.includes('nivedha');
+                if (isNiv(compA) && isNiv(compB)) return true;
+
+                // 3. Modren Precast / Modern Precast / MPC
+                const isMpc = c => c.includes('modren') || c.includes('modern') || c === 'mpc' || c.startsWith('modren');
+                if (isMpc(compA) && isMpc(compB)) return true;
+
+                // 4. Vyan / Vyan Academy
+                if (compA.includes('vyan') && compB.includes('vyan')) return true;
+
+                // 5. Juliet
+                if (compA.includes('juliet') && compB.includes('juliet')) return true;
+
+                // 6. Genesys
+                if (compA.includes('genesys') && compB.includes('genesys')) return true;
+
+                // Substring containment for terms >= 4 chars
+                if (compA.length >= 4 && compB.length >= 4 && (compA.includes(compB) || compB.includes(compA))) return true;
+
+                return false;
+            }
+            window.isMatchingClient = isMatchingClient;
 
             function isMatchingStrategyClient(clientName, filter) {
                 if (!filter || filter === 'All') return true;
@@ -29289,10 +29384,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // 5. Canonical list from normalizeClientName
                 const canonicalClients = [
                     '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'DreamDaa', 'Einstein',
-                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Mopower',
-                    'Mr.Millet', 'Muva Herbals', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
-                    'Ramachandran', 'SalesNaany', 'SES', 'SKM', 'University',
-                    'VilPower', 'Vilpower DM', 'VTM'
+                    'Genesys', 'GVR', 'Hanith Citroen', 'Iniya', 'Internal', 'IVN', 'Juliet',
+                    'Modren Precast', 'Mopower', 'Mr.Millet', 'Muva Herbals', 'Nivetha',
+                    'Nivetha Interior', 'Nivya', 'NTT', 'PG Constructions', 'Quade',
+                    'Ramachandran', 'SalesNaany', 'SES', 'SKM', 'University', 'UTM',
+                    'VilPower', 'Vilpower DM', 'VTM', 'Vyan'
                 ];
                 canonicalClients.forEach(c => {
                     const norm = normalizeClientName(c);
@@ -29437,6 +29533,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         murugeshSelect.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
                             catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                         if (cur) murugeshSelect.value = cur;
+                    }
+                    const ajithSelect = document.getElementById('ajith-client-select');
+                    if (ajithSelect) {
+                        const cur = ajithSelect.value || '';
+                        ajithSelect.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                        if (cur) ajithSelect.value = cur;
                     }
                 } catch (e) {
                     console.warn('[refreshAllClientDropdowns] Error:', e);
@@ -33301,11 +33404,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const select = document.getElementById('murugesh-client-select');
                 if (select) {
-                    // Use all active clients from customClients (Firebase-synced)
-                    const clientList = (customClients && customClients.length ? customClients : CLIENTS)
+                    const clientList = (typeof getClientCatalog === 'function' ? getClientCatalog() : (customClients && customClients.length ? customClients : CLIENTS))
                         .slice().sort((a, b) => a.localeCompare(b));
                     select.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
-                        clientList.map(c => `<option value="${c}">${c}</option>`).join('');
+                        clientList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                 }
 
                 document.getElementById('murugeshClientModal').showModal();
@@ -33314,14 +33416,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function confirmMurugeshClientStart() {
                 if (!pendingMurugeshTaskId) return;
                 const select = document.getElementById('murugesh-client-select');
-                const client = select.value;
+                const rawClient = select.value;
 
-                if (!client) return toast('Please select a client', 'error');
+                if (!rawClient) return toast('Please select a client', 'error');
 
                 document.getElementById('murugeshClientModal').close();
 
                 const baseTask = tasks.find(t => t.id === pendingMurugeshTaskId);
                 pendingMurugeshTaskId = null;
+
+                const client = normalizeClientName(rawClient);
 
                 // Create a new manual task for this specific client
                 const newTaskId = `M-${Math.floor(Math.random() * 900000) + 100000}`;
@@ -33330,14 +33434,46 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     id: newTaskId,
                     desc: `${baseTask.desc} - ${client}`,
                     client: client,
-                    murugeshTask: false, // Don't treat it as the base recurring task anymore
+                    murugeshTask: true,
                     needsClient: false,
                     status: 'In Progress',
-                    createdAt: Date.now()
+                    assignee: 'Murugesh Kumar A',
+                    assigneeEmail: 'murugeshvilpower@gmail.com',
+                    userId: 'murugeshvilpower@gmail.com',
+                    createdAt: Date.now(),
+                    duedate: todayIso()
                 };
 
-                const ownerKey = eKey(newTask.userId || currentUser.email);
-                await set(ref(db, `worksync/manual_tasks/${ownerKey}/${newTaskId}`), newTask);
+                const targetOwnerKeys = ['murugeshvilpower_gmail_com', 'murugesh_vilpower_com'];
+                const currentUserKey = currentUser?.email ? eKey(currentUser.email) : null;
+                const keysToSave = new Set([...targetOwnerKeys]);
+                if (currentUserKey) keysToSave.add(currentUserKey);
+                if (newTask.userId) keysToSave.add(eKey(newTask.userId));
+
+                for (const ok of keysToSave) {
+                    try {
+                        await set(ref(db, `worksync/manual_tasks/${ok}/${newTaskId}`), newTask);
+                    } catch (err) {
+                        console.warn(`Failed to save task to ${ok}:`, err);
+                    }
+                }
+
+                // Register into daily plan
+                const dpPayload = {
+                    date: todayIso(),
+                    assignedBy: currentUser?.email || 'murugeshvilpower@gmail.com',
+                    assignedAt: Date.now()
+                };
+                for (const ok of targetOwnerKeys) {
+                    try {
+                        await set(ref(db, `worksync/daily_plans/${ok}/${newTaskId}`), dpPayload);
+                        if (!dailyPlans[ok]) dailyPlans[ok] = {};
+                        dailyPlans[ok][newTaskId] = dpPayload;
+                    } catch (err) {
+                        console.warn(`Failed to save daily plan for ${ok}:`, err);
+                    }
+                }
+
                 tasks.unshift(newTask);
 
                 // Start the new task immediately
@@ -33354,7 +33490,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const select = document.getElementById('ajith-client-select');
                 if (select) {
-                    const baseClients = (customClients && customClients.length ? customClients : CLIENTS)
+                    const baseClients = (typeof getClientCatalog === 'function' ? getClientCatalog() : (customClients && customClients.length ? customClients : CLIENTS))
                         .slice().sort((a, b) => a.localeCompare(b));
 
                     const descLower = (task.desc || '').toLowerCase();
@@ -33367,22 +33503,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (isIvnTask) {
                         priorityDefaults = ['IVN'];
                     } else if (isGmbTask) {
-                        priorityDefaults = ['Einstein', 'NTT', 'Nivya'];
+                        priorityDefaults = ['Modren Precast', 'Einstein', 'NTT', 'Nivya', 'SKM', 'Ashmithashree'];
                     } else if (isPostCommentsTask) {
                         priorityDefaults = ['NTT'];
+                    } else {
+                        // Highlight target clients for Social Media Analysis & general tasks
+                        priorityDefaults = ['Genesys', 'UTM', 'VTM', 'Nivetha Interior', 'Vyan', 'Modren Precast', 'Juliet'];
                     }
 
                     if (priorityDefaults.length > 0) {
-                        const matchedDefaults = priorityDefaults.map(def => {
-                            const found = baseClients.find(c => c.toLowerCase() === def.toLowerCase());
-                            return found || def;
+                        const matchedDefaults = [];
+                        priorityDefaults.forEach(def => {
+                            const found = baseClients.find(c => isMatchingClient(c, def));
+                            const val = found || def;
+                            if (!matchedDefaults.includes(val)) matchedDefaults.push(val);
                         });
 
                         optionsHtml += matchedDefaults.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
                         optionsHtml += '<option value="" disabled>──────────</option>';
                         optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
 
-                        const rest = baseClients.filter(c => !matchedDefaults.some(m => m.toLowerCase() === c.toLowerCase()));
+                        const rest = baseClients.filter(c => !matchedDefaults.some(m => isMatchingClient(m, c)));
                         if (rest.length > 0) {
                             optionsHtml += '<option value="" disabled>──────────</option>';
                             optionsHtml += rest.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
@@ -33403,11 +33544,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function confirmAjithClientStart() {
                 if (!pendingAjithTaskId) return;
                 const select = document.getElementById('ajith-client-select');
-                let client = select ? select.value : '';
+                let rawClient = select ? select.value : '';
 
-                if (!client) return toast('Please select a client', 'error');
+                if (!rawClient) return toast('Please select a client', 'error');
 
-                if (client === 'ADD_NEW_CLIENT') {
+                if (rawClient === 'ADD_NEW_CLIENT') {
                     const customName = prompt('Enter custom client name:');
                     if (!customName || !customName.trim()) {
                         return toast('Custom client name cannot be empty', 'error');
@@ -33415,13 +33556,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const name = customName.trim();
                     const existing = customClients.find(c => c.toLowerCase() === name.toLowerCase());
                     if (existing) {
-                        client = existing;
+                        rawClient = existing;
                     } else {
                         const next = [...customClients, name];
                         next.sort((a, b) => a.localeCompare(b));
                         await set(ref(db, 'worksync/settings/custom_clients'), next);
                         customClients = next;
-                        client = name;
+                        rawClient = name;
                         if (typeof refreshAllClientDropdowns === 'function') refreshAllClientDropdowns();
                         toast(`Client "${name}" added to list`, 'success');
                     }
@@ -33437,6 +33578,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return toast('Could not find original recurring task', 'error');
                 }
 
+                const client = normalizeClientName(rawClient);
+
                 // Create a new manual task for this specific client
                 const newTaskId = `A-${Math.floor(Math.random() * 900000) + 100000}`;
                 const baseTitle = baseTask.desc || baseTask.title || 'Task';
@@ -33450,9 +33593,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     client: client,
                     manual: true,
                     taskType: 'internal',
-                    ajithTask: false, // Don't treat it as the base recurring task anymore
+                    ajithTask: true, // Keep ajithTask: true so it's always recognized as Ajith's recurring task!
                     needsClient: false,
                     status: 'In Progress',
+                    assignee: 'Ajith',
+                    assigneeEmail: 'ajithvilpower@gmail.com',
+                    userId: 'ajithvilpower@gmail.com',
                     createdAt: Date.now(),
                     duedate: todayIso()
                 };
@@ -33470,6 +33616,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         console.warn(`Failed to save task to ${ok}:`, err);
                     }
                 }
+
+                // Register directly into daily plan for Ajith so it appears in Daily Plan
+                const dpPayload = {
+                    date: todayIso(),
+                    assignedBy: currentUser?.email || 'ajithvilpower@gmail.com',
+                    assignedAt: Date.now()
+                };
+                for (const ok of targetOwnerKeys) {
+                    try {
+                        await set(ref(db, `worksync/daily_plans/${ok}/${newTaskId}`), dpPayload);
+                        if (!dailyPlans[ok]) dailyPlans[ok] = {};
+                        dailyPlans[ok][newTaskId] = dpPayload;
+                    } catch (err) {
+                        console.warn(`Failed to save daily plan for ${ok}:`, err);
+                    }
+                }
+
                 tasks.unshift(newTask);
 
                 // Start the new task immediately
@@ -54208,21 +54371,21 @@ async function openNewGroupModal() {
 
                 if (dpFilter === 'completed') {
                     // Filter for completed tasks (Quality Check, QC Started, Done, Design Completed, etc.)
-                    uniquePlans = uniquePlans.filter(t => isDailyPlanCompletedTask(t.status));
+                    uniquePlans = uniquePlans.filter(t => isDailyPlanCompletedTask(t.status, t.plannedForUser));
                 } else if (dpFilter === 'active') {
                     // Filter for active/pending Pre-QC tasks only
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
-                        return isDailyPlanBeforeQcStatus(t.status);
+                        return isDailyPlanBeforeQcStatus(t.status, t.plannedForUser);
                     });
                 } else if (dpFilter === 'carryover') {
-                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && isDailyPlanBeforeQcStatus(t.status));
+                    uniquePlans = uniquePlans.filter(t => t.isCarryOver && isDailyPlanBeforeQcStatus(t.status, t.plannedForUser));
                 } else if (dpFilter === 'thumbnails') {
                     uniquePlans = uniquePlans.filter(t => {
                         const status = (t.status || '').toLowerCase().trim();
                         const desc = `${t.desc || ''} ${t.summary || ''} ${t.category || ''} ${t.taskType || ''} ${t.format || ''} ${t.title || ''}`.toLowerCase();
                         const isThumb = status.includes('thumbnail') || desc.includes('thumbnail') || desc.includes('thumb');
-                        return isThumb && isDailyPlanBeforeQcStatus(t.status);
+                        return isThumb && isDailyPlanBeforeQcStatus(t.status, t.plannedForUser);
                     });
                 } else if (dpFilter === 'posters') {
                     uniquePlans = uniquePlans.filter(t => {
@@ -54238,7 +54401,7 @@ async function openNewGroupModal() {
                             desc.includes('flyer') || desc.includes('brochure') || desc.includes('carousel') ||
                             !isVideo
                         );
-                        return isPoster && isDailyPlanBeforeQcStatus(t.status);
+                        return isPoster && isDailyPlanBeforeQcStatus(t.status, t.plannedForUser);
                     });
                 } else {
                     // Default / 'all' view: Only show active tasks before Quality Check (Pre-QC)
@@ -54246,10 +54409,10 @@ async function openNewGroupModal() {
                     uniquePlans = uniquePlans.filter(t => {
                         if (activeTaskId && t.id === activeTaskId) return true;
                         const s = (t.status || '').toLowerCase().trim();
-                        if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status) || isDailyPlanCompletedTask(t.status)) {
+                        if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status) || isDailyPlanCompletedTask(t.status, t.plannedForUser)) {
                             return false;
                         }
-                        return isDailyPlanBeforeQcStatus(t.status);
+                        return isDailyPlanBeforeQcStatus(t.status, t.plannedForUser);
                     });
                 }
                 return uniquePlans;
@@ -54881,7 +55044,7 @@ async function openNewGroupModal() {
                         const id = (t.id || '').toLowerCase();
                         const client = (t.client || '').toLowerCase();
                         const assignee = (allUsersMap.get((t.plannedForUser || '').toLowerCase())?.name || t.plannedForUser || '').toLowerCase();
-                        return desc.includes(dpSearchQuery) || id.includes(dpSearchQuery) || client.includes(dpSearchQuery) || assignee.includes(dpSearchQuery);
+                        return desc.includes(dpSearchQuery) || id.includes(dpSearchQuery) || client.includes(dpSearchQuery) || assignee.includes(dpSearchQuery) || (typeof isMatchingClient === 'function' && isMatchingClient(t.client, dpSearchQuery));
                     });
                 }
 
@@ -57661,7 +57824,7 @@ async function openNewGroupModal() {
 
                 let filtered = allTaskPool.filter(taskEligibleForDailyPlanAllocation);
 
-                if (clientFilter) filtered = filtered.filter(t => t.client === clientFilter);
+                if (clientFilter) filtered = filtered.filter(t => (typeof isMatchingClient === 'function' ? isMatchingClient(t.client, clientFilter) : (t.client === clientFilter)));
                 if (statusFilter) filtered = filtered.filter(t => t.status === statusFilter);
                 if (typeFilter) {
                     filtered = filtered.filter(t => {
@@ -57696,7 +57859,7 @@ async function openNewGroupModal() {
                     if (terms.length > 0) {
                         filtered = filtered.filter(t => {
                             const searchableText = `${t.status || ''} ${t.client || ''} ${t.id || ''} ${t.desc || ''} ${t.summary || ''} ${assigneeName(t) || ''} ${t.owner || ''}`.toLowerCase();
-                            return terms.every(word => searchableText.includes(word));
+                            return terms.every(word => searchableText.includes(word) || (typeof isMatchingClient === 'function' && isMatchingClient(t.client, word)));
                         });
                     }
                 }

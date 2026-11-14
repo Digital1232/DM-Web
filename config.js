@@ -41,7 +41,15 @@ export const JIRA = {
     useLocalApi: false
 };
 
-export const CLIENTS = ['3Jo Toys', 'Aladi Ezhilvanan', 'Client', 'DreamDaa', 'Discussion', 'Einstein', 'Iniya', 'IVN', 'Learning', 'Mopower', 'Mr.Millet', 'Nivya', 'NTT', 'Others', 'Quade', 'SalesNaany', 'SKM', 'University', 'Vilpower', 'Vilpower DM'];
+export const CLIENTS = [
+    '3Jo Toys', 'Aladi Ezhilvanan', 'Ashmithashree', 'Client', 'Discussion',
+    'DreamDaa', 'Einstein', 'Genesys', 'GVR', 'Hanith Citroen', 'Iniya',
+    'Internal', 'IVN', 'Juliet', 'Learning', 'Modren Precast', 'Mopower',
+    'Mr.Millet', 'Muva Herbals', 'Nivetha', 'Nivetha Interior', 'Nivya',
+    'NTT', 'Others', 'PG Constructions', 'Quade', 'Ramachandran',
+    'SalesNaany', 'SES', 'SKM', 'University', 'UTM', 'Vilpower',
+    'Vilpower DM', 'VTM', 'Vyan'
+];
 
 export const META_ADS = {
     accessToken: "EAAZBjdDlKPisBR5B2oxcEr7LKIh2hiZAkSyA990xiJ3lTfO93ZAL69WeXWz7V889cFADqB42DciNcOy9UZBIHXENjXVBk5lBbYcXso6MRQF0XZBVKFVu5zAKSxrYXqwcIFTPWnfPJZAeISI4T1LrsckxO0NysnZBzrlaURPMK0BK5jHAkfz8IJSxycUHG2iIdHzJP8ooZADR"
