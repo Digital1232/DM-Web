@@ -21640,6 +21640,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function openBreakPopup() {
+                if (typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) return;
                 const modal = document.getElementById('breakStatusModal');
                 if (modal && !modal.open) {
                     selectRandomBreakMessage();
@@ -22151,6 +22152,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     dialog.close();
                     dialog.remove();
                 }
+                lastBreakAlertTime = 0;
                 await doResume();
             }
 
@@ -22204,15 +22206,53 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function checkBreakLimit() {
-                if (!isCheckedIn || !breakStartTime) return;
-                const breakDuration = Date.now() - breakStartTime;
+                if (!isCheckedIn) return;
+
+                // 1. If actively working on a task, user is definitely working and NOT on break!
+                if (typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                    if (breakStartTime) {
+                        breakStartTime = null;
+                        try { localStorage.removeItem('worksync_breakStartTime'); } catch (e) { }
+                        if (typeof timerState !== 'undefined' && timerState === 'paused') {
+                            setTimerState('running');
+                            try { localStorage.setItem('worksync_timerState', 'running'); } catch (e) { }
+                            syncActiveSessionToFirebase('running');
+                        }
+                    }
+                    return;
+                }
+
+                // 2. If timerState is running, user is working and NOT on break
+                const curState = (typeof timerState !== 'undefined' ? timerState : '') || localStorage.getItem('worksync_timerState');
+                if (curState === 'running') {
+                    if (breakStartTime) {
+                        breakStartTime = null;
+                        try { localStorage.removeItem('worksync_breakStartTime'); } catch (e) { }
+                    }
+                    return;
+                }
+
+                if (!breakStartTime) return;
+
+                // 3. Stale date check: break must be from today
+                const now = Date.now();
+                const breakDate = new Date(breakStartTime);
+                const today = new Date();
+                if (breakDate.toDateString() !== today.toDateString()) {
+                    breakStartTime = null;
+                    try { localStorage.removeItem('worksync_breakStartTime'); } catch (e) { }
+                    setTimerState(isCheckedIn ? 'running' : 'idle');
+                    return;
+                }
+
+                const breakDuration = now - breakStartTime;
                 if (breakDuration > 30 * 60 * 1000) { // 30 minutes
                     if (!document.getElementById('breakExceededModal')) {
                         showBreakExceededPopup(breakDuration);
                     }
 
-                    if (Date.now() - lastBreakAlertTime > 5 * 60 * 1000) {
-                        lastBreakAlertTime = Date.now();
+                    if (now - lastBreakAlertTime > 5 * 60 * 1000) {
+                        lastBreakAlertTime = now;
 
                         const sound = document.getElementById('announcement-notification-sound') || document.getElementById('chat-notification-sound');
                         if (sound) {
@@ -22439,6 +22479,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 stopBreakTimer();
                             }
                         } else if (remoteState === 'paused' && remoteCheckInTime) {
+                            if (typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
+                                syncActiveSessionToFirebase('running');
+                                return;
+                            }
                             const localState = localStorage.getItem('worksync_timerState');
                             if (localState !== 'paused' || !breakStartTime) {
                                 isCheckedIn = true;
@@ -34115,6 +34159,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             async function doStartTask(id, options = {}) {
+                if ((typeof breakStartTime !== 'undefined' && breakStartTime) ||
+                    (typeof timerState !== 'undefined' && timerState === 'paused') ||
+                    localStorage.getItem('worksync_timerState') === 'paused') {
+                    try {
+                        await doResume();
+                    } catch (e) {
+                        console.warn('[doStartTask] auto-resume from break failed:', e);
+                        breakStartTime = null;
+                        try { localStorage.removeItem('worksync_breakStartTime'); } catch (err) { }
+                        setTimerState('running');
+                        try { localStorage.setItem('worksync_timerState', 'running'); } catch (err) { }
+                        syncActiveSessionToFirebase('running');
+                    }
+                }
                 const startStatus = options.internalStatus || 'In Progress';
                 // If another task is active, log its time and put it on hold before switching.
                 if (activeTaskId && !isSameTaskId(activeTaskId, id)) {
