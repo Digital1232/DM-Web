@@ -546,12 +546,77 @@
     // ─────────────────────────────────────────────────────────────
     // 5. LIVE TEAM OVERVIEW (MANAGEMENT)
     // ─────────────────────────────────────────────────────────────
-    function deriveUserState(u) {
+    function resolveUserTask(u, c) {
+        if (!u) return null;
+        if (u.currentTask && (u.currentTask.taskId || u.currentTask.taskDesc)) {
+            return u.currentTask;
+        }
+        const email = (u.email || '').toLowerCase().trim();
+        if (!email || !c || !Array.isArray(c.tasks)) return null;
+
+        // Find tasks assigned to this user that are in progress
+        const userTasks = c.tasks.filter(t => {
+            if (typeof c.assigneeMatches === 'function') {
+                return c.assigneeMatches(t, email);
+            }
+            const taskEmail = (t.assigneeEmail || t.userId || t.plannedForUser || '').toLowerCase().trim();
+            return taskEmail === email;
+        });
+
+        // 1. First priority: actively in progress tasks
+        const inProgress = userTasks.filter(t => typeof c.isInProgress === 'function' ? c.isInProgress(t.status) : false);
+        if (inProgress.length > 0) {
+            const t = inProgress[0];
+            return {
+                taskId: t.id || t.key || 'TASK',
+                taskDesc: t.desc || t.summary || 'In Progress Task',
+                client: t.client || '',
+                status: t.status || 'In Progress',
+                state: 'working',
+                isAssignedActive: true
+            };
+        }
+
+        // 2. Second priority: tasks currently in review / approval / QA
+        const inReview = userTasks.filter(t => {
+            const st = (t.status || '').toLowerCase();
+            return st.includes('review') || st.includes('qc') || st.includes('quality') || st.includes('approval');
+        });
+        if (inReview.length > 0) {
+            const t = inReview[0];
+            return {
+                taskId: t.id || t.key || 'TASK',
+                taskDesc: t.desc || t.summary || 'In Review Task',
+                client: t.client || '',
+                status: t.status || 'In Review',
+                state: 'paused',
+                isAssignedActive: true
+            };
+        }
+
+        return null;
+    }
+
+    function deriveUserState(u, c) {
         if (!u) return 'checkedout';
         if (u.activeSession?.state === 'paused' || u.timerState === 'paused') return 'break';
-        if (u.currentTask?.state === 'working') return 'working';
-        if (u.currentTask && u.currentTask.state !== 'working') return 'paused';
-        if (u.online || u.activeSession?.state === 'running') return 'idle';
+        const task = u.currentTask || (c ? resolveUserTask(u, c) : null);
+        if (task?.state === 'working') return 'working';
+        if (task && task.state !== 'working') return 'paused';
+        if (u.online || u.activeSession?.state === 'running' || u.isCheckedIn) return 'idle';
+
+        const context = c || (typeof ctx === 'function' ? ctx() : null);
+        if (context && Array.isArray(context.allTimeLogs)) {
+            const todayStr = typeof context.todayIso === 'function' ? context.todayIso() : new Date().toISOString().slice(0, 10);
+            const email = (u.email || '').toLowerCase().trim();
+            const hasLoggedToday = context.allTimeLogs.some(l => {
+                if (String(l.userId || l.userEmail || '').toLowerCase().trim() !== email) return false;
+                const d = l.startTime ? new Date(l.startTime) : null;
+                return d && !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === todayStr;
+            });
+            if (hasLoggedToday) return 'idle';
+        }
+
         return 'checkedout';
     }
 
@@ -591,6 +656,16 @@
             }
         }
 
+        // Ensure each user has their active task resolved if available
+        users.forEach(u => {
+            if (!u.currentTask) {
+                const resolved = resolveUserTask(u, c);
+                if (resolved) {
+                    u.currentTask = resolved;
+                }
+            }
+        });
+
         // Setup UI controls for Live Team Overview
         const titleEl = document.getElementById('admin-current-work-title');
         const subtitleEl = document.getElementById('admin-current-work-subtitle');
@@ -605,7 +680,7 @@
         if (pillsWrap) pillsWrap.classList.remove('hidden');
         list.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5';
 
-        const activeCount = users.filter(u => deriveUserState(u) === 'working').length;
+        const activeCount = users.filter(u => deriveUserState(u, c) === 'working').length;
         countEl.textContent = `${activeCount} Working`;
 
         const search = state.team.search.trim().toLowerCase();
@@ -619,7 +694,7 @@
         });
 
         let filtered = users.filter(u => {
-            const st = deriveUserState(u);
+            const st = deriveUserState(u, c);
             if (stFilter !== 'all' && st !== stFilter) return false;
             if (search) {
                 const hay = `${u.name || ''} ${u.email || ''} ${u.role || ''} ${u.currentTask?.taskId || ''}`.toLowerCase();
@@ -639,7 +714,7 @@
                 return (taskCountsByEmail.get(String(b.email).toLowerCase()) || 0) - (taskCountsByEmail.get(String(a.email).toLowerCase()) || 0);
             }
             const order = { working: 0, paused: 1, break: 2, idle: 3, checkedout: 4 };
-            return (order[deriveUserState(a)] ?? 9) - (order[deriveUserState(b)] ?? 9) || (a.name || '').localeCompare(b.name || '');
+            return (order[deriveUserState(a, c)] ?? 9) - (order[deriveUserState(b, c)] ?? 9) || (a.name || '').localeCompare(b.name || '');
         });
 
         if (!filtered.length) {
@@ -656,13 +731,20 @@
         };
 
         list.innerHTML = filtered.map(u => {
-            const st = deriveUserState(u);
+            const st = deriveUserState(u, c);
             const b = badgeMap[st];
             const task = u.currentTask;
             const elapsed = task?.startedAt ? fmtTime(Math.max(0, Math.floor((Date.now() - task.startedAt) / 1000))) : '00:00:00';
-            const avatar = typeof c.getSafePdfUrl === 'function' && typeof c.getUserAvatarSrc === 'function'
-                ? c.getSafePdfUrl(u.profilePicture || c.getUserAvatarSrc(u))
-                : '';
+            let avatar = '';
+            if (u.profilePicture && typeof window.isSafeWebOrMediaUrl === 'function' && window.isSafeWebOrMediaUrl(u.profilePicture)) {
+                avatar = u.profilePicture;
+            } else if (typeof c.getUserAvatarSrc === 'function') {
+                avatar = c.getUserAvatarSrc(u);
+            } else if (typeof window.getUserAvatarSrc === 'function') {
+                avatar = window.getUserAvatarSrc(u);
+            } else if (typeof window.getInitialsAvatar === 'function') {
+                avatar = window.getInitialsAvatar(u.name || u.email);
+            }
             const lastSeen = u.lastSeen || u.updatedAt || task?.startedAt || null;
 
             return `
@@ -671,7 +753,7 @@
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex items-center gap-2.5 min-w-0">
                             <div class="relative shrink-0">
-                                <img src="${esc(avatar)}" alt="${esc(u.name || u.email)}" class="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-[#E8EDF4] dark:border-slate-700 object-cover">
+                                <img src="${esc(avatar)}" alt="${esc(u.name || u.email)}" onerror="window.handleAvatarError && window.handleAvatarError(this, '${esc(u.name || u.email)}')" class="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-[#E8EDF4] dark:border-slate-700 object-cover">
                                 <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${u.online ? 'bg-[#10B981]' : 'bg-slate-300 dark:bg-slate-600'}"></span>
                             </div>
                             <div class="min-w-0">
@@ -691,7 +773,11 @@
                             <p class="text-xs font-semibold text-[#171D32] dark:text-slate-200 line-clamp-1">${esc(task.taskDesc || 'Task in progress')}</p>
                             <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
                                 <span class="text-[#718096] dark:text-slate-400 truncate">${esc(task.client || 'No Client')}</span>
-                                <span class="live-task-timer font-mono font-bold text-[#171D32] dark:text-white" data-started="${task.startedAt || 0}" data-state="${task.state || 'idle'}">${elapsed}</span>
+                                ${task.startedAt ? `
+                                    <span class="live-task-timer font-mono font-bold text-[#171D32] dark:text-white" data-started="${task.startedAt || 0}" data-state="${task.state || 'idle'}">${elapsed}</span>
+                                ` : `
+                                    <span class="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400"><iconify-icon icon="solar:play-circle-bold" width="13"></iconify-icon>In Progress</span>
+                                `}
                             </div>
                         </div>` : `
                         <div class="bg-white/70 dark:bg-slate-900/50 rounded-xl border border-dashed border-[#E8EDF4] dark:border-slate-800 p-3 text-center">
@@ -712,7 +798,7 @@
             || (c.knownUserByEmail ? c.knownUserByEmail(email) : null)
             || { email, name: email };
 
-        const empTasks = (c.tasks || []).filter(t => String(t.assigneeEmail || t.userId || '').toLowerCase() === String(email).toLowerCase());
+        const empTasks = (c.tasks || []).filter(t => typeof c.assigneeMatches === 'function' ? c.assigneeMatches(t, email) : String(t.assigneeEmail || t.userId || '').toLowerCase() === String(email).toLowerCase());
         const active = empTasks.filter(t => c.isInProgress?.(t.status));
         const completed = empTasks.filter(t => c.isDone?.(t.status) || c.isInternalDone?.(t.status) || c.isTaskCompletedStatus?.(t.status));
 
