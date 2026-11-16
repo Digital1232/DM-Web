@@ -112,7 +112,7 @@ describe('MyMonthlyReport Module Verification', () => {
                 {
                     userId: 'karthikavilpower@gmail.com',
                     type: 'check_in',
-                    timestamp: new Date(2026, 10, 2, 9, 55, 0).getTime()
+                    timestamp: new Date(2026, 10, 2, 9, 40, 0).getTime()
                 },
                 {
                     userId: 'karthikavilpower@gmail.com',
@@ -122,7 +122,7 @@ describe('MyMonthlyReport Module Verification', () => {
                 {
                     userId: 'karthikavilpower@gmail.com',
                     type: 'break_end',
-                    timestamp: new Date(2026, 10, 2, 14, 0, 0).getTime(),
+                    timestamp: new Date(2026, 10, 2, 14, 15, 0).getTime(),
                     duration: 2700000 // 45m = 2700s
                 }
             ],

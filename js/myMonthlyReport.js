@@ -1088,6 +1088,7 @@
         let presentDaysCount = 0;
         const todayStr = Engine.formatLocalDate(new Date());
         Object.values(perUserDayMap).forEach(uDay => {
+            const hasRealCheckIn = uDay.checkIns.length > 0;
             if (uDay.checkIns.length === 0 && uDay.workLogs.length > 0) {
                 const starts = uDay.workLogs.map(l => Engine.parseTimestamp(l.startTime || l.startedAt || l.timestamp)).filter(Boolean);
                 const ends = uDay.workLogs.map(l => {
@@ -1107,7 +1108,7 @@
 
             presentDaysCount++;
             const firstInDate = new Date(firstIn);
-            if (firstInDate.getHours() * 60 + firstInDate.getMinutes() > 585) { // > 9:45 AM (aligned with One Report)
+            if (hasRealCheckIn && (firstInDate.getHours() * 60 + firstInDate.getMinutes() > 585)) { // > 9:45 AM (aligned with One Report)
                 lateCheckInCount++;
                 if (dayObj) dayObj.isLate = true;
             }

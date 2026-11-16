@@ -761,31 +761,7 @@
         // 1. Permission scope → 2. period → 3. user filters
         // Ghost filtering & check-in clamping already ran in normalizeLogs before overlap trimming.
         const scopedLogs = norm.logs.filter(l => inScope(scope, l.email));
-        const periodLogs = scopedLogs.filter(l => {
-            if (l.start && l.end && l.end > l.start) {
-                return l.start <= period.toTs && l.end >= period.fromTs;
-            }
-            return l.dateTs >= period.fromTs && l.dateTs <= period.toTs;
-        }).map(l => {
-            if (l.entryType === 'Session' && l.start && l.end && l.end > l.start) {
-                const effectiveStart = Math.max(l.start, period.fromTs);
-                const effectiveEnd = Math.min(l.end, period.toTs);
-                if (effectiveEnd > effectiveStart) {
-                    const clampedSec = Math.floor((effectiveEnd - effectiveStart) / 1000);
-                    if (clampedSec !== l.seconds) {
-                        return Object.assign({}, l, {
-                            start: effectiveStart,
-                            end: effectiveEnd,
-                            seconds: Math.min(l.seconds, clampedSec),
-                            rawSeconds: Math.min(l.rawSeconds, clampedSec),
-                            dateTs: effectiveStart,
-                            date: localDateStr(effectiveStart)
-                        });
-                    }
-                }
-            }
-            return l;
-        });
+        const periodLogs = scopedLogs.filter(l => l.dateTs >= period.fromTs && l.dateTs <= period.toTs);
         const entries = periodLogs.filter(l =>
             (f.employee === 'all' || l.email === f.employee) &&
             (f.client === 'all' || l.client === f.client) &&
@@ -800,6 +776,15 @@
         const employeeEmails = new Set();
         dir.forEach((p, e) => { if (p.catalog && trackers.has(e) && inScope(scope, e)) employeeEmails.add(e); });
         periodLogs.forEach(l => employeeEmails.add(l.email));
+        (ctx.attendanceEvents || []).forEach(e => {
+            const em = normEmail(e && (e.userId || e.email));
+            if (em && inScope(scope, em)) {
+                const ts = toTs(e.timestamp);
+                if (ts && ts >= period.fromTs && ts <= period.toTs) {
+                    employeeEmails.add(em);
+                }
+            }
+        });
         if (scope.emails) scope.emails.forEach(e => employeeEmails.add(e));
         let reportEmails = [...employeeEmails];
         if (f.employee !== 'all') reportEmails = reportEmails.filter(e => e === f.employee);
