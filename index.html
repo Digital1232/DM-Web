@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.1.14">
+    <meta name="app-version" content="1.1.15">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -29977,7 +29977,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (ajithSelect) {
                         const cur = ajithSelect.value || '';
                         ajithSelect.innerHTML = '<option value="" disabled selected>Select a client...</option>' +
-                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                            catalog.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('') +
+                            '<option value="" disabled>──────────</option>' +
+                            '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
                         if (cur) ajithSelect.value = cur;
                     }
                 } catch (e) {
@@ -32474,7 +32476,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const assigneeName = 'Ajith';
 
                     // Invalidate session cache if configuration changed
-                    const ajithConfigSig = 'v3_20261113_ajith_recurring';
+                    const ajithConfigSig = 'v4_20261116_ajith_recurring';
                     if (sessionStorage.getItem('ajithTasks_configSig') !== ajithConfigSig) {
                         sessionStorage.removeItem('ajithTasks_lastRun');
                         sessionStorage.setItem('ajithTasks_configSig', ajithConfigSig);
@@ -33932,49 +33934,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const baseClients = (typeof getClientCatalog === 'function' ? getClientCatalog() : (customClients && customClients.length ? customClients : CLIENTS))
                         .slice().sort((a, b) => a.localeCompare(b));
 
-                    const descLower = (task.desc || '').toLowerCase();
-                    const isGmbTask = descLower.includes('gmb');
-                    const isIvnTask = descLower.includes('ivn');
-                    const isPostCommentsTask = descLower.includes('post comments') || descLower.includes('comment');
                     let optionsHtml = '<option value="" disabled selected>Select a client...</option>';
-
-                    let priorityDefaults = [];
-                    if (isIvnTask) {
-                        priorityDefaults = ['IVN'];
-                    } else if (isGmbTask) {
-                        priorityDefaults = ['Modren Precast', 'Einstein', 'NTT', 'Nivya', 'SKM', 'Ashmithashree'];
-                    } else if (isPostCommentsTask) {
-                        priorityDefaults = ['NTT'];
-                    } else {
-                        // Highlight target clients for Social Media Analysis & general tasks
-                        priorityDefaults = ['Genesys', 'UTM', 'VTM', 'Nivetha Interior', 'Vyan', 'Modren Precast', 'Juliet'];
-                    }
-
-                    if (priorityDefaults.length > 0) {
-                        const matchedDefaults = [];
-                        priorityDefaults.forEach(def => {
-                            const found = baseClients.find(c => isMatchingClient(c, def));
-                            const val = found || def;
-                            if (!matchedDefaults.includes(val)) matchedDefaults.push(val);
-                        });
-
-                        optionsHtml += matchedDefaults.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-                        optionsHtml += '<option value="" disabled>──────────</option>';
-                        optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
-
-                        const rest = baseClients.filter(c => !matchedDefaults.some(m => isMatchingClient(m, c)));
-                        if (rest.length > 0) {
-                            optionsHtml += '<option value="" disabled>──────────</option>';
-                            optionsHtml += rest.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-                        }
-                    } else {
-                        optionsHtml += baseClients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-                        optionsHtml += '<option value="" disabled>──────────</option>';
-                        optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
-                    }
+                    // Include all clients in alphabetical order so every recurring task has all client names
+                    optionsHtml += baseClients.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                    optionsHtml += '<option value="" disabled>──────────</option>';
+                    optionsHtml += '<option value="ADD_NEW_CLIENT" style="color: #4f46e5; font-weight: bold;">+ Add Custom Client...</option>';
 
                     select.innerHTML = optionsHtml;
-                    select.value = '';
+
+                    // If task has a suggested/preferred client (e.g. IVN for IVN task, or NTT for NTT task), pre-select it while keeping all clients in dropdown
+                    const descLower = (task.desc || '').toLowerCase();
+                    const preferredClient = task.client && task.client !== 'Internal' && task.client !== 'Others'
+                        ? task.client
+                        : (descLower.includes('ivn') ? 'IVN' : (descLower.includes('ntt') ? 'NTT' : ''));
+
+                    if (preferredClient && baseClients.some(c => isMatchingClient(c, preferredClient))) {
+                        const matched = baseClients.find(c => isMatchingClient(c, preferredClient)) || preferredClient;
+                        select.value = matched;
+                    } else {
+                        select.value = '';
+                    }
                 }
 
                 document.getElementById('ajithClientModal').showModal();
