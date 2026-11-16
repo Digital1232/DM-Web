@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="1.1.17">
+    <meta name="app-version" content="1.1.18">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="64x64" href="img/favicon-64.png">
     <link rel="icon" type="image/jpeg" sizes="192x192" href="img/app-icon-192.jpg">
@@ -19839,7 +19839,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         getAllUsers().then(users => {
                             allUsersMap = users;
                             window.allUsersMap = users;
-                            if (canViewDailySummary() && typeof refreshEmployeeCurrentTasks === 'function') {
+                            if (typeof refreshEmployeeCurrentTasks === 'function') {
                                 refreshEmployeeCurrentTasks(true);
                             }
                             if (activeView === 'chat') {
@@ -20285,19 +20285,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     document.getElementById('report-tab-performance')?.classList.remove('hidden');
                     document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
                 }
-                // Daily summary cards and data loading - available to admins AND managers
+                // Daily summary cards and data loading - Live Work Board visible to all team members
                 const dashPanel = document.getElementById('view-dashboard-panel');
+                document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                loadEmployeeCurrentTasks();
+
                 if (canViewDailySummary()) {
                     dashPanel?.classList.add('role-management');
-                    document.getElementById('admin-current-work-card')?.classList.remove('hidden');
                     document.getElementById('admin-workload-card')?.classList.remove('hidden');
                     document.getElementById('admin-attention-card')?.classList.remove('hidden');
                     document.getElementById('admin-report-card')?.classList.remove('hidden');
-                    loadEmployeeCurrentTasks();
                     loadTodayWorkSummary();
                 } else {
                     dashPanel?.classList.remove('role-management');
-                    document.getElementById('admin-current-work-card')?.classList.add('hidden');
                     document.getElementById('admin-workload-card')?.classList.add('hidden');
                     document.getElementById('admin-attention-card')?.classList.add('hidden');
                     document.getElementById('admin-report-card')?.classList.add('hidden');
@@ -22976,14 +22976,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (activeView !== view) return;
 
                     if (view === 'dashboard') {
-                        if (canViewDailySummary()) {
-                            document.getElementById('admin-current-work-card')?.classList.remove('hidden');
-                            loadEmployeeCurrentTasks();
-                            if (!currentWorkUsers.length && typeof refreshEmployeeCurrentTasks === 'function') {
-                                refreshEmployeeCurrentTasks(true);
-                            } else {
-                                renderEmployeeCurrentTasks();
-                            }
+                        document.getElementById('admin-current-work-card')?.classList.remove('hidden');
+                        loadEmployeeCurrentTasks();
+                        if (!currentWorkUsers.length && typeof refreshEmployeeCurrentTasks === 'function') {
+                            refreshEmployeeCurrentTasks(true);
+                        } else {
+                            renderEmployeeCurrentTasks();
                         }
                         if (window.OneDeskDashboard && typeof window.OneDeskDashboard.refreshAll === 'function') {
                             window.OneDeskDashboard.refreshAll();
@@ -35925,15 +35923,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function loadEmployeeCurrentTasks() {
-                if (!canViewDailySummary() || currentWorkUnsub) return;
+                if (currentWorkUnsub) return;
                 currentWorkUnsub = onValue(ref(db, 'worksync/users'), snap => {
                     const liveData = snap.val() || {};
-                    currentWorkUsers = Array.from(allUsersMap.values())
-                        .filter(u => u.email && u.email !== '123')
+                    const userMap = new Map();
+                    if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                        allUsersMap.forEach(u => {
+                            if (u && u.email && u.email !== '123') userMap.set(u.email.toLowerCase().trim(), { ...u });
+                        });
+                    }
+                    if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                        USERS.forEach(u => {
+                            if (u && u.email && u.email !== '123' && !userMap.has(u.email.toLowerCase().trim())) {
+                                userMap.set(u.email.toLowerCase().trim(), { ...u });
+                            }
+                        });
+                    }
+                    Object.entries(liveData).forEach(([fbKey, val]) => {
+                        if (!val || typeof val !== 'object') return;
+                        const em = (val.email || '').toLowerCase().trim();
+                        if (em && em !== '123') {
+                            const existing = userMap.get(em) || {};
+                            userMap.set(em, { ...existing, ...val, email: em });
+                        }
+                    });
+
+                    currentWorkUsers = Array.from(userMap.values())
                         .map(u => ({ ...u, ...(liveData[eKey(u.email)] || {}) })) // Merge live task/online data
                         .sort((a, b) => {
-                            const aActive = a.currentTask ? 0 : 1;
-                            const bActive = b.currentTask ? 0 : 1;
+                            const aActive = (a.currentTask && a.currentTask.state === 'working') ? 0 : (a.currentTask ? 1 : 2);
+                            const bActive = (b.currentTask && b.currentTask.state === 'working') ? 0 : (b.currentTask ? 1 : 2);
                             return aActive - bActive || (a.name || '').localeCompare(b.name || '');
                         });
                     renderEmployeeCurrentTasks();
@@ -35963,11 +35982,31 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const countEl = document.getElementById('admin-current-work-count');
                 if (!list || !countEl) return;
 
-                // Filter users based on current user's role: Admin sees all users; others see their tasks alone
-                let filteredUsers = currentWorkUsers;
-                if (!isAdmin()) {
-                    filteredUsers = currentWorkUsers.filter(u => (u.email || '').toLowerCase().trim() === (currentUser?.email || '').toLowerCase().trim());
+                let filteredUsers = (currentWorkUsers || []).slice();
+
+                // If current user is actively working locally, ensure their entry has their current task immediately
+                if (currentUser && currentUser.email && activeTaskId) {
+                    const myEmailLower = currentUser.email.toLowerCase().trim();
+                    const me = filteredUsers.find(u => (u.email || '').toLowerCase().trim() === myEmailLower);
+                    if (me && (!me.currentTask || me.currentTask.taskId !== activeTaskId)) {
+                        const myDetails = activeTaskDetails();
+                        me.currentTask = {
+                            taskId: activeTaskId,
+                            taskDesc: myDetails.desc,
+                            status: myDetails.status,
+                            client: myDetails.client,
+                            priority: myDetails.priority,
+                            state: taskOnHold ? 'on_hold' : 'working',
+                            startedAt: taskStartTime || Date.now()
+                        };
+                    }
                 }
+
+                filteredUsers.sort((a, b) => {
+                    const aActive = (a.currentTask && a.currentTask.state === 'working') ? 0 : (a.currentTask ? 1 : 2);
+                    const bActive = (b.currentTask && b.currentTask.state === 'working') ? 0 : (b.currentTask ? 1 : 2);
+                    return aActive - bActive || (a.name || '').localeCompare(b.name || '');
+                });
 
                 const activeCount = filteredUsers.filter(u => u.currentTask && u.currentTask.state === 'working').length; // Count only actively working
                 countEl.textContent = `${activeCount} Active`;
@@ -36031,7 +36070,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!startedAt || state !== 'working') return;
 
                     const now = Date.now();
-                    const elapsedSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+                    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
                     el.textContent = formatTime(elapsedSeconds);
                 });
             }
@@ -36046,12 +36085,33 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!db) return;
                 get(ref(db, 'worksync/users')).then(snap => {
                     const liveData = snap.val() || {};
-                    currentWorkUsers = Array.from(allUsersMap.values())
-                        .filter(u => u.email && u.email !== '123')
+                    const userMap = new Map();
+                    if (typeof allUsersMap !== 'undefined' && allUsersMap) {
+                        allUsersMap.forEach(u => {
+                            if (u && u.email && u.email !== '123') userMap.set(u.email.toLowerCase().trim(), { ...u });
+                        });
+                    }
+                    if (typeof USERS !== 'undefined' && Array.isArray(USERS)) {
+                        USERS.forEach(u => {
+                            if (u && u.email && u.email !== '123' && !userMap.has(u.email.toLowerCase().trim())) {
+                                userMap.set(u.email.toLowerCase().trim(), { ...u });
+                            }
+                        });
+                    }
+                    Object.entries(liveData).forEach(([fbKey, val]) => {
+                        if (!val || typeof val !== 'object') return;
+                        const em = (val.email || '').toLowerCase().trim();
+                        if (em && em !== '123') {
+                            const existing = userMap.get(em) || {};
+                            userMap.set(em, { ...existing, ...val, email: em });
+                        }
+                    });
+
+                    currentWorkUsers = Array.from(userMap.values())
                         .map(u => ({ ...u, ...(liveData[eKey(u.email)] || {}) }))
                         .sort((a, b) => {
-                            const aActive = a.currentTask ? 0 : 1;
-                            const bActive = b.currentTask ? 0 : 1;
+                            const aActive = (a.currentTask && a.currentTask.state === 'working') ? 0 : (a.currentTask ? 1 : 2);
+                            const bActive = (b.currentTask && b.currentTask.state === 'working') ? 0 : (b.currentTask ? 1 : 2);
                             return aActive - bActive || (a.name || '').localeCompare(b.name || '');
                         });
                     renderEmployeeCurrentTasks();
