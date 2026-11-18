@@ -16990,10 +16990,29 @@
             let pendingApprovalReq = null;
             let taskTimerRef = null;
             let lastCurrentTaskSyncSec = 0;
+            let taskBaseSeconds = 0;
             let taskSeconds = 0;
             let taskOnHold = false;
             let taskStartTime = null;
             let activeTimerSessionId = null;
+
+            function getTodayTaskSeconds(taskId) {
+                if (!taskId) return 0;
+                try {
+                    const localAcc = parseInt(localStorage.getItem('worksync_task_accumulated_' + taskId), 10);
+                    if (Number.isFinite(localAcc) && localAcc > 0) return localAcc;
+                } catch (e) { }
+                try {
+                    if (typeof getTaskTimeTotals === 'function') {
+                        const totals = getTaskTimeTotals();
+                        const entry = totals.get(String(taskId));
+                        if (entry && entry.today > 0) return entry.today;
+                    }
+                } catch (e) { }
+                return 0;
+            }
+            window.getTodayTaskSeconds = getTodayTaskSeconds;
+
             function isSameTaskId(a, b) {
                 if (!a || !b) return false;
                 return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
@@ -17013,14 +17032,22 @@
                         const _elapsed = Math.max(0, Math.floor((Date.now() - _lastUp) / 1000));
                         const _saved = _d.currentSeconds || 0;
                         const MAX_GAP = 43200; // 12 Hours
+                        taskBaseSeconds = _d.baseSeconds || (_d.state === 'on_hold' ? _saved : 0);
                         if (_elapsed > MAX_GAP) {
                             taskOnHold = true;
-                            taskSeconds = 0;
+                            taskSeconds = taskBaseSeconds;
+                            taskStartTime = null;
                         } else {
                             taskOnHold = _d.state === 'on_hold';
-                            taskSeconds = taskOnHold ? 0 : (_saved + _elapsed);
+                            if (taskOnHold) {
+                                taskSeconds = taskBaseSeconds || _saved;
+                                taskStartTime = null;
+                            } else {
+                                taskSeconds = _saved + _elapsed;
+                                const segSec = Math.max(0, taskSeconds - taskBaseSeconds);
+                                taskStartTime = Date.now() - (segSec * 1000);
+                            }
                         }
-                        taskStartTime = Date.now() - (taskSeconds * 1000);
                         console.log('[0ms Startup] Active task restored immediately:', activeTaskId, taskSeconds, 'seconds, onHold:', taskOnHold);
                     }
                 }
@@ -21841,8 +21868,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             resumeTaskTimer();
                         } else {
                             taskOnHold = false;
-                            taskSeconds = 0;
+                            if (!taskBaseSeconds && taskSeconds > 0) {
+                                taskBaseSeconds = taskSeconds;
+                            } else if (!taskBaseSeconds) {
+                                taskBaseSeconds = getTodayTaskSeconds(activeTaskId);
+                            }
                             taskStartTime = Date.now();
+                            taskSeconds = taskBaseSeconds;
                             if (typeof startTaskTimer === 'function') startTaskTimer();
                             if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
                             const activeInternalTask = tasks.find(t => isSameTaskId(t.id, activeTaskId));
@@ -33563,7 +33595,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const { desc: taskDesc, status, client, priority } = activeTaskDetails();
                 const isWorking = state === 'working' && !taskOnHold;
-                const curSec = (isWorking && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : 0;
+                const segSec = (isWorking && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : 0;
+                const curSec = isWorking ? ((taskBaseSeconds || 0) + segSec) : (taskSeconds || taskBaseSeconds || 0);
 
                 const payload = {
                     taskId: String(activeTaskId).trim(),
@@ -33572,8 +33605,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     client,
                     priority,
                     state,
-                    startedAt: isWorking ? (taskStartTime || Date.now()) : Date.now(),
+                    startedAt: Date.now() - (curSec * 1000),
                     currentSeconds: curSec,
+                    baseSeconds: taskBaseSeconds || 0,
                     workDetails: currentWorkDetails || '',
                     updatedAt: Date.now(),
                     timerSessionId: activeTimerSessionId || ''
@@ -33616,20 +33650,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     activeTaskId = data.taskId;
                     currentWorkDetails = data.workDetails || '';
                     activeTimerSessionId = data.timerSessionId || null;
+                    taskBaseSeconds = data.baseSeconds || (data.state === 'on_hold' ? savedSeconds : 0);
 
                     if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
                         taskOnHold = true;
-                        taskSeconds = 0;
+                        taskSeconds = taskBaseSeconds || savedSeconds;
+                        taskStartTime = null;
                     } else {
                         taskOnHold = data.state === 'on_hold';
                         if (taskOnHold) {
-                            taskSeconds = 0;
+                            taskSeconds = taskBaseSeconds || savedSeconds;
+                            taskStartTime = null;
                         } else {
                             taskSeconds = savedSeconds + elapsedSinceUpdate;
+                            const curSeg = Math.max(0, taskSeconds - taskBaseSeconds);
+                            taskStartTime = Date.now() - (curSeg * 1000);
                         }
                     }
 
-                    taskStartTime = Date.now() - (taskSeconds * 1000);
                     if (!taskOnHold) {
                         startTaskTimer();
                     }
@@ -33681,21 +33719,24 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
 
                         activeTaskId = String(currentTaskData.taskId).trim();
+                        taskBaseSeconds = currentTaskData.baseSeconds || (currentTaskData.state === 'on_hold' ? savedSeconds : 0);
                         if (elapsedSinceUpdate > MAX_RESTORABLE_GAP_SECONDS) {
                             taskOnHold = true;
-                            taskSeconds = 0;
+                            taskSeconds = taskBaseSeconds || savedSeconds;
+                            taskStartTime = null;
                         } else {
                             taskOnHold = currentTaskData.state === 'on_hold';
 
                             if (taskOnHold) {
-                                taskSeconds = 0;
+                                taskSeconds = taskBaseSeconds || savedSeconds;
+                                taskStartTime = null;
                             } else {
                                 const remoteSeconds = savedSeconds + elapsedSinceUpdate;
                                 taskSeconds = Math.max(taskSeconds || 0, remoteSeconds);
+                                const curSeg = Math.max(0, taskSeconds - taskBaseSeconds);
+                                taskStartTime = Date.now() - (curSeg * 1000);
                             }
                         }
-
-                        taskStartTime = Date.now() - (taskSeconds * 1000);
 
                         if (!taskOnHold) {
                             startTaskTimer();
@@ -34312,7 +34353,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     }
 
                     // Log the time segment for the previous task (only if it was actively running; a held task was already logged at hold)
-                    if (!taskOnHold && taskSeconds > 0) {
+                    const prevSegSec = (!taskOnHold && taskStartTime) ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000)) : 0;
+                    if (!taskOnHold && prevSegSec > 0) {
                         const log = {
                             taskId: activeTaskId,
                             taskDesc: prevTask?.desc || prevDetails.desc,
@@ -34321,12 +34363,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             userName: currentUser.name,
                             startTime: taskStartTime,
                             endTime: Date.now(),
-                            durationSeconds: taskSeconds,
-                            durationFormatted: formatTime(taskSeconds),
+                            durationSeconds: prevSegSec,
+                            durationFormatted: formatTime(prevSegSec),
                             timerSessionId: activeTimerSessionId || null
                         };
                         await push(ref(db, 'worksync/timelogs'), log);
-                        toast(`Task ${activeTaskId} put on hold — ${formatTime(taskSeconds)} logged`, 'info');
+                        taskBaseSeconds = (taskBaseSeconds || 0) + prevSegSec;
+                        try {
+                            localStorage.setItem('worksync_task_accumulated_' + activeTaskId, String(taskBaseSeconds));
+                        } catch (e) { }
+                        toast(`Task ${activeTaskId} put on hold — ${formatTime(taskBaseSeconds)} logged`, 'info');
                     }
                     // Reset session ID — a new one will be set by the popup for the next task
                     activeTimerSessionId = null;
@@ -34342,7 +34388,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     status: startInfo.status || '',
                     priority: startInfo.priority || ''
                 } : null;
-                taskSeconds = 0;
+                taskBaseSeconds = getTodayTaskSeconds(id);
+                taskSeconds = taskBaseSeconds;
                 taskOnHold = false;
                 taskStartTime = Date.now();
 
@@ -34438,7 +34485,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function startTaskTimer() {
                 if (taskTimerRef) clearInterval(taskTimerRef);
                 if (!taskOnHold && taskStartTime) {
-                    taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+                    const segSec = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+                    taskSeconds = (taskBaseSeconds || 0) + segSec;
                 }
                 const formatted = formatTime(taskSeconds);
                 const initialEl = document.getElementById('task-timer-display');
@@ -34447,12 +34495,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     node.textContent = formatted;
                 });
                 document.querySelectorAll('.task-live-time').forEach(liveEl => {
-                    liveEl.textContent = formatTime((Number(liveEl.dataset.base) || 0) + (taskSeconds || 0));
+                    liveEl.textContent = formatted;
                 });
                 taskTimerRef = setInterval(() => {
                     // Calculate actual elapsed time to avoid setInterval drift
                     if (!taskOnHold && taskStartTime) {
-                        taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+                        const segSec = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
+                        taskSeconds = (taskBaseSeconds || 0) + segSec;
                     }
 
                     const tickFormatted = formatTime(taskSeconds);
@@ -34462,7 +34511,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         node.textContent = tickFormatted;
                     });
                     document.querySelectorAll('.task-live-time').forEach(liveEl => {
-                        liveEl.textContent = formatTime((Number(liveEl.dataset.base) || 0) + (taskSeconds || 0));
+                        liveEl.textContent = tickFormatted;
                     });
 
                     // Fast local storage backup every 5 seconds so timer survives any crash/reload
@@ -34472,6 +34521,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (raw) {
                                 const parsed = JSON.parse(raw);
                                 parsed.currentSeconds = taskSeconds;
+                                parsed.baseSeconds = taskBaseSeconds || 0;
                                 parsed.updatedAt = Date.now();
                                 localStorage.setItem('worksync_active_task', JSON.stringify(parsed));
                             }
@@ -34491,16 +34541,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 taskTimerRef = null;
             }
 
-            // Saves the running session's time as its own time log and restarts the counter at 0,
-            // so a task held today and resumed tomorrow logs each day's work on the right day.
+            // Saves the running session's time as its own time log and preserves the accumulated seconds,
+            // so a task held today and resumed later continues from the current elapsed time.
             function logHeldSegment(customEndTime = null) {
                 if (taskOnHold || !activeTaskId || !currentUser || !taskStartTime) return Promise.resolve();
                 const endTs = (typeof customEndTime === 'number' && Number.isFinite(customEndTime))
                     ? Math.min(customEndTime, Date.now())
                     : Date.now();
-                taskSeconds = Math.max(0, Math.floor((endTs - taskStartTime) / 1000));
+                const segmentSec = Math.max(0, Math.floor((endTs - taskStartTime) / 1000));
                 let writePromise = Promise.resolve();
-                if (taskSeconds > 0 && db) {
+                if (segmentSec > 0 && db) {
                     const t = findRealTask(activeTaskId);
                     const details = activeTaskDetails();
                     writePromise = push(ref(db, 'worksync/timelogs'), {
@@ -34511,13 +34561,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         userName: currentUser.name,
                         startTime: taskStartTime,
                         endTime: endTs,
-                        durationSeconds: taskSeconds,
-                        durationFormatted: formatTime(taskSeconds),
+                        durationSeconds: segmentSec,
+                        durationFormatted: formatTime(segmentSec),
                         timerSessionId: activeTimerSessionId || null
                     }).catch(err => console.error('Failed to log held task time:', err));
                 }
-                taskSeconds = 0;
+                taskBaseSeconds = (taskBaseSeconds || 0) + segmentSec;
+                taskSeconds = taskBaseSeconds;
                 taskStartTime = null;
+                try {
+                    localStorage.setItem('worksync_task_accumulated_' + activeTaskId, String(taskBaseSeconds));
+                } catch (e) { }
                 return writePromise;
             }
 
@@ -34569,8 +34623,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 if (!taskOnHold || !activeTaskId) return;
                 taskOnHold = false;
-                taskSeconds = 0;
+                if (!taskBaseSeconds && taskSeconds > 0) {
+                    taskBaseSeconds = taskSeconds;
+                } else if (!taskBaseSeconds) {
+                    taskBaseSeconds = getTodayTaskSeconds(activeTaskId);
+                }
                 taskStartTime = Date.now();
+                taskSeconds = taskBaseSeconds;
                 startTaskTimer();
                 saveCurrentTaskState('working');
                 // Update status back to In Progress for internal tasks
@@ -34597,10 +34656,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 try {
                     stopTaskTimer();
 
-                    // Final clock-based validation of total time
-                    if (!taskOnHold && taskStartTime) {
-                        taskSeconds = Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000));
-                    }
+                    // Final clock-based validation of current segment time
+                    const finalSegSec = (!taskOnHold && taskStartTime)
+                        ? Math.max(0, Math.floor((Date.now() - taskStartTime) / 1000))
+                        : 0;
+                    const totalTaskTime = (taskBaseSeconds || 0) + finalSegSec;
 
                     const t = findRealTask(activeTaskId);
                     const userRole = (currentUser?.role || '').toLowerCase();
@@ -34608,13 +34668,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     if (t && isMorningLearningTask(t)) {
                         await completeMorningLearningTask(t);
-                        // AUTO-MOVE TO QUALITY CHECK DISABLED — re-enable by uncommenting below
-                        // } else if (t && isVideoEditorOrDesigner) {
-                        //     if (isInternalTask(t)) {
-                        //         await updateInternalTaskStatus(activeTaskId, 'Quality Check');
-                        //     } else {
-                        //         await updateTaskStatus(activeTaskId, 'Quality Check');
-                        //     }
                     } else if (t && isInternalTask(t)) {
                         await updateInternalTaskStatus(activeTaskId, 'Completed');
                     }
@@ -34631,7 +34684,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     }
 
-                    if (!taskOnHold && taskSeconds > 0) {
+                    if (!taskOnHold && finalSegSec > 0) {
                         const log = {
                             taskId: activeTaskId,
                             taskDesc: t?.desc || activeTaskDetails().desc,
@@ -34640,15 +34693,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             userName: currentUser.name,
                             startTime: taskStartTime || Date.now(),
                             endTime: Date.now(),
-                            durationSeconds: taskSeconds,
-                            durationFormatted: formatTime(taskSeconds),
+                            durationSeconds: finalSegSec,
+                            durationFormatted: formatTime(finalSegSec),
                             timerSessionId: activeTimerSessionId || null
                         };
                         await push(ref(db, 'worksync/timelogs'), log);
-                        toast(`Task ended — ${formatTime(taskSeconds)} logged`, 'success');
+                        toast(`Task ended — total ${formatTime(totalTaskTime)} logged`, 'success');
                     } else {
                         toast('Task ended', 'success');
                     }
+                    try { localStorage.removeItem('worksync_task_accumulated_' + activeTaskId); } catch (e) { }
+                    taskBaseSeconds = 0;
                     activeTimerSessionId = null;
                     try { localStorage.removeItem('worksync_paused_by_break'); } catch (e) { }
                     await clearCurrentTask();
