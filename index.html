@@ -4171,8 +4171,8 @@
                 </nav>
 
                 <nav id="admin-nav" class="hidden mt-6 space-y-1">
-                    <p class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Settings</p>
-                    <button onclick="openSettings()" data-label="Configuration" aria-label="Configuration"
+                    <p id="admin-nav-heading" class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Settings</p>
+                    <button onclick="openSettings()" id="nav-config" data-label="Configuration" aria-label="Configuration"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all group text-left">
                         <iconify-icon icon="solar:settings-linear" width="20"></iconify-icon>
                         Configuration
@@ -4201,7 +4201,7 @@
                         <iconify-icon icon="solar:users-group-rounded-linear" width="20"></iconify-icon>
                         Organising Activity
                     </button>
-                    <button onclick="diagnoseJira()" data-label="Diagnostics" aria-label="Diagnostics"
+                    <button onclick="diagnoseJira()" id="nav-diagnostics" data-label="Diagnostics" aria-label="Diagnostics"
                         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-amber-600 hover:bg-amber-50 transition-all group text-left">
                         <iconify-icon icon="solar:bug-linear" width="20"></iconify-icon>
                         Diagnostics
@@ -9056,30 +9056,137 @@
                 <div id="view-users-panel" class="hidden space-y-6 fade-in">
                     <div
                         class="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <h3 class="text-lg font-black text-slate-900 tracking-tight">
                                     User Management</h3>
                                 <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                    Directory
-                                    & Access Roles</p>
+                                    Directory & Feature Access Control</p>
                             </div>
-                            <div class="flex items-center gap-2">
-                            <button onclick="optimizeAllPhotos()" id="btn-optimize-photos"
-                                title="Shrink oversized profile and group photos so Chat and the dashboard load faster"
-                                class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2.5 transition-all disabled:opacity-60">
-                                <iconify-icon icon="solar:gallery-minimalistic-bold" width="18"></iconify-icon>
-                                Optimize Photos
-                            </button>
-                            <button onclick="openAdminUserModal()"
-                                class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
-                                <iconify-icon icon="solar:user-plus-rounded-bold" width="18"></iconify-icon>
-                                Add User
-                            </button>
+
+                            <!-- Tabs Switcher -->
+                            <div class="inline-flex items-center bg-slate-100 p-1.5 rounded-2xl gap-1 self-start md:self-auto">
+                                <button type="button" onclick="switchUserMgmtTab('directory')" id="tab-btn-users-dir"
+                                    class="px-4 py-2 text-xs font-bold rounded-xl transition-all bg-white text-slate-900 shadow-sm flex items-center gap-2">
+                                    <iconify-icon icon="solar:users-group-two-rounded-bold" width="16"></iconify-icon>
+                                    User Directory
+                                </button>
+                                <button type="button" onclick="switchUserMgmtTab('permissions')" id="tab-btn-users-perms"
+                                    class="px-4 py-2 text-xs font-bold rounded-xl transition-all text-slate-500 hover:text-slate-900 flex items-center gap-2">
+                                    <iconify-icon icon="solar:shield-keyhole-bold-duotone" width="16" class="text-indigo-600"></iconify-icon>
+                                    Feature Access
+                                    <span class="bg-indigo-100 text-indigo-700 text-[10px] font-black px-1.5 py-0.5 rounded-full">New</span>
+                                </button>
+                            </div>
+
+                            <!-- Actions for Directory tab -->
+                            <div id="users-dir-actions" class="flex items-center gap-2">
+                                <button onclick="optimizeAllPhotos()" id="btn-optimize-photos"
+                                    title="Shrink oversized profile and group photos so Chat and the dashboard load faster"
+                                    class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl px-4 py-2.5 transition-all disabled:opacity-60">
+                                    <iconify-icon icon="solar:gallery-minimalistic-bold" width="18"></iconify-icon>
+                                    Optimize Photos
+                                </button>
+                                <button onclick="openAdminUserModal()"
+                                    class="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl px-5 py-2.5 shadow-lg shadow-slate-200 transition-all">
+                                    <iconify-icon icon="solar:user-plus-rounded-bold" width="18"></iconify-icon>
+                                    Add User
+                                </button>
                             </div>
                         </div>
-                        <div id="admin-users-list" class="divide-y divide-slate-50">
-                            <!-- Populated via JS -->
+
+                        <!-- Tab 1: User Directory List -->
+                        <div id="admin-users-directory-view">
+                            <div id="admin-users-list" class="divide-y divide-slate-50">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Feature Access Control Matrix -->
+                        <div id="admin-users-permissions-view" class="hidden">
+                            <!-- Permissions Header & Search Bar -->
+                            <div class="p-6 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
+                                        <iconify-icon icon="solar:key-square-bold-duotone" width="22"></iconify-icon>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-slate-900">Feature Permissions Control</h4>
+                                        <p class="text-xs text-slate-500">Toggle permissions ON or OFF per user. Changes sync live in real-time immediately to their accounts.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <iconify-icon icon="solar:magnifer-linear" width="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></iconify-icon>
+                                        <input type="text" id="perms-user-search" oninput="filterUserPermissionsTable(this.value)"
+                                            placeholder="Search team member..."
+                                            class="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 w-56 md:w-64">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Permissions Table Container -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-50/80 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                                        <tr>
+                                            <th class="py-3.5 px-6 sticky left-0 bg-slate-50/95 backdrop-blur z-10 min-w-[200px]">Team Member</th>
+                                            <th class="py-3.5 px-4 min-w-[130px] text-center" title="Manage Client Names & Jira label mappings">
+                                                <div class="flex items-center justify-center gap-1 text-indigo-600">
+                                                    <iconify-icon icon="solar:tag-bold" width="14"></iconify-icon>
+                                                    <span>Client Names</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[120px] text-center" title="Quality Check portal access">
+                                                <div class="flex items-center justify-center gap-1 text-rose-600">
+                                                    <iconify-icon icon="solar:shield-check-bold" width="14"></iconify-icon>
+                                                    <span>QC Portal</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[140px] text-center" title="Content strategy calendar">
+                                                <div class="flex items-center justify-center gap-1 text-purple-600">
+                                                    <iconify-icon icon="solar:calendar-mark-bold" width="14"></iconify-icon>
+                                                    <span>Strategy Cal</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[120px] text-center" title="Meta advertising tracking">
+                                                <div class="flex items-center justify-center gap-1 text-blue-600">
+                                                    <iconify-icon icon="solar:target-bold" width="14"></iconify-icon>
+                                                    <span>Meta Ads</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[130px] text-center" title="Monthly roadmaps & hours">
+                                                <div class="flex items-center justify-center gap-1 text-amber-600">
+                                                    <iconify-icon icon="solar:calendar-bold" width="14"></iconify-icon>
+                                                    <span>Monthly Plan</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[120px] text-center" title="Company projects dashboard">
+                                                <div class="flex items-center justify-center gap-1 text-cyan-600">
+                                                    <iconify-icon icon="solar:folder-with-files-bold" width="14"></iconify-icon>
+                                                    <span>Projects</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[130px] text-center" title="Daily Plan team overview">
+                                                <div class="flex items-center justify-center gap-1 text-emerald-600">
+                                                    <iconify-icon icon="solar:checklist-minimalistic-bold" width="14"></iconify-icon>
+                                                    <span>Daily Plan (Team)</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 min-w-[120px] text-center" title="Sales inquiries & pipeline">
+                                                <div class="flex items-center justify-center gap-1 text-teal-600">
+                                                    <iconify-icon icon="solar:hand-stars-bold" width="14"></iconify-icon>
+                                                    <span>Sales Hub</span>
+                                                </div>
+                                            </th>
+                                            <th class="py-3.5 px-4 text-right min-w-[100px]">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="user-perms-tbody" class="divide-y divide-slate-100 text-xs">
+                                        <!-- Populated via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -14550,6 +14657,11 @@
                             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all">
                     </div>
                 </div>
+                <button type="button" onclick="openUserPermissionsModal(document.getElementById('au-email').value)"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-all mt-4">
+                    <iconify-icon icon="solar:shield-keyhole-bold" width="16"></iconify-icon>
+                    Manage Feature Access Permissions
+                </button>
             </div>
             <div class="flex items-center gap-3 mt-8">
                 <button id="au-delete-btn" onclick="deleteAdminUser()"
@@ -14559,6 +14671,58 @@
                     class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-indigo-100 transition-all">Save
                     Changes</button>
             </div>
+        </div>
+    </dialog>
+
+    <!-- Modal: User Feature Access Control -->
+    <dialog id="userPermissionsModal" class="rounded-3xl shadow-2xl p-0 w-full max-w-xl border-none overflow-hidden bg-white">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white relative">
+            <button onclick="this.closest('dialog').close()"
+                class="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors">
+                <iconify-icon icon="solar:close-circle-bold" width="24"></iconify-icon>
+            </button>
+            <div class="flex items-center gap-4">
+                <img id="upm-user-avatar"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E"
+                    class="w-14 h-14 rounded-2xl bg-white/20 border-2 border-white/40 object-cover shadow-md shrink-0">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <h3 id="upm-user-name" class="text-lg font-black tracking-tight truncate">User Name</h3>
+                        <span id="upm-user-role" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white shrink-0">Role</span>
+                    </div>
+                    <p id="upm-user-email" class="text-xs text-indigo-100 font-mono mt-0.5 truncate">user@email.com</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div class="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3.5 flex items-start gap-3">
+                <iconify-icon icon="solar:info-circle-bold" class="text-indigo-600 shrink-0 mt-0.5" width="18"></iconify-icon>
+                <p class="text-xs text-indigo-900 leading-relaxed">
+                    Toggle feature access for this user. Toggles save and sync in real-time immediately to their account.
+                </p>
+            </div>
+
+            <!-- Features list container -->
+            <div id="upm-features-list" class="space-y-2.5">
+                <!-- Populated via renderUserPermissionsModalContent -->
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 px-6 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+            <button id="upm-reset-btn" type="button"
+                onclick="resetUserFeaturePermissions(document.getElementById('userPermissionsModal').dataset.email)"
+                class="hidden text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5">
+                <iconify-icon icon="solar:restart-bold" width="15"></iconify-icon>
+                Reset to Defaults
+            </button>
+            <button type="button" onclick="this.closest('dialog').close()"
+                class="ml-auto bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all">
+                Done
+            </button>
         </div>
     </dialog>
 
@@ -16247,17 +16411,155 @@
             window.isAdmin = isAdmin;
             window.isManager = isManager;
 
-            function isAdmin() {
-                if (!currentUser) return false;
-                const role = (currentUser.role || '').trim();
-                const email = (currentUser.email || '').toLowerCase();
+            function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
+            window.eKey = eKey;
+
+            const MANAGEABLE_FEATURES = [
+                {
+                    key: 'clients-admin',
+                    name: 'Client Names',
+                    shortDesc: 'Manage Client Names, Jira label mappings, and manual clients',
+                    icon: 'solar:tag-bold-duotone',
+                    color: 'text-indigo-600 bg-indigo-50 border-indigo-100'
+                },
+                {
+                    key: 'qc',
+                    name: 'QC Portal',
+                    shortDesc: 'Review completed work, submit QC remarks, and track quality scores',
+                    icon: 'solar:shield-check-bold-duotone',
+                    color: 'text-rose-600 bg-rose-50 border-rose-100'
+                },
+                {
+                    key: 'strategy-calendar',
+                    name: 'Strategy Calendar',
+                    shortDesc: 'View and manage monthly brand and content strategy calendars',
+                    icon: 'solar:calendar-mark-bold-duotone',
+                    color: 'text-purple-600 bg-purple-50 border-purple-100'
+                },
+                {
+                    key: 'meta-ads',
+                    name: 'Meta Ads',
+                    shortDesc: 'Track Meta / Facebook advertising campaigns, spend, and metrics',
+                    icon: 'solar:target-bold-duotone',
+                    color: 'text-blue-600 bg-blue-50 border-blue-100'
+                },
+                {
+                    key: 'monthly-plan',
+                    name: 'Monthly Plan',
+                    shortDesc: 'Plan monthly task roadmaps, view hours allocation, and milestones',
+                    icon: 'solar:calendar-bold-duotone',
+                    color: 'text-amber-600 bg-amber-50 border-amber-100'
+                },
+                {
+                    key: 'projects',
+                    name: 'Projects Overview',
+                    shortDesc: 'Access team projects directory, timeline milestones, and delivery',
+                    icon: 'solar:folder-with-files-bold-duotone',
+                    color: 'text-cyan-600 bg-cyan-50 border-cyan-100'
+                },
+                {
+                    key: 'dailyplan-team',
+                    name: 'Daily Plan (Team)',
+                    shortDesc: 'View all team members\' daily plans and live work board',
+                    icon: 'solar:checklist-minimalistic-bold-duotone',
+                    color: 'text-emerald-600 bg-emerald-50 border-emerald-100'
+                },
+                {
+                    key: 'sales-hub',
+                    name: 'Sales Hub',
+                    shortDesc: 'Access lead pipeline, sales inquiries, deal statuses, and client outreach',
+                    icon: 'solar:hand-stars-bold-duotone',
+                    color: 'text-teal-600 bg-teal-50 border-teal-100'
+                }
+            ];
+            window.MANAGEABLE_FEATURES = MANAGEABLE_FEATURES;
+
+            let userFeaturePermissions = {};
+            window.userFeaturePermissions = userFeaturePermissions;
+
+            function initUserFeaturePermissionsListener() {
+                if (!db) return;
+                try {
+                    onValue(ref(db, 'worksync/settings/user_permissions'), snap => {
+                        userFeaturePermissions = snap.val() || {};
+                        window.userFeaturePermissions = userFeaturePermissions;
+                        if (currentUser && typeof applyUserUI === 'function') {
+                            applyUserUI();
+                        }
+                        if (typeof activeView !== 'undefined' && activeView === 'users') {
+                            if (typeof renderUserPermissionsTable === 'function') renderUserPermissionsTable();
+                        }
+                    });
+                } catch (e) {
+                    console.warn('[initUserFeaturePermissionsListener] error:', e);
+                }
+            }
+            window.initUserFeaturePermissionsListener = initUserFeaturePermissionsListener;
+
+            function getDefaultFeatureAccess(email, featureKey) {
+                if (!email) return false;
+                const cleanEmail = email.toLowerCase().trim();
+                const user = (typeof allUsersMap !== 'undefined' && allUsersMap?.get(cleanEmail)) ||
+                             (typeof knownUserByEmail === 'function' ? knownUserByEmail(cleanEmail) : null) ||
+                             (currentUser && (currentUser.email || '').toLowerCase() === cleanEmail ? currentUser : null);
+                const role = (user?.role || '').toLowerCase();
+                const isUserAdmin = isAdmin(user) || role === 'admin' || cleanEmail === 'nanjil@vilpower.com';
+                const isUserManager = isUserAdmin || isManager(user);
+
+                if (isUserAdmin) return true;
+
+                switch (featureKey) {
+                    case 'clients-admin':
+                        return cleanEmail === 'snehavilpower@gmail.com';
+                    case 'qc':
+                        return cleanEmail === 'snehavilpower@gmail.com';
+                    case 'strategy-calendar':
+                        return isUserManager || cleanEmail === 'snehavilpower@gmail.com' || cleanEmail === 'murugeshvilpower@gmail.com';
+                    case 'meta-ads':
+                        return isUserManager || cleanEmail === 'digitalmarketing@vilpower.com';
+                    case 'monthly-plan':
+                        return isUserManager;
+                    case 'projects':
+                        return isUserManager;
+                    case 'dailyplan-team':
+                        return isUserManager;
+                    case 'sales-hub':
+                        return isUserManager || [
+                            'digitalmarketing@vilpower.com',
+                            'palanirajan@vilpower.com',
+                            'nanjil@vilpower.com',
+                            'murugeshvilpower@gmail.com',
+                            'princevilpower@gmail.com',
+                            'prince@vilpower.com'
+                        ].includes(cleanEmail) || role.includes('sales') || role.includes('business development') || role.includes('executive');
+                    default:
+                        return false;
+                }
+            }
+            window.getDefaultFeatureAccess = getDefaultFeatureAccess;
+
+            function hasUserFeatureAccess(email, featureKey) {
+                if (!email) return false;
+                const cleanEmail = email.toLowerCase().trim();
+                const key = eKey(cleanEmail);
+                if (userFeaturePermissions && userFeaturePermissions[key] && typeof userFeaturePermissions[key][featureKey] === 'boolean') {
+                    return userFeaturePermissions[key][featureKey];
+                }
+                return getDefaultFeatureAccess(cleanEmail, featureKey);
+            }
+            window.hasUserFeatureAccess = hasUserFeatureAccess;
+
+            function isAdmin(user = currentUser) {
+                if (!user) return false;
+                const role = (user.role || '').trim();
+                const email = (user.email || '').toLowerCase().trim();
                 return ADMIN_EMAILS.some(e => e.toLowerCase() === email) ||
                     ADMIN_ROLES.includes(role);
             }
-            function isManager() {
-                if (!currentUser) return false;
-                const role = (currentUser.role || '').trim();
-                const email = (currentUser.email || '').toLowerCase();
+            function isManager(user = currentUser) {
+                if (!user) return false;
+                const role = (user.role || '').trim();
+                const email = (user.email || '').toLowerCase().trim();
                 return role === 'Manager' || MANAGER_EMAILS.some(e => e.toLowerCase() === email);
             }
 
@@ -16338,52 +16640,50 @@
             function hasClientWideAccess() { return currentUser && CLIENT_WIDE_ACCESS_EMAILS.some(e => e.toLowerCase() === (currentUser.email || '').toLowerCase()); }
             function canViewReports() { return true; }
             function canViewDailySummary() { return !!currentUser; }
-            function canViewDailyPlanTeamAccess() { return isAdmin() || isManager(); }
-            function canViewMonthlyPlan() { return isAdmin() || isManager(); }
-            function canViewProjects() { return isAdmin() || isManager(); }
-            function canViewMetaAds() {
-                if (!currentUser) return false;
-                const email = (currentUser.email || '').toLowerCase();
-                return isAdmin() || isManager() || email === 'digitalmarketing@vilpower.com';
+            function canViewClientsAdmin(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'clients-admin');
+            }
+            window.canViewClientsAdmin = canViewClientsAdmin;
+
+            function canViewDailyPlanTeamAccess(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'dailyplan-team');
+            }
+            function canViewMonthlyPlan(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'monthly-plan');
+            }
+            function canViewProjects(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'projects');
+            }
+            function canViewMetaAds(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'meta-ads');
             }
             function knownUserByEmail(email) { return USERS.find(u => u.email.toLowerCase() === (email || '').toLowerCase()); }
-            function canViewQcPortal() {
-                if (!currentUser) return false;
-                if (isAdmin()) return true;
-                // Only Sneha (QC Incharge) can access the QC Portal
-                return currentUser.email.toLowerCase() === 'snehavilpower@gmail.com';
+            function canViewQcPortal(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'qc');
             }
 
-            function canViewStrategyCalendar() {
-                if (!currentUser) return false;
-                if (isAdmin() || isManager()) return true;
-                const allowedStrategyEmails = [
-                    'snehavilpower@gmail.com',
-                    'murugeshvilpower@gmail.com'
-                ];
-                return allowedStrategyEmails.includes(currentUser.email.toLowerCase());
+            function canViewStrategyCalendar(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'strategy-calendar');
             }
 
-            function canViewSalesHub() {
-                if (!currentUser) return false;
-                const email = (currentUser.email || '').toLowerCase().trim();
-                const name = (currentUser.name || '').toLowerCase();
-                const role = (currentUser.role || '').toLowerCase();
-                const allowedEmails = [
-                    'digitalmarketing@vilpower.com', // Palanirajan R
-                    'palanirajan@vilpower.com',       // Palanirajan R
-                    'nanjil@vilpower.com',           // Nanjil Manohar S
-                    'murugeshvilpower@gmail.com',    // Murugesh Kumar A
-                    'princevilpower@gmail.com',      // Prince (Sales Executive)
-                    'prince@vilpower.com'
-                ];
-                return isAdmin() ||
-                    isManager() ||
-                    name.includes('palanirajan') ||
-                    allowedEmails.includes(email) ||
-                    role.includes('sales') ||
-                    role.includes('business development') ||
-                    role.includes('executive');
+            function canViewSalesHub(user = currentUser) {
+                if (!user) return false;
+                if (isAdmin(user)) return true;
+                return hasUserFeatureAccess(user.email, 'sales-hub');
             }
 
             function isDesignOrVideoUser(user = currentUser) {
@@ -19842,7 +20142,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (canViewProjects()) validViews.push('projects');
                     if (canViewReports()) validViews.push('reports');
                     if (canViewDailySummary()) validViews.push('daily-summary');
-                    if (isAdmin()) validViews.push('users', 'clients-admin');
+                    if (isAdmin()) validViews.push('users');
+                    if (canViewClientsAdmin()) validViews.push('clients-admin');
                     if (canViewStrategyCalendar()) validViews.push('strategy-calendar');
                     if (canViewMetaAds()) validViews.push('meta-ads');
 
@@ -19859,6 +20160,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     initTaskNotifications();
                     loadAllNotificationsForUser();
                     initOrganisersListener();
+                    initUserFeaturePermissionsListener();
                     if (typeof window.setupFirebaseRealtimeListener === 'function') window.setupFirebaseRealtimeListener();
 
                     try {
@@ -20330,8 +20632,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } else {
                     document.getElementById('manager-nav')?.classList.add('hidden');
                 }
+                const showAdminNav = isAdmin() || canViewClientsAdmin();
+                const adminNavEl = document.getElementById('admin-nav');
+                if (adminNavEl) {
+                    adminNavEl.classList.toggle('hidden', !showAdminNav);
+                    document.getElementById('nav-config')?.classList.toggle('hidden', !isAdmin());
+                    document.getElementById('nav-meta-integration')?.classList.toggle('hidden', !isAdmin());
+                    document.getElementById('nav-users')?.classList.toggle('hidden', !isAdmin());
+                    document.getElementById('nav-clients-admin')?.classList.toggle('hidden', !canViewClientsAdmin());
+                    document.getElementById('nav-organisers-admin')?.classList.toggle('hidden', !isAdmin());
+                    document.getElementById('nav-diagnostics')?.classList.toggle('hidden', !isAdmin());
+                }
+
+                const mobAdminSec = document.getElementById('mob-drawer-admin-section');
+                if (mobAdminSec) {
+                    mobAdminSec.classList.toggle('hidden', !showAdminNav);
+                    document.getElementById('mob-nav-users')?.classList.toggle('hidden', !isAdmin());
+                    document.getElementById('mob-nav-clients-admin')?.classList.toggle('hidden', !canViewClientsAdmin());
+                    document.getElementById('mob-nav-organisers-admin')?.classList.toggle('hidden', !isAdmin());
+                }
+
                 if (isAdmin()) {
-                    document.getElementById('admin-nav')?.classList.remove('hidden');
                     document.getElementById('group-create-btn')?.classList.remove('hidden');
                     document.getElementById('announcement-compose-card')?.classList.remove('hidden');
                     document.getElementById('dpr-tab-team')?.classList.remove('hidden');
@@ -20341,12 +20662,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // Managers can see employee performance reports
                     document.getElementById('report-tab-performance')?.classList.remove('hidden');
                     document.getElementById('report-tab-indiv-perf')?.classList.remove('hidden');
-                    document.getElementById('admin-nav')?.classList.add('hidden');
                     document.getElementById('group-create-btn')?.classList.add('hidden');
                     document.getElementById('announcement-compose-card')?.classList.add('hidden');
                     document.getElementById('dpr-tab-team')?.classList.add('hidden');
                 } else { // Non-admin, non-manager users (regular employees)
-                    document.getElementById('admin-nav')?.classList.add('hidden');
                     document.getElementById('group-create-btn')?.classList.add('hidden');
                     document.getElementById('announcement-compose-card')?.classList.add('hidden');
                     document.getElementById('dpr-tab-team')?.classList.add('hidden');
@@ -22925,7 +23244,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (view === 'workplace-org' && !isWorkplaceOrganiser() && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'dm-content-org' && !isDmContentOrganiser() && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'organisers-admin' && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
-                if (view === 'clients-admin' && !isAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
+                if (view === 'clients-admin' && !canViewClientsAdmin()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'strategy-calendar' && !canViewStrategyCalendar()) { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'plan-tracking') { view = 'dashboard'; panelId = 'dashboard'; }
                 if (view === 'meta-ads' && !canViewMetaAds()) { view = 'dashboard'; panelId = 'dashboard'; }
@@ -37385,7 +37704,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             // CHAT
-            function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
+            // eKey defined above
             function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
             function getAllConvAliases(id) {
                 if (!id || typeof id !== 'string') return [];
@@ -53859,6 +54178,7 @@ async function openNewGroupModal() {
             async function loadUsersList() {
                 if (!isAdmin()) return;
                 const list = document.getElementById('admin-users-list');
+                if (!list) return;
                 list.innerHTML = `<p class="p-8 text-center text-xs text-slate-400 italic">Loading users...</p>`;
 
                 const snap = await get(ref(db, 'worksync/users'));
@@ -53876,9 +54196,284 @@ async function openNewGroupModal() {
                             <p class="text-[10px] text-slate-400 font-bold uppercase">${escapeHtml(u.role || 'User')} · ${escapeHtml(u.email)}</p>
                         </div>
                     </div>
-                    <button onclick="openAdminUserModal('${u.email}')" class="px-4 py-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all">Edit</button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openUserPermissionsModal('${escapeHtml(u.email)}')" class="px-3.5 py-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all flex items-center gap-1.5" title="Manage Feature Access">
+                            <iconify-icon icon="solar:shield-keyhole-bold" width="14"></iconify-icon>
+                            Access
+                        </button>
+                        <button onclick="openAdminUserModal('${escapeHtml(u.email)}')" class="px-4 py-2 text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all">Edit</button>
+                    </div>
                 </div>
             `).join('');
+
+                renderUserPermissionsTable();
+            }
+
+            function switchUserMgmtTab(tab) {
+                const dirTabBtn = document.getElementById('tab-btn-users-dir');
+                const permsTabBtn = document.getElementById('tab-btn-users-perms');
+                const dirView = document.getElementById('admin-users-directory-view');
+                const permsView = document.getElementById('admin-users-permissions-view');
+                const dirActions = document.getElementById('users-dir-actions');
+
+                if (tab === 'permissions') {
+                    dirTabBtn?.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+                    dirTabBtn?.classList.add('text-slate-500');
+                    permsTabBtn?.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+                    permsTabBtn?.classList.remove('text-slate-500');
+
+                    dirView?.classList.add('hidden');
+                    permsView?.classList.remove('hidden');
+                    dirActions?.classList.add('hidden');
+
+                    renderUserPermissionsTable();
+                } else {
+                    permsTabBtn?.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+                    permsTabBtn?.classList.add('text-slate-500');
+                    dirTabBtn?.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+                    dirTabBtn?.classList.remove('text-slate-500');
+
+                    permsView?.classList.add('hidden');
+                    dirView?.classList.remove('hidden');
+                    dirActions?.classList.remove('hidden');
+                }
+            }
+
+            let userPermsSearchTerm = '';
+            function filterUserPermissionsTable(term) {
+                userPermsSearchTerm = (term || '').toLowerCase().trim();
+                renderUserPermissionsTable();
+            }
+
+            async function renderUserPermissionsTable() {
+                const tbody = document.getElementById('user-perms-tbody');
+                if (!tbody) return;
+
+                if (!allUsersMap || allUsersMap.size === 0) {
+                    allUsersMap = await getAllUsers();
+                }
+
+                let users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+                if (userPermsSearchTerm) {
+                    users = users.filter(u =>
+                        (u.name || '').toLowerCase().includes(userPermsSearchTerm) ||
+                        (u.email || '').toLowerCase().includes(userPermsSearchTerm) ||
+                        (u.role || '').toLowerCase().includes(userPermsSearchTerm)
+                    );
+                }
+
+                if (!users.length) {
+                    tbody.innerHTML = `<tr><td colspan="${MANAGEABLE_FEATURES.length + 2}" class="p-8 text-center text-xs text-slate-400 italic">No matching team members found.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = users.map(u => {
+                    const uEmail = (u.email || '').toLowerCase().trim();
+                    const isUserAdmin = isAdmin(u);
+                    const userOverrides = userFeaturePermissions[eKey(uEmail)] || {};
+                    const hasAnyOverride = Object.keys(userOverrides).length > 0;
+
+                    const featureCells = MANAGEABLE_FEATURES.map(feat => {
+                        const hasAccess = hasUserFeatureAccess(uEmail, feat.key);
+                        const isExplicitOverride = typeof userOverrides[feat.key] === 'boolean';
+
+                        if (isUserAdmin) {
+                            return `
+                            <td class="py-3 px-4 text-center">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/80" title="Full administrator access">
+                                    <iconify-icon icon="solar:shield-check-bold" width="12"></iconify-icon>
+                                    Admin
+                                </span>
+                            </td>`;
+                        }
+
+                        return `
+                        <td class="py-3 px-4 text-center">
+                            <div class="inline-flex flex-col items-center gap-1">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox"
+                                        onchange="toggleUserFeaturePermission('${escapeHtml(uEmail)}', '${feat.key}', this.checked)"
+                                        ${hasAccess ? 'checked' : ''}
+                                        class="sr-only peer">
+                                    <div class="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-3.5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                                ${isExplicitOverride ? `
+                                    <span class="text-[8px] font-bold uppercase tracking-wider ${hasAccess ? 'text-indigo-600' : 'text-rose-500'}">
+                                        ${hasAccess ? 'Granted' : 'Revoked'}
+                                    </span>
+                                ` : `
+                                    <span class="text-[8px] font-semibold text-slate-400 uppercase tracking-wider">
+                                        ${hasAccess ? 'Default' : 'Off'}
+                                    </span>
+                                `}
+                            </div>
+                        </td>`;
+                    }).join('');
+
+                    return `
+                    <tr class="hover:bg-slate-50/70 transition-colors">
+                        <td class="py-3.5 px-6 sticky left-0 bg-white hover:bg-slate-50/70 backdrop-blur z-10">
+                            <div class="flex items-center gap-3">
+                                <img src="${u.profilePicture || getUserAvatarSrc(u)}" class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 object-cover shrink-0">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(u.name)}</p>
+                                    <p class="text-[10px] text-slate-400 font-semibold truncate">${escapeHtml(u.role || 'Member')}</p>
+                                    <p class="text-[9px] text-slate-400 font-mono truncate">${escapeHtml(u.email)}</p>
+                                </div>
+                            </div>
+                        </td>
+                        ${featureCells}
+                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <button type="button" onclick="openUserPermissionsModal('${escapeHtml(uEmail)}')"
+                                    class="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-all"
+                                    title="Manage detailed permissions">
+                                    <iconify-icon icon="solar:pen-linear" width="16"></iconify-icon>
+                                </button>
+                                ${hasAnyOverride && !isUserAdmin ? `
+                                    <button type="button" onclick="resetUserFeaturePermissions('${escapeHtml(uEmail)}')"
+                                        class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all"
+                                        title="Reset all custom overrides back to defaults">
+                                        <iconify-icon icon="solar:restart-bold" width="16"></iconify-icon>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+
+            async function toggleUserFeaturePermission(email, featureKey, enabled) {
+                if (!isAdmin()) return toast('Only Admins can modify feature permissions', 'error');
+                if (!email || !featureKey) return;
+                const cleanEmail = email.toLowerCase().trim();
+                const key = eKey(cleanEmail);
+                const user = allUsersMap?.get(cleanEmail) || knownUserByEmail(cleanEmail);
+                const userName = user?.name || cleanEmail;
+                const feat = MANAGEABLE_FEATURES.find(f => f.key === featureKey);
+                const featName = feat?.name || featureKey;
+
+                try {
+                    await set(ref(db, `worksync/settings/user_permissions/${key}/${featureKey}`), enabled);
+                    if (!userFeaturePermissions[key]) userFeaturePermissions[key] = {};
+                    userFeaturePermissions[key][featureKey] = enabled;
+
+                    toast(`${enabled ? 'Granted' : 'Revoked'} ${featName} for ${userName}`, 'success');
+
+                    const modal = document.getElementById('userPermissionsModal');
+                    if (modal && modal.open && modal.dataset.email === cleanEmail) {
+                        renderUserPermissionsModalContent(cleanEmail);
+                    }
+                    renderUserPermissionsTable();
+                } catch (err) {
+                    console.error('[toggleUserFeaturePermission] error:', err);
+                    toast('Failed to update permission: ' + err.message, 'error');
+                }
+            }
+
+            async function resetUserFeaturePermissions(email) {
+                if (!isAdmin()) return toast('Only Admins can modify feature permissions', 'error');
+                if (!email) return;
+                const cleanEmail = email.toLowerCase().trim();
+                const key = eKey(cleanEmail);
+                const user = allUsersMap?.get(cleanEmail) || knownUserByEmail(cleanEmail);
+                const userName = user?.name || cleanEmail;
+
+                if (!confirm(`Reset all feature permissions for ${userName} to default role settings?`)) return;
+
+                try {
+                    await remove(ref(db, `worksync/settings/user_permissions/${key}`));
+                    if (userFeaturePermissions[key]) delete userFeaturePermissions[key];
+
+                    toast(`Reset permissions for ${userName} to default`, 'info');
+
+                    const modal = document.getElementById('userPermissionsModal');
+                    if (modal && modal.open && modal.dataset.email === cleanEmail) {
+                        renderUserPermissionsModalContent(cleanEmail);
+                    }
+                    renderUserPermissionsTable();
+                } catch (err) {
+                    console.error('[resetUserFeaturePermissions] error:', err);
+                    toast('Failed to reset permissions: ' + err.message, 'error');
+                }
+            }
+
+            async function openUserPermissionsModal(email) {
+                if (!isAdmin()) return toast('Only Admins can access permission management', 'error');
+                if (!email) return;
+                const cleanEmail = email.toLowerCase().trim();
+                const modal = document.getElementById('userPermissionsModal');
+                if (!modal) return;
+                modal.dataset.email = cleanEmail;
+                renderUserPermissionsModalContent(cleanEmail);
+                modal.showModal();
+            }
+
+            function renderUserPermissionsModalContent(email) {
+                const cleanEmail = email.toLowerCase().trim();
+                const user = allUsersMap?.get(cleanEmail) || knownUserByEmail(cleanEmail) || { email: cleanEmail, name: cleanEmail, role: 'User' };
+                const isUserAdmin = isAdmin(user);
+                const userOverrides = userFeaturePermissions[eKey(cleanEmail)] || {};
+                const hasAnyOverride = Object.keys(userOverrides).length > 0;
+
+                const avatarEl = document.getElementById('upm-user-avatar');
+                const nameEl = document.getElementById('upm-user-name');
+                const roleEl = document.getElementById('upm-user-role');
+                const emailEl = document.getElementById('upm-user-email');
+                if (avatarEl) avatarEl.src = user.profilePicture || getUserAvatarSrc(user);
+                if (nameEl) nameEl.textContent = user.name || cleanEmail;
+                if (roleEl) roleEl.textContent = user.role || 'Member';
+                if (emailEl) emailEl.textContent = user.email || cleanEmail;
+
+                const resetBtn = document.getElementById('upm-reset-btn');
+                if (resetBtn) {
+                    resetBtn.classList.toggle('hidden', !hasAnyOverride || isUserAdmin);
+                }
+
+                const listEl = document.getElementById('upm-features-list');
+                if (!listEl) return;
+
+                listEl.innerHTML = MANAGEABLE_FEATURES.map(feat => {
+                    const hasAccess = hasUserFeatureAccess(cleanEmail, feat.key);
+                    const isExplicit = typeof userOverrides[feat.key] === 'boolean';
+
+                    return `
+                    <div class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 transition-all">
+                        <div class="flex items-center gap-3.5 min-w-0 pr-2">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${feat.color || 'bg-slate-100 text-slate-700'}">
+                                <iconify-icon icon="${feat.icon}" width="20"></iconify-icon>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(feat.name)}</p>
+                                    ${isExplicit ? `
+                                        <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${hasAccess ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700'}">Custom Override</span>
+                                    ` : `
+                                        <span class="text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Default Role</span>
+                                    `}
+                                </div>
+                                <p class="text-[11px] text-slate-500 leading-snug mt-0.5">${escapeHtml(feat.shortDesc)}</p>
+                            </div>
+                        </div>
+
+                        <div class="shrink-0 ml-3">
+                            ${isUserAdmin ? `
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Admin
+                                </span>
+                            ` : `
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox"
+                                        onchange="toggleUserFeaturePermission('${escapeHtml(cleanEmail)}', '${feat.key}', this.checked)"
+                                        ${hasAccess ? 'checked' : ''}
+                                        class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                            `}
+                        </div>
+                    </div>`;
+                }).join('');
             }
 
             async function openAdminUserModal(email = null) {
@@ -61212,6 +61807,7 @@ async function openNewGroupModal() {
             window.openAddTaskModal = openAddTaskModal; window.submitManualTask = submitManualTask; window.openEditTaskModal = openEditTaskModal; window.submitTaskUpdate = submitTaskUpdate; window.endLearningTask = endLearningTask; window.deleteManualTask = deleteManualTask;
             window.openScheduleDiscussionModal = openScheduleDiscussionModal; window.submitScheduleDiscussion = submitScheduleDiscussion; window.submitStartLiveDiscussion = submitStartLiveDiscussion; window.submitLogPastDiscussion = submitLogPastDiscussion; window.setDiscussionMode = setDiscussionMode; window.joinDiscussion = joinDiscussion; window.joinDiscussionById = joinDiscussionById; window.dismissDiscussionPopup = dismissDiscussionPopup; window.editScheduledDiscussion = editScheduledDiscussion; window.startScheduledDiscussion = startScheduledDiscussion; window.cancelScheduledDiscussion = cancelScheduledDiscussion; window.holdCurrentDiscussionLive = holdCurrentDiscussionLive; window.resumeCurrentDiscussionLive = resumeCurrentDiscussionLive; window.endCurrentDiscussionLive = endCurrentDiscussionLive;
             window.loadUsersList = loadUsersList; window.openAdminUserModal = openAdminUserModal; window.saveAdminUser = saveAdminUser; window.auUploadPhoto = auUploadPhoto; window.deleteAdminUser = deleteAdminUser;
+            window.switchUserMgmtTab = switchUserMgmtTab; window.filterUserPermissionsTable = filterUserPermissionsTable; window.renderUserPermissionsTable = renderUserPermissionsTable; window.toggleUserFeaturePermission = toggleUserFeaturePermission; window.resetUserFeaturePermissions = resetUserFeaturePermissions; window.openUserPermissionsModal = openUserPermissionsModal; window.renderUserPermissionsModalContent = renderUserPermissionsModalContent;
             window.openClientMapModal = openClientMapModal; window.saveClientMapEntry = saveClientMapEntry; window.deleteClientMapEntry = deleteClientMapEntry;
             window.openCustomClientModal = openCustomClientModal; window.saveCustomClientEntry = saveCustomClientEntry; window.deleteCustomClient = deleteCustomClient;
             window.importUnmappedJiraLabels = importUnmappedJiraLabels;
@@ -70429,14 +71025,14 @@ async function openNewGroupModal() {
             <div id="mob-drawer-admin-section">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Admin & Management</p>
                 <div class="grid grid-cols-3 gap-2.5">
-                    <button type="button" onclick="selectMobileAppView('users')" class="mobile-app-tile">
+                    <button type="button" id="mob-nav-users" onclick="selectMobileAppView('users')" class="mobile-app-tile">
                         <div class="tile-icon-box bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400">
                             <iconify-icon icon="solar:users-group-two-rounded-bold-duotone"></iconify-icon>
                         </div>
                         <span
                             class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Users</span>
                     </button>
-                    <button type="button" onclick="selectMobileAppView('clients-admin')" class="mobile-app-tile">
+                    <button type="button" id="mob-nav-clients-admin" onclick="selectMobileAppView('clients-admin')" class="mobile-app-tile">
                         <div
                             class="tile-icon-box bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
                             <iconify-icon icon="solar:tag-bold-duotone"></iconify-icon>
@@ -70444,7 +71040,7 @@ async function openNewGroupModal() {
                         <span
                             class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate w-full">Clients</span>
                     </button>
-                    <button type="button" onclick="selectMobileAppView('organisers-admin')" class="mobile-app-tile">
+                    <button type="button" id="mob-nav-organisers-admin" onclick="selectMobileAppView('organisers-admin')" class="mobile-app-tile">
                         <div
                             class="tile-icon-box bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
                             <iconify-icon icon="solar:users-group-rounded-bold-duotone"></iconify-icon>
