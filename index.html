@@ -17517,6 +17517,33 @@
                 const override = MORNING_LEARNING_USER_OVERRIDES[(email || '').toLowerCase()];
                 return override ? override.title : MORNING_LEARNING_TITLE;
             }
+
+            function isActualThumbnailTask(t) {
+                if (!t) return false;
+                const desc = `${t.desc || ''} ${t.summary || ''} ${t.title || ''} ${t.name || ''}`.toLowerCase();
+                const type = `${t.format || ''} ${t.issueType || ''} ${t.type || ''} ${t.category || ''} ${t.taskType || ''}`.toLowerCase();
+
+                // Explicit video deliverables are NOT thumbnail tasks even if status is "Thumbnail Waiting"
+                const isVideoDeliverable = (type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || type.includes('shoot')) &&
+                    !desc.includes('thumbnail') && !desc.includes('thumb');
+                if (isVideoDeliverable) return false;
+
+                // Subtask check: if it is a subtask under a parent, check if title/summary mentions thumbnail
+                const isSub = !!(t.parentId || t.parentKey || t.parentTaskId || (typeof t.parent === 'string' ? t.parent : (t.parent && t.parent.key)) || t.isSubtask === true);
+                if (isSub) {
+                    return desc.includes('thumbnail') || desc.includes('thumb');
+                }
+
+                // Direct thumbnail format or type
+                if (type.includes('thumbnail') || type.includes('thumb')) return true;
+
+                // Direct description/summary indicates thumbnail deliverable
+                if (desc.includes('thumbnail') || desc.includes('thumb')) return true;
+
+                return false;
+            }
+            window.isActualThumbnailTask = isActualThumbnailTask;
+
             const MORNING_LEARNING_EXCLUDED_EMAILS = ['princevilpower@gmail.com', 'prince@vilpower.com'];
             let morningLearningEnsureStarted = false;
             const DAILY_REPORT_TIMES = [
@@ -19080,17 +19107,27 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function sortInternalBoardStatuses(statuses) {
                 const list = [...statuses];
+                const defaultOrder = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Hold', 'Learnings', 'Discussion', 'Completed'];
                 if (internalBoardColumnOrder && Array.isArray(internalBoardColumnOrder)) {
+                    // Ensure 'Hold' is included in effectiveOrder if missing from a previously saved order
+                    const effectiveOrder = [...internalBoardColumnOrder];
+                    if (!effectiveOrder.includes('Hold')) {
+                        const inProgIdx = effectiveOrder.indexOf('In Progress');
+                        if (inProgIdx !== -1) effectiveOrder.splice(inProgIdx + 1, 0, 'Hold');
+                        else effectiveOrder.push('Hold');
+                    }
                     list.sort((a, b) => {
-                        const idxA = internalBoardColumnOrder.indexOf(a);
-                        const idxB = internalBoardColumnOrder.indexOf(b);
+                        const idxA = effectiveOrder.indexOf(a);
+                        const idxB = effectiveOrder.indexOf(b);
                         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
                         if (idxA !== -1) return -1;
                         if (idxB !== -1) return 1;
+                        const defA = defaultOrder.indexOf(a);
+                        const defB = defaultOrder.indexOf(b);
+                        if (defA !== -1 && defB !== -1) return defA - defB;
                         return a.localeCompare(b);
                     });
                 } else {
-                    const defaultOrder = ['To do', 'Shoot Needed', 'Shoot Planned', 'Shoot In Progress', 'Shoot Completed', 'Shoot Cancelled', 'In Progress', 'Hold', 'Learnings', 'Discussion', 'Completed'];
                     list.sort((a, b) => {
                         const ai = defaultOrder.indexOf(a);
                         const bi = defaultOrder.indexOf(b);
@@ -19104,13 +19141,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function moveInternalBoardColumn(status, direction) {
-                let allStatuses = [...new Set(
-                    tasks.filter(t => String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true)
-                        .map(t => {
-                            const found = INTERNAL_TASK_STATUSES.find(c => c.toLowerCase() === (t.status || '').toLowerCase());
-                            return found || t.status;
-                        }).filter(Boolean)
-                )];
+                const coreInternalStatuses = ['To do', 'In Progress', 'Hold', 'Completed'];
+                const taskStatuses = tasks.filter(t => String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true)
+                    .map(t => {
+                        const raw = (t.status || '').trim().toLowerCase();
+                        if (raw === 'hold' || raw === 'on hold' || raw === 'paused') return 'Hold';
+                        const found = INTERNAL_TASK_STATUSES.find(c => c.toLowerCase() === raw);
+                        return found || t.status;
+                    }).filter(Boolean);
+                let allStatuses = [...new Set([...coreInternalStatuses, ...taskStatuses])];
                 allStatuses = sortInternalBoardStatuses(allStatuses);
                 const index = allStatuses.indexOf(status);
                 if (index === -1) return;
@@ -19428,9 +19467,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     .filter(task => {
                         if (!task) return false;
                         const s = (task.status || '').trim().toLowerCase();
-                        const isThumb = s.includes('thumbnail');
+                        const isThumb = typeof isActualThumbnailTask === 'function' ? isActualThumbnailTask(task) : false;
                         const isRework = s.includes('rework');
                         const statusMatch = DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(st => st.toLowerCase() === s) || isThumb || isRework;
+                        // Karthika only auto-matches actual thumbnail tasks, NEVER a main video task!
                         const userMatch = assigneeMatches(task, userEmail) || (isKarthikaCollector && isThumb);
                         return statusMatch && userMatch;
                     })
@@ -19446,7 +19486,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     .filter(task => {
                         if (!task || !isInternalTask(task)) return false;
                         const s = (task.status || '').trim().toLowerCase();
-                        const isThumb = s.includes('thumbnail');
+                        const isThumb = typeof isActualThumbnailTask === 'function' ? isActualThumbnailTask(task) : false;
                         const isRework = s.includes('rework');
                         const statusMatch = INTERNAL_DAILY_PLAN_AUTO_INCLUDE_STATUSES.some(st => st.toLowerCase() === s) || isThumb || isRework;
                         const userMatch = assigneeMatches(task, userEmail) || (isKarthikaCollector && isThumb);
@@ -19600,8 +19640,9 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!task || !task.id) continue;
 
                     const taskStatusLower = (task.status || '').trim().toLowerCase();
-                    const isThumbnailTask = taskStatusLower.includes('thumbnail');
+                    const isThumbnailTask = typeof isActualThumbnailTask === 'function' ? isActualThumbnailTask(task) : false;
                     const isReworkTask = taskStatusLower.includes('rework');
+                    // Karthika only matches actual thumbnail deliverables, NEVER a main video task!
                     const userMatch = assigneeMatches(task, userEmail) || (isKarthika && isThumbnailTask);
                     if (!userMatch) continue;
 
@@ -31852,22 +31893,35 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             return true;
                         });
 
-                    if (!boardTasks.length) {
-                        kanban.innerHTML = `<div class="flex-1 flex items-center justify-center text-xs text-slate-400 py-10">No internal tasks found.</div>`;
-                        return;
-                    }
-
                     // Normalise status casing so "To do" and "To Do" don't create duplicate columns.
                     // Use the canonical INTERNAL_TASK_STATUSES spelling as the source of truth.
                     const canonicalStatus = (s) => {
-                        const found = INTERNAL_TASK_STATUSES.find(c => c.toLowerCase() === (s || '').toLowerCase());
+                        const raw = (s || '').trim().toLowerCase();
+                        if (raw === 'hold' || raw === 'on hold' || raw === 'paused') return 'Hold';
+                        const found = INTERNAL_TASK_STATUSES.find(c => c.toLowerCase() === raw);
                         return found || s;
                     };
                     boardTasks.forEach(t => { t._canonicalStatus = canonicalStatus(t.status); });
 
-                    // Build unique column list from canonical statuses present in boardTasks
-                    let allStatuses = [...new Set(boardTasks.map(t => t._canonicalStatus).filter(Boolean))];
+                    // Core columns that should always appear on the Kanban board view
+                    const coreInternalStatuses = ['To do', 'In Progress', 'Hold', 'Completed'];
+                    const presentStatuses = boardTasks.map(t => t._canonicalStatus).filter(Boolean);
+
+                    let allStatuses;
+                    if (currentInternalStatusFilter !== 'all' && Array.isArray(currentInternalStatusFilter) && currentInternalStatusFilter.length > 0) {
+                        allStatuses = [...new Set(currentInternalStatusFilter.map(canonicalStatus))];
+                    } else {
+                        allStatuses = [...new Set([...coreInternalStatuses, ...presentStatuses])];
+                    }
+                    if (currentInternalStatusFilter === 'all' || (Array.isArray(currentInternalStatusFilter) && currentInternalStatusFilter.some(s => (s || '').toLowerCase().includes('hold')))) {
+                        if (!allStatuses.includes('Hold')) allStatuses.push('Hold');
+                    }
                     allStatuses = sortInternalBoardStatuses(allStatuses);
+
+                    if (!allStatuses.length) {
+                        kanban.innerHTML = `<div class="flex-1 flex items-center justify-center text-xs text-slate-400 py-10">No internal tasks found.</div>`;
+                        return;
+                    }
 
                     const statusColors = (s) => {
                         const style = getStatusStyle(s);
@@ -31892,7 +31946,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             </div>
                         </div>
                         <div class="flex-1 space-y-3 overflow-y-auto max-h-[600px]">
-                            ${colTasks.map(t => {
+                            ${colTasks.length === 0 ? `<div class="h-24 flex items-center justify-center text-[11px] text-slate-400 border-2 border-dashed border-slate-200/60 rounded-xl">Drop tasks here</div>` : colTasks.map(t => {
                             const taskCompleted = isInternalDone(t._canonicalStatus) || isDone(t._canonicalStatus);
                             const todayD = new Date(); todayD.setHours(0, 0, 0, 0);
                             const dueDate = t.duedate ? new Date(t.duedate) : null;
@@ -36563,11 +36617,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function isThumbnailTask(t) {
                 if (!t) return false;
+                if (typeof isActualThumbnailTask === 'function') {
+                    return isActualThumbnailTask(t);
+                }
                 const status = (t.status || '').toLowerCase().trim();
                 const desc = (t.desc || t.summary || t.name || t.title || t.id || '').toLowerCase().trim();
                 const category = (t.category || t.taskType || t.issueType || '').toLowerCase().trim();
                 const labels = Array.isArray(t.clientLabels) ? t.clientLabels.map(l => (l || '').toLowerCase().trim()) : [];
-                return status.includes('thumbnail') ||
+                return (status.includes('thumbnail') && !status.includes('waiting')) ||
                     desc.includes('thumbnail') ||
                     category.includes('thumbnail') ||
                     labels.some(l => l.includes('thumbnail'));
@@ -44844,7 +44901,7 @@ async function openNewGroupModal() {
                         const isPoster = type.includes('poster') || type.includes('design') || type.includes('static') || type.includes('creative') || desc.includes('poster') || desc.includes('design');
 
                         if (isPoster) userTaskStats[email].posters.push(t);
-                        if (t.status === 'Thumbnail Waiting' || t.status === 'Thumbnail' || type.includes('thumbnail') || desc.includes('thumbnail')) userTaskStats[email].thumbnails.push(t);
+                        if (typeof isActualThumbnailTask === 'function' ? isActualThumbnailTask(t) : (type.includes('thumbnail') || desc.includes('thumbnail'))) userTaskStats[email].thumbnails.push(t);
                     });
 
                     let periodQcReports = (typeof allQcReports !== 'undefined' ? allQcReports : []).filter(r => {
@@ -58232,6 +58289,9 @@ async function openNewGroupModal() {
 
                         if (newStatus.toLowerCase() === 'thumbnail waiting' && oldStatus.toLowerCase() !== 'thumbnail waiting') {
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            if (typeof checkAndCreateThumbnailSubTask === 'function') {
+                                checkAndCreateThumbnailSubTask(task, task.assigneeEmail || currentUser?.email);
+                            }
                         }
                         if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
@@ -58270,6 +58330,9 @@ async function openNewGroupModal() {
                     } else {
                         if (newStatus.toLowerCase() === 'thumbnail waiting' && oldStatus.toLowerCase() !== 'thumbnail waiting') {
                             sendThumbnailNotification(task, currentUser?.name || currentUser?.email || 'Unknown');
+                            if (typeof checkAndCreateThumbnailSubTask === 'function') {
+                                checkAndCreateThumbnailSubTask(task, task.assigneeEmail || currentUser?.email);
+                            }
                         }
                         if (isReworkStatus(newStatus) || isQcStatus(newStatus)) {
                             sendReworkOrQcNotification(task, newStatus, currentUser?.name || currentUser?.email || 'Unknown');
@@ -58441,9 +58504,9 @@ async function openNewGroupModal() {
                 const labels = Array.isArray(task.clientLabels) ? task.clientLabels.map(l => (l || '').toLowerCase()) : [];
                 if (Array.isArray(task.labels)) task.labels.forEach(l => labels.push(String(l).toLowerCase()));
 
-                // 1. Thumbnail
+                // 1. Thumbnail (must be an actual thumbnail deliverable, not a main video waiting for a thumbnail)
                 if (
-                    status.includes('thumbnail') ||
+                    (typeof isActualThumbnailTask === 'function' && isActualThumbnailTask(task)) ||
                     type.includes('thumbnail') || type.includes('thumb') ||
                     desc.includes('thumbnail') || desc.includes('thumb') ||
                     labels.some(l => l.includes('thumbnail') || l.includes('thumb'))
@@ -58453,6 +58516,7 @@ async function openNewGroupModal() {
 
                 // 2. Video
                 if (
+                    status.includes('thumbnail waiting') ||
                     type.includes('video') || type.includes('reel') || type.includes('motion') || type.includes('animation') || type.includes('shoot') ||
                     desc.includes('video') || desc.includes('reel') || desc.includes('teaser') || desc.includes('glimpse') || desc.includes('shoot') || desc.includes('editing') ||
                     labels.some(l => l.includes('video') || l.includes('reel') || l.includes('shoot'))
@@ -58541,10 +58605,12 @@ async function openNewGroupModal() {
                 }
 
                 // By default (when no filters/search are set), show tasks assigned to the target user, strategy events owned by user, or unassigned.
+                const isKarthikaAssignee = (userEmail || '').trim().toLowerCase() === 'karthikavilpower@gmail.com';
                 if (!term && !clientFilter && !statusFilter && !typeFilter && !dueDateFrom && !dueDateTo) {
                     filtered = filtered.filter(t => (
                         assigneeMatches(t, userEmail) ||
                         (t.owner && t.owner.toLowerCase() === (userEmail || '').toLowerCase()) ||
+                        (isKarthikaAssignee && (typeof isActualThumbnailTask === 'function' ? isActualThumbnailTask(t) : false)) ||
                         !t.assignee ||
                         t.assignee === 'Unassigned'
                     ));
@@ -58817,7 +58883,7 @@ async function openNewGroupModal() {
             }
 
             async function checkAndCreateThumbnailSubTask(task, newAssigneeEmail, skipRender = false) {
-                if (!task || !newAssigneeEmail) return;
+                if (!task) return;
                 const videoEditors = [
                     'barathvilpower@gmail.com',
                     'muthuvilpower@gmail.com',
@@ -58828,45 +58894,92 @@ async function openNewGroupModal() {
                     'alexvilpower@gmail.com',
                 ];
 
-                if (!videoEditors.includes(newAssigneeEmail.toLowerCase())) return;
+                const emailToCheck = (newAssigneeEmail || task.assigneeEmail || '').toLowerCase();
+                const isVideoEditor = emailToCheck && videoEditors.includes(emailToCheck);
+                const isThumbnailWaiting = (task.status || '').toLowerCase().trim() === 'thumbnail waiting';
+                const isVideoTask = (task.format || '').toLowerCase().includes('video') || (typeof getTaskDeliverableType === 'function' && getTaskDeliverableType(task) === 'video');
 
-                const descLower = (task.desc || '').toLowerCase();
-                if (descLower.includes('thumbnail')) return;
+                if (!isVideoEditor && !isThumbnailWaiting && !isVideoTask) return;
+
+                const descLower = (task.desc || task.summary || task.name || task.title || '').toLowerCase();
+                if (descLower.startsWith('thumbnail') || descLower.includes(' thumbnail')) return;
 
                 const targetKarthikaEmail = 'karthikavilpower@gmail.com';
                 const karthikaUser = (typeof allUsersMap !== 'undefined' && allUsersMap ? allUsersMap.get(targetKarthikaEmail) : null) || (typeof knownUserByEmail === 'function' ? knownUserByEmail(targetKarthikaEmail) : null);
                 const karthikaName = karthikaUser?.name || 'Karthika';
 
-                // Look for an existing JIRA sub-task under this parent task that is for a thumbnail
-                const thumbnailJiraTask = Array.isArray(tasks) ? tasks.find(t =>
-                    t && t.parentTaskId === task.id &&
-                    (t.desc && t.desc.toLowerCase().includes('thumbnail'))
-                ) : null;
+                const taskId = String(task.id || task.key || '').trim().toLowerCase();
+
+                // Look for an existing JIRA or internal sub-task under this parent task that is for a thumbnail
+                let thumbnailJiraTask = Array.isArray(tasks) ? tasks.find(t => {
+                    if (!t) return false;
+                    const pId = String(t.parentId || t.parentKey || t.parentTaskId || (typeof t.parent === 'string' ? t.parent : (t.parent && t.parent.key)) || (t.fields && t.fields.parent && t.fields.parent.key) || '').trim().toLowerCase();
+                    if (pId !== taskId) return false;
+                    const desc = `${t.desc || ''} ${t.summary || ''} ${t.title || ''}`.toLowerCase();
+                    return desc.includes('thumbnail') || desc.includes('thumb');
+                }) : null;
 
                 if (!thumbnailJiraTask) {
                     console.log('No Jira sub-task for thumbnail found for video task', task.id);
-                    return;
+                    // If it's a Jira task and Jira credentials are configured, auto-create subtask in Jira
+                    if (!isInternalTask(task) && typeof jiraRequest === 'function' && typeof JIRA !== 'undefined' && JIRA?.domain) {
+                        try {
+                            const parentKey = task.id;
+                            const projectKey = parentKey.includes('-') ? parentKey.split('-')[0] : 'DM';
+                            const subtaskTitle = `Thumbnail – ${task.desc || task.summary || parentKey}`;
+                            const subtaskPayload = {
+                                fields: {
+                                    project: { key: projectKey },
+                                    parent: { key: parentKey },
+                                    summary: subtaskTitle,
+                                    issuetype: { name: 'Sub-task' },
+                                    duedate: task.duedate || null,
+                                    labels: Array.isArray(task.clientLabels) ? task.clientLabels : (task.client ? [task.client.replace(/\s+/g, '_')] : [])
+                                }
+                            };
+                            const karthikaAccountId = typeof findJiraAccountId === 'function' ? await findJiraAccountId(karthikaUser || { email: targetKarthikaEmail }) : null;
+                            if (karthikaAccountId) {
+                                subtaskPayload.fields.assignee = { id: karthikaAccountId };
+                            }
+                            const jiraUrl = `https://${JIRA.domain}/rest/api/3/issue`;
+                            const subRes = await jiraRequest(jiraUrl, 'post', subtaskPayload);
+                            if (subRes.success && (subRes.data?.key || subRes.key)) {
+                                const newKey = subRes.data?.key || subRes.key;
+                                console.log(`Auto-created Jira thumbnail subtask ${newKey} for ${parentKey}`);
+                                if (typeof syncTasks === 'function') {
+                                    await syncTasks(true);
+                                }
+                                thumbnailJiraTask = Array.isArray(tasks) ? tasks.find(t => t && t.id === newKey) : null;
+                            }
+                        } catch (err) {
+                            console.error('Failed to auto-create Jira thumbnail subtask:', err);
+                        }
+                    }
                 }
 
-                try {
-                    const dpRef = ref(db, `worksync/daily_plans/${eKey(targetKarthikaEmail)}/${thumbnailJiraTask.id}`);
-                    await set(dpRef, {
-                        date: todayIso(),
-                        assignedBy: currentUser?.email || 'System',
-                        assignedAt: Date.now()
-                    });
+                if (thumbnailJiraTask) {
+                    try {
+                        thumbnailJiraTask.assigneeEmail = targetKarthikaEmail;
+                        thumbnailJiraTask.assignee = karthikaName;
+                        const dpRef = ref(db, `worksync/daily_plans/${eKey(targetKarthikaEmail)}/${thumbnailJiraTask.id}`);
+                        await set(dpRef, {
+                            date: todayIso(),
+                            assignedBy: currentUser?.email || 'System',
+                            assignedAt: Date.now()
+                        });
 
-                    if (!skipRender) {
-                        if (typeof activeView !== 'undefined' && (activeView === 'dailyplan' || (typeof isDailyPlanTabActive === 'function' && isDailyPlanTabActive()))) {
-                            if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                        if (!skipRender) {
+                            if (typeof activeView !== 'undefined' && (activeView === 'dailyplan' || (typeof isDailyPlanTabActive === 'function' && isDailyPlanTabActive()))) {
+                                if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                            }
+                            if (typeof updateStats === 'function') updateStats();
                         }
-                        if (typeof updateStats === 'function') updateStats();
+                        if (typeof toast === 'function') {
+                            toast(`Auto-assigned Jira thumbnail task to Karthika's Daily Plan for ${task.id}`, 'success');
+                        }
+                    } catch (e) {
+                        console.error('Failed to auto-assign thumbnail sub-task', e);
                     }
-                    if (typeof toast === 'function') {
-                        toast(`Auto-assigned Jira thumbnail task to Karthika's Daily Plan for ${task.id}`, 'success');
-                    }
-                } catch (e) {
-                    console.error('Failed to auto-assign thumbnail sub-task', e);
                 }
             }
 
