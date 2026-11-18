@@ -21641,6 +21641,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function openBreakPopup() {
                 if (typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) return;
+                if (!breakStartTime) {
+                    const saved = parseInt(localStorage.getItem('worksync_breakStartTime'), 10);
+                    if (saved && !isNaN(saved)) {
+                        breakStartTime = saved;
+                    } else {
+                        breakStartTime = Date.now();
+                        try { localStorage.setItem('worksync_breakStartTime', String(breakStartTime)); } catch (e) { }
+                    }
+                }
                 const modal = document.getElementById('breakStatusModal');
                 if (modal && !modal.open) {
                     selectRandomBreakMessage();
@@ -21683,10 +21692,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function tickBreakTimer() {
                 if (!breakStartTime) {
-                    stopBreakTimer();
-                    return;
+                    const saved = parseInt(localStorage.getItem('worksync_breakStartTime'), 10);
+                    if (saved && !isNaN(saved)) {
+                        breakStartTime = saved;
+                    } else {
+                        stopBreakTimer();
+                        return;
+                    }
                 }
-                const elapsedSeconds = Math.floor((Date.now() - breakStartTime) / 1000);
+                const elapsedSeconds = Math.max(0, Math.floor((Date.now() - breakStartTime) / 1000));
                 const formatted = formatTime(elapsedSeconds);
 
                 const popupTimer = document.getElementById('break-popup-timer');
@@ -21703,16 +21717,20 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 localStorage.setItem('worksync_breakStartTime', String(breakStartTime));
                 setTimerState('paused');
                 logAttendanceEvent('break_start');
-                syncActiveSessionToFirebase('paused');
-                // Auto-hold any active task when going on break
+
+                // Auto-hold any active task FIRST before syncing break state
                 if (activeTaskId && !taskOnHold) {
                     try { localStorage.setItem('worksync_paused_by_break', String(activeTaskId)); } catch (e) { }
                     holdTask();
                     toast('Break started — active task put on hold', 'info');
                 } else {
-                    try { localStorage.removeItem('worksync_paused_by_break'); } catch (e) { }
+                    if (!activeTaskId) {
+                        try { localStorage.removeItem('worksync_paused_by_break'); } catch (e) { }
+                    }
                     toast('Break session started', 'info');
                 }
+
+                syncActiveSessionToFirebase('paused');
 
                 // Check for tea break window
                 const now = new Date();
@@ -21773,42 +21791,36 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     localStorage.removeItem('worksync_paused_by_break');
                 } catch (e) { }
 
-                if (pausedByBreakTaskId) {
+                const targetResumeId = pausedByBreakTaskId || (taskOnHold ? activeTaskId : null);
+                if (targetResumeId) {
                     try {
-                        if (currentUser && typeof get === 'function' && typeof ref === 'function' && db) {
-                            const snap = await get(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`));
-                            const currentTaskData = snap.val();
-                            if (currentTaskData && currentTaskData.taskId && String(currentTaskData.taskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase()) {
-                                activeTaskId = currentTaskData.taskId;
-                                taskSeconds = 0; // Fresh segment begins; prior time was logged at break start
-                                taskOnHold = false;
-                                taskStartTime = Date.now();
-                                if (typeof startTaskTimer === 'function') startTaskTimer();
-                                if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
-                                // Ensure internal task status is restored to 'In Progress' after break
-                                const activeInternalTask = tasks.find(t => String(t.id || '').toUpperCase() === String(activeTaskId).toUpperCase());
-                                if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
-                                    activeInternalTask.isOnHold = false;
-                                    if (typeof updateInternalTaskStatus === 'function') {
-                                        const resumeStatus = (typeof isShootTask === 'function' && isShootTask(activeInternalTask)) ? 'Shoot In Progress' : 'In Progress';
-                                        updateInternalTaskStatus(activeTaskId, resumeStatus);
-                                    }
-                                }
-
-                                if (typeof renderTasks === 'function') renderTasks();
-                                if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
-                                if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
-                                if (typeof renderDailyPlan === 'function') renderDailyPlan();
-                                toast('Paused task auto-resumed', 'success');
-                            }
-                        } else if (activeTaskId && taskOnHold && String(activeTaskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase() && typeof resumeTaskTimer === 'function') {
+                        activeTaskId = targetResumeId;
+                        taskOnHold = true;
+                        if (typeof resumeTaskTimer === 'function') {
                             resumeTaskTimer();
+                        } else {
+                            taskOnHold = false;
+                            taskSeconds = 0;
+                            taskStartTime = Date.now();
+                            if (typeof startTaskTimer === 'function') startTaskTimer();
+                            if (typeof saveCurrentTaskState === 'function') await saveCurrentTaskState('working');
+                            const activeInternalTask = tasks.find(t => isSameTaskId(t.id, activeTaskId));
+                            if (activeInternalTask && isInternalTask(activeInternalTask) && !isMorningLearningTask(activeInternalTask)) {
+                                activeInternalTask.isOnHold = false;
+                                if (typeof updateInternalTaskStatus === 'function') {
+                                    const resumeStatus = (typeof isShootTask === 'function' && isShootTask(activeInternalTask)) ? 'Shoot In Progress' : 'In Progress';
+                                    updateInternalTaskStatus(activeTaskId, resumeStatus);
+                                }
+                            }
+                            if (typeof updateSessionStatus === 'function') updateSessionStatus();
+                            if (typeof renderTasks === 'function') renderTasks();
+                            if (typeof isInternalTabActive === 'function' && isInternalTabActive() && typeof renderInternalTasks === 'function') renderInternalTasks();
+                            if (typeof renderActiveTaskCard === 'function') renderActiveTaskCard();
+                            if (typeof renderDailyPlan === 'function') renderDailyPlan();
+                            toast('Paused task auto-resumed', 'success');
                         }
                     } catch (err) {
                         console.error('Failed to auto-resume task:', err);
-                        if (activeTaskId && taskOnHold && String(activeTaskId).toUpperCase() === String(pausedByBreakTaskId).toUpperCase() && typeof resumeTaskTimer === 'function') {
-                            resumeTaskTimer();
-                        }
                     }
                 }
             }
@@ -22355,8 +22367,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     localStorage.removeItem('worksync_checkInTime');
                     localStorage.removeItem('worksync_totalBreakDuration');
                     localStorage.removeItem('worksync_breakStartTime');
+                    localStorage.removeItem('worksync_active_task');
+                    localStorage.removeItem('worksync_paused_by_break');
+                    if (typeof clearCurrentTask === 'function') {
+                        clearCurrentTask().catch(() => {});
+                    }
                     isCheckedIn = false;
                     checkInTime = null;
+                    activeTaskId = null;
+                    taskSeconds = 0;
+                    taskOnHold = false;
+                    taskStartTime = null;
+                    activeTimerSessionId = null;
                     setTimerState('idle');
                     return;
                 }
@@ -22480,8 +22502,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             }
                         } else if (remoteState === 'paused' && remoteCheckInTime) {
                             if (typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
-                                syncActiveSessionToFirebase('running');
-                                return;
+                                try { localStorage.setItem('worksync_paused_by_break', String(activeTaskId)); } catch (e) { }
+                                if (typeof holdTask === 'function') holdTask();
                             }
                             const localState = localStorage.getItem('worksync_timerState');
                             if (localState !== 'paused' || !breakStartTime) {
@@ -31545,9 +31567,25 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (!u.currentTask || !u.currentTask.taskId) return;
                     const ct = u.currentTask;
                     const ctId = String(ct.taskId).trim();
+
+                    // Check if currentTask is stale from a previous day
+                    const ctUpdated = ct.updatedAt || ct.startedAt || 0;
+                    if (ctUpdated) {
+                        const ctDate = new Date(ctUpdated);
+                        const isToday = (ctDate.toDateString() === new Date().toDateString());
+                        if (!isToday && !u.isCheckedIn && u.activeSession?.state !== 'running' && u.activeSession?.state !== 'paused') {
+                            return; // Skip stale overnight task!
+                        }
+                    }
+
+                    // Never synthesize or force in-progress for completed tasks
+                    const isCtDone = (typeof isDone === 'function' && isDone(ct.status)) ||
+                                     (typeof isInternalDone === 'function' && isInternalDone(ct.status));
+
                     // Prefer an exact id match; fall back to name only if the id isn't loaded and matches same user
                     const existing = tasks.find(t => isSameTaskId(t.id, ctId)) || tasks.find(t => t.desc && ct.taskDesc && t.desc.toLowerCase().trim() === ct.taskDesc.toLowerCase().trim() && ((t.userId || '').toLowerCase() === (u.email || '').toLowerCase() || (t.assigneeEmail || '').toLowerCase() === (u.email || '').toLowerCase()));
                     if (!existing) {
+                        if (isCtDone) return; // Do not synthesize finished tasks
                         // Stand-in so the running task is visible. Prefer a real name from
                         // other sources; only show the ID when no name is known.
                         const savedName = realTaskName(ct.taskDesc);
@@ -31580,8 +31618,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             if (ct.client) existing.client = ct.client;
                             added = true;
                         }
-                        // Keep status in sync if user is currently working on it
-                        if (ct.state === 'working' && existing.status !== 'In Progress' && !isDone(existing.status)) {
+                        // Keep status in sync if user is currently working on it AND task is not done
+                        const isExistingDone = (typeof isDone === 'function' && isDone(existing.status)) ||
+                                               (typeof isInternalDone === 'function' && isInternalDone(existing.status));
+                        if (ct.state === 'working' && existing.status !== 'In Progress' && !isExistingDone && !isCtDone) {
                             if (!isShootTask(existing) && existing.status !== 'Shoot In Progress') {
                                 existing.status = 'In Progress';
                                 added = true;
@@ -31608,11 +31648,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return false;
             }
 
-            // Recurring daily tasks (Murugesh/Ajith/Palani/learning) belong to the day they were
+            // Recurring daily tasks (Murugesh/Ajith/Palani/Alex/learning) belong to the day they were
             // generated for. If the owner was on leave, the refresh is skipped, so the old copy must
             // not carry forward into later days — it only shows when a date filter targets its day.
             function isStaleRecurringTask(t) {
-                if (!t || !(t.murugeshTask || t.ajithTask || t.palaniTask || t.learningSession || t.recurring)) return false;
+                if (!t || !(t.murugeshTask || t.ajithTask || t.palaniTask || t.alexTask || t.learningSession || t.recurring)) return false;
                 if (!t.duedate || t.duedate >= todayIso()) return false;
                 if (typeof isTaskCurrentlyWorkingOrActive === 'function' && isTaskCurrentlyWorkingOrActive(t)) return false;
                 return true;
@@ -33492,7 +33532,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (db) {
                     try {
-                        await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), payload);
+                        const uEmail = (currentUser.email || '').toLowerCase();
+                        const isAlex = (typeof ALEX_EMAILS !== 'undefined' && ALEX_EMAILS.includes(uEmail));
+                        if (isAlex) {
+                            await set(ref(db, `worksync/users/alexvilpower_gmail_com/currentTask`), payload);
+                            set(ref(db, `worksync/users/alex_vilpower_com/currentTask`), null).catch(() => {});
+                        } else {
+                            await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), payload);
+                        }
                     } catch (err) {
                         console.warn('Failed to sync currentTask to Firebase:', err);
                     }
@@ -33570,6 +33617,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         currentWorkDetails = currentTaskData.workDetails || currentWorkDetails || '';
                         activeTimerSessionId = currentTaskData.timerSessionId || activeTimerSessionId || null;
                         const lastUpdated = currentTaskData.updatedAt || Date.now();
+                        const isSameDay = (new Date(lastUpdated).toDateString() === new Date().toDateString());
+                        if (!isSameDay && !isCheckedIn) {
+                            clearCurrentTask().catch(() => {});
+                            return;
+                        }
                         const elapsedSinceUpdate = Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000));
                         const savedSeconds = currentTaskData.currentSeconds || 0;
                         const MAX_RESTORABLE_GAP_SECONDS = 43200; // 12 Hours
@@ -33621,7 +33673,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 } catch (e) { }
                 if (!currentUser || !db) return;
                 try {
-                    await set(ref(db, `worksync/users/${eKey(currentUser.email)}/currentTask`), null);
+                    const uEmail = (currentUser.email || '').toLowerCase();
+                    const emailsToClear = (typeof ALEX_EMAILS !== 'undefined' && ALEX_EMAILS.includes(uEmail))
+                        ? ALEX_EMAILS
+                        : [uEmail];
+                    await Promise.all(emailsToClear.map(em => set(ref(db, `worksync/users/${eKey(em)}/currentTask`), null)));
                 } catch (err) {
                     console.warn('Failed to clear currentTask in Firebase:', err);
                 }
@@ -36150,13 +36206,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Optimistically update UI
                 const isDoneState = newStatus === 'Completed' || isInternalDone(newStatus) || isDone(newStatus);
-                const isRecurring = !!(task.murugeshTask || task.ajithTask || task.palaniTask || isMorningLearningTask(task));
+                const isRecurring = !!(task.murugeshTask || task.ajithTask || task.palaniTask || task.alexTask || isMorningLearningTask(task));
 
                 task.status = newStatus;
                 task.updatedAt = Date.now();
                 if (isDoneState) {
                     task.lastCompletedDate = todayIso();
                     task.completedAt = Date.now();
+                    // If this task was currently active/running, stop and clear it so it doesn't linger overnight
+                    if (activeTaskId && isSameTaskId(activeTaskId, taskId)) {
+                        stopTaskTimer();
+                        activeTaskId = null;
+                        taskSeconds = 0;
+                        taskOnHold = false;
+                        taskStartTime = null;
+                        activeTimerSessionId = null;
+                        if (typeof clearCurrentTask === 'function') {
+                            clearCurrentTask().catch(() => {});
+                        }
+                        if (typeof updateSessionStatus === 'function') updateSessionStatus();
+                    }
                 } else {
                     task.lastCompletedDate = null;
                     task.completedAt = null;
@@ -36180,7 +36249,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             updates.lastCompletedDate = null;
                             updates.completedAt = null;
                         }
-                        await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
+                        const uEmail = (task.userId || task.assigneeEmail || currentUser?.email || '').toLowerCase();
+                        const isAlexTask = (typeof ALEX_EMAILS !== 'undefined' ? ALEX_EMAILS : ['alexvilpower@gmail.com', 'alex@vilpower.com']).includes(uEmail);
+                        if (isAlexTask) {
+                            await Promise.all([
+                                update(ref(db, `worksync/manual_tasks/alexvilpower_gmail_com/${taskId}`), updates).catch(() => {}),
+                                update(ref(db, `worksync/manual_tasks/alex_vilpower_com/${taskId}`), updates).catch(() => {})
+                            ]);
+                        } else {
+                            await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
+                        }
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
@@ -36981,8 +37059,35 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // CHAT
             function eKey(email) { return (email || '').toLowerCase().replace(/[@.]/g, '_'); }
             function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
+            function getAllConvAliases(id) {
+                if (!id || typeof id !== 'string') return [];
+                const res = new Set();
+                res.add(id);
+                if (id.startsWith('dm_')) {
+                    res.add(id.slice(3));
+                } else if (id.includes('_') && !id.startsWith('group_')) {
+                    res.add('dm_' + id);
+                }
+                Array.from(res).forEach(v => {
+                    if (v.includes('alexvilpower_gmail_com')) {
+                        res.add(v.replace('alexvilpower_gmail_com', 'alex_vilpower_com'));
+                    }
+                    if (v.includes('alex_vilpower_com')) {
+                        res.add(v.replace('alex_vilpower_com', 'alexvilpower_gmail_com'));
+                    }
+                });
+                return Array.from(res);
+            }
+            window.getAllConvAliases = getAllConvAliases;
+
             function getAltDmId(id) {
                 if (!id || typeof id !== 'string') return null;
+                if (id.includes('alexvilpower_gmail_com')) {
+                    return id.replace('alexvilpower_gmail_com', 'alex_vilpower_com');
+                }
+                if (id.includes('alex_vilpower_com')) {
+                    return id.replace('alex_vilpower_com', 'alexvilpower_gmail_com');
+                }
                 if (id.startsWith('dm_')) return id.slice(3);
                 if (id.includes('_') && !id.startsWith('group_')) return 'dm_' + id;
                 return null;
@@ -37605,9 +37710,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         if (msg.senderEmail === currentUser.email || msg.unsent) return;
 
-                        const isCurrentActive = (id === activeConvId) || (activeConvId && id === getAltDmId(activeConvId));
+                        const isFcpActive = !!((typeof window.fcpIsOpen === 'function' ? window.fcpIsOpen() : window.fcpOpen) &&
+                            (window.fcpConvId === id || (typeof getAltDmId === 'function' && window.fcpConvId === getAltDmId(id))));
+                        const isCurrentActive = (id === activeConvId) || (activeConvId && id === getAltDmId(activeConvId)) || isFcpActive;
                         const isAppHidden = document.hidden;
-                        const isChatView = activeView === 'chat';
+                        const isChatView = activeView === 'chat' || !!((typeof window.fcpIsOpen === 'function' ? window.fcpIsOpen() : window.fcpOpen) && isFcpActive);
 
                         if (!isCurrentActive || isAppHidden) {
                             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
@@ -65495,6 +65602,9 @@ async function openNewGroupModal() {
             window._fcpSetAllUsersMap = function (m) { if (typeof allUsersMap !== 'undefined') allUsersMap = m; };
             window._fcpGetChatConvs = function () { return typeof chatConversations !== 'undefined' ? chatConversations : {}; };
             window._fcpGetUnreadCounts = function () { return typeof unreadCounts !== 'undefined' ? unreadCounts : {}; };
+            window._fcpGetChatMessageCache = function () { return typeof chatMessageCache !== 'undefined' ? chatMessageCache : {}; };
+            window.chatMessageCache = typeof chatMessageCache !== 'undefined' ? chatMessageCache : {};
+            window.formatChatTime = typeof formatChatTime === 'function' ? formatChatTime : null;
             safeExpose('_fcpGetAllUsers', () => getAllUsers);
             safeExpose('_fcpEKey', () => eKey);
             safeExpose('_fcpDmId', () => dmId);
@@ -66340,14 +66450,33 @@ async function openNewGroupModal() {
         var fcpConvName = '';
         var fcpConvType = '';
         var fcpMsgListener = null;
+        var fcpAltMsgListener = null;
+        var chatMessageCache = (window.chatMessageCache || (typeof window._fcpGetChatMessageCache === 'function' ? window._fcpGetChatMessageCache() : null)) || {};
         var fcpStagedAttachments = [];
         var fcpActiveTab = 'dm';
         var fcpOnlineStates = {};
         var fcpOnlineListeners = {};
 
+        window.fcpIsOpen = function () { return !!fcpOpen; };
+        window.fcpGetConvId = function () { return fcpConvId; };
+        try {
+            Object.defineProperty(window, 'fcpOpen', {
+                get: function () { return fcpOpen; },
+                set: function (v) { fcpOpen = !!v; },
+                configurable: true
+            });
+            Object.defineProperty(window, 'fcpConvId', {
+                get: function () { return fcpConvId; },
+                set: function (v) { fcpConvId = v; },
+                configurable: true
+            });
+        } catch (e) {
+            window.fcpOpen = false;
+            window.fcpConvId = null;
+        }
 
         // Bridge: resolve scoped variables from the main script block
-        function _fcpCU() { return window._fcpGetCurrentUser ? window._fcpGetCurrentUser() : null; }
+        function _fcpCU() { return window._fcpGetCurrentUser ? window._fcpGetCurrentUser() : (window.currentUser || null); }
         function _fcpUM() { return window._fcpGetAllUsersMap ? window._fcpGetAllUsersMap() : (typeof allUsersMap !== 'undefined' ? allUsersMap : null); }
         function _fcpCC() { return window._fcpGetChatConvs ? window._fcpGetChatConvs() : (typeof chatConversations !== 'undefined' ? chatConversations : {}); }
         function _fcpUC() { return window._fcpGetUnreadCounts ? window._fcpGetUnreadCounts() : (typeof unreadCounts !== 'undefined' ? unreadCounts : {}); }
@@ -66358,13 +66487,34 @@ async function openNewGroupModal() {
         // Firebase bridge helpers
         function _db() { return window._fcpDb ? window._fcpDb() : (typeof db !== 'undefined' ? db : null); }
         function _ref(p) { return window._fcpRef ? window._fcpRef(p) : (typeof ref !== 'undefined' ? ref(typeof db !== 'undefined' ? db : null, p) : null); }
-        function _onVal(r, cb) { return (window._fcpOnValue || onValue)(r, cb); }
-        function _query(...a) { return (window._fcpQuery || query)(...a); }
-        function _llast(n) { return (window._fcpLimitToLast || limitToLast)(n); }
-        function _get(r) { return (window._fcpGet || get)(r); }
-        function _set(r, v) { return (window._fcpSet || set)(r, v); }
-        function _push(r, v) { return (window._fcpPush || push)(r, v); }
-        function _upd(r, v) { return (window._fcpUpdate || update)(r, v); }
+        function _onVal(r, cb) {
+            var fn = window._fcpOnValue || (typeof onValue !== 'undefined' ? onValue : null);
+            return fn ? fn(r, cb) : function () { };
+        }
+        function _query(...a) {
+            var fn = window._fcpQuery || (typeof query !== 'undefined' ? query : null);
+            return fn ? fn(...a) : null;
+        }
+        function _llast(n) {
+            var fn = window._fcpLimitToLast || (typeof limitToLast !== 'undefined' ? limitToLast : null);
+            return fn ? fn(n) : null;
+        }
+        function _get(r) {
+            var fn = window._fcpGet || (typeof get !== 'undefined' ? get : null);
+            return fn ? fn(r) : Promise.reject('no get');
+        }
+        function _set(r, v) {
+            var fn = window._fcpSet || (typeof set !== 'undefined' ? set : null);
+            return fn ? fn(r, v) : Promise.reject('no set');
+        }
+        function _push(r, v) {
+            var fn = window._fcpPush || (typeof push !== 'undefined' ? push : null);
+            return fn ? fn(r, v) : null;
+        }
+        function _upd(r, v) {
+            var fn = window._fcpUpdate || (typeof update !== 'undefined' ? update : null);
+            return fn ? fn(r, v) : Promise.reject('no update');
+        }
         function _toast(m, t) { if (window._fcpToast) window._fcpToast(m, t); else if (typeof toast === 'function') toast(m, t); }
         function _upload(f) { return window._fcpUpload ? window._fcpUpload(f) : (typeof uploadToCloudinary !== 'undefined' ? uploadToCloudinary(f) : Promise.reject('no upload')); }
         function _f2b64(f) { return window._fcpFileToBase64 ? window._fcpFileToBase64(f) : (typeof fileToBase64 !== 'undefined' ? fileToBase64(f) : Promise.reject('no f2b')); }
@@ -66388,6 +66538,7 @@ async function openNewGroupModal() {
             var panel = document.getElementById('float-chat-panel');
             if (panel) panel.style.setProperty('display', 'none', 'important');
             fcpOpen = false;
+            window.fcpOpen = false;
             if (typeof fcpDismissHeadsUp === 'function') fcpDismissHeadsUp();
         }
 
@@ -66403,6 +66554,7 @@ async function openNewGroupModal() {
                 return;
             }
             fcpOpen = !fcpOpen;
+            window.fcpOpen = fcpOpen;
             var panel = document.getElementById('float-chat-panel');
             var btn = document.getElementById('float-chat-btn');
             if (btn) btn.classList.remove('chat-pulse-active');
@@ -66868,12 +67020,21 @@ async function openNewGroupModal() {
 
         function fcpOpenConv(convId, name, type, avatar) {
             fcpConvId = convId;
+            window.fcpConvId = convId;
             fcpConvName = name;
             fcpConvType = type;
+            var getAliasesFn = typeof getAllConvAliases === 'function' ? getAllConvAliases : (window.getAllConvAliases || null);
+            var aliases = getAliasesFn ? getAliasesFn(convId) : [convId];
+            var altFn = typeof getAltDmId === 'function' ? getAltDmId : (window.getAltDmId || null);
+            if (altFn) {
+                var alt = altFn(convId);
+                if (alt && !aliases.includes(alt)) aliases.push(alt);
+            }
+
             if (_fcpUC()) {
-                _fcpUC()[convId] = 0;
-                var altId = typeof getAltDmId === 'function' ? getAltDmId(convId) : null;
-                if (altId) _fcpUC()[altId] = 0;
+                aliases.forEach(function (aId) {
+                    _fcpUC()[aId] = 0;
+                });
             }
             var u = _fcpCU();
             if (u && u.email) {
@@ -66881,13 +67042,14 @@ async function openNewGroupModal() {
                 try {
                     var stored = JSON.parse(localStorage.getItem(storedLastSeenKey) || '{}');
                     var now = Date.now();
-                    stored[convId] = now;
-                    var altId2 = typeof getAltDmId === 'function' ? getAltDmId(convId) : null;
-                    if (altId2) stored[altId2] = now;
+                    aliases.forEach(function (aId) {
+                        stored[aId] = now;
+                    });
                     localStorage.setItem(storedLastSeenKey, JSON.stringify(stored));
                 } catch (e) { }
             }
-            if (typeof renderChatBadge === 'function') renderChatBadge();
+            var renderBadgeFn = typeof renderChatBadge === 'function' ? renderChatBadge : (window.renderChatBadge || null);
+            if (renderBadgeFn) renderBadgeFn();
             fcpUpdateFloatBadge();
 
             document.getElementById('fcp-list-view').style.display = 'none';
@@ -66927,11 +67089,25 @@ async function openNewGroupModal() {
 
         function fcpLoadMessages(convId) {
             if (fcpMsgListener) { try { fcpMsgListener(); } catch (e) { } fcpMsgListener = null; }
+            if (fcpAltMsgListener) { try { fcpAltMsgListener(); } catch (e) { } fcpAltMsgListener = null; }
             var msgArea = document.getElementById('fcp-messages');
+            var cache = (window.chatMessageCache || (typeof window._fcpGetChatMessageCache === 'function' ? window._fcpGetChatMessageCache() : null)) || chatMessageCache || {};
+            var getAliasesFn = typeof getAllConvAliases === 'function' ? getAllConvAliases : (window.getAllConvAliases || null);
+            var aliases = getAliasesFn ? getAliasesFn(convId) : [convId];
+            var altFn = typeof getAltDmId === 'function' ? getAltDmId : (window.getAltDmId || null);
+            if (altFn) {
+                var alt = altFn(convId);
+                if (alt && !aliases.includes(alt)) aliases.push(alt);
+            }
+
+            var mergedMsgs = {};
+            aliases.forEach(function (aId) {
+                if (cache[aId]) Object.assign(mergedMsgs, cache[aId]);
+            });
+
             if (msgArea) {
-                var cached = chatMessageCache[convId];
-                if (cached && Object.keys(cached).length) {
-                    var initialMsgs = Object.entries(cached).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
+                if (Object.keys(mergedMsgs).length) {
+                    var initialMsgs = Object.entries(mergedMsgs).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
                         .sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
                     fcpRenderMessages(initialMsgs);
                 } else {
@@ -66939,16 +67115,31 @@ async function openNewGroupModal() {
                 }
             }
 
-            var q = _query(_ref('worksync/messages/' + convId), _llast(40));
-            fcpMsgListener = _onVal(q, function (snap) {
-                var val = snap.val() || {};
-                chatMessageCache[convId] = val;
-                var msgs = val
-                    ? Object.entries(val).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
-                        .sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); })
-                    : [];
+            function updateAndRender() {
+                var msgs = Object.entries(mergedMsgs).map(function (e) { return Object.assign({ id: e[0] }, e[1]); })
+                    .sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
                 fcpRenderMessages(msgs);
+            }
+
+            var unsubs = [];
+            aliases.forEach(function (aId) {
+                var refItem = _ref('worksync/messages/' + aId);
+                if (!refItem) return;
+                var q = _query(refItem, _llast(40));
+                if (!q) return;
+                var un = _onVal(q, function (snap) {
+                    var val = snap.val() || {};
+                    cache[aId] = val;
+                    chatMessageCache[aId] = val;
+                    if (typeof window.chatMessageCache !== 'undefined') window.chatMessageCache[aId] = val;
+                    Object.assign(mergedMsgs, val);
+                    updateAndRender();
+                });
+                if (un) unsubs.push(un);
             });
+            fcpMsgListener = function () {
+                unsubs.forEach(function (u) { try { u(); } catch (e) { } });
+            };
         }
 
         function fcpRenderMessages(msgs) {
@@ -66963,7 +67154,8 @@ async function openNewGroupModal() {
 
             el.innerHTML = msgs.map(function (m) {
                 var isMe = m.senderEmail === (_fcpCU() && _fcpCU()?.email);
-                var timeStr = m.timestamp ? formatChatTime(m.timestamp) : '';
+                var timeFn = typeof formatChatTime === 'function' ? formatChatTime : (window.formatChatTime || fcpFormatTime);
+                var timeStr = m.timestamp ? timeFn(m.timestamp) : '';
                 var textHtml = m.unsent
                     ? '<em style="color:#94a3b8;font-size:10px;">Message unsent</em>'
                     : '<span style="font-size:11px;line-height:1.5;word-break:break-word;">' + _fcpEH(m.text || '') + '</span>';
@@ -67101,10 +67293,16 @@ async function openNewGroupModal() {
                     }
                 }
 
-                await Promise.all([
+                var sendUpdates = [
                     _push(_ref('worksync/messages/' + targetId), payload),
                     _upd(_ref('worksync/conversations/' + targetId), fcpConvData)
-                ]);
+                ];
+                var getAltFn = typeof getAltDmId === 'function' ? getAltDmId : (window.getAltDmId || null);
+                var altTargetId = getAltFn ? getAltFn(targetId) : null;
+                if (altTargetId) {
+                    sendUpdates.push(_upd(_ref('worksync/conversations/' + altTargetId), fcpConvData).catch(function () { }));
+                }
+                await Promise.all(sendUpdates);
             } catch (err) {
                 if (typeof toast === 'function') _toast('Failed to send: ' + err.message, 'error');
                 if (isTextOnly) input.value = savedText;
@@ -67160,7 +67358,9 @@ async function openNewGroupModal() {
 
         function floatChatBack() {
             if (fcpMsgListener) { try { fcpMsgListener(); } catch (e) { } fcpMsgListener = null; }
+            if (fcpAltMsgListener) { try { fcpAltMsgListener(); } catch (e) { } fcpAltMsgListener = null; }
             fcpConvId = null;
+            window.fcpConvId = null;
             fcpStagedAttachments = [];
             fcpUpdateAttachmentPreview();
             fcpClearSearch();
@@ -67170,11 +67370,18 @@ async function openNewGroupModal() {
         }
 
         function fcpUpdateFloatBadge() {
-            var total = typeof getChatUnreadTotal === 'function' ? getChatUnreadTotal() : (_fcpUC() ? Object.values(_fcpUC()).reduce(function (s, c) { return s + (c || 0); }, 0) : 0);
+            var totalFn = typeof getChatUnreadTotal === 'function' ? getChatUnreadTotal : (window.getChatUnreadTotal || null);
+            var total = totalFn ? totalFn() : (_fcpUC() ? Object.values(_fcpUC()).reduce(function (s, c) { return s + (c || 0); }, 0) : 0);
             var badge = document.getElementById('float-chat-badge');
             if (!badge) return;
             badge.textContent = total;
-            badge.style.display = total > 0 ? 'block' : 'none';
+            if (total > 0) {
+                badge.classList.remove('hidden');
+                badge.style.display = 'flex';
+            } else {
+                badge.classList.add('hidden');
+                badge.style.display = 'none';
+            }
         }
 
         // Hook renderChatBadge to also update float badge

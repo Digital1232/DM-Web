@@ -554,6 +554,10 @@
         const email = (u.email || '').toLowerCase().trim();
         if (!email || !c || !Array.isArray(c.tasks)) return null;
 
+        // If user is not checked in or not online today, do not auto-synthesize active tasks from past days
+        const isUserActive = u.isCheckedIn || u.online || u.activeSession?.state === 'running' || u.activeSession?.state === 'paused';
+        if (!isUserActive) return null;
+
         // Find tasks assigned to this user that are in progress
         const userTasks = c.tasks.filter(t => {
             if (typeof c.assigneeMatches === 'function') {
@@ -563,8 +567,13 @@
             return taskEmail === email;
         });
 
-        // 1. First priority: actively in progress tasks
-        const inProgress = userTasks.filter(t => typeof c.isInProgress === 'function' ? c.isInProgress(t.status) : false);
+        // 1. First priority: actively in progress tasks (skip completed tasks)
+        const inProgress = userTasks.filter(t => {
+            const isComp = (typeof c.isDone === 'function' && c.isDone(t.status)) ||
+                           (typeof c.isInternalDone === 'function' && c.isInternalDone(t.status));
+            if (isComp) return false;
+            return typeof c.isInProgress === 'function' ? c.isInProgress(t.status) : false;
+        });
         if (inProgress.length > 0) {
             const t = inProgress[0];
             return {
@@ -579,6 +588,9 @@
 
         // 2. Second priority: tasks currently in review / approval / QA
         const inReview = userTasks.filter(t => {
+            const isComp = (typeof c.isDone === 'function' && c.isDone(t.status)) ||
+                           (typeof c.isInternalDone === 'function' && c.isInternalDone(t.status));
+            if (isComp) return false;
             const st = (t.status || '').toLowerCase();
             return st.includes('review') || st.includes('qc') || st.includes('quality') || st.includes('approval');
         });
