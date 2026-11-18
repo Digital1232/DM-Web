@@ -107,6 +107,26 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If discussion notification:
+      if (data.view === 'discussions') {
+        const indexPage = clientList.find(c => {
+          try { return !new URL(c.url).pathname.endsWith('/chat.html'); } catch (e) { return false; }
+        }) || clientList.find(c => c.url && 'focus' in c);
+        if (indexPage) {
+          return indexPage.focus().then((focused) => {
+            (focused || indexPage).postMessage({
+              type: 'NOTIFICATION_CLICK',
+              view: 'discussions',
+              data: data
+            });
+          });
+        }
+        if (self.clients.openWindow) {
+          const url = new URL('index.html#discussions', self.registration.scope);
+          return self.clients.openWindow(url.href);
+        }
+      }
+
       // Prefer an already-open dedicated chat window, then any other One Desk window.
       const target = clientList.find(isChatPage) || clientList.find((c) => c.url && 'focus' in c);
       if (target) {

@@ -34725,6 +34725,66 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             let discussionPopupShown = false;
             let discussionJoinCountdown = null;
 
+            function getDiscussionParticipants(disc) {
+                if (!disc) return [];
+                const p = disc.participants;
+                if (!p) return [];
+                if (Array.isArray(p)) return p.map(e => String(e || '').trim()).filter(Boolean);
+                if (typeof p === 'object') return Object.values(p).map(e => String(e || '').trim()).filter(Boolean);
+                if (typeof p === 'string') return p.split(/[,;]/).map(e => e.trim()).filter(Boolean);
+                return [];
+            }
+            window.getDiscussionParticipants = getDiscussionParticipants;
+
+            function getDiscussionJoinedBy(disc) {
+                if (!disc) return [];
+                const j = disc.joinedBy;
+                if (!j) return [];
+                if (Array.isArray(j)) return j.map(e => String(e || '').trim()).filter(Boolean);
+                if (typeof j === 'object') return Object.values(j).map(e => String(e || '').trim()).filter(Boolean);
+                if (typeof j === 'string') return j.split(/[,;]/).map(e => e.trim()).filter(Boolean);
+                return [];
+            }
+            window.getDiscussionJoinedBy = getDiscussionJoinedBy;
+
+            function isUserInDiscussion(disc, userEmail) {
+                if (!disc) return false;
+                const email = (userEmail || currentUser?.email || '').trim().toLowerCase();
+                if (!email) return false;
+                // Admins and managers can view all discussions across the organization
+                if (typeof isAdmin === 'function' && typeof isManager === 'function' && (isAdmin() || isManager())) {
+                    return true;
+                }
+                // The creator/organizer is always part of the discussion
+                if ((disc.createdBy || '').trim().toLowerCase() === email) return true;
+                // Check participants list
+                const parts = getDiscussionParticipants(disc);
+                if (parts.some(p => p.toLowerCase() === email)) return true;
+                // Check joinedBy list
+                const joined = getDiscussionJoinedBy(disc);
+                if (joined.some(j => j.toLowerCase() === email)) return true;
+                return false;
+            }
+            window.isUserInDiscussion = isUserInDiscussion;
+
+            function updateDiscussionsBadge() {
+                const badge = document.getElementById('discussions-badge');
+                if (!badge || !currentUser || !currentUser.email) return;
+                const myEmail = (currentUser.email || '').trim().toLowerCase();
+                const count = discussions.filter(d => {
+                    const s = String(d.status || '').toLowerCase().trim();
+                    const isActiveOrScheduled = s === 'scheduled' || s === 'upcoming' || s === 'planned' || s === 'in-progress' || s === 'hold';
+                    return isActiveOrScheduled && isUserInDiscussion(d, myEmail);
+                }).length;
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+            window.updateDiscussionsBadge = updateDiscussionsBadge;
+
             function openScheduleDiscussionModal() {
                 // Clear input fields
                 document.getElementById('disc-title').value = '';
@@ -34734,12 +34794,17 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const clientSelect = document.getElementById('disc-client');
                 populateClientSelect(clientSelect, '', 'Select client/department...');
 
-                // Populate participants checkboxes
+                // Populate participants checkboxes with fallback if allUsersMap is still loading
                 const participantsDiv = document.getElementById('disc-participants');
-                participantsDiv.innerHTML = Array.from(allUsersMap.values()).map(u => `
+                const userList = (allUsersMap && allUsersMap.size > 0)
+                    ? Array.from(allUsersMap.values())
+                    : ((typeof USERS !== 'undefined' && USERS.length) ? USERS : (typeof currentWorkUsers !== 'undefined' ? currentWorkUsers : []));
+                participantsDiv.innerHTML = userList
+                    .filter(u => u && u.email && u.email !== '123')
+                    .map(u => `
                 <label class="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
                     <input type="checkbox" value="${u.email}" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
-                    <span class="text-xs text-slate-700"><span class="font-bold">${u.name}</span><br><span class="text-slate-500">${u.email}</span></span>
+                    <span class="text-xs text-slate-700"><span class="font-bold">${u.name || u.email}</span><br><span class="text-slate-500">${u.email}</span></span>
                 </label>
             `).join('');
 
@@ -34776,14 +34841,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const description = document.getElementById('disc-description').value.trim();
 
                 const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
-                const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+                const rawParticipants = Array.from(participantCheckboxes).map(cb => (cb.value || '').trim().toLowerCase()).filter(Boolean);
+                const creatorEmail = (currentUser?.email || '').trim().toLowerCase();
 
                 // Validation
                 if (!title) return toast('Enter discussion title', 'error');
                 if (!client) return toast('Select a client/department', 'error');
                 if (!date) return toast('Select a date', 'error');
                 if (!time) return toast('Select a time', 'error');
-                if (participants.length === 0) return toast('Select at least one participant', 'error');
+                if (rawParticipants.length === 0) return toast('Select at least one participant', 'error');
+
+                // Auto-include the creator in participants list
+                const participants = Array.from(new Set([...rawParticipants, ...(creatorEmail ? [creatorEmail] : [])]));
 
                 const btn = document.getElementById('disc-submit-btn');
                 const originalText = btn.textContent;
@@ -34804,6 +34873,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         btn.textContent = originalText;
                         return;
                     }
+
+                    const otherParticipants = participants.filter(e => e !== creatorEmail);
 
                     if (isEditing) {
                         // Update existing discussion
@@ -34826,6 +34897,32 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             };
                         }
 
+                        // Send update notification to participants
+                        if (otherParticipants.length > 0) {
+                            await push(ref(db, 'worksync/task_notifications'), {
+                                title: 'Discussion Updated',
+                                body: `Discussion "${title}" has been updated/rescheduled to ${date} at ${time}.`,
+                                timestamp: Date.now(),
+                                readBy: {},
+                                type: 'discussion',
+                                discId: discussionId,
+                                notifyEmails: otherParticipants
+                            });
+
+                            if (window.PushManager && typeof window.PushManager.triggerPushNotification === 'function') {
+                                otherParticipants.forEach(email => {
+                                    try {
+                                        window.PushManager.triggerPushNotification({
+                                            userKey: eKey(email),
+                                            title: 'Discussion Updated',
+                                            body: `Discussion "${title}" updated to ${date} at ${time}.`,
+                                            data: { view: 'discussions', discId: discussionId }
+                                        });
+                                    } catch (e) { }
+                                });
+                            }
+                        }
+
                         toast('Discussion updated successfully!', 'success');
                     } else {
                         // Create new discussion
@@ -34845,13 +34942,30 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
 
-                        await push(ref(db, 'worksync/task_notifications'), {
-                            title: 'Discussion Scheduled',
-                            body: `You have been added to a discussion: "${title}" on ${date} at ${time}.`,
-                            timestamp: Date.now(),
-                            readBy: {},
-                            notifyEmails: participants
-                        });
+                        if (otherParticipants.length > 0) {
+                            await push(ref(db, 'worksync/task_notifications'), {
+                                title: 'Discussion Scheduled',
+                                body: `You have been added to a discussion: "${title}" on ${date} at ${time}.`,
+                                timestamp: Date.now(),
+                                readBy: {},
+                                type: 'discussion',
+                                discId: discussionId,
+                                notifyEmails: otherParticipants
+                            });
+
+                            if (window.PushManager && typeof window.PushManager.triggerPushNotification === 'function') {
+                                otherParticipants.forEach(email => {
+                                    try {
+                                        window.PushManager.triggerPushNotification({
+                                            userKey: eKey(email),
+                                            title: 'Discussion Scheduled',
+                                            body: `You are invited to "${title}" on ${date} at ${time}.`,
+                                            data: { view: 'discussions', discId: discussionId }
+                                        });
+                                    } catch (e) { }
+                                });
+                            }
+                        }
 
                         discussions.push(discussion);
                         toast(`Discussion scheduled successfully!`, 'success');
@@ -34862,6 +34976,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     btn.innerHTML = '<iconify-icon icon="solar:calendar-plus-bold" width="18"></iconify-icon> Schedule';
                     startDiscussionListener();
                     renderDiscussionsView();
+                    updateDiscussionsBadge();
                 } catch (err) {
                     console.error('Failed to save discussion:', err);
                     toast('Failed to save discussion: ' + err.message, 'error');
@@ -34938,12 +35053,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const description = document.getElementById('disc-description').value.trim();
 
                 const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
-                const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+                const rawParticipants = Array.from(participantCheckboxes).map(cb => (cb.value || '').trim().toLowerCase()).filter(Boolean);
+                const creatorEmail = (currentUser?.email || '').trim().toLowerCase();
 
                 // Auto include the creator as participant
-                if (!participants.includes(currentUser.email)) {
-                    participants.push(currentUser.email);
-                }
+                const participants = Array.from(new Set([...rawParticipants, ...(creatorEmail ? [creatorEmail] : [])]));
 
                 // Validation
                 if (!title) return toast('Enter discussion title', 'error');
@@ -34972,15 +35086,30 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
 
                     // Notify other participants that this meeting is happening now
-                    const otherParticipants = participants.filter(e => e !== currentUser.email);
+                    const otherParticipants = participants.filter(e => e !== creatorEmail);
                     if (otherParticipants.length > 0) {
                         await push(ref(db, 'worksync/task_notifications'), {
                             title: 'Live Discussion Started',
                             body: `An ad-hoc discussion has started: "${title}". Please join immediately.`,
                             timestamp: Date.now(),
                             readBy: {},
+                            type: 'discussion',
+                            discId: discussionId,
                             notifyEmails: otherParticipants
                         });
+
+                        if (window.PushManager && typeof window.PushManager.triggerPushNotification === 'function') {
+                            otherParticipants.forEach(email => {
+                                try {
+                                    window.PushManager.triggerPushNotification({
+                                        userKey: eKey(email),
+                                        title: 'Live Discussion Started',
+                                        body: `Meeting "${title}" has started. Please join now!`,
+                                        data: { view: 'discussions', discId: discussionId }
+                                    });
+                                } catch (e) { }
+                            });
+                        }
                     }
 
                     document.getElementById('scheduleDiscussionModal').close();
@@ -34991,6 +35120,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     await joinDiscussion();
 
                     startDiscussionListener();
+                    updateDiscussionsBadge();
                 } catch (err) {
                     console.error('Failed to start live discussion:', err);
                     toast('Failed to start live: ' + err.message, 'error');
@@ -35009,12 +35139,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const notes = document.getElementById('disc-description').value.trim();
 
                 const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]:checked');
-                const participants = Array.from(participantCheckboxes).map(cb => cb.value);
+                const rawParticipants = Array.from(participantCheckboxes).map(cb => (cb.value || '').trim().toLowerCase()).filter(Boolean);
+                const creatorEmail = (currentUser?.email || '').trim().toLowerCase();
 
                 // Auto include the creator as participant
-                if (!participants.includes(currentUser.email)) {
-                    participants.push(currentUser.email);
-                }
+                const participants = Array.from(new Set([...rawParticipants, ...(creatorEmail ? [creatorEmail] : [])]));
 
                 // Validation
                 if (!title) return toast('Enter discussion title', 'error');
@@ -35068,7 +35197,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     // 1. Create Discussion Record
                     await set(ref(db, `worksync/discussions/${discussionId}`), discussion);
 
-                    // 2. Log Tasks and Timelogs for each participant
+                    // 2. Notify other participants about the logged meeting
+                    const otherParticipants = participants.filter(e => e !== creatorEmail);
+                    if (otherParticipants.length > 0) {
+                        await push(ref(db, 'worksync/task_notifications'), {
+                            title: 'Discussion Logged',
+                            body: `${currentUser.name || currentUser.email} logged meeting notes for: "${title}" (${formatTime(durationSec)}).`,
+                            timestamp: Date.now(),
+                            readBy: {},
+                            type: 'discussion',
+                            discId: discussionId,
+                            notifyEmails: otherParticipants
+                        });
+                    }
+
+                    // 3. Log Tasks and Timelogs for each participant
                     const promises = [];
                     for (const email of participants) {
                         const userObj = knownUserByEmail(email);
@@ -35118,9 +35261,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     toast(`Past discussion logged successfully for ${participants.length} team members!`, 'success');
 
                     // Reload local view/tasks if the current user is a participant
-                    if (participants.includes(currentUser.email)) {
+                    if (participants.includes(creatorEmail)) {
                         syncTasks(true);
                     }
+                    renderDiscussionsView();
+                    updateDiscussionsBadge();
                 } catch (err) {
                     console.error('Failed to log past discussion:', err);
                     toast('Failed to log past discussion: ' + err.message, 'error');
@@ -35137,31 +35282,37 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 discussionCheckInterval = setInterval(() => {
                     if (!currentUser || !currentUser.email) return;
                     const now = Date.now();
-                    const myEmail = (currentUser.email || '').toLowerCase();
+                    const myEmail = (currentUser.email || '').trim().toLowerCase();
 
                     (discussions || []).forEach(disc => {
                         if (!disc || !disc.id) return;
 
+                        const s = String(disc.status || '').toLowerCase().trim();
                         // Do not show popup if discussion is completed, cancelled, closed, or on hold
-                        if (['completed', 'cancelled', 'closed', 'finished', 'hold'].includes(disc.status)) return;
+                        if (['completed', 'cancelled', 'closed', 'finished', 'hold'].includes(s)) return;
 
                         // Check if user has already dismissed or joined
                         if (dismissedDiscussionIds.includes(disc.id)) return;
-                        const hasJoined = (disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail);
+                        const joined = getDiscussionJoinedBy(disc);
+                        const hasJoined = joined.some(e => e.toLowerCase() === myEmail);
                         if (hasJoined) return;
 
-                        if (disc.status === 'scheduled') {
+                        const isParticipant = isUserInDiscussion(disc, myEmail);
+                        if (!isParticipant) return;
+
+                        if (s === 'scheduled' || s === 'upcoming' || s === 'planned') {
                             const timeUntilStart = (disc.scheduledTime || 0) - now;
 
-                            // Show popup within 30 seconds before start time up to 1 minute after
-                            if (timeUntilStart <= 30000 && timeUntilStart > -60000 && !discussionPopupShown) {
-                                const isParticipant = (disc.participants || []).some(p => (p || '').toLowerCase() === myEmail);
-                                if (isParticipant) {
-                                    discussionPopupShown = true;
-                                    currentDiscussion = disc;
-                                    showDiscussionJoinPopup(disc);
-                                }
+                            // Show popup within 2 minutes before start time up to 10 minutes after
+                            if (timeUntilStart <= 120000 && timeUntilStart > -600000 && !discussionPopupShown) {
+                                discussionPopupShown = true;
+                                currentDiscussion = disc;
+                                showDiscussionJoinPopup(disc);
                             }
+                        } else if (s === 'in-progress' && !discussionPopupShown) {
+                            discussionPopupShown = true;
+                            currentDiscussion = disc;
+                            showDiscussionJoinPopup(disc);
                         }
                     });
                 }, 1000);
@@ -35174,6 +35325,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const countdownEl = popup.querySelector('#disc-popup-countdown');
 
                 if (titleEl) titleEl.textContent = discussion.title || 'Discussion';
+
+                // Alert the participant with a desktop / browser notification
+                if (typeof showBrowserNotification === 'function') {
+                    showBrowserNotification(`💬 Discussion Starting: ${discussion.title || 'Meeting'}`, {
+                        body: `Meeting with ${discussion.client || 'team'} is starting now. Click to join!`,
+                        tag: `disc-join-${discussion.id}`,
+                        requireInteraction: true
+                    }, () => {
+                        window.focus();
+                        if (popup && !popup.open) popup.showModal();
+                    });
+                }
 
                 // Add close event listener once to handle ESC or backdrop dismissals
                 if (!popup.dataset.hasCloseListener) {
@@ -35218,7 +35381,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (!currentDiscussion) return;
 
                 const popup = document.getElementById('discussionJoinPopup');
-                popup.close();
+                if (popup && popup.open) popup.close();
                 clearInterval(discussionJoinCountdown);
 
                 // Hold current task if one is active
@@ -35254,23 +35417,40 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 taskOnHold = false;
                 startTaskTimer();
 
-                // Update discussion status in Firebase
+                // Update discussion status in Firebase with clean joinedBy array
+                const existingJoined = getDiscussionJoinedBy(currentDiscussion);
+                const updatedJoined = Array.from(new Set([...existingJoined, (currentUser.email || '').trim().toLowerCase()]));
                 await update(ref(db, `worksync/discussions/${currentDiscussion.id}`), {
                     status: 'in-progress',
-                    joinedBy: [...(currentDiscussion.joinedBy || []), currentUser.email],
+                    joinedBy: updatedJoined,
                     joinedAt: Date.now()
                 });
 
-                // Notify other participants that this person has joined the discussion
-                const otherParticipants = (currentDiscussion.participants || []).filter(e => e !== currentUser.email);
+                // Notify other participants that this person has joined / started the discussion
+                const otherParticipants = getDiscussionParticipants(currentDiscussion).filter(e => e.toLowerCase() !== (currentUser.email || '').toLowerCase());
                 if (otherParticipants.length > 0) {
                     await push(ref(db, 'worksync/task_notifications'), {
                         title: 'Discussion Started',
-                        body: `${currentUser.name} has joined the discussion: "${currentDiscussion.title}" and a task has been created.`,
+                        body: `${currentUser.name || 'Participant'} joined the discussion: "${currentDiscussion.title}". Join now!`,
                         timestamp: Date.now(),
                         readBy: {},
+                        type: 'discussion',
+                        discId: currentDiscussion.id,
                         notifyEmails: otherParticipants
                     });
+
+                    if (window.PushManager && typeof window.PushManager.triggerPushNotification === 'function') {
+                        otherParticipants.forEach(email => {
+                            try {
+                                window.PushManager.triggerPushNotification({
+                                    userKey: eKey(email),
+                                    title: 'Discussion Started',
+                                    body: `Meeting "${currentDiscussion.title}" is happening now. Please join!`,
+                                    data: { view: 'discussions', discId: currentDiscussion.id }
+                                });
+                            } catch (e) { }
+                        });
+                    }
                 }
 
                 tasks = mergeTasksById([discussionTask, ...tasks]);
@@ -35278,6 +35458,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 renderInternalTasks();
                 renderActiveTaskCard();
                 updateStats();
+                updateDiscussionsBadge();
 
                 toast(`Joined discussion: ${currentDiscussion.title}`, 'success');
                 discussionPopupShown = false;
@@ -35293,6 +35474,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const snapshot = await get(ref(db, `worksync/discussions/${discId}`));
                         if (snapshot.exists()) {
                             disc = snapshot.val();
+                            disc.id = disc.id || discId;
                         } else {
                             throw new Error('Discussion not found in database');
                         }
@@ -35304,7 +35486,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Already joined? (case-insensitive)
                 const myEmail = (currentUser.email || '').toLowerCase();
-                if ((disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail)) {
+                const joined = getDiscussionJoinedBy(disc);
+                if (joined.some(e => e.toLowerCase() === myEmail)) {
                     toast('You have already joined this discussion', 'info');
                     return;
                 }
@@ -35334,8 +35517,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                if (disc.createdBy !== currentUser.email) {
-                    toast('Only the organizer can edit this discussion', 'error');
+                const myEmail = (currentUser?.email || '').trim().toLowerCase();
+                const isCreator = (disc.createdBy || '').toLowerCase() === myEmail || (typeof isAdmin === 'function' && isAdmin());
+                if (!isCreator) {
+                    toast('Only the organizer or admin can edit this discussion', 'error');
                     return;
                 }
 
@@ -35355,10 +35540,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const durationMinutes = Math.floor((disc.duration || 0) / (60 * 1000));
                 document.getElementById('disc-duration').value = durationMinutes || 30;
 
-                // Set participants - check the checkboxes
+                // Set participants - check the checkboxes safely
+                const participantsList = getDiscussionParticipants(disc);
                 const participantCheckboxes = document.querySelectorAll('#disc-participants input[type="checkbox"]');
                 participantCheckboxes.forEach(cb => {
-                    cb.checked = (disc.participants || []).includes(cb.value);
+                    cb.checked = participantsList.some(p => p.toLowerCase() === cb.value.toLowerCase());
                 });
 
                 // Change the modal title and button text to indicate edit mode
@@ -35415,8 +35601,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     return;
                 }
 
-                if (disc.createdBy !== currentUser.email) {
-                    toast('Only the organizer can cancel this discussion', 'error');
+                const myEmail = (currentUser?.email || '').trim().toLowerCase();
+                const isCreator = (disc.createdBy || '').toLowerCase() === myEmail || (typeof isAdmin === 'function' && isAdmin());
+                if (!isCreator) {
+                    toast('Only the organizer or admin can cancel this discussion', 'error');
                     return;
                 }
 
@@ -35493,33 +35681,40 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                         snapshot.forEach(childSnapshot => {
                             const disc = childSnapshot.val();
-                            if (disc && disc.id && !idSet.has(disc.id)) {
-                                idSet.add(disc.id);
-                                allDiscussions.push(disc);
+                            if (disc) {
+                                const discId = disc.id || childSnapshot.key;
+                                disc.id = discId;
+                                if (!idSet.has(discId)) {
+                                    idSet.add(discId);
+                                    allDiscussions.push(disc);
 
-                                // Auto-close popup if current discussion is completed/closed/cancelled/finished
-                                if (['completed', 'cancelled', 'closed', 'finished'].includes(disc.status)) {
-                                    if (currentDiscussion && currentDiscussion.id === disc.id) {
-                                        dismissDiscussionPopup();
+                                    // Auto-close popup if current discussion is completed/closed/cancelled/finished
+                                    const discStatus = String(disc.status || '').toLowerCase().trim();
+                                    if (['completed', 'cancelled', 'closed', 'finished'].includes(discStatus)) {
+                                        if (currentDiscussion && currentDiscussion.id === discId) {
+                                            dismissDiscussionPopup();
+                                        }
                                     }
-                                }
 
-                                // Auto-trigger popup for other participants when status becomes in-progress
-                                const myEmail = (currentUser?.email || '').toLowerCase();
-                                const isParticipant = (disc.participants || []).some(p => (p || '').toLowerCase() === myEmail);
-                                if (disc.status === 'in-progress' && isParticipant) {
-                                    const hasJoined = (disc.joinedBy || []).some(e => (e || '').toLowerCase() === myEmail);
-                                    if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(disc.id)) {
-                                        discussionPopupShown = true;
-                                        currentDiscussion = disc;
-                                        // Delay popup to prevent duplicate from rapid re-renders
-                                        setTimeout(() => showDiscussionJoinPopup(disc), 100);
+                                    // Auto-trigger popup for other participants when status becomes in-progress
+                                    const myEmail = (currentUser?.email || '').toLowerCase().trim();
+                                    const isParticipant = isUserInDiscussion(disc, myEmail);
+                                    if (discStatus === 'in-progress' && isParticipant) {
+                                        const joined = getDiscussionJoinedBy(disc);
+                                        const hasJoined = joined.some(e => e.toLowerCase() === myEmail);
+                                        if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(discId)) {
+                                            discussionPopupShown = true;
+                                            currentDiscussion = disc;
+                                            // Delay popup to prevent duplicate from rapid re-renders
+                                            setTimeout(() => showDiscussionJoinPopup(disc), 100);
+                                        }
                                     }
                                 }
                             }
                         });
 
                         discussions = allDiscussions;
+                        updateDiscussionsBadge();
 
                         // Sync active task timer with discussion status
                         if (activeTaskId) {
@@ -35556,21 +35751,29 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function renderDiscussionsView() {
+                if (!discussionsUnsub) {
+                    loadDiscussions();
+                }
                 const liveSection = document.getElementById('live-discussion-section');
                 const upcomingList = document.getElementById('upcoming-discussions-list');
                 const pastList = document.getElementById('past-discussions-list');
 
                 if (!liveSection || !upcomingList || !pastList) return;
 
-                const now = Date.now();
+                const myEmail = (currentUser?.email || '').trim().toLowerCase();
                 // Find active or held discussions for current user
-                const activeDisc = discussions.find(d => (d.status === 'in-progress' || d.status === 'hold') && (d.participants || []).includes(currentUser.email));
+                const activeDisc = discussions.find(d => {
+                    const s = String(d.status || '').toLowerCase().trim();
+                    return (s === 'in-progress' || s === 'hold') && isUserInDiscussion(d, myEmail);
+                });
 
                 if (activeDisc) {
                     liveSection.classList.remove('hidden');
 
-                    const participantsHtml = (activeDisc.participants || []).map(p => {
-                        const hasJoined = (activeDisc.joinedBy || []).includes(p);
+                    const participantsList = getDiscussionParticipants(activeDisc);
+                    const joinedList = getDiscussionJoinedBy(activeDisc);
+                    const participantsHtml = participantsList.map(p => {
+                        const hasJoined = joinedList.some(j => j.toLowerCase() === p.toLowerCase());
                         const userObj = knownUserByEmail(p);
                         const name = userObj?.name || p;
                         const badgeClass = hasJoined
@@ -35584,7 +35787,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     `;
                     }).join('');
 
-                    const hasJoinedActive = (activeDisc.joinedBy || []).includes(currentUser.email);
+                    const hasJoinedActive = joinedList.some(j => j.toLowerCase() === myEmail);
 
                     let liveIndicatorHtml = '';
                     let liveHeaderHtml = '';
@@ -35686,8 +35889,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Render Upcoming List
                 const upcoming = discussions
-                    .filter(d => d.status === 'scheduled' && (d.participants || []).includes(currentUser.email))
-                    .sort((a, b) => a.scheduledTime - b.scheduledTime);
+                    .filter(d => {
+                        const s = String(d.status || '').toLowerCase().trim();
+                        return (s === 'scheduled' || s === 'upcoming' || s === 'planned') && isUserInDiscussion(d, myEmail);
+                    })
+                    .sort((a, b) => Number(a.scheduledTime || 0) - Number(b.scheduledTime || 0));
 
                 if (upcoming.length === 0) {
                     upcomingList.innerHTML = `
@@ -35698,23 +35904,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 `;
                 } else {
                     upcomingList.innerHTML = upcoming.map(disc => {
-                        const dateStr = new Date(disc.scheduledTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-                        const timeStr = new Date(disc.scheduledTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                        const dateVal = disc.scheduledTime ? new Date(disc.scheduledTime) : new Date();
+                        const dateStr = dateVal.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+                        const timeStr = dateVal.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-                        const participantNames = (disc.participants || []).map(p => {
+                        const parts = getDiscussionParticipants(disc);
+                        const participantNames = parts.map(p => {
                             const userObj = knownUserByEmail(p);
                             return userObj?.name || p;
                         }).join(', ');
 
-                        // Only allow edit if user created the discussion
-                        const isCreator = disc.createdBy === currentUser.email;
-                        const editButton = isCreator ? `
+                        // Allow creator, admin or manager to edit/cancel
+                        const isCreator = (disc.createdBy || '').toLowerCase() === myEmail;
+                        const canManage = isCreator || (typeof isAdmin === 'function' && isAdmin()) || (typeof isManager === 'function' && isManager());
+                        const editButton = canManage ? `
                             <button onclick="editScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
                                 <iconify-icon icon="solar:pen-bold" width="13"></iconify-icon> Edit
                             </button>
                         ` : '';
 
-                        const deleteButton = isCreator ? `
+                        const deleteButton = canManage ? `
                             <button onclick="cancelScheduledDiscussion('${disc.id}')" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 text-[10px] font-bold rounded-lg transition-all shadow-sm shrink-0">
                                 <iconify-icon icon="solar:trash-bin-trash-bold" width="13"></iconify-icon> Cancel
                             </button>
@@ -35747,8 +35956,11 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Render Past / Completed List
                 const past = discussions
-                    .filter(d => d.status === 'completed' && (d.participants || []).includes(currentUser.email))
-                    .sort((a, b) => b.scheduledTime - a.scheduledTime);
+                    .filter(d => {
+                        const s = String(d.status || '').toLowerCase().trim();
+                        return (s === 'completed' || s === 'finished' || s === 'closed' || s === 'past') && isUserInDiscussion(d, myEmail);
+                    })
+                    .sort((a, b) => Number(b.scheduledTime || 0) - Number(a.scheduledTime || 0));
 
                 if (past.length === 0) {
                     pastList.innerHTML = `
@@ -35759,10 +35971,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 `;
                 } else {
                     pastList.innerHTML = past.map(disc => {
-                        const dateStr = new Date(disc.scheduledTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-                        const timeStr = new Date(disc.scheduledTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                        const dateVal = disc.scheduledTime ? new Date(disc.scheduledTime) : new Date();
+                        const dateStr = dateVal.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+                        const timeStr = dateVal.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-                        const participantNames = (disc.participants || []).map(p => {
+                        const parts = getDiscussionParticipants(disc);
+                        const participantNames = parts.map(p => {
                             const userObj = knownUserByEmail(p);
                             return userObj?.name || p;
                         }).join(', ');
@@ -35791,6 +36005,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     `;
                     }).join('');
                 }
+
+                updateDiscussionsBadge();
             }
 
             let liveNotesSaveTimeout = null;
@@ -38267,7 +38483,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.addEventListener('message', (event) => {
                     if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
-                        const data = event.data.chatData || {};
+                        const data = event.data.chatData || event.data.data || {};
+                        const view = event.data.view || data.view;
+                        if (view === 'discussions') {
+                            window.focus();
+                            if (typeof switchView === 'function') switchView('discussions');
+                            return;
+                        }
                         window.focus();
                         if (typeof switchView === 'function') switchView('chat');
                         const welcomeEl = document.getElementById('chat-welcome');
@@ -56752,33 +56974,73 @@ async function openNewGroupModal() {
                 taskNotifUnsub = onValue(notifRef, snap => {
                     if (!currentUser || !currentUser.email) return;
                     const data = snap.val();
-                    if (!data || isFirstLoad) { isFirstLoad = false; return; }
+                    if (!data) return;
 
-                    const myEmail = (currentUser?.email || '').toLowerCase();
+                    const myEmail = (currentUser?.email || '').toLowerCase().trim();
+                    const now = Date.now();
+
                     Object.entries(data).forEach(([id, notif]) => {
+                        if (!notif) return;
                         if (shownTaskNotifIds.has(id)) return;
 
-                        const targets = (notif.notifyEmails || []).map(e => e.toLowerCase());
+                        // On first load, only alert if the notification is very recent (< 2 mins)
+                        if (isFirstLoad) {
+                            if (now - (notif.timestamp || 0) > 120000) {
+                                shownTaskNotifIds.add(id);
+                                return;
+                            }
+                        }
+
+                        // Don't show if already read
+                        if (notif.readBy && notif.readBy[eKey(myEmail)]) {
+                            shownTaskNotifIds.add(id);
+                            return;
+                        }
+
+                        // Only show notifications from the last 5 minutes
+                        if (now - (notif.timestamp || 0) > 300000) {
+                            shownTaskNotifIds.add(id);
+                            return;
+                        }
+
+                        const rawTargets = notif.notifyEmails || [];
+                        const targets = (Array.isArray(rawTargets) ? rawTargets : Object.values(rawTargets)).map(e => String(e || '').toLowerCase().trim()).filter(Boolean);
+                        const isDiscussionNotif = notif.type === 'discussion' || String(notif.title || '').toLowerCase().includes('discussion');
                         const isReworkOrQcNotif = notif.type === 'rework' || notif.type === 'qc' || isReworkStatus(notif.newStatus) || isQcStatus(notif.newStatus);
                         const isDesignCompletedNotif = notif.type === 'design_completed' || (notif.newStatus || '').toLowerCase().trim() === 'design completed';
                         const isAlertNotif = isReworkOrQcNotif || isDesignCompletedNotif;
 
                         // Strict target filtering:
-                        // For Rework, QC, and Design Completed notifications, ONLY process if current user's email is explicitly in notifyEmails list
-                        if (isAlertNotif) {
+                        if (isDiscussionNotif) {
+                            if (targets.length > 0 && !targets.includes(myEmail)) return;
+                        } else if (isAlertNotif) {
                             if (targets.length === 0 || !targets.includes(myEmail)) return;
                         } else if (targets.length > 0 && !targets.includes(myEmail)) {
                             return;
                         }
 
-                        // Don't show if already read
-                        if (notif.readBy && notif.readBy[eKey(myEmail)]) return;
-
-                        // Only show notifications from the last 5 minutes
-                        if (Date.now() - (notif.timestamp || 0) > 300000) return;
-
                         shownTaskNotifIds.add(id);
-                        localStorage.setItem('worksync_toasted_notifs', JSON.stringify(Array.from(shownTaskNotifIds)));
+                        try {
+                            localStorage.setItem('worksync_toasted_notifs', JSON.stringify(Array.from(shownTaskNotifIds)));
+                        } catch (e) { }
+
+                        // Discussion notifications
+                        if (isDiscussionNotif) {
+                            const openDiscussion = () => {
+                                window.focus();
+                                if (typeof switchView === 'function') switchView('discussions');
+                            };
+                            toast(`💬 ${notif.title || 'Discussion Alert'}: ${notif.body || 'A discussion has been updated.'}`, 'info', openDiscussion);
+                            if (typeof showBrowserNotification === 'function') {
+                                showBrowserNotification(`💬 ${notif.title || 'Discussion Alert'}`, {
+                                    body: notif.body || 'Click to view discussion',
+                                    tag: `disc-notif-${notif.discId || notif.id || id}`,
+                                    requireInteraction: true,
+                                    data: { view: 'discussions', discId: notif.discId || notif.id || id }
+                                }, openDiscussion);
+                            }
+                            return;
+                        }
 
                         // Trigger Popup Modal for Rework, QC, and Design Completed notifications!
                         if (isAlertNotif) {
@@ -56806,6 +57068,7 @@ async function openNewGroupModal() {
                             }
                         }
                     });
+                    isFirstLoad = false;
                 });
             }
 
