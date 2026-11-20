@@ -91,13 +91,15 @@
     }
 
     function isJiraKey(id) {
-        return /^[A-Z][A-Z0-9]+-\d+$/.test(String(id || '').trim().toUpperCase()) &&
-            !/^(M|LEARN|SHOOT)-/i.test(String(id || '').trim());
+        const s = String(id || '').trim();
+        return /^[A-Z][A-Z0-9]+-\d+$/.test(s.toUpperCase()) &&
+            !/^(M|LEARN|SHOOT|DISC|INT)-/i.test(s) &&
+            !/^[A-Z]{3,4}-\d{2}-\d+$/i.test(s);
     }
 
     function isInternalTaskObj(t, taskId) {
         const id = String(taskId || (t && (t.id || t.taskId)) || '').toUpperCase().trim();
-        if (id.startsWith('M-') || id.startsWith('LEARN-')) return true;
+        if (id.startsWith('M-') || id.startsWith('LEARN-') || /^[A-Z]{3,4}-\d{2}-\d+$/i.test(id)) return true;
         if (t) {
             if (t.manual === true || t.manual === 'true' || t.internal === true || t.internal === 'true') return true;
             if (String(t.taskType || '').toLowerCase() === 'internal') return true;

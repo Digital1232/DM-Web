@@ -8315,9 +8315,15 @@
                                     <h4
                                         class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
                                         Conversation Participants</h4>
-                                    <span id="chat-members-tab-count"
-                                        class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0
-                                        members</span>
+                                    <div class="flex items-center gap-2">
+                                        <span id="chat-members-tab-count"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0
+                                            members</span>
+                                        <button id="chat-members-edit-btn" type="button" onclick="openEditGroupModal(activeConvId)"
+                                            class="hidden items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            <iconify-icon icon="solar:user-plus-bold" width="14"></iconify-icon> Edit / Remove Members
+                                        </button>
+                                    </div>
                                 </div>
                                 <div id="chat-members-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                             </div>
@@ -17319,6 +17325,91 @@
             }
             window.isSameTaskId = isSameTaskId;
 
+            function isInternalTaskId(id) {
+                if (!id) return false;
+                const str = String(id).toUpperCase().trim();
+                if (
+                    str.startsWith('M-') ||
+                    str.startsWith('A-') ||
+                    str.startsWith('LEARN-') ||
+                    str.startsWith('MP-') ||
+                    str.startsWith('DISC-') ||
+                    str.startsWith('P-') ||
+                    str.startsWith('INT-') ||
+                    str.startsWith('STRAT-')
+                ) {
+                    return true;
+                }
+                // Monthly internal task key format: e.g. NOV-26-001, DEC-26-002
+                return /^[A-Z]{3,4}-\d{2}-\d+$/i.test(str);
+            }
+            window.isInternalTaskId = isInternalTaskId;
+
+            const INTERNAL_TASK_MONTH_CODES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+            async function getNextInternalTaskId(createdDate = new Date()) {
+                const d = (createdDate instanceof Date && !isNaN(createdDate.getTime())) ? createdDate : new Date(createdDate || Date.now());
+                const m = INTERNAL_TASK_MONTH_CODES[d.getMonth()] || 'NOV';
+                const yy = String(d.getFullYear()).slice(-2);
+                const prefix = `${m}-${yy}-`;
+                const regex = new RegExp(`^${m}-${yy}-(\\d+)$`, 'i');
+
+                let maxSeq = 0;
+
+                // Scan all available in-memory task lists
+                const allTaskLists = [
+                    ...(Array.isArray(tasks) ? tasks : []),
+                    ...(typeof window !== 'undefined' && Array.isArray(window.tasks) ? window.tasks : []),
+                    ...(typeof window !== 'undefined' && Array.isArray(window.manualTasks) ? window.manualTasks : []),
+                    ...(typeof window !== 'undefined' && Array.isArray(window.internalTasks) ? window.internalTasks : [])
+                ];
+
+                const seenIds = new Set();
+                for (const t of allTaskLists) {
+                    if (!t) continue;
+                    const id = String(t.id || t.taskId || '').trim();
+                    if (!id || seenIds.has(id)) continue;
+                    seenIds.add(id);
+                    const match = id.match(regex);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (!isNaN(num) && num > maxSeq) {
+                            maxSeq = num;
+                        }
+                    }
+                }
+
+                // Also check Firebase RTDB counter if available
+                try {
+                    if (typeof db !== 'undefined' && typeof ref === 'function' && typeof get === 'function') {
+                        const snap = await get(ref(db, `worksync/counters/internal_tasks/${m}-${yy}`));
+                        if (snap && snap.exists()) {
+                            const fbCount = parseInt(snap.val(), 10);
+                            if (!isNaN(fbCount) && fbCount > maxSeq) {
+                                maxSeq = fbCount;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[InternalTaskId] Failed to check Firebase counter:', e);
+                }
+
+                const nextSeq = maxSeq + 1;
+                const nextId = `${prefix}${String(nextSeq).padStart(3, '0')}`;
+
+                // Persist updated counter in Firebase asynchronously
+                try {
+                    if (typeof db !== 'undefined' && typeof ref === 'function' && typeof set === 'function') {
+                        set(ref(db, `worksync/counters/internal_tasks/${m}-${yy}`), nextSeq).catch(() => {});
+                    }
+                } catch (e) {
+                    // non-blocking
+                }
+
+                return nextId;
+            }
+            window.getNextInternalTaskId = getNextInternalTaskId;
+
             // Immediate 0ms synchronous restore so activeTaskId is NEVER null at any point of startup
             try {
                 const _rawActive = localStorage.getItem('worksync_active_task');
@@ -18165,7 +18256,7 @@
                 const reviewNumber = previousReviews.length + 1;
 
                 const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                const isManualTask = task.manual || String(task.id).startsWith('M-') || String(task.id).startsWith('A-') || String(task.id).startsWith('P-');
+                const isManualTask = task.manual || isInternalTaskId(task.id);
                 if (isManualTask) {
                     document.getElementById('qc-task-id').textContent = `${task.id} (Review #${reviewNumber})`;
                 } else {
@@ -18507,7 +18598,7 @@
                 list.innerHTML = visible.map(r => {
                     const scoreColor = r.qcScore >= 85 ? 'text-emerald-600' : r.qcScore >= 60 ? 'text-amber-500' : 'text-rose-500';
                     const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                    const isManualReport = r.manual || String(r.taskId || '').startsWith('M-') || String(r.taskId || '').startsWith('A-') || String(r.taskId || '').startsWith('P-');
+                    const isManualReport = r.manual || isInternalTaskId(r.taskId);
                     const taskIdHtml = isManualReport
                         ? `<span class="text-indigo-600 font-mono mr-2">${escapeHtml(r.taskId || '')}</span>`
                         : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(r.taskId)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="text-indigo-600 hover:text-indigo-800 hover:underline font-mono inline-flex items-center gap-0.5 mr-2 cursor-pointer" title="Open Jira Task Details">${escapeHtml(r.taskId || '')} <iconify-icon icon="solar:external-link-linear" width="10"></iconify-icon></a>`;
@@ -18961,7 +19052,7 @@
                 if (!issueKey || !commentText) return false;
                 try {
                     // Post comment if issue is a Jira task key (e.g. JIRA-123 or AUG-1007)
-                    if (issueKey.includes('-') && !issueKey.startsWith('M-') && !issueKey.startsWith('A-') && !issueKey.startsWith('P-') && !issueKey.startsWith('LEARN-') && !issueKey.startsWith('DISC-')) {
+                    if (issueKey.includes('-') && !isInternalTaskId(issueKey)) {
                         const jiraUrl = `${JIRA.host}/rest/api/2/issue/${encodeURIComponent(issueKey)}/comment`;
                         const res = await jiraRequest(jiraUrl, 'post', { body: commentText });
                         if (res && res.success !== false) {
@@ -19364,7 +19455,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 const jiraDomain = (typeof JIRA !== 'undefined' && JIRA.domain) ? JIRA.domain : 'vilpowerdigitalmarketing.atlassian.net';
-                const isManualReportTask = report.manual || String(report.taskId || '').startsWith('M-') || String(report.taskId || '').startsWith('A-') || String(report.taskId || '').startsWith('P-');
+                const isManualReportTask = report.manual || isInternalTaskId(report.taskId);
                 const reportTaskIdHtml = isManualReportTask
                     ? escapeHtml(report.taskId)
                     : `<a href="https://${jiraDomain}/browse/${encodeURIComponent(report.taskId)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 cursor-pointer" title="Open in Jira">${escapeHtml(report.taskId)} <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon></a>`;
@@ -29022,6 +29113,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             function getTaskCreatedDate(task) {
                 if (task.created) return new Date(task.created);
+                if (task.createdAt) return new Date(task.createdAt);
                 if (task.id && task.id.startsWith('M-')) {
                     const ts = parseInt(task.id.slice(2));
                     if (!isNaN(ts)) return new Date(ts);
@@ -30141,7 +30233,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function isJiraCloudTask(task) {
-                return task && !task.manual && /^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '');
+                return task && !task.manual && !isInternalTaskId(task.id || task.taskId) && /^[A-Z][A-Z0-9]*-\d+$/i.test(task.id || '');
             }
 
             function applyLocalTaskAssignee(taskId, userEmail, accountId = '') {
@@ -32498,7 +32590,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function isInternalTask(t) {
                 if (!t) return false;
                 const tId = String(t.id || t.taskId || '').toUpperCase().trim();
-                if (tId.startsWith('M-') || tId.startsWith('A-') || tId.startsWith('LEARN-') || tId.startsWith('MP-') || tId.startsWith('DISC-') || tId.startsWith('P-')) return true;
+                if (isInternalTaskId(tId)) return true;
                 if (t?.manual === true || t?.manual === 'true' || String(t?.taskType || '').toLowerCase() === 'internal' || t?.internal === true || t?.internal === 'true') return true;
                 return typeof isJiraCloudTask === 'function' ? !isJiraCloudTask(t) : false;
             }
@@ -36769,7 +36861,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             ${task ? `
                                 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
                                     <div class="flex items-center gap-2 mb-2">
-                                        <span class="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">${task.taskId.startsWith('M-') ? escapeHtml(task.taskId) : `<a href="https://${JIRA.domain}/browse/${encodeURIComponent(task.taskId)}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors" title="Open in Jira">${escapeHtml(task.taskId)}</a>`}</span>
+                                        <span class="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">${(task.manual || isInternalTaskId(task.taskId)) ? escapeHtml(task.taskId) : `<a href="https://${JIRA.domain}/browse/${encodeURIComponent(task.taskId)}" target="_blank" class="hover:underline hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors" title="Open in Jira">${escapeHtml(task.taskId)}</a>`}</span>
                                         ${task.status ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusClass(task.status)}">${escapeHtml(task.status)}</span>` : ''}
                                     </div>
                                     <p class="text-sm font-bold text-slate-900 dark:text-white mb-3 line-clamp-2">${escapeHtml(task.taskDesc || 'Task details unavailable')}</p>
@@ -37865,6 +37957,41 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 return false;
             }
             window.isGroupMember = isGroupMember;
+
+            function isExplicitGroupMember(c, userOrEmail) {
+                if (!c || !c.members) return false;
+                const email = (typeof userOrEmail === 'string' ? userOrEmail : userOrEmail?.email || '').toLowerCase().trim();
+                if (!email) return false;
+                const key = (typeof eKey === 'function' ? eKey(email) : email.replace(/[@.]/g, '_'));
+                const norm = email.replace(/[@.]/g, '_');
+
+                if (Array.isArray(c.members)) {
+                    return c.members.some(m => {
+                        const sm = String(m || '').toLowerCase().trim();
+                        return sm === email || sm === key || sm === norm;
+                    });
+                }
+                if (typeof c.members === 'object') {
+                    if (c.members[key] || c.members[email] || c.members[norm]) return true;
+                    return Object.keys(c.members).some(k => {
+                        const lk = k.toLowerCase().trim();
+                        return lk === key || lk === email || lk === norm;
+                    });
+                }
+                return false;
+            }
+            window.isExplicitGroupMember = isExplicitGroupMember;
+
+            function canManageGroup(group, user = currentUser) {
+                if (!group || !user) return false;
+                if (typeof isAdmin === 'function' && isAdmin(user)) return true;
+                if (typeof isManager === 'function' && isManager(user)) return true;
+                const userEmail = String(user.email || '').toLowerCase().trim();
+                const creatorEmail = String(group.createdBy || '').toLowerCase().trim();
+                if (creatorEmail && creatorEmail === userEmail) return true;
+                return isGroupMember(group, user);
+            }
+            window.canManageGroup = canManageGroup;
 
             function registerOnline() {
                 if (!db || !currentUser) return;
@@ -39642,7 +39769,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     convCreator = cachedConv.createdBy;
                     if (allUsersMap && allUsersMap.size) {
                         const allUsers = Array.from(allUsersMap.values());
-                        activeGroupMembers = allUsers.filter(u => isGroupMember(cachedConv, u));
+                        activeGroupMembers = allUsers.filter(u => isExplicitGroupMember(cachedConv, u));
                     }
                     if (statusEl) statusEl.textContent = `${activeGroupMembers.length || Object.keys(cachedConv.members || {}).length || 1} members`;
                     if (onlineDot) onlineDot.classList.add('hidden');
@@ -39722,17 +39849,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 const actions = document.getElementById('chat-conv-actions');
                 if (actions) {
-                    const isCreator = convCreator === (currentUser && currentUser.email);
-                    if (type === 'group' && (isAdmin() || isCreator)) {
+                    const canEdit = type === 'group' && canManageGroup(cachedConv, currentUser);
+                    if (canEdit) {
+                        const canDelete = isAdmin() || (cachedConv.createdBy && currentUser?.email && String(cachedConv.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim());
                         actions.innerHTML = `
                         <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
                             <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
                             <span>Edit Group</span>
                         </button>
+                        ${canDelete ? `
                         <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
                             <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
                             <span>Delete Group</span>
-                        </button>
+                        </button>` : ''}
                     `;
                     } else {
                         actions.innerHTML = '';
@@ -39747,19 +39876,21 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             convCreator = conv.createdBy;
                             if (allUsersMap && allUsersMap.size) {
                                 const allUsers = Array.from(allUsersMap.values());
-                                activeGroupMembers = allUsers.filter(u => isGroupMember(conv, u));
+                                activeGroupMembers = allUsers.filter(u => isExplicitGroupMember(conv, u));
                             }
                             if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
-                            if (actions && (isAdmin() || convCreator === (currentUser && currentUser.email))) {
+                            if (actions && canManageGroup(conv, currentUser)) {
+                                const canDelete = isAdmin() || (conv.createdBy && currentUser?.email && String(conv.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim());
                                 actions.innerHTML = `
                                 <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
                                     <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
                                     <span>Edit Group</span>
                                 </button>
+                                ${canDelete ? `
                                 <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
                                     <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
                                     <span>Delete Group</span>
-                                </button>
+                                </button>` : ''}
                             `;
                             }
                         }
@@ -40179,6 +40310,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (countBadge) countBadge.textContent = `${members.length} members`;
 
+                const editBtn = document.getElementById('chat-members-edit-btn');
+                const isGroup = activeConvId && (activeConvId.startsWith('group_') || (typeof chatConversations !== 'undefined' && chatConversations[activeConvId]?.type === 'group'));
+                const convObj = (typeof chatConversations !== 'undefined' && chatConversations[activeConvId]) || {};
+                const canManage = isGroup && (typeof canManageGroup === 'function' ? canManageGroup(convObj, currentUser) : true);
+
+                if (editBtn) {
+                    editBtn.classList.toggle('hidden', !canManage);
+                    editBtn.classList.toggle('inline-flex', canManage);
+                }
+
                 if (!members.length) {
                     grid.innerHTML = `<div class="col-span-full py-12 text-center text-xs text-slate-400 italic">No members found.</div>`;
                     return;
@@ -40196,10 +40337,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             <p class="text-xs font-black text-slate-900 dark:text-white truncate">${escapeHtml(u.name || u.email)}</p>
                             <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')} · ${escapeHtml(u.email || '')}</p>
                         </div>
-                        ${u.email !== currentUser.email ? `
-                        <button onclick="openDm('${u.email}')" class="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-xl transition-colors shrink-0" title="Direct Message">
-                            <iconify-icon icon="solar:chat-round-line-bold" width="16"></iconify-icon>
-                        </button>` : ''}
+                        <div class="flex items-center gap-1 shrink-0">
+                            ${u.email !== currentUser.email ? `
+                            <button onclick="openDm('${u.email}')" class="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-xl transition-colors" title="Direct Message">
+                                <iconify-icon icon="solar:chat-round-line-bold" width="16"></iconify-icon>
+                            </button>` : ''}
+                            ${(isGroup && canManage && u.email !== currentUser.email) ? `
+                            <button onclick="removeGroupMember('${activeConvId}', '${escapeHtml(u.email)}')" class="p-2 text-rose-500 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 hover:text-rose-700 rounded-xl transition-colors" title="Remove from Group">
+                                <iconify-icon icon="solar:user-cross-bold" width="16"></iconify-icon>
+                            </button>` : ''}
+                        </div>
                     </div>`;
                 }).join('');
             }
@@ -42100,9 +42247,8 @@ async function openNewGroupModal() {
             async function openEditGroupModal(convId) {
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 if (!snap.exists()) return toast('Group not found', 'error');
-                const group = snap.val();
-                const isCreator = group.createdBy === currentUser.email;
-                if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can edit this group', 'error');
+                const group = snap.val() || {};
+                if (!canManageGroup(group, currentUser)) return toast('Only group members, managers, or admins can edit this group', 'error');
 
                 document.getElementById('edit-group-id').value = convId;
                 document.getElementById('edit-group-name-input').value = group.name || '';
@@ -42129,11 +42275,11 @@ async function openNewGroupModal() {
                 }
 
                 list.innerHTML = allMembers.map(u => {
-                    const isMember = isGroupMember(group, u);
+                    const isMember = isExplicitGroupMember(group, u);
                     return `
-                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-xl cursor-pointer transition-all">
-                    <input type="checkbox" value="${u.email}" class="w-4 h-4 rounded-md text-indigo-600" ${isMember ? 'checked' : ''}>
-                    <span class="text-xs font-bold text-slate-700">${escapeHtml(u.name || u.email)}</span>
+                <label class="flex items-center gap-3 p-2 hover:bg-white dark:hover:bg-slate-700/60 rounded-xl cursor-pointer transition-all">
+                    <input type="checkbox" value="${escapeHtml(u.email)}" class="w-4 h-4 rounded-md text-indigo-600" ${isMember ? 'checked' : ''}>
+                    <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(u.name || u.email)}</span>
                     <span class="text-[10px] text-slate-400 ml-auto">${escapeHtml(u.role || 'Member')}</span>
                 </label>`;
                 }).join('');
@@ -42141,14 +42287,17 @@ async function openNewGroupModal() {
 
             async function updateGroup() {
                 const convId = document.getElementById('edit-group-id').value;
+                if (!convId) return;
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 const group = snap.val() || {};
-                const isCreator = group.createdBy === currentUser.email;
-                if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can edit this group', 'error');
+                if (!canManageGroup(group, currentUser)) return toast('Only group members, managers, or admins can edit this group', 'error');
                 const name = document.getElementById('edit-group-name-input').value.trim();
                 if (!name) return toast('Enter group name', 'error');
                 const members = {};
-                [...document.querySelectorAll('#edit-group-members-list input:checked')].forEach(i => members[eKey(i.value)] = true);
+                [...document.querySelectorAll('#edit-group-members-list input:checked')].forEach(i => {
+                    const em = i.value.trim();
+                    if (em) members[eKey(em)] = true;
+                });
                 if (Object.keys(members).length < 1) return toast('Select at least one member', 'error');
 
                 const picImg = document.getElementById('edit-group-pic');
@@ -42157,21 +42306,44 @@ async function openNewGroupModal() {
                 try {
                     const updates = {
                         name,
-                        members,
                         memberCount: Object.keys(members).length,
                     };
                     if (newPic) updates.profilePicture = newPic;
 
+                    // 1. Purge removed members by overwriting members node directly with set
+                    await set(ref(db, `worksync/conversations/${convId}/members`), members);
+                    // 2. Update conversation metadata
                     await update(ref(db, `worksync/conversations/${convId}`), updates);
+
+                    // Update in-memory conversations cache
+                    if (typeof chatConversations !== 'undefined' && chatConversations[convId]) {
+                        chatConversations[convId].name = name;
+                        chatConversations[convId].members = members;
+                        chatConversations[convId].memberCount = Object.keys(members).length;
+                        if (newPic) chatConversations[convId].profilePicture = newPic;
+                    }
+
                     document.getElementById('editGroupModal').close();
-                    toast('Group updated', 'success');
+                    toast('Group updated successfully', 'success');
+
                     if (activeConvId === convId) {
                         document.getElementById('chat-conv-name').textContent = name;
                         const avatarEl = document.getElementById('chat-conv-avatar');
-                        if (updates.profilePicture || picImg.src.startsWith('data:')) {
+                        if (updates.profilePicture || (picImg && picImg.src && picImg.src.startsWith('data:'))) {
                             avatarEl.innerHTML = `<img src="${updates.profilePicture || picImg.src}" class="w-full h-full rounded-xl object-cover">`;
                         } else {
                             avatarEl.textContent = name.charAt(0);
+                        }
+
+                        if (allUsersMap && allUsersMap.size) {
+                            const allUsers = Array.from(allUsersMap.values());
+                            activeGroupMembers = allUsers.filter(u => isExplicitGroupMember({ members }, u));
+                        }
+                        const statusEl = document.getElementById('chat-conv-status');
+                        if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
+
+                        if (typeof renderChatMembersList === 'function' && activeChatSubTab === 'members') {
+                            renderChatMembersList();
                         }
                     }
                 } catch (err) {
@@ -42180,10 +42352,68 @@ async function openNewGroupModal() {
                 }
             }
 
+            async function removeGroupMember(convId, memberEmail) {
+                if (!convId || !memberEmail) return;
+                const snap = await get(ref(db, `worksync/conversations/${convId}`));
+                if (!snap.exists()) return toast('Group not found', 'error');
+                const group = snap.val() || {};
+                if (!canManageGroup(group, currentUser)) {
+                    return toast('Only group members, managers, or admins can modify this group', 'error');
+                }
+
+                const userObj = (allUsersMap && (allUsersMap.get(memberEmail.toLowerCase()) || allUsersMap.get(eKey(memberEmail)))) || { name: memberEmail };
+                const memberName = userObj.name || memberEmail;
+
+                if (!confirm(`Are you sure you want to remove ${memberName} from this group?`)) return;
+
+                try {
+                    const memKey = eKey(memberEmail);
+                    const normKey = memberEmail.replace(/[@.]/g, '_');
+
+                    const currentMembers = Object.assign({}, group.members || {});
+                    delete currentMembers[memKey];
+                    delete currentMembers[normKey];
+                    delete currentMembers[memberEmail];
+                    delete currentMembers[memberEmail.toLowerCase()];
+
+                    const remainingCount = Object.keys(currentMembers).length;
+                    if (remainingCount < 1) {
+                        return toast('A group must have at least one member', 'error');
+                    }
+
+                    // Directly overwrite members in RTDB to guarantee removal
+                    await set(ref(db, `worksync/conversations/${convId}/members`), currentMembers);
+                    await update(ref(db, `worksync/conversations/${convId}`), { memberCount: remainingCount });
+
+                    if (typeof chatConversations !== 'undefined' && chatConversations[convId]) {
+                        chatConversations[convId].members = currentMembers;
+                        chatConversations[convId].memberCount = remainingCount;
+                    }
+
+                    if (allUsersMap && allUsersMap.size) {
+                        const allUsers = Array.from(allUsersMap.values());
+                        activeGroupMembers = allUsers.filter(u => isExplicitGroupMember({ members: currentMembers }, u));
+                    }
+
+                    const statusEl = document.getElementById('chat-conv-status');
+                    if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
+
+                    if (typeof renderChatMembersList === 'function') {
+                        renderChatMembersList();
+                    }
+
+                    toast(`${memberName} removed from group`, 'success');
+                } catch (err) {
+                    console.error('Failed to remove member:', err);
+                    toast('Failed to remove member: ' + err.message, 'error');
+                }
+            }
+            window.removeGroupMember = removeGroupMember;
+
             async function deleteGroup(convId) {
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 const group = snap.val() || {};
-                const isCreator = group.createdBy === currentUser.email;
+                const isCreator = group.createdBy && currentUser?.email && String(group.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim();
                 if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can delete this group', 'error');
                 if (!confirm('Are you sure you want to delete this group permanently?')) return;
                 try {
@@ -53542,7 +53772,7 @@ async function openNewGroupModal() {
                         }
                     } else {
                         if (!client) { toast('Select a client', 'error'); return; }
-                        const taskId = 'M-' + Date.now();
+                        const taskId = await getNextInternalTaskId(new Date());
                         const task = {
                             id: taskId,
                             desc: title,
@@ -57342,9 +57572,9 @@ async function openNewGroupModal() {
                         <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-3">
                             <div class="flex items-center gap-2">
                                 <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60">${escapeHtml(taskId)}</span>
-                                <a href="https://${typeof JIRA !== 'undefined' && JIRA.domain ? JIRA.domain : 'jira.com'}/browse/${taskId}" target="_blank" class="text-[11px] font-bold text-slate-400 hover:text-indigo-600 inline-flex items-center gap-1 transition-colors" title="Open Jira Issue">
+                                ${(taskObj?.manual || isInternalTaskId(taskId)) ? '' : `<a href="https://${typeof JIRA !== 'undefined' && JIRA.domain ? JIRA.domain : 'jira.com'}/browse/${taskId}" target="_blank" class="text-[11px] font-bold text-slate-400 hover:text-indigo-600 inline-flex items-center gap-1 transition-colors" title="Open Jira Issue">
                                     Open in Jira <iconify-icon icon="solar:external-link-linear" width="12"></iconify-icon>
-                                </a>
+                                </a>`}
                             </div>
                             <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${stStyle.bg} ${stStyle.text}">${escapeHtml(status)}</span>
                         </div>
@@ -61842,7 +62072,7 @@ async function openNewGroupModal() {
             window.editMessage = editMessage; window.deleteMessage = deleteMessage; window.unsendMessage = unsendMessage; window.toggleReaction = toggleReaction; window.replyToMessage = replyToMessage; window.cancelReply = cancelReply;
             window.jumpToChatMessage = jumpToChatMessage; window.highlightChatMessage = highlightChatMessage;
             window.openNewGroupModal = openNewGroupModal; window.createGroup = createGroup;
-            window.openEditGroupModal = openEditGroupModal; window.updateGroup = updateGroup; window.deleteGroup = deleteGroup; window.processGroupPhoto = processGroupPhoto; window.togglePinChat = togglePinChat;
+            window.openEditGroupModal = openEditGroupModal; window.updateGroup = updateGroup; window.deleteGroup = deleteGroup; window.removeGroupMember = removeGroupMember; window.canManageGroup = canManageGroup; window.isExplicitGroupMember = isExplicitGroupMember; window.processGroupPhoto = processGroupPhoto; window.togglePinChat = togglePinChat;
             window.sendAnnouncement = sendAnnouncement; window.deleteAnnouncement = deleteAnnouncement;
             window.showAnnouncementPopupModal = showAnnouncementPopupModal; window.closeAnnouncementPopupModal = closeAnnouncementPopupModal;
             window.showAnnouncementPopupModalById = showAnnouncementPopupModalById; window.onAnnouncementImageUrlInput = onAnnouncementImageUrlInput;

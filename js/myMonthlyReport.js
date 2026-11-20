@@ -576,7 +576,7 @@
         const isInternalFn = typeof window.isInternalTask === 'function' ? window.isInternalTask : (t => {
             if (!t) return false;
             const tId = String(t.id || t.taskId || '').toUpperCase().trim();
-            if (tId.startsWith('M-') || tId.startsWith('LEARN-')) return true;
+            if (tId.startsWith('M-') || tId.startsWith('LEARN-') || /^[A-Z]{3,4}-\d{2}-\d+$/i.test(tId) || (typeof window.isInternalTaskId === 'function' && window.isInternalTaskId(tId))) return true;
             return t.manual === true || t.manual === 'true' || t.taskType === 'internal';
         });
 
@@ -770,7 +770,7 @@
                     candidateUserTasks.push(taskByIdMap.get(tIdLower));
                     candidateTaskIds.add(tIdLower);
                 } else {
-                    const isInternal = tId.startsWith('M-') || log.taskType === 'internal';
+                    const isInternal = tId.startsWith('M-') || /^[A-Z]{3,4}-\d{2}-\d+$/i.test(tId) || (typeof window.isInternalTaskId === 'function' && window.isInternalTaskId(tId)) || log.taskType === 'internal';
                     const dashIdx = tId.indexOf('-');
                     const pKey = dashIdx !== -1 ? tId.substring(0, dashIdx).toUpperCase() : '';
                     const syntheticTask = {
@@ -3884,7 +3884,7 @@
         // 6. Internal / Operations classification
         if (!client) {
             const tId = String(log?.taskId || task?.id || '').trim().toUpperCase();
-            const isInternal = tId.startsWith('M-') || tId.startsWith('LEARN-') || log?.taskType === 'internal' || task?.manual || task?.taskType === 'internal';
+            const isInternal = tId.startsWith('M-') || tId.startsWith('LEARN-') || /^[A-Z]{3,4}-\d{2}-\d+$/i.test(tId) || (typeof window.isInternalTaskId === 'function' && window.isInternalTaskId(tId)) || log?.taskType === 'internal' || task?.manual || task?.taskType === 'internal';
             if (isInternal) {
                 client = 'Internal / Operations';
             } else {

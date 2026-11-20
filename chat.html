@@ -532,9 +532,15 @@
                                     <h4
                                         class="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
                                         Conversation Participants</h4>
-                                    <span id="chat-members-tab-count"
-                                        class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0
-                                        members</span>
+                                    <div class="flex items-center gap-2">
+                                        <span id="chat-members-tab-count"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">0
+                                            members</span>
+                                        <button id="chat-members-edit-btn" type="button" onclick="openEditGroupModal(activeConvId)"
+                                            class="hidden items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            <iconify-icon icon="solar:user-plus-bold" width="14"></iconify-icon> Edit / Remove Members
+                                        </button>
+                                    </div>
                                 </div>
                                 <div id="chat-members-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                             </div>
@@ -870,6 +876,41 @@
             return false;
         }
         window.isGroupMember = isGroupMember;
+
+        function isExplicitGroupMember(c, userOrEmail) {
+            if (!c || !c.members) return false;
+            const email = (typeof userOrEmail === 'string' ? userOrEmail : userOrEmail?.email || '').toLowerCase().trim();
+            if (!email) return false;
+            const key = (typeof eKey === 'function' ? eKey(email) : email.replace(/[@.]/g, '_'));
+            const norm = email.replace(/[@.]/g, '_');
+
+            if (Array.isArray(c.members)) {
+                return c.members.some(m => {
+                    const sm = String(m || '').toLowerCase().trim();
+                    return sm === email || sm === key || sm === norm;
+                });
+            }
+            if (typeof c.members === 'object') {
+                if (c.members[key] || c.members[email] || c.members[norm]) return true;
+                return Object.keys(c.members).some(k => {
+                    const lk = k.toLowerCase().trim();
+                    return lk === key || lk === email || lk === norm;
+                });
+            }
+            return false;
+        }
+        window.isExplicitGroupMember = isExplicitGroupMember;
+
+        function canManageGroup(group, user = currentUser) {
+            if (!group || !user) return false;
+            if (typeof isAdmin === 'function' && isAdmin(user)) return true;
+            if (typeof isManager === 'function' && isManager(user)) return true;
+            const userEmail = String(user.email || '').toLowerCase().trim();
+            const creatorEmail = String(group.createdBy || '').toLowerCase().trim();
+            if (creatorEmail && creatorEmail === userEmail) return true;
+            return isGroupMember(group, user);
+        }
+        window.canManageGroup = canManageGroup;
 
         function getChatSafeUsersList() {
             let list = [];
@@ -3102,7 +3143,7 @@ let AVATAR_MAX_PX = 256;
                     convCreator = cachedConv.createdBy;
                     if (allUsersMap && allUsersMap.size) {
                         const allUsers = Array.from(allUsersMap.values());
-                        activeGroupMembers = allUsers.filter(u => isGroupMember(cachedConv, u));
+                        activeGroupMembers = allUsers.filter(u => isExplicitGroupMember(cachedConv, u));
                     }
                     if (statusEl) statusEl.textContent = `${activeGroupMembers.length || Object.keys(cachedConv.members || {}).length || 1} members`;
                     if (onlineDot) onlineDot.classList.add('hidden');
@@ -3182,17 +3223,19 @@ let AVATAR_MAX_PX = 256;
 
                 const actions = document.getElementById('chat-conv-actions');
                 if (actions) {
-                    const isCreator = convCreator === (currentUser && currentUser.email);
-                    if (type === 'group' && (isAdmin() || isCreator)) {
+                    const canEdit = type === 'group' && canManageGroup(cachedConv, currentUser);
+                    if (canEdit) {
+                        const canDelete = isAdmin() || (cachedConv.createdBy && currentUser?.email && String(cachedConv.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim());
                         actions.innerHTML = `
                         <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
                             <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
                             <span>Edit Group</span>
                         </button>
+                        ${canDelete ? `
                         <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
                             <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
                             <span>Delete Group</span>
-                        </button>
+                        </button>` : ''}
                     `;
                     } else {
                         actions.innerHTML = '';
@@ -3207,19 +3250,21 @@ let AVATAR_MAX_PX = 256;
                             convCreator = conv.createdBy;
                             if (allUsersMap && allUsersMap.size) {
                                 const allUsers = Array.from(allUsersMap.values());
-                                activeGroupMembers = allUsers.filter(u => isGroupMember(conv, u));
+                                activeGroupMembers = allUsers.filter(u => isExplicitGroupMember(conv, u));
                             }
                             if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
-                            if (actions && (isAdmin() || convCreator === (currentUser && currentUser.email))) {
+                            if (actions && canManageGroup(conv, currentUser)) {
+                                const canDelete = isAdmin() || (conv.createdBy && currentUser?.email && String(conv.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim());
                                 actions.innerHTML = `
                                 <button onclick="openEditGroupModal('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-left">
                                     <iconify-icon icon="solar:pen-bold" width="15" class="text-indigo-500"></iconify-icon>
                                     <span>Edit Group</span>
                                 </button>
+                                ${canDelete ? `
                                 <button onclick="deleteGroup('${convId}'); toggleChatOptionsMenu();" class="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-rose-50 text-rose-600 dark:hover:bg-slate-700 text-left">
                                     <iconify-icon icon="solar:trash-bin-trash-bold" width="15" class="text-rose-500"></iconify-icon>
                                     <span>Delete Group</span>
-                                </button>
+                                </button>` : ''}
                             `;
                             }
                         }
@@ -3639,6 +3684,16 @@ let AVATAR_MAX_PX = 256;
 
                 if (countBadge) countBadge.textContent = `${members.length} members`;
 
+                const editBtn = document.getElementById('chat-members-edit-btn');
+                const isGroup = activeConvId && (activeConvId.startsWith('group_') || (typeof chatConversations !== 'undefined' && chatConversations[activeConvId]?.type === 'group'));
+                const convObj = (typeof chatConversations !== 'undefined' && chatConversations[activeConvId]) || {};
+                const canManage = isGroup && (typeof canManageGroup === 'function' ? canManageGroup(convObj, currentUser) : true);
+
+                if (editBtn) {
+                    editBtn.classList.toggle('hidden', !canManage);
+                    editBtn.classList.toggle('inline-flex', canManage);
+                }
+
                 if (!members.length) {
                     grid.innerHTML = `<div class="col-span-full py-12 text-center text-xs text-slate-400 italic">No members found.</div>`;
                     return;
@@ -3656,10 +3711,16 @@ let AVATAR_MAX_PX = 256;
                             <p class="text-xs font-black text-slate-900 dark:text-white truncate">${escapeHtml(u.name || u.email)}</p>
                             <p class="text-[10px] text-slate-400 truncate">${escapeHtml(u.role || 'Member')} · ${escapeHtml(u.email || '')}</p>
                         </div>
-                        ${u.email !== currentUser.email ? `
-                        <button onclick="openDm('${u.email}')" class="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-xl transition-colors shrink-0" title="Direct Message">
-                            <iconify-icon icon="solar:chat-round-line-bold" width="16"></iconify-icon>
-                        </button>` : ''}
+                        <div class="flex items-center gap-1 shrink-0">
+                            ${u.email !== currentUser.email ? `
+                            <button onclick="openDm('${u.email}')" class="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-xl transition-colors" title="Direct Message">
+                                <iconify-icon icon="solar:chat-round-line-bold" width="16"></iconify-icon>
+                            </button>` : ''}
+                            ${(isGroup && canManage && u.email !== currentUser.email) ? `
+                            <button onclick="removeGroupMember('${activeConvId}', '${escapeHtml(u.email)}')" class="p-2 text-rose-500 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 hover:text-rose-700 rounded-xl transition-colors" title="Remove from Group">
+                                <iconify-icon icon="solar:user-cross-bold" width="16"></iconify-icon>
+                            </button>` : ''}
+                        </div>
                     </div>`;
                 }).join('');
             }
@@ -5451,7 +5512,7 @@ let AVATAR_MAX_PX = 256;
                 'handleChatDragLeave', 'handleChatDragOver', 'handleChatDrop', 'handleMsgInput',
                 'handleMsgKeyDown', 'handleMsgPaste', 'loadMoreChatMessages', 'openChatImageGallery',
                 'openEditGroupModal', 'openGoogleDriveLinkModal', 'openNewGroupModal', 'processGroupPhoto',
-                'removeStagedAttachment', 'replyToMessage', 'resetChatImageZoom', 'selectMention',
+                'removeGroupMember', 'removeStagedAttachment', 'replyToMessage', 'resetChatImageZoom', 'selectMention',
                 'sendMessage', 'stepChatImageGallery', 'toggleReaction', 'unsendMessage', 'updateGroup',
                 'uploadChatAttachment', 'zoomChatImage'
             ].forEach(n => {
@@ -5544,9 +5605,8 @@ let AVATAR_MAX_PX = 256;
             async function openEditGroupModal(convId) {
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 if (!snap.exists()) return toast('Group not found', 'error');
-                const group = snap.val();
-                const isCreator = group.createdBy === currentUser.email;
-                if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can edit this group', 'error');
+                const group = snap.val() || {};
+                if (!canManageGroup(group, currentUser)) return toast('Only group members, managers, or admins can edit this group', 'error');
 
                 document.getElementById('edit-group-id').value = convId;
                 document.getElementById('edit-group-name-input').value = group.name || '';
@@ -5560,12 +5620,6 @@ let AVATAR_MAX_PX = 256;
                 document.getElementById('editGroupModal').showModal();
 
                 let people = getChatSafeUsersList();
-                try {
-                    // No need to fetch again, allUsersMap is already merged
-                } catch (err) {
-                    console.warn('Could not load Firebase users for group members:', err);
-                }
-
                 const allMembers = people.filter(u => u.email);
                 if (!allMembers.length) {
                     list.innerHTML = `<p class="p-3 text-center text-xs text-slate-400 italic">No members available.</p>`;
@@ -5573,11 +5627,11 @@ let AVATAR_MAX_PX = 256;
                 }
 
                 list.innerHTML = allMembers.map(u => {
-                    const isMember = isGroupMember(group, u);
+                    const isMember = isExplicitGroupMember(group, u);
                     return `
-                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-xl cursor-pointer transition-all">
-                    <input type="checkbox" value="${u.email}" class="w-4 h-4 rounded-md text-indigo-600" ${isMember ? 'checked' : ''}>
-                    <span class="text-xs font-bold text-slate-700">${escapeHtml(u.name || u.email)}</span>
+                <label class="flex items-center gap-3 p-2 hover:bg-white dark:hover:bg-slate-700/60 rounded-xl cursor-pointer transition-all">
+                    <input type="checkbox" value="${escapeHtml(u.email)}" class="w-4 h-4 rounded-md text-indigo-600" ${isMember ? 'checked' : ''}>
+                    <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(u.name || u.email)}</span>
                     <span class="text-[10px] text-slate-400 ml-auto">${escapeHtml(u.role || 'Member')}</span>
                 </label>`;
                 }).join('');
@@ -5585,14 +5639,17 @@ let AVATAR_MAX_PX = 256;
 
             async function updateGroup() {
                 const convId = document.getElementById('edit-group-id').value;
+                if (!convId) return;
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 const group = snap.val() || {};
-                const isCreator = group.createdBy === currentUser.email;
-                if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can edit this group', 'error');
+                if (!canManageGroup(group, currentUser)) return toast('Only group members, managers, or admins can edit this group', 'error');
                 const name = document.getElementById('edit-group-name-input').value.trim();
                 if (!name) return toast('Enter group name', 'error');
                 const members = {};
-                [...document.querySelectorAll('#edit-group-members-list input:checked')].forEach(i => members[eKey(i.value)] = true);
+                [...document.querySelectorAll('#edit-group-members-list input:checked')].forEach(i => {
+                    const em = i.value.trim();
+                    if (em) members[eKey(em)] = true;
+                });
                 if (Object.keys(members).length < 1) return toast('Select at least one member', 'error');
 
                 const picImg = document.getElementById('edit-group-pic');
@@ -5601,21 +5658,44 @@ let AVATAR_MAX_PX = 256;
                 try {
                     const updates = {
                         name,
-                        members,
                         memberCount: Object.keys(members).length,
                     };
                     if (newPic) updates.profilePicture = newPic;
 
+                    // 1. Purge removed members by overwriting members node directly with set
+                    await set(ref(db, `worksync/conversations/${convId}/members`), members);
+                    // 2. Update conversation metadata
                     await update(ref(db, `worksync/conversations/${convId}`), updates);
+
+                    // Update in-memory conversations cache
+                    if (typeof chatConversations !== 'undefined' && chatConversations[convId]) {
+                        chatConversations[convId].name = name;
+                        chatConversations[convId].members = members;
+                        chatConversations[convId].memberCount = Object.keys(members).length;
+                        if (newPic) chatConversations[convId].profilePicture = newPic;
+                    }
+
                     document.getElementById('editGroupModal').close();
-                    toast('Group updated', 'success');
+                    toast('Group updated successfully', 'success');
+
                     if (activeConvId === convId) {
                         document.getElementById('chat-conv-name').textContent = name;
                         const avatarEl = document.getElementById('chat-conv-avatar');
-                        if (updates.profilePicture || picImg.src.startsWith('data:')) {
+                        if (updates.profilePicture || (picImg && picImg.src && picImg.src.startsWith('data:'))) {
                             avatarEl.innerHTML = `<img src="${updates.profilePicture || picImg.src}" class="w-full h-full rounded-xl object-cover">`;
                         } else {
                             avatarEl.textContent = name.charAt(0);
+                        }
+
+                        if (allUsersMap && allUsersMap.size) {
+                            const allUsers = Array.from(allUsersMap.values());
+                            activeGroupMembers = allUsers.filter(u => isExplicitGroupMember({ members }, u));
+                        }
+                        const statusEl = document.getElementById('chat-conv-status');
+                        if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
+
+                        if (typeof renderChatMembersList === 'function' && activeChatSubTab === 'members') {
+                            renderChatMembersList();
                         }
                     }
                 } catch (err) {
@@ -5624,10 +5704,68 @@ let AVATAR_MAX_PX = 256;
                 }
             }
 
+            async function removeGroupMember(convId, memberEmail) {
+                if (!convId || !memberEmail) return;
+                const snap = await get(ref(db, `worksync/conversations/${convId}`));
+                if (!snap.exists()) return toast('Group not found', 'error');
+                const group = snap.val() || {};
+                if (!canManageGroup(group, currentUser)) {
+                    return toast('Only group members, managers, or admins can modify this group', 'error');
+                }
+
+                const userObj = (allUsersMap && (allUsersMap.get(memberEmail.toLowerCase()) || allUsersMap.get(eKey(memberEmail)))) || { name: memberEmail };
+                const memberName = userObj.name || memberEmail;
+
+                if (!confirm(`Are you sure you want to remove ${memberName} from this group?`)) return;
+
+                try {
+                    const memKey = eKey(memberEmail);
+                    const normKey = memberEmail.replace(/[@.]/g, '_');
+
+                    const currentMembers = Object.assign({}, group.members || {});
+                    delete currentMembers[memKey];
+                    delete currentMembers[normKey];
+                    delete currentMembers[memberEmail];
+                    delete currentMembers[memberEmail.toLowerCase()];
+
+                    const remainingCount = Object.keys(currentMembers).length;
+                    if (remainingCount < 1) {
+                        return toast('A group must have at least one member', 'error');
+                    }
+
+                    // Directly overwrite members in RTDB to guarantee removal
+                    await set(ref(db, `worksync/conversations/${convId}/members`), currentMembers);
+                    await update(ref(db, `worksync/conversations/${convId}`), { memberCount: remainingCount });
+
+                    if (typeof chatConversations !== 'undefined' && chatConversations[convId]) {
+                        chatConversations[convId].members = currentMembers;
+                        chatConversations[convId].memberCount = remainingCount;
+                    }
+
+                    if (allUsersMap && allUsersMap.size) {
+                        const allUsers = Array.from(allUsersMap.values());
+                        activeGroupMembers = allUsers.filter(u => isExplicitGroupMember({ members: currentMembers }, u));
+                    }
+
+                    const statusEl = document.getElementById('chat-conv-status');
+                    if (statusEl) statusEl.textContent = `${activeGroupMembers.length} members`;
+
+                    if (typeof renderChatMembersList === 'function') {
+                        renderChatMembersList();
+                    }
+
+                    toast(`${memberName} removed from group`, 'success');
+                } catch (err) {
+                    console.error('Failed to remove member:', err);
+                    toast('Failed to remove member: ' + err.message, 'error');
+                }
+            }
+            window.removeGroupMember = removeGroupMember;
+
             async function deleteGroup(convId) {
                 const snap = await get(ref(db, `worksync/conversations/${convId}`));
                 const group = snap.val() || {};
-                const isCreator = group.createdBy === currentUser.email;
+                const isCreator = group.createdBy && currentUser?.email && String(group.createdBy).toLowerCase().trim() === String(currentUser.email).toLowerCase().trim();
                 if (!isAdmin() && !isCreator) return toast('Only admins or the group creator can delete this group', 'error');
                 if (!confirm('Are you sure you want to delete this group permanently?')) return;
                 try {
