@@ -30818,6 +30818,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     }
                                 }
                                 if (existingTask && !replaceWithActive) {
+                                    // Protect completed tasks from being overwritten by an uncompleted duplicate
+                                    const isExistingCompleted = isDone(existingTask.status) || isInternalDone(existingTask.status) || existingTask.lastCompletedDate === todayIso();
+                                    const isIncomingCompleted = isDone(task.status) || isInternalDone(task.status) || task.lastCompletedDate === todayIso();
+                                    if (isExistingCompleted && !isIncomingCompleted) {
+                                        const existUp = Number(existingTask.updatedAt || existingTask.completedAt || 0);
+                                        const inUp = Number(task.updatedAt || 0);
+                                        if (existUp >= inUp) {
+                                            task.status = existingTask.status;
+                                            task.lastCompletedDate = existingTask.lastCompletedDate;
+                                            task.completedAt = existingTask.completedAt;
+                                        }
+                                    }
                                     Object.assign(existingTask, task);
                                     return; // Skip duplicate task object
                                 }
@@ -30832,6 +30844,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     const prev = map.get(task.id);
                     if (prev && task.isLiveStandIn && !prev.isLiveStandIn) return;
                     const base = (prev && prev.isLiveStandIn && !task.isLiveStandIn) ? {} : (prev || {});
+
+                    // Protect completed tasks from being clobbered by an uncompleted copy from another Firebase key
+                    const isPrevCompleted = isDone(base.status) || isInternalDone(base.status) || base.lastCompletedDate === todayIso();
+                    const isTaskCompleted = isDone(task.status) || isInternalDone(task.status) || task.lastCompletedDate === todayIso();
+                    if (isPrevCompleted && !isTaskCompleted) {
+                        const prevUp = Number(base.updatedAt || base.completedAt || 0);
+                        const taskUp = Number(task.updatedAt || 0);
+                        if (prevUp >= taskUp) {
+                            task.status = base.status;
+                            task.lastCompletedDate = base.lastCompletedDate;
+                            task.completedAt = base.completedAt;
+                        }
+                    }
                     const merged = { ...base, ...task };
                     if (merged.client) {
                         merged.client = resolveClientDisplay(merged.client);
@@ -32012,7 +32037,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                         // Keep status in sync if user is currently working on it AND task is not done
                         const isExistingDone = (typeof isDone === 'function' && isDone(existing.status)) ||
-                                               (typeof isInternalDone === 'function' && isInternalDone(existing.status));
+                                               (typeof isInternalDone === 'function' && isInternalDone(existing.status)) ||
+                                               existing.lastCompletedDate === todayIso();
                         if (ct.state === 'working' && existing.status !== 'In Progress' && !isExistingDone && !isCtDone) {
                             if (!isShootTask(existing) && existing.status !== 'Shoot In Progress') {
                                 existing.status = 'In Progress';
@@ -32112,10 +32138,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         filtered = filtered.filter(t => {
                             if (isWorking(t)) return true;
                             if (t.duedate !== todayStr) return false;
-                            if (currentInternalStatusFilter === 'all') {
-                                const s = (t.status || '').toLowerCase().trim();
-                                if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
-                            }
                             return true;
                         });
                     } else if (currentInternalDueDateFilter === 'yesterday') {
@@ -32219,10 +32241,6 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     if (!t.duedate || new Date(t.duedate) >= todayF || isInternalDone(t.status) || isDone(t.status)) return false;
                                 } else if (currentInternalDueDateFilter === 'today') {
                                     if (t.duedate !== todayStr) return false;
-                                    if (currentInternalStatusFilter === 'all') {
-                                        const s = (t.status || '').toLowerCase().trim();
-                                        if (s === 'done' || s === 'completed' || isDone(t.status) || isInternalDone(t.status)) return false;
-                                    }
                                 } else if (currentInternalDueDateFilter === 'this_week') {
                                     const sow = new Date(todayF); sow.setDate(todayF.getDate() - todayF.getDay() + (todayF.getDay() === 0 ? -6 : 1));
                                     const eow = new Date(sow); eow.setDate(sow.getDate() + 6); eow.setHours(23, 59, 59, 999);
@@ -32393,7 +32411,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     </td>
                     <td class="px-6 py-4">
                         <select onchange="updateInternalTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-full border outline-none cursor-pointer transition-all ${statusClass(t.status)}" style="background:transparent;" title="Change status">
-                            ${INTERNAL_TASK_STATUSES.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                            ${INTERNAL_TASK_STATUSES.map(s => {
+                                const tStatus = (t.status || '').trim().toLowerCase();
+                                const sLower = s.toLowerCase();
+                                const isSel = tStatus === sLower || ((tStatus === 'done' || isInternalDone(t.status) || isDone(t.status)) && s === 'Completed');
+                                return `<option value="${s}" ${isSel ? 'selected' : ''}>${s}</option>`;
+                            }).join('')}
                         </select>
                     </td>
                     <td class="px-6 py-4 hidden lg:table-cell">
@@ -36826,7 +36849,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
             // Update status for internal tasks via the inline dropdown
             async function updateInternalTaskStatus(taskId, newStatus) {
-                const taskIndex = tasks.findIndex(t => t.id === taskId);
+                const taskIndex = tasks.findIndex(t => isSameTaskId(t.id, taskId));
                 if (taskIndex === -1) return false;
                 const task = tasks[taskIndex];
                 const oldStatus = task.status;
@@ -36857,6 +36880,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (isDoneState) {
                     task.lastCompletedDate = todayIso();
                     task.completedAt = Date.now();
+                    task.isOnHold = false;
                     // If this task was currently active/running, stop and clear it so it doesn't linger overnight
                     if (activeTaskId && isSameTaskId(activeTaskId, taskId)) {
                         stopTaskTimer();
@@ -36878,10 +36902,39 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 renderInternalTasks();
                 updateStats();
 
+                // If user marks the currently active task completed, safely end the task timer & session
+                if (isDoneState && activeTaskId && isSameTaskId(activeTaskId, taskId)) {
+                    try {
+                        if (typeof endTask === 'function' && !isEndingTask) {
+                            await endTask();
+                        }
+                    } catch (e) {
+                        console.warn('Error auto-ending completed task:', e);
+                    }
+                }
+
                 try {
                     if (task.manual || isInternalTask(task)) {
-                        // Save to Firebase for manual/internal tasks
-                        const ownerKey = eKey(task.userId || task.assigneeEmail || currentUser.email);
+                        // Save to Firebase for manual/internal tasks across ALL owner keys
+                        const keysToUpdate = new Set();
+                        if (task.userId) keysToUpdate.add(eKey(task.userId));
+                        if (task.assigneeEmail) keysToUpdate.add(eKey(task.assigneeEmail));
+                        if (currentUser?.email) keysToUpdate.add(eKey(currentUser.email));
+                        const tIdUpper = String(taskId).toUpperCase();
+                        if (task.murugeshTask || tIdUpper.startsWith('M-')) {
+                            keysToUpdate.add('murugeshvilpower_gmail_com');
+                            keysToUpdate.add('murugesh_vilpower_com');
+                            keysToUpdate.add('murugeshkumar_vilpower_com');
+                        }
+                        if (task.ajithTask || tIdUpper.startsWith('A-')) {
+                            keysToUpdate.add('ajithvilpower_gmail_com');
+                            keysToUpdate.add('ajith_vilpower_com');
+                        }
+                        if (task.palaniTask || tIdUpper.startsWith('P-')) {
+                            keysToUpdate.add('palani_vilpower_com');
+                            keysToUpdate.add('palanivilpower_gmail_com');
+                        }
+
                         const updates = {
                             status: newStatus,
                             updatedAt: Date.now()
@@ -36889,20 +36942,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         if (isDoneState) {
                             updates.lastCompletedDate = todayIso();
                             updates.completedAt = Date.now();
+                            updates.isOnHold = false;
                         } else {
                             updates.lastCompletedDate = null;
                             updates.completedAt = null;
                         }
                         const uEmail = (task.userId || task.assigneeEmail || currentUser?.email || '').toLowerCase();
-                        const isAlexTask = (typeof ALEX_EMAILS !== 'undefined' ? ALEX_EMAILS : ['alexvilpower@gmail.com', 'alex@vilpower.com']).includes(uEmail);
-                        if (isAlexTask) {
-                            await Promise.all([
-                                update(ref(db, `worksync/manual_tasks/alexvilpower_gmail_com/${taskId}`), updates).catch(() => {}),
-                                update(ref(db, `worksync/manual_tasks/alex_vilpower_com/${taskId}`), updates).catch(() => {})
-                            ]);
-                        } else {
-                            await update(ref(db, `worksync/manual_tasks/${ownerKey}/${taskId}`), updates);
+                        if (task.alexTask || (typeof ALEX_EMAILS !== 'undefined' ? ALEX_EMAILS : ['alexvilpower@gmail.com', 'alex@vilpower.com']).includes(uEmail)) {
+                            keysToUpdate.add('alexvilpower_gmail_com');
+                            keysToUpdate.add('alex_vilpower_com');
                         }
+                        await Promise.allSettled(Array.from(keysToUpdate).map(ok =>
+                            update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates)
+                        ));
                         if (newStatus.toLowerCase().trim() === 'design completed' && (oldStatus || '').toLowerCase().trim() !== 'design completed') {
                             sendDesignCompletedNotification(task, currentUser?.name || currentUser?.email || 'Unknown', oldStatus);
                         }
@@ -47727,96 +47779,60 @@ async function openNewGroupModal() {
                         }
                     };
 
-                    // Determine if user gets tasks from daily plans
-                    const isDailyPlanUser = [
-                        'barathvilpower@gmail.com',
-                        'muthuvilpower@gmail.com',
-                        'immanuelvilpower@gmail.com',
-                        'karthikavilpower@gmail.com'
-                    ].includes(userEmail.toLowerCase());
+                    // Gather tasks for userEmail from all pools (tasks, internalTasks, manualTasks, dailyPlans)
+                    const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(userEmail) : (dailyPlans[eKey(userEmail)] || {});
+                    const todayIsoKey = (typeof todayIso === 'function' ? todayIso() : new Date(todayStartTsVal).toLocalYMD());
 
-                    console.log(`[DEBUG] isDailyPlanUser: ${isDailyPlanUser}, userEmail: ${userEmail}`);
-                    console.log(`[DEBUG] Total tasks in system: ${tasks.length}`);
+                    const pool = [
+                        ...(tasks || []),
+                        ...(window.internalTasks || []),
+                        ...(window.manualTasks || [])
+                    ];
+                    const seenPoolIds = new Set();
+                    const userCompletedTasks = [];
 
-                    // Show sample of task assignees
-                    const sampleAssignees = tasks.slice(0, 5).map(t => `${t.id}: ${t.assignee || t.assigneeEmail || 'N/A'}`);
-                    console.log(`[DEBUG] Sample task assignees:`, sampleAssignees);
+                    pool.forEach(t => {
+                        if (!t || !t.id) return;
+                        const tIdUpper = String(t.id).toUpperCase();
+                        if (seenPoolIds.has(tIdUpper)) return;
+                        seenPoolIds.add(tIdUpper);
 
-                    // For daily-plan users, check daily plan date for today's tasks
-                    // For others, check task's own timestamp
-                    if (isDailyPlanUser) {
-                        // For daily plan users, check BOTH daily plan AND timestamps
-                        console.log(`[DEBUG] ========== DAILY PLAN USER: ${userEmail} ==========`);
+                        const isCompleted = isTaskCompletedStatus(t.status) || isDone(t.status) || isInternalDone(t.status);
+                        if (!isCompleted || isExcludedTask(t)) return;
 
-                        const userPlans = typeof getUserDailyPlans === 'function' ? getUserDailyPlans(userEmail) : (dailyPlans[eKey(userEmail)] || {});
-                        const todayIso = new Date(todayStartTsVal).toLocalYMD();
+                        const matches = assigneeMatches(t, userEmail) ||
+                            (t.userId && t.userId.toLowerCase() === userEmail) ||
+                            (t.assigneeEmail && t.assigneeEmail.toLowerCase() === userEmail) ||
+                            (Array.isArray(allTimeLogs) && allTimeLogs.some(l => isSameTaskId(l.taskId, t.id) && String(l.userId || '').toLowerCase() === userEmail && Number(l.startTime || l.endTime || 0) >= todayStartTsVal && Number(l.startTime || l.endTime || 0) < todayEndTsVal));
 
-                        const completedTasks = [];
-                        tasks.forEach(t => {
-                            const isCompleted = isTaskCompletedStatus(t.status);
-                            const isExcluded = isExcludedTask(t);
-                            const matches = assigneeMatches(t, userEmail);
+                        if (!matches) return;
 
-                            if (isCompleted && !isExcluded && matches) {
-                                // Check if task is in today's daily plan OR has today's timestamp
-                                let isInPlan = false;
-                                if (userPlans[t.id] && userPlans[t.id].date) {
-                                    isInPlan = typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(userPlans[t.id].date, todayStartTsVal, todayEndTsVal) : (userPlans[t.id].date.slice(0, 10) === todayIso);
-                                } else if (userPlans[todayIso] && userPlans[todayIso][t.id]) {
-                                    isInPlan = true;
-                                }
+                        // Check if task is in today's daily plan OR has today's timestamp/date
+                        let isInPlan = false;
+                        if (userPlans[t.id] && userPlans[t.id].date) {
+                            isInPlan = typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(userPlans[t.id].date, todayStartTsVal, todayEndTsVal) : (userPlans[t.id].date.slice(0, 10) === todayIsoKey);
+                        } else if (userPlans[todayIsoKey] && userPlans[todayIsoKey][t.id]) {
+                            isInPlan = true;
+                        }
 
-                                let hasRecentTimestamp = false;
-                                const completedTs = t.completedAt;
-                                const updatedTs = t.updatedAt;
-                                const createdTs = t.createdAt || (t.created ? new Date(t.created).getTime() : 0);
+                        let isTodayTask = false;
+                        if (t.lastCompletedDate === todayIsoKey) isTodayTask = true;
+                        const completedTs = Number(t.completedAt || 0);
+                        const updatedTs = Number(t.updatedAt || (t.updated ? new Date(t.updated).getTime() : 0));
+                        const createdTs = Number(t.createdAt || (t.created ? new Date(t.created).getTime() : 0));
 
-                                if (completedTs && completedTs >= todayStartTsVal && completedTs < todayEndTsVal) hasRecentTimestamp = true;
-                                else if (updatedTs && updatedTs >= todayStartTsVal && updatedTs < todayEndTsVal) hasRecentTimestamp = true;
-                                else if (createdTs && createdTs >= todayStartTsVal && createdTs < todayEndTsVal) hasRecentTimestamp = true;
+                        if (completedTs >= todayStartTsVal && completedTs < todayEndTsVal) isTodayTask = true;
+                        else if (updatedTs >= todayStartTsVal && updatedTs < todayEndTsVal) isTodayTask = true;
+                        else if (createdTs >= todayStartTsVal && createdTs < todayEndTsVal) isTodayTask = true;
+                        else if (t.duedate === todayIsoKey) isTodayTask = true;
 
-                                if (isInPlan || hasRecentTimestamp) {
-                                    completedTasks.push(t);
-                                    console.log(`[DEBUG] ✓ ${t.id} - inPlan: ${isInPlan}, hasTimestamp: ${hasRecentTimestamp}`);
-                                }
-                            }
-                        });
+                        if (isInPlan || isTodayTask) {
+                            userCompletedTasks.push(t);
+                        }
+                    });
 
-                        console.log(`[DEBUG] Final: ${completedTasks.length} tasks for ${userEmail}`);
-                        completedTasks.forEach(t => addItem(t.id, t, '', t.status));
-                    } else {
-                        // For non-daily-plan users, show completed tasks from TODAY ONLY
-                        const completedTasks = tasks.filter(t => {
-                            // Must be completed
-                            if (!isTaskCompletedStatus(t.status)) return false;
-
-                            // Must be directly assigned
-                            if (!assigneeMatches(t, userEmail)) return false;
-
-                            // Must not be excluded
-                            if (isExcludedTask(t)) return false;
-
-                            // MUST be completed today - check completedAt, then updatedAt
-                            const completedTs = t.completedAt;
-                            const updatedTs = t.updatedAt;
-
-                            // Prefer completedAt if available
-                            if (completedTs) {
-                                return completedTs >= todayStartTsVal && completedTs < todayEndTsVal;
-                            }
-
-                            // Otherwise use updatedAt
-                            if (updatedTs) {
-                                return updatedTs >= todayStartTsVal && updatedTs < todayEndTsVal;
-                            }
-
-                            // No valid date found
-                            return false;
-                        });
-
-                        console.log(`[DEBUG] Completed tasks for ${userEmail}: ${completedTasks.length}`);
-                        completedTasks.forEach(t => addItem(t.id, t, '', t.status));
-                    }
+                    console.log(`[DEBUG] Final completed tasks for ${userEmail}: ${userCompletedTasks.length}`);
+                    userCompletedTasks.forEach(t => addItem(t.id, t, '', t.status));
 
                     if (userEmail === SNEHA_EMAIL) {
                         const todaySelections = snehaSelections.filter(s =>
@@ -59189,9 +59205,45 @@ async function openNewGroupModal() {
 
                 if (task.manual || isInternal) {
                     try {
-                        const userKey = eKey(task.userId || task.assigneeEmail || currentUser?.email || 'unknown');
-                        if (task.manual) {
-                            await update(ref(db, `worksync/manual_tasks/${userKey}/${taskId}`), { status: newStatus, updatedAt: Date.now() });
+                        const isDoneState = newStatus === 'Completed' || isInternalDone(newStatus) || isDone(newStatus);
+                        const updates = { status: newStatus, updatedAt: Date.now() };
+                        if (isDoneState) {
+                            updates.lastCompletedDate = todayIso();
+                            updates.completedAt = Date.now();
+                            updates.isOnHold = false;
+                            task.lastCompletedDate = todayIso();
+                            task.completedAt = Date.now();
+                            task.isOnHold = false;
+                        } else {
+                            updates.lastCompletedDate = null;
+                            updates.completedAt = null;
+                            task.lastCompletedDate = null;
+                            task.completedAt = null;
+                        }
+
+                        const keysToUpdate = new Set();
+                        if (task.userId) keysToUpdate.add(eKey(task.userId));
+                        if (task.assigneeEmail) keysToUpdate.add(eKey(task.assigneeEmail));
+                        if (currentUser?.email) keysToUpdate.add(eKey(currentUser.email));
+                        const tIdUpper = String(taskId).toUpperCase();
+                        if (task.murugeshTask || tIdUpper.startsWith('M-')) {
+                            keysToUpdate.add('murugeshvilpower_gmail_com');
+                            keysToUpdate.add('murugesh_vilpower_com');
+                            keysToUpdate.add('murugeshkumar_vilpower_com');
+                        }
+                        if (task.ajithTask || tIdUpper.startsWith('A-')) {
+                            keysToUpdate.add('ajithvilpower_gmail_com');
+                            keysToUpdate.add('ajith_vilpower_com');
+                        }
+                        if (task.palaniTask || tIdUpper.startsWith('P-')) {
+                            keysToUpdate.add('palani_vilpower_com');
+                            keysToUpdate.add('palanivilpower_gmail_com');
+                        }
+
+                        if (task.manual || isInternal) {
+                            await Promise.allSettled(Array.from(keysToUpdate).map(ok =>
+                                update(ref(db, `worksync/manual_tasks/${ok}/${taskId}`), updates)
+                            ));
                         }
                         task.status = newStatus;
                         renderDailyPlan();
@@ -66731,7 +66783,7 @@ async function openNewGroupModal() {
                 `;
                 menu.appendChild(allOption);
 
-                // Get unique clients from time logs
+                // Get unique clients from time logs and completed tasks
                 const uniqueClients = new Set();
                 if (todayTimeLogs && todayTimeLogs.length > 0) {
                     todayTimeLogs.forEach(log => {
@@ -66741,6 +66793,14 @@ async function openNewGroupModal() {
                         }
                     });
                 }
+                (tasks || []).forEach(t => {
+                    if (t && t.client && (isDone(t.status) || isInternalDone(t.status) || isCompletedTask(t.status))) {
+                        const stLower = String(t.status || '').toLowerCase().trim();
+                        if (stLower !== 'learnings' && stLower !== 'learning') {
+                            uniqueClients.add(t.client);
+                        }
+                    }
+                });
 
                 // Add divider if there are clients
                 if (uniqueClients.size > 0) {
@@ -66827,40 +66887,126 @@ async function openNewGroupModal() {
 
                     const fromTs = dateRange.from.getTime();
                     const toTs = dateRange.to.getTime();
+                    const todayStr = typeof todayIso === 'function' ? todayIso() : new Date().toISOString().slice(0, 10);
 
                     console.log('[CompletedTasks] Date range:', dateRange.from, 'to', dateRange.to);
 
                     // Fetch timelogs directly from Firebase — works for ALL users (not just admin/manager)
-                    let logsSnap;
+                    let logsSnap = null;
                     if (isAdmin() || isManager()) {
-                        // Admins/managers: use already-loaded todayTimeLogs if available for "today", else fetch fresh
                         if (completedTasksDateRange === 'today' && todayTimeLogs && todayTimeLogs.length > 0) {
-                            // Use in-memory data for today
                             logsSnap = null;
                         } else {
-                            logsSnap = await get(ref(db, 'worksync/timelogs'));
+                            try { logsSnap = await get(ref(db, 'worksync/timelogs')); } catch (e) { }
                         }
                     } else {
-                        // Non-admin: fetch timelogs and filter in memory
-                        logsSnap = await get(ref(db, 'worksync/timelogs'));
+                        try { logsSnap = await get(ref(db, 'worksync/timelogs')); } catch (e) { }
                     }
 
-                    let allLogs;
-                    if (logsSnap === null) {
-                        // Use in-memory todayTimeLogs (already filtered to today)
+                    let allLogs = [];
+                    if (logsSnap === null && todayTimeLogs && todayTimeLogs.length > 0) {
                         allLogs = todayTimeLogs;
-                    } else {
+                    } else if (logsSnap && logsSnap.exists()) {
                         allLogs = Object.values(logsSnap.val() || {})
                             .filter(log => {
                                 const logTs = log.endTime || log.startTime || 0;
                                 return logTs >= fromTs && logTs < toTs;
                             })
                             .sort((a, b) => (b.endTime || 0) - (a.endTime || 0));
+                    } else if (Array.isArray(window.allTimeLogs) && window.allTimeLogs.length) {
+                        allLogs = window.allTimeLogs.filter(log => {
+                            const logTs = log.endTime || log.startTime || 0;
+                            return logTs >= fromTs && logTs < toTs;
+                        });
                     }
 
                     console.log('[CompletedTasks] Time logs fetched:', allLogs.length);
 
-                    if (!allLogs || allLogs.length === 0) {
+                    // Map logs by task ID
+                    const logsByTaskId = new Map();
+                    allLogs.forEach(l => {
+                        if (!l || !l.taskId) return;
+                        const k = String(l.taskId).trim().toUpperCase();
+                        if (!logsByTaskId.has(k)) logsByTaskId.set(k, []);
+                        logsByTaskId.get(k).push(l);
+                    });
+
+                    // Gather candidate tasks from all available lists
+                    const pool = [
+                        ...(tasks || []),
+                        ...(window.internalTasks || []),
+                        ...(window.manualTasks || [])
+                    ];
+                    const taskMap = new Map();
+                    pool.forEach(t => {
+                        if (t && t.id) {
+                            const k = String(t.id).trim().toUpperCase();
+                            if (!taskMap.has(k)) taskMap.set(k, t);
+                        }
+                    });
+
+                    // Also include any tasks referenced in timelogs
+                    allLogs.forEach(log => {
+                        const k = String(log.taskId || '').trim().toUpperCase();
+                        if (k && !taskMap.has(k)) {
+                            taskMap.set(k, {
+                                id: log.taskId,
+                                desc: log.taskDesc || log.taskId,
+                                client: log.client || 'Others',
+                                status: 'Completed',
+                                completedAt: log.endTime || log.startTime,
+                                userId: log.userId,
+                                assignee: log.userName
+                            });
+                        }
+                    });
+
+                    const isTodayRange = completedTasksDateRange === 'today';
+                    const allCompletedTasks = [];
+
+                    taskMap.forEach(task => {
+                        // Skip learnings tasks
+                        const stLower = String(task.status || '').toLowerCase().trim();
+                        if (stLower === 'learnings' || stLower === 'learning' || String(task.id || '').toUpperCase().startsWith('LEARN-')) return;
+
+                        const isDoneState = isDone(task.status) || isInternalDone(task.status) || isCompletedTask(task.status);
+                        const k = String(task.id).trim().toUpperCase();
+                        const tLogs = logsByTaskId.get(k) || [];
+                        const hasLogsInPeriod = tLogs.length > 0;
+
+                        let completedInPeriod = false;
+                        if (isDoneState) {
+                            if (isTodayRange && task.lastCompletedDate === todayStr) {
+                                completedInPeriod = true;
+                            } else {
+                                const cTs = Number(task.completedAt || 0);
+                                const uTs = Number(task.updatedAt || (task.updated ? new Date(task.updated).getTime() : 0));
+                                if (cTs >= fromTs && cTs < toTs) completedInPeriod = true;
+                                else if (uTs >= fromTs && uTs < toTs) completedInPeriod = true;
+                                else if (task.duedate && new Date(task.duedate).getTime() >= fromTs && new Date(task.duedate).getTime() < toTs) completedInPeriod = true;
+                            }
+                        }
+                        if (hasLogsInPeriod && isDoneState) {
+                            completedInPeriod = true;
+                        }
+
+                        if (!completedInPeriod) return;
+
+                        const totalDuration = tLogs.reduce((acc, l) => acc + Number(l.durationSeconds || 0), 0);
+                        const primaryLog = tLogs[0];
+
+                        allCompletedTasks.push({
+                            ...task,
+                            status: 'Completed',
+                            loggedTime: totalDuration,
+                            loggedUser: primaryLog?.userId || task.userId || task.assigneeEmail,
+                            loggedUserName: primaryLog?.userName || task.assignee || task.assigneeEmail
+                        });
+                    });
+
+                    console.log('[CompletedTasks] Matched completed tasks:', allCompletedTasks.length);
+
+                    if (!allCompletedTasks.length) {
                         container.innerHTML = `
                             <div class="text-center py-12">
                                 <iconify-icon icon="solar:inbox-bold" width="48" class="text-slate-300 mb-3 block mx-auto"></iconify-icon>
@@ -66871,33 +67017,20 @@ async function openNewGroupModal() {
                         return;
                     }
 
-                    // Build list of completed tasks from time logs
-                    const allCompletedTasks = allLogs
-                        .map(log => {
-                            const task = tasks.find(t => t.id === log.taskId);
-                            if (!task) return null;
-                            // Skip learnings tasks
-                            if (task.status === 'Learnings' || task.status === 'Learning') return null;
-                            // Check task source eligibility for the logged user
-                            if (log.userId && typeof isTaskEligibleForUser === 'function' && !isTaskEligibleForUser(task, log.userId)) {
-                                return null;
-                            }
-                            return {
-                                ...task,
-                                loggedTime: log.durationSeconds,
-                                loggedUser: log.userId,
-                                loggedUserName: log.userName
-                            };
-                        })
-                        .filter(Boolean);
-
-                    console.log('[CompletedTasks] Matched tasks:', allCompletedTasks.length);
-
                     let tasksToShow = allCompletedTasks;
 
-                    // Apply employee filter (admins only)
+                    // Apply employee filter
                     if (completedTasksSelectedEmployee !== 'all') {
-                        tasksToShow = tasksToShow.filter(t => t.loggedUser === completedTasksSelectedEmployee);
+                        const filterEmail = String(completedTasksSelectedEmployee).toLowerCase().trim();
+                        tasksToShow = tasksToShow.filter(t => {
+                            const u = String(t.loggedUser || t.userId || t.assigneeEmail || '').toLowerCase();
+                            if (u === filterEmail) return true;
+                            if (typeof assigneeMatches === 'function' && assigneeMatches(t, filterEmail)) return true;
+                            if (ALEX_EMAILS.includes(filterEmail) && ALEX_EMAILS.some(a => u.includes(a))) return true;
+                            if (MURUGESH_EMAILS.includes(filterEmail) && MURUGESH_EMAILS.some(m => u.includes(m))) return true;
+                            if (AJITH_EMAILS.includes(filterEmail) && AJITH_EMAILS.some(aj => u.includes(aj))) return true;
+                            return false;
+                        });
                     }
 
                     // Apply client filter

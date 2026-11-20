@@ -1077,9 +1077,27 @@
             hoursByDay[key] = 0;
         }
 
-        (c.tasks || []).forEach(t => {
+        const pool = [
+            ...(c.tasks || []),
+            ...(window.internalTasks || []),
+            ...(window.manualTasks || [])
+        ];
+        const seenIds = new Set();
+        pool.forEach(t => {
+            if (!t || !t.id) return;
+            const k = String(t.id).toUpperCase();
+            if (seenIds.has(k)) return;
+            seenIds.add(k);
+
             if (statusCategory(t.status, c) !== 'completed') return;
-            const dStr = t.lastCompletedDate || (t.completedAt ? new Date(t.completedAt).toISOString().slice(0, 10) : null);
+            let dStr = t.lastCompletedDate;
+            if (!dStr && t.completedAt) {
+                dStr = new Date(t.completedAt).toISOString().slice(0, 10);
+            } else if (!dStr && t.updatedAt) {
+                dStr = new Date(t.updatedAt).toISOString().slice(0, 10);
+            } else if (!dStr && t.duedate) {
+                dStr = String(t.duedate).slice(0, 10);
+            }
             if (dStr && dStr in completedByDay) completedByDay[dStr] += 1;
         });
 
