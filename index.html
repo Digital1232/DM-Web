@@ -16408,7 +16408,8 @@
                 { email: 'karthikavilpower@gmail.com', name: 'Karthika K', role: 'Graphic Designer Associate', avatar: 'Karthika' },
                 { email: 'immanuelvilpower@gmail.com', name: 'Immanuel Raja S', role: 'Video Producer Associate', avatar: 'Immanuel' },
                 { email: 'ajithvilpower@gmail.com', name: 'Ajith', role: 'Social Media Executive', avatar: 'Ajith' },
-                { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' }
+                { email: 'alexvilpower@gmail.com', name: 'Alex', role: 'Team Member', avatar: 'Alex' },
+                { email: 'princevilpower@gmail.com', name: 'Prince', role: 'Business Development Executive', avatar: 'Prince' }
             ];
             window.USERS = USERS;
             window.ADMIN_EMAILS = ADMIN_EMAILS;
@@ -23720,8 +23721,14 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 if (alexCanonical) {
                     merged.set('alexvilpower@gmail.com', { ...alexCanonical, email: 'alexvilpower@gmail.com' });
                 }
-                // Strip duplicate alex@vilpower.com and thanush from allUsersMap
+                // Ensure canonical single Prince email only (princevilpower@gmail.com)
+                const princeCanonical = merged.get('princevilpower@gmail.com') || merged.get('prince@vilpower.com');
+                if (princeCanonical) {
+                    merged.set('princevilpower@gmail.com', { ...princeCanonical, email: 'princevilpower@gmail.com' });
+                }
+                // Strip duplicate alex@vilpower.com, prince@vilpower.com and thanush from allUsersMap
                 merged.delete('alex@vilpower.com');
+                merged.delete('prince@vilpower.com');
                 merged.delete('thanushvilpower@gmail.com');
                 merged.delete('thanush@vilpower.com');
 
@@ -37873,6 +37880,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (v.includes('alex_vilpower_com')) {
                         res.add(v.replace('alex_vilpower_com', 'alexvilpower_gmail_com'));
                     }
+                    if (v.includes('princevilpower_gmail_com')) {
+                        res.add(v.replace('princevilpower_gmail_com', 'prince_vilpower_com'));
+                    }
+                    if (v.includes('prince_vilpower_com')) {
+                        res.add(v.replace('prince_vilpower_com', 'princevilpower_gmail_com'));
+                    }
                 });
                 return Array.from(res);
             }
@@ -37885,6 +37898,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
                 if (id.includes('alex_vilpower_com')) {
                     return id.replace('alex_vilpower_com', 'alexvilpower_gmail_com');
+                }
+                if (id.includes('princevilpower_gmail_com')) {
+                    return id.replace('princevilpower_gmail_com', 'prince_vilpower_com');
+                }
+                if (id.includes('prince_vilpower_com')) {
+                    return id.replace('prince_vilpower_com', 'princevilpower_gmail_com');
                 }
                 if (id.startsWith('dm_')) return id.slice(3);
                 if (id.includes('_') && !id.startsWith('group_')) return 'dm_' + id;
@@ -39976,7 +39995,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     scrollChatToBottom();
                 });
 
-                if (altConvId && chatConversations && chatConversations[altConvId] && (chatConversations[altConvId].lastTimestamp || 0) > 0) {
+                if (altConvId) {
                     const altQ = query(ref(db, `worksync/messages/${altConvId}`), limitToLast(activeConvMessageLimit));
                     altMsgListener = onValue(altQ, snap => {
                         const incoming = snap.val() || {};
