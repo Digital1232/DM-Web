@@ -17756,6 +17756,71 @@
             }
             window.isPlanDateInPeriod = isPlanDateInPeriod;
 
+            function isCurrentMonthTask(t, refDateStr) {
+                if (!t || !t.id) return false;
+                const curMonthKey = (refDateStr || (typeof todayIso === 'function' ? todayIso() : new Date().toLocalYMD())).slice(0, 7); // 'YYYY-MM'
+                const tIdUp = String(t.id).toUpperCase().trim();
+
+                // 1. Jira tasks: check project key prefix against registered mappings
+                if (!t.manual && t.taskType !== 'internal' && tIdUp.includes('-')) {
+                    const taskPrefix = tIdUp.split('-')[0].trim();
+                    const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
+                    const entry = mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === taskPrefix);
+                    if (entry) {
+                        if (entry.forReportingOnly) return false;
+                        const entryYM = String(entry.year || '2026').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
+                        return entryYM === curMonthKey;
+                    }
+                    const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
+                    return taskPrefix === activeKey;
+                }
+
+                // 2. Manual / Internal tasks: exclude tasks dated or created in past months
+                if (t.duedate && String(t.duedate).slice(0, 7) < curMonthKey) {
+                    return false;
+                }
+                if (t.postDate && String(t.postDate).slice(0, 7) < curMonthKey) {
+                    return false;
+                }
+                const cr = Number(t.createdAt || (t.id && /^M-(\d{13})$/i.test(t.id) ? t.id.slice(2) : 0));
+                if (cr > 0) {
+                    const cDate = new Date(cr).toISOString().slice(0, 7);
+                    if (cDate < curMonthKey) return false;
+                }
+
+                return true;
+            }
+            window.isCurrentMonthTask = isCurrentMonthTask;
+
+            // Was this task actually completed within [fromTs, toTs)?
+            // Jira tasks: the in-app lastCompletedDate/completedAt fields were historically re-stamped
+            // with "today" during syncs/merges, so they're unreliable. Trust Jira's resolutiondate;
+            // if Jira hasn't provided one, fall back to "user logged time on it in this range".
+            // Manual / internal tasks: lastCompletedDate / completedAt are set by the app on completion.
+            function wasTaskCompletedInRange(t, fromTs, toTs, hasLogsInRange) {
+                if (!t) return false;
+                const tIdUp = String(t.id || '').toUpperCase();
+                const isJira = !t.manual && t.taskType !== 'internal' && !(typeof isInternalTask === 'function' && isInternalTask(t)) && tIdUp.includes('-') && !/^M-/i.test(tIdUp);
+                if (isJira) {
+                    if (t.resolutiondate) {
+                        const rTs = new Date(t.resolutiondate).getTime();
+                        if (!isNaN(rTs)) return rTs >= fromTs && rTs < toTs;
+                    }
+                    return !!hasLogsInRange;
+                }
+                const cTs = typeof t.completedAt === 'number' ? t.completedAt
+                    : (t.completedAt ? new Date(t.completedAt).getTime() : 0);
+                if (cTs && cTs >= fromTs && cTs < toTs) return true;
+                if (t.lastCompletedDate) {
+                    const ld = String(t.lastCompletedDate).slice(0, 10);
+                    const fromYmd = new Date(fromTs).toLocalYMD();
+                    const toYmd = new Date(toTs - 1).toLocalYMD();
+                    if (ld >= fromYmd && ld <= toYmd) return true;
+                }
+                return false;
+            }
+            window.wasTaskCompletedInRange = wasTaskCompletedInRange;
+
             let dpFilter = 'all';
             let dpViewMode = 'table';
             let taskSortCol = null;
@@ -19937,35 +20002,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 // Helper: determine whether a Jira task id belongs to a past-month project key
                 function _isCurrentMonthTask(t, planDateStr) {
-                    if (!t || !t.id) return false;
-                    const tIdUp = String(t.id).toUpperCase().trim();
-
-                    // 1. Jira tasks: check project key prefix against registered mappings
-                    if (!t.manual && t.taskType !== 'internal' && tIdUp.includes('-')) {
-                        const taskPrefix = tIdUp.split('-')[0].trim();
-                        const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
-                        const entry = mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === taskPrefix);
-                        if (entry) {
-                            if (entry.forReportingOnly) return false;
-                            const entryYM = String(entry.year || '2026').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
-                            return entryYM === curMonthKey;
-                        }
-                        const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
-                        return taskPrefix === activeKey;
-                    }
-
-                    // 2. Manual / Internal tasks: exclude tasks dated in past months
-                    if (t.duedate && String(t.duedate).slice(0, 7) < curMonthKey) {
-                        return false;
-                    }
-                    if (t.postDate && String(t.postDate).slice(0, 7) < curMonthKey) {
-                        return false;
-                    }
-                    if (planDateStr && String(planDateStr).slice(0, 7) < curMonthKey) {
-                        return false;
-                    }
-
-                    return true;
+                    return typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(t, planDateStr || dateStr) : true;
                 }
                 function _isCurrentMonthJiraTask(t) {
                     return _isCurrentMonthTask(t);
@@ -20612,6 +20649,22 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 return (d === 'hello' || d === 'testing task 1' || d === 'testing task 1 - thumbnail');
                             };
                             loaded = (parsed || []).filter(t => t && !isDeletedTaskItem(t));
+                            // Clean up contaminated lastCompletedDate / completedAt on historical tasks from past bug
+                            let cacheCleaned = false;
+                            loaded.forEach(t => {
+                                if (t && (t.lastCompletedDate || t.completedAt)) {
+                                    const refD = t.lastCompletedDate || (typeof todayIso === 'function' ? todayIso() : new Date().toLocalYMD());
+                                    const isCur = typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(t, refD) : true;
+                                    if (!isCur) {
+                                        t.lastCompletedDate = null;
+                                        delete t.completedAt;
+                                        cacheCleaned = true;
+                                    }
+                                }
+                            });
+                            if (cacheCleaned) {
+                                try { localStorage.setItem('worksync_tasks', JSON.stringify(loaded)); } catch (e) { }
+                            }
                             if (!window._worksyncTargetTasksCleaned) {
                                 window._worksyncTargetTasksCleaned = true;
                                 ['worksync_tasks', 'worksync_manual_tasks', 'worksync_cached_tasks'].forEach(k => {
@@ -30881,7 +30934,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         issueType: i.fields.issuetype?.name || '',
                         parentId: i.fields.parent?.key || '',
                         manual: false,
-                        taskType: 'jira'
+                        taskType: 'jira',
+                        resolutiondate: i.fields.resolutiondate || null
                     };
                 });
             }
@@ -30920,16 +30974,16 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 }
                                 if (existingTask && !replaceWithActive) {
                                     // Protect completed tasks from being overwritten by an uncompleted duplicate
-                                    const isExistingCompleted = isDone(existingTask.status) || isInternalDone(existingTask.status) || existingTask.lastCompletedDate === todayIso();
-                                    const isIncomingCompleted = isDone(task.status) || isInternalDone(task.status) || task.lastCompletedDate === todayIso();
+                                    const isExistingCompleted = isDone(existingTask.status) || isInternalDone(existingTask.status);
+                                    const isIncomingCompleted = isDone(task.status) || isInternalDone(task.status);
                                     if (isExistingCompleted && !isIncomingCompleted) {
                                         task.status = existingTask.status;
-                                        task.lastCompletedDate = existingTask.lastCompletedDate || todayIso();
-                                        task.completedAt = existingTask.completedAt || Date.now();
+                                        if (existingTask.lastCompletedDate) task.lastCompletedDate = existingTask.lastCompletedDate;
+                                        if (existingTask.completedAt) task.completedAt = existingTask.completedAt;
                                     } else if (!isExistingCompleted && isIncomingCompleted) {
                                         existingTask.status = task.status;
-                                        existingTask.lastCompletedDate = task.lastCompletedDate || todayIso();
-                                        existingTask.completedAt = task.completedAt || Date.now();
+                                        if (task.lastCompletedDate) existingTask.lastCompletedDate = task.lastCompletedDate;
+                                        if (task.completedAt) existingTask.completedAt = task.completedAt;
                                     }
                                     Object.assign(existingTask, task);
                                     return; // Skip duplicate task object
@@ -30946,17 +31000,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (prev && task.isLiveStandIn && !prev.isLiveStandIn) return;
                     const base = (prev && prev.isLiveStandIn && !task.isLiveStandIn) ? {} : (prev || {});
 
-                    // Protect completed tasks from being clobbered by an uncompleted copy from another Firebase key
-                    const isPrevCompleted = isDone(base.status) || isInternalDone(base.status) || base.lastCompletedDate === todayIso();
-                    const isTaskCompleted = isDone(task.status) || isInternalDone(task.status) || task.lastCompletedDate === todayIso();
-                    if (isPrevCompleted && !isTaskCompleted) {
-                        task.status = base.status;
-                        task.lastCompletedDate = base.lastCompletedDate || todayIso();
-                        task.completedAt = base.completedAt || Date.now();
-                    } else if (!isPrevCompleted && isTaskCompleted) {
-                        base.status = task.status;
-                        base.lastCompletedDate = task.lastCompletedDate || todayIso();
-                        base.completedAt = task.completedAt || Date.now();
+                    // Protect completed tasks from being clobbered by an uncompleted copy from another Firebase key ONLY if prev already existed
+                    if (prev && !prev.isLiveStandIn) {
+                        const isPrevCompleted = isDone(base.status) || isInternalDone(base.status);
+                        const isTaskCompleted = isDone(task.status) || isInternalDone(task.status);
+                        if (isPrevCompleted && !isTaskCompleted) {
+                            task.status = base.status;
+                            if (base.lastCompletedDate) task.lastCompletedDate = base.lastCompletedDate;
+                            if (base.completedAt) task.completedAt = base.completedAt;
+                        } else if (!isPrevCompleted && isTaskCompleted) {
+                            base.status = task.status;
+                            if (task.lastCompletedDate) base.lastCompletedDate = task.lastCompletedDate;
+                            if (task.completedAt) base.completedAt = task.completedAt;
+                        }
                     }
                     const merged = { ...base, ...task };
                     if (merged.client) {
@@ -31073,6 +31129,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 if (jiraTask.referenceLinks) existingTask.referenceLinks = jiraTask.referenceLinks;
                                 if (jiraTask.campaign) existingTask.campaign = jiraTask.campaign;
                                 if (jiraTask.department) existingTask.department = jiraTask.department;
+                                if (jiraTask.resolutiondate) existingTask.resolutiondate = jiraTask.resolutiondate;
 
                                 if (jiraTask.assigneeEmail && jiraTask.assigneeEmail !== oldAssigneeEmail) {
                                     checkAndCreateThumbnailSubTask(existingTask, jiraTask.assigneeEmail, true);
@@ -31120,7 +31177,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                     const issues = await fetchAllJiraIssues(
                         jql,
-                        'summary,status,priority,labels,assignee,duedate,issuetype,parent,components',
+                        'summary,status,priority,labels,assignee,duedate,issuetype,parent,components,resolutiondate',
                         (pageIssues, allSoFar) => {
                             // Apply progressive batch so recent issues are updated immediately
                             applyJiraBatch(allSoFar, false);
@@ -36991,11 +37048,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const isDoneState = newStatus === 'Completed' || isInternalDone(newStatus) || isDone(newStatus);
                 const isRecurring = !!(task.murugeshTask || task.ajithTask || task.palaniTask || task.alexTask || isMorningLearningTask(task));
 
+                // Only stamp a completion date on a real not-done -> done transition,
+                // so re-saving an already-completed task doesn't make it look "completed today".
+                const wasDoneBefore = oldStatus === 'Completed' || isInternalDone(oldStatus) || isDone(oldStatus);
+                const keepPrevCompletion = isDoneState && wasDoneBefore && !!task.lastCompletedDate;
+                const prevLastCompletedDate = task.lastCompletedDate;
+                const prevCompletedAt = task.completedAt;
+
                 task.status = newStatus;
                 task.updatedAt = Date.now();
                 if (isDoneState) {
-                    task.lastCompletedDate = todayIso();
-                    task.completedAt = Date.now();
+                    task.lastCompletedDate = keepPrevCompletion ? prevLastCompletedDate : todayIso();
+                    task.completedAt = keepPrevCompletion ? (prevCompletedAt || null) : Date.now();
                     task.isOnHold = false;
                     // Clear currentTask for this user / assignee so it cannot be revived into 'In Progress'
                     clearCurrentTask(task.assigneeEmail || task.userId).catch(() => {});
@@ -37046,8 +37110,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                             updatedAt: Date.now()
                         };
                         if (isDoneState) {
-                            updates.lastCompletedDate = todayIso();
-                            updates.completedAt = Date.now();
+                            updates.lastCompletedDate = task.lastCompletedDate || todayIso();
+                            updates.completedAt = task.completedAt || Date.now();
                             updates.isOnHold = false;
                         } else {
                             updates.lastCompletedDate = null;
@@ -47973,6 +48037,7 @@ async function openNewGroupModal() {
                     const client = (t.client || '').toLowerCase().trim();
                     const status = (t.status || '').toLowerCase().trim();
                     const id = (t.id || '').toLowerCase().trim();
+                    if (status === 'missed' || status === 'skipped' || status === 'shoot cancelled' || status === 'cancelled') return true;
                     return client === 'learning' || client === 'discussion' || client === 'learnings' || client === 'discussions' ||
                         status === 'learnings' || status === 'discussion' ||
                         id.startsWith('learn-') || id.startsWith('disc-');
@@ -48009,6 +48074,15 @@ async function openNewGroupModal() {
                 } catch (err) {
                     console.error('Failed to load Sneha/QC data for 5:30 popup:', err);
                 }
+
+                const todayIsoKey = (typeof todayIso === 'function' ? todayIso() : new Date(todayStartTsVal).toLocalYMD());
+                // Instantly sanitize any tasks with contaminated lastCompletedDate from past months
+                (tasks || []).forEach(t => {
+                    if (t && t.lastCompletedDate === todayIsoKey && typeof isCurrentMonthTask === 'function' && !isCurrentMonthTask(t, todayIsoKey)) {
+                        t.lastCompletedDate = null;
+                        delete t.completedAt;
+                    }
+                });
 
                 const buildUserTodayItems = (userEmail) => {
                     console.log(`\n[DEBUG] ========== Building items for ${userEmail} ==========`);
@@ -48056,33 +48130,28 @@ async function openNewGroupModal() {
                         const isCompleted = isTaskCompletedStatus(t.status) || isDone(t.status) || isInternalDone(t.status);
                         if (!isCompleted || isExcludedTask(t)) return;
 
+                        const hasUserLogsToday = Array.isArray(allTimeLogs) && allTimeLogs.some(l =>
+                            isSameTaskId(l.taskId, t.id) &&
+                            String(l.userId || '').toLowerCase() === userEmail &&
+                            Number(l.startTime || l.endTime || 0) >= todayStartTsVal &&
+                            Number(l.startTime || l.endTime || 0) < todayEndTsVal
+                        );
+
                         const matches = assigneeMatches(t, userEmail) ||
                             (t.userId && t.userId.toLowerCase() === userEmail) ||
                             (t.assigneeEmail && t.assigneeEmail.toLowerCase() === userEmail) ||
-                            (Array.isArray(allTimeLogs) && allTimeLogs.some(l => isSameTaskId(l.taskId, t.id) && String(l.userId || '').toLowerCase() === userEmail && Number(l.startTime || l.endTime || 0) >= todayStartTsVal && Number(l.startTime || l.endTime || 0) < todayEndTsVal));
+                            hasUserLogsToday;
 
                         if (!matches) return;
 
-                        // Check if task is in today's daily plan OR has today's timestamp/date
-                        let isInPlan = false;
-                        if (userPlans[t.id] && userPlans[t.id].date) {
-                            isInPlan = typeof isPlanDateInPeriod === 'function' ? isPlanDateInPeriod(userPlans[t.id].date, todayStartTsVal, todayEndTsVal) : (userPlans[t.id].date.slice(0, 10) === todayIsoKey);
-                        } else if (userPlans[todayIsoKey] && userPlans[todayIsoKey][t.id]) {
-                            isInPlan = true;
-                        }
+                        // Must belong to the current month
+                        const isCurMonth = typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(t, todayIsoKey) : true;
+                        if (!isCurMonth) return;
 
-                        let isTodayTask = false;
-                        if (t.lastCompletedDate === todayIsoKey) isTodayTask = true;
-                        const completedTs = Number(t.completedAt || 0);
-                        const updatedTs = Number(t.updatedAt || (t.updated ? new Date(t.updated).getTime() : 0));
-                        const createdTs = Number(t.createdAt || (t.created ? new Date(t.created).getTime() : 0));
+                        // STRICT COMPLETION CHECK: Must actually have been completed TODAY
+                        const isTodayTask = wasTaskCompletedInRange(t, todayStartTsVal, todayEndTsVal, hasUserLogsToday);
 
-                        if (completedTs >= todayStartTsVal && completedTs < todayEndTsVal) isTodayTask = true;
-                        else if (updatedTs >= todayStartTsVal && updatedTs < todayEndTsVal) isTodayTask = true;
-                        else if (createdTs >= todayStartTsVal && createdTs < todayEndTsVal) isTodayTask = true;
-                        else if (t.duedate === todayIsoKey) isTodayTask = true;
-
-                        if (isInPlan || isTodayTask) {
+                        if (isTodayTask) {
                             userCompletedTasks.push(t);
                         }
                     });
@@ -53952,9 +54021,12 @@ async function openNewGroupModal() {
                 }
 
                 const isDoneState = isDone(updates.status) || isInternalDone(updates.status);
+                const wasDoneBefore = isDone(originalTask.status) || isInternalDone(originalTask.status);
                 if (isDoneState) {
-                    updates.lastCompletedDate = todayIso();
-                    updates.completedAt = Date.now();
+                    // Editing an already-completed task must not re-stamp it as completed today
+                    const keepPrev = wasDoneBefore && !!originalTask.lastCompletedDate;
+                    updates.lastCompletedDate = keepPrev ? originalTask.lastCompletedDate : todayIso();
+                    updates.completedAt = keepPrev ? (originalTask.completedAt || null) : Date.now();
                     updates.isOnHold = false;
                 } else {
                     updates.lastCompletedDate = null;
@@ -59595,11 +59667,13 @@ async function openNewGroupModal() {
                         const isDoneState = newStatus === 'Completed' || isInternalDone(newStatus) || isDone(newStatus);
                         const updates = { status: newStatus, updatedAt: Date.now() };
                         if (isDoneState) {
-                            updates.lastCompletedDate = todayIso();
-                            updates.completedAt = Date.now();
+                            const wasDoneBefore = oldStatus === 'Completed' || isInternalDone(oldStatus) || isDone(oldStatus);
+                            const keepPrev = wasDoneBefore && !!task.lastCompletedDate;
+                            updates.lastCompletedDate = keepPrev ? task.lastCompletedDate : todayIso();
+                            updates.completedAt = keepPrev ? (task.completedAt || null) : Date.now();
                             updates.isOnHold = false;
-                            task.lastCompletedDate = todayIso();
-                            task.completedAt = Date.now();
+                            task.lastCompletedDate = updates.lastCompletedDate;
+                            task.completedAt = updates.completedAt;
                             task.isOnHold = false;
                         } else {
                             updates.lastCompletedDate = null;
@@ -67344,61 +67418,25 @@ async function openNewGroupModal() {
                         }
                     });
 
-                    // Also include any tasks referenced in timelogs
-                    allLogs.forEach(log => {
-                        const k = String(log.taskId || '').trim().toUpperCase();
-                        if (k && !taskMap.has(k)) {
-                            taskMap.set(k, {
-                                id: log.taskId,
-                                desc: log.taskDesc || log.taskId,
-                                client: log.client || 'Others',
-                                status: 'Completed',
-                                completedAt: log.endTime || log.startTime,
-                                userId: log.userId,
-                                assignee: log.userName
-                            });
-                        }
-                    });
-
                     const isTodayRange = completedTasksDateRange === 'today';
                     const allCompletedTasks = [];
 
                     taskMap.forEach(task => {
-                        // Skip learnings tasks
+                        // Skip learnings, missed, skipped, or cancelled tasks
                         const stLower = String(task.status || '').toLowerCase().trim();
                         if (stLower === 'learnings' || stLower === 'learning' || String(task.id || '').toUpperCase().startsWith('LEARN-')) return;
+                        if (stLower === 'missed' || stLower === 'skipped' || stLower === 'shoot cancelled' || stLower === 'cancelled') return;
 
                         const isDoneState = isDone(task.status) || isInternalDone(task.status) || isCompletedTask(task.status);
+                        if (!isDoneState) return;
+
                         const k = String(task.id).trim().toUpperCase();
                         const tLogs = logsByTaskId.get(k) || [];
-                        const hasLogsInPeriod = tLogs.length > 0;
 
-                        let completedInPeriod = false;
-                        if (isDoneState) {
-                            if (isTodayRange && task.lastCompletedDate === todayStr) {
-                                completedInPeriod = true;
-                            } else {
-                                const cTs = Number(task.completedAt || 0);
-                                const uTs = Number(task.updatedAt || (task.updated ? new Date(task.updated).getTime() : 0));
-                                if (cTs >= fromTs && cTs < toTs) completedInPeriod = true;
-                                else if (uTs >= fromTs && uTs < toTs) completedInPeriod = true;
-                                else if (task.duedate && new Date(task.duedate).getTime() >= fromTs && new Date(task.duedate).getTime() < toTs) completedInPeriod = true;
-                            }
-                        }
-                        if (hasLogsInPeriod && isDoneState) {
-                            completedInPeriod = true;
-                        }
+                        const isCurMonth = typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(task, todayStr) : true;
+                        if (!isCurMonth) return;
 
-                        // Also check if task was in Daily Plan for today
-                        if (isDoneState && isTodayRange) {
-                            const checkEmail = (task.assigneeEmail || task.userId || '').toLowerCase();
-                            if (checkEmail && typeof getUserDailyPlans === 'function') {
-                                const uPlans = getUserDailyPlans(checkEmail);
-                                if (uPlans[task.id] && uPlans[task.id].date && uPlans[task.id].date.slice(0, 10) === todayStr) {
-                                    completedInPeriod = true;
-                                }
-                            }
-                        }
+                        const completedInPeriod = wasTaskCompletedInRange(task, fromTs, toTs, tLogs.length > 0);
 
                         if (!completedInPeriod) return;
 
