@@ -16268,8 +16268,44 @@
                 val: () => val
             });
 
+            // The app fast-boots from the cached user BEFORE Firebase Auth restores the session.
+            // Previously every read/listener made in that window was silently dropped (get -> null,
+            // onValue -> no-op), so after a reload the Live Team Overview, timers, chat, etc. never
+            // received data. Now they wait for auth instead of being discarded.
+            const _waitForAuth = (timeoutMs = 10000) => new Promise(resolve => {
+                if (auth && auth.currentUser) return resolve(true);
+                let done = false, unsub = null;
+                const finish = ok => {
+                    if (done) return;
+                    done = true;
+                    if (unsub) { try { unsub(); } catch (e) { } }
+                    resolve(ok);
+                };
+                try {
+                    unsub = onAuthStateChanged(auth, u => { if (u) finish(true); });
+                    if (done && unsub) { try { unsub(); } catch (e) { } }
+                } catch (e) { }
+                setTimeout(() => finish(!!(auth && auth.currentUser)), timeoutMs);
+            });
+            window._waitForFirebaseAuth = _waitForAuth;
+
+            const _deferredListen = (orig, label, args) => {
+                if (auth && auth.currentUser) {
+                    try { return orig(...args); } catch (e) { console.error(`Firebase ${label} error:`, e); return () => { }; }
+                }
+                let cancelled = false, unsub = null;
+                _waitForAuth(10 * 60 * 1000).then(ok => {
+                    if (!ok || cancelled) return;
+                    try { unsub = orig(...args); } catch (e) { console.error(`Firebase ${label} error:`, e); }
+                });
+                return () => {
+                    cancelled = true;
+                    if (unsub) { try { unsub(); } catch (e) { } unsub = null; }
+                };
+            };
+
             get = async (...args) => {
-                const hasAuth = auth && auth.currentUser;
+                const hasAuth = (auth && auth.currentUser) || await _waitForAuth();
                 if (!hasAuth) {
                     return mockSnap(null);
                 }
@@ -16282,7 +16318,7 @@
             };
 
             set = async (...args) => {
-                const hasAuth = auth && auth.currentUser;
+                const hasAuth = (auth && auth.currentUser) || await _waitForAuth();
                 if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origSet(...args);
@@ -16293,7 +16329,7 @@
             };
 
             update = async (...args) => {
-                const hasAuth = auth && auth.currentUser;
+                const hasAuth = (auth && auth.currentUser) || await _waitForAuth();
                 if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origUpdate(...args);
@@ -16317,7 +16353,7 @@
             };
 
             remove = async (...args) => {
-                const hasAuth = auth && auth.currentUser;
+                const hasAuth = (auth && auth.currentUser) || await _waitForAuth();
                 if (!hasAuth) return Promise.resolve();
                 try {
                     return await _origRemove(...args);
@@ -16327,25 +16363,9 @@
                 }
             };
 
-            onValue = (...args) => {
-                if (!(auth && auth.currentUser)) return () => { };
-                try {
-                    return _origOnValue(...args);
-                } catch (e) {
-                    console.error("Firebase onValue error:", e);
-                    return () => { };
-                }
-            };
+            onValue = (...args) => _deferredListen(_origOnValue, "onValue", args);
 
-            onChildAdded = (...args) => {
-                if (!(auth && auth.currentUser)) return () => { };
-                try {
-                    return _origOnChildAdded(...args);
-                } catch (e) {
-                    console.error("Firebase onChildAdded error:", e);
-                    return () => { };
-                }
-            };
+            onChildAdded = (...args) => _deferredListen(_origOnChildAdded, "onChildAdded", args);
 
             // CONFIG
             const FB_CONFIG = {
