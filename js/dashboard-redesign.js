@@ -657,13 +657,24 @@
             }
             if (me) {
                 me.online = true;
+                // After a reload the local snapshot is empty, so prefer the live Firebase entry
+                // for the same task, then the task list, before any placeholder.
+                const sameId = (a, b) => String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
+                const live = (me.currentTask && sameId(me.currentTask.taskId, c.activeTaskId)) ? me.currentTask : null;
+                const fromList = (c.tasks || []).find(t => sameId(t.id, c.activeTaskId));
+                const snap = c.activeTaskSnapshot || {};
+                const localSecs = Number(c.taskSeconds || 0);
+                const startedAt = localSecs > 0
+                    ? Date.now() - localSecs * 1000
+                    : (live?.startedAt || window.taskStartTime || Date.now());
                 me.currentTask = {
+                    ...(live || {}),
                     taskId: c.activeTaskId,
-                    taskDesc: c.activeTaskSnapshot?.desc || 'Current Active Task',
-                    client: c.activeTaskSnapshot?.client || '',
-                    status: c.activeTaskSnapshot?.status || 'In Progress',
-                    startedAt: window.taskStartTime || Date.now(),
-                    state: window.taskOnHold ? 'paused' : 'working'
+                    taskDesc: snap.desc || live?.taskDesc || fromList?.desc || fromList?.summary || 'Current Active Task',
+                    client: snap.client || live?.client || fromList?.client || '',
+                    status: snap.status || live?.status || fromList?.status || 'In Progress',
+                    startedAt,
+                    state: c.taskOnHold ? 'paused' : 'working'
                 };
             }
         }
