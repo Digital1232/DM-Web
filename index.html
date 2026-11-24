@@ -37928,6 +37928,45 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             // CHAT
             // eKey defined above
             function dmId(e1, e2) { const k = [eKey(e1), eKey(e2)].sort(); return `dm_${k[0]}_${k[1]}`; }
+
+            // Subscribe to a chat query only once Firebase Auth has signed in.
+            // The app fast-boots from the cached user BEFORE Firebase Auth restores the session, so
+            // opening /#chat directly used to attach listeners while unauthenticated. The rules require
+            // auth != null, Firebase cancels the listener with permission_denied, and it never recovered
+            // (messages never loaded). chat.html didn't hit this because it waits for onAuthStateChanged.
+            // Returns an unsubscribe function, same as onValue.
+            function onValueWhenAuthed(q, cb) {
+                let unsub = null, authUnsub = null, cancelled = false, subscribed = false, retries = 0;
+                const subscribe = () => {
+                    if (cancelled || subscribed) return;
+                    subscribed = true;
+                    unsub = onValue(q, cb, err => {
+                        console.warn('[chat] listener cancelled, will retry after auth:', err?.code || err?.message || err);
+                        unsub = null;
+                        subscribed = false;
+                        if (!cancelled && retries < 3) {
+                            retries++;
+                            setTimeout(waitAndSubscribe, 1000 * retries);
+                        }
+                    });
+                };
+                const waitAndSubscribe = () => {
+                    if (cancelled) return;
+                    if (auth && auth.currentUser) { subscribe(); return; }
+                    if (authUnsub) return;
+                    authUnsub = onAuthStateChanged(auth, u => {
+                        if (!u || cancelled) return;
+                        if (authUnsub) { try { authUnsub(); } catch (e) { } authUnsub = null; }
+                        subscribe();
+                    });
+                };
+                waitAndSubscribe();
+                return () => {
+                    cancelled = true;
+                    if (authUnsub) { try { authUnsub(); } catch (e) { } authUnsub = null; }
+                    if (unsub) { try { unsub(); } catch (e) { } unsub = null; }
+                };
+            }
             function getAllConvAliases(id) {
                 if (!id || typeof id !== 'string') return [];
                 const res = new Set();
@@ -38523,7 +38562,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     });
                 }
-                chatConversationsUnsub = onValue(ref(db, 'worksync/conversations'), snap => {
+                chatConversationsUnsub = onValueWhenAuthed(ref(db, 'worksync/conversations'), snap => {
                     if (!currentUser || !currentUser.email) return;
                     chatConversations = snap.val() || {};
                     chatConversationsLoaded = true;
@@ -39724,6 +39763,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     } catch (e) { }
                     msgListener = null;
                 }
+                // Also stop the alias (dm_/legacy id) listener, or it keeps merging the closed
+                // conversation's messages into whichever chat is opened next.
+                if (altMsgListener) {
+                    try { altMsgListener(); } catch (e) { }
+                    altMsgListener = null;
+                }
                 if (readReceiptsListener) {
                     try { readReceiptsListener(); } catch (e) { }
                     readReceiptsListener = null;
@@ -40035,7 +40080,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 // Query last messages from Firebase with optimal index
                 const q = query(ref(db, `worksync/messages/${convId}`), limitToLast(activeConvMessageLimit));
                 let firstSnapshotLogged = false;
-                msgListener = onValue(q, snap => {
+                msgListener = onValueWhenAuthed(q, snap => {
                     const incoming = snap.val() || {};
                     chatMessageCache[convId] = incoming;
                     if (diskShownKeys) {
@@ -40061,7 +40106,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
 
                 if (altConvId) {
                     const altQ = query(ref(db, `worksync/messages/${altConvId}`), limitToLast(activeConvMessageLimit));
-                    altMsgListener = onValue(altQ, snap => {
+                    altMsgListener = onValueWhenAuthed(altQ, snap => {
                         const incoming = snap.val() || {};
                         chatMessageCache[altConvId] = incoming;
                         saveChatDiskCache(altConvId, incoming);
@@ -40089,7 +40134,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 // Listen to read receipts for this conversation
-                readReceiptsListener = onValue(ref(db, `worksync/read_receipts/${convId}`), snap => {
+                readReceiptsListener = onValueWhenAuthed(ref(db, `worksync/read_receipts/${convId}`), snap => {
                     activeConvReadReceipts = snap.val() || {};
                     const msgs = currentConvMessages;
                     if (msgs && Object.keys(msgs).length > 0) {
