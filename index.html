@@ -16677,6 +16677,9 @@
             function canViewDailyPlanTeamAccess(user = currentUser) {
                 if (!user) return false;
                 if (isAdmin(user)) return true;
+                // Team view is restricted to managers. A stray per-user permission
+                // flag must not expose other members' plans to regular staff.
+                if (!isManager(user)) return false;
                 return hasUserFeatureAccess(user.email, 'dailyplan-team');
             }
             function canViewMonthlyPlan(user = currentUser) {
