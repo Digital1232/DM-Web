@@ -23155,9 +23155,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     snap = await get(ref(db, 'worksync/attendance_events'));
                 }
                 if (!snap || !snap.exists()) return null;
-                const me = (currentUser.email || '').toLowerCase();
+                // Same person can sign in as name@vilpower.com or namevilpower@gmail.com
+                const me = (currentUser.email || '').toLowerCase().trim();
+                const myEmails = new Set([me]);
+                let m;
+                if ((m = me.match(/^(.+)@vilpower\.com$/))) myEmails.add(`${m[1]}vilpower@gmail.com`);
+                if ((m = me.match(/^(.+)vilpower@gmail\.com$/))) myEmails.add(`${m[1]}@vilpower.com`);
+                if (me.includes('murugesh')) ['murugeshvilpower@gmail.com', 'murugesh@vilpower.com', 'murugeshkumar@vilpower.com'].forEach(x => myEmails.add(x));
                 const events = Object.values(snap.val() || {})
-                    .filter(e => e && e.date === today && (e.userId || e.userEmail || e.email || '').toLowerCase() === me)
+                    .filter(e => e && e.date === today && myEmails.has((e.userId || e.userEmail || e.email || '').toLowerCase().trim()))
                     .sort((a, b) => a.timestamp - b.timestamp);
                 if (!events.length) return null;
 
