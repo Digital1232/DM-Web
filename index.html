@@ -17285,7 +17285,20 @@
             let internalBoardColumnOrder = null;
             let activeTasksTab = localStorage.getItem('worksync_activeTasksTab') || 'all'; // tracks which tab is active inside Tasks Hub
             let activeTaskId = null;
-            let dismissedDiscussionIds = [];
+            // Dismissed join-popups are remembered across reloads so they don't come back daily.
+            let dismissedDiscussionIds = (() => {
+                try { return JSON.parse(localStorage.getItem('worksync_dismissed_discussions') || '[]') || []; } catch (e) { return []; }
+            })();
+            dismissedDiscussionIds.push = function (...ids) {
+                const r = Array.prototype.push.apply(this, ids);
+                try { localStorage.setItem('worksync_dismissed_discussions', JSON.stringify(this.slice(-200))); } catch (e) { }
+                return r;
+            };
+            // An in-progress discussion scheduled more than 12h ago was never closed: don't nag about it.
+            function isStaleDiscussion(disc) {
+                const t = Number(disc?.scheduledTime || 0);
+                return !!t && (Date.now() - t) > 12 * 3600 * 1000;
+            }
             let wasPausedByDiscussionHold = false;
             let shootCalendarDate = new Date();
             let activeConvId = null;
@@ -35922,7 +35935,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                 currentDiscussion = disc;
                                 showDiscussionJoinPopup(disc);
                             }
-                        } else if (s === 'in-progress' && !discussionPopupShown) {
+                        } else if (s === 'in-progress' && !discussionPopupShown && !isStaleDiscussion(disc)) {
                             discussionPopupShown = true;
                             currentDiscussion = disc;
                             showDiscussionJoinPopup(disc);
@@ -36312,7 +36325,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                                     // Auto-trigger popup for other participants when status becomes in-progress
                                     const myEmail = (currentUser?.email || '').toLowerCase().trim();
                                     const isParticipant = isUserInDiscussion(disc, myEmail);
-                                    if (discStatus === 'in-progress' && isParticipant) {
+                                    if (discStatus === 'in-progress' && isParticipant && !isStaleDiscussion(disc)) {
                                         const joined = getDiscussionJoinedBy(disc);
                                         const hasJoined = joined.some(e => e.toLowerCase() === myEmail);
                                         if (!hasJoined && !discussionPopupShown && !dismissedDiscussionIds.includes(discId)) {
