@@ -16918,15 +16918,8 @@
                     if (cached) {
                         const parsed = JSON.parse(cached);
                         if (Array.isArray(parsed) && parsed.length > 0) {
-                            // Keep NOV (active) + OCT (reporting-only), remove any other stale keys
-                            const novEntry = parsed.find(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
-                            const octEntry = parsed.find(m => String(m.projectKey || '').toUpperCase().trim() === 'OCT');
-                            const merged = [];
-                            if (novEntry) { novEntry.isActive = true; merged.push(novEntry); } else { merged.push(novMapping); }
-                            if (octEntry) { octEntry.isActive = false; octEntry.forReportingOnly = true; merged.push(octEntry); } else { merged.push(octMapping); }
-                            localStorage.setItem('worksync_jira_project_mappings', JSON.stringify(merged));
-                            localStorage.setItem('worksync_jira_active_project_key', 'NOV');
-                            return merged;
+                            // Respect the admin-configured list (added/removed keys persist)
+                            return parsed.filter(m => m && m.projectKey);
                         }
                     }
                 } catch (e) { }
@@ -30736,17 +30729,13 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         customClients = [...new Set([...settings.custom_clients, ...(typeof CLIENTS !== 'undefined' ? CLIENTS : [])])];
                     }
                     if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
-                        // Keep NOV (active) + OCT (reporting-only); strip any other stale keys
-                        const novEntry = settings.jira_project_mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === 'NOV');
-                        const octEntry = settings.jira_project_mappings.find(m => String(m.projectKey || '').toUpperCase().trim() === 'OCT');
-                        const merged = [];
-                        if (novEntry) { novEntry.isActive = true; merged.push(novEntry); }
-                        else { merged.push({ id: 'map-nov', projectKey: 'NOV', month: 11, monthName: 'November', year: '2026', isActive: true }); }
-                        if (octEntry) { octEntry.isActive = false; octEntry.forReportingOnly = true; merged.push(octEntry); }
-                        else { merged.push({ id: 'map-oct', projectKey: 'OCT', month: 10, monthName: 'October', year: '2026', isActive: false, forReportingOnly: true }); }
-                        applyJiraProjectMappings(merged, 'NOV');
+                        // Use the saved list as-is so added/removed keys persist
+                        const merged = settings.jira_project_mappings.filter(m => m && m.projectKey);
+                        const activeEntry = merged.find(m => m.isActive);
+                        const activeKey = String(settings.jira_active_project_key || (activeEntry && activeEntry.projectKey) || (merged[0] && merged[0].projectKey) || 'NOV').toUpperCase();
+                        applyJiraProjectMappings(merged, activeKey);
                         safeSetLocalStorage('worksync_jira_project_mappings', JSON.stringify(merged));
-                        safeSetLocalStorage('worksync_jira_active_project_key', 'NOV');
+                        safeSetLocalStorage('worksync_jira_active_project_key', activeKey);
                         if (document.getElementById('cfg-project-mappings-list')) {
                             renderJiraProjectMappingsSettings();
                         }
