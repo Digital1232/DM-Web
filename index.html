@@ -16915,10 +16915,10 @@
                 const defaultMappings = [novMapping, octMapping];
                 try {
                     const cached = localStorage.getItem('worksync_jira_project_mappings');
-                    if (cached) {
+                    if (cached !== null) {
                         const parsed = JSON.parse(cached);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            // Respect the admin-configured list (added/removed keys persist)
+                        if (Array.isArray(parsed)) {
+                            // Respect the admin-configured list (added/removed keys persist, including empty list)
                             return parsed.filter(m => m && m.projectKey);
                         }
                     }
@@ -17003,7 +17003,7 @@
             window.pruneTasksByProjectKeys = pruneTasksByProjectKeys;
 
             function applyJiraProjectMappings(mappings, activeKey) {
-                if (Array.isArray(mappings) && mappings.length > 0) {
+                if (Array.isArray(mappings)) {
                     jiraProjectMappings = mappings;
                 }
                 let chosenKey = activeKey;
@@ -22012,6 +22012,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         }
                     } catch (dbErr) {
                         console.error('Firebase error saving jira mappings:', dbErr);
+                        toast('Failed to save project key to server: ' + (dbErr?.message || 'Permission denied'), 'error');
+                        return;
                     }
                 }
 
@@ -22045,6 +22047,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         await set(ref(db, 'worksync/settings/jira_active_project_key'), key);
                     } catch (e) {
                         console.error('Firebase error updating active project key:', e);
+                        toast('Failed to update active project key: ' + (e?.message || 'Permission denied'), 'error');
+                        return;
                     }
                 }
 
@@ -22086,6 +22090,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         await set(ref(db, 'worksync/settings/jira_active_project_key'), nextActiveKey);
                     } catch (e) {
                         console.error('Firebase error removing jira mapping:', e);
+                        toast('Failed to remove project key from server: ' + (e?.message || 'Permission denied'), 'error');
+                        return;
                     }
                 }
 
@@ -30728,7 +30734,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     if (Array.isArray(settings.custom_clients) && settings.custom_clients.length) {
                         customClients = [...new Set([...settings.custom_clients, ...(typeof CLIENTS !== 'undefined' ? CLIENTS : [])])];
                     }
-                    if (Array.isArray(settings.jira_project_mappings) && settings.jira_project_mappings.length) {
+                    if (Array.isArray(settings.jira_project_mappings)) {
                         // Use the saved list as-is so added/removed keys persist
                         const merged = settings.jira_project_mappings.filter(m => m && m.projectKey);
                         const activeEntry = merged.find(m => m.isActive);
