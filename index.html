@@ -22421,9 +22421,15 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
 
             function confirmCheckOut() {
-                if (!currentUser) return;
+                if (!currentUser) {
+                    toast('Please wait for login to complete before checking out.', 'warning');
+                    return;
+                }
                 if (confirm('Are you sure you want to Check Out for today?')) {
-                    executeCheckOut();
+                    executeCheckOut().catch(err => {
+                        console.error('Checkout error:', err);
+                        toast('Checkout encountered an error: ' + (err?.message || 'Unknown error'), 'error');
+                    });
                 }
             }
 
@@ -22431,27 +22437,38 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 clearInterval(timerRef);
                 isCheckedIn = false;
                 const endTime = Date.now();
+                const withTimeout = (promise, ms = 3000) => Promise.race([
+                    Promise.resolve(promise).catch(e => console.warn('Checkout step error:', e)),
+                    new Promise(resolve => setTimeout(resolve, ms))
+                ]);
+
+                const effectiveCheckIn = checkInTime || parseInt(localStorage.getItem('worksync_checkInTime'), 10) || null;
                 const effectiveBreakStart = breakStartTime || parseInt(localStorage.getItem('worksync_breakStartTime'), 10) || null;
                 if (effectiveBreakStart) {
                     const breakDuration = Math.max(0, endTime - effectiveBreakStart);
                     totalBreakDuration += breakDuration;
-                    logAttendanceEvent('break_end', breakDuration);
+                    logAttendanceEvent('break_end', breakDuration).catch(e => console.warn('break_end log error:', e));
                     breakStartTime = null;
                 }
+
                 if (typeof holdActiveTaskForCheckout === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
-                    try { await holdActiveTaskForCheckout(endTime); } catch (e) { }
+                    await withTimeout(holdActiveTaskForCheckout(endTime));
                 } else if (typeof holdTask === 'function' && typeof activeTaskId !== 'undefined' && activeTaskId && !taskOnHold) {
-                    try { await holdTask(endTime); } catch (e) { }
+                    await withTimeout(holdTask(endTime));
                 }
                 if (typeof clearCurrentTask === 'function') {
-                    try { await clearCurrentTask(); } catch (e) { }
+                    await withTimeout(clearCurrentTask());
                 }
+
                 activeTaskId = null; taskSeconds = 0; taskOnHold = false; taskStartTime = null; activeTimerSessionId = null;
-                if (checkInTime) {
-                    const totalDuration = Math.max(0, (endTime - checkInTime) - totalBreakDuration);
-                    logAttendanceEvent('check_out', totalDuration);
+                if (effectiveCheckIn) {
+                    const totalDuration = Math.max(0, (endTime - effectiveCheckIn) - totalBreakDuration);
+                    logAttendanceEvent('check_out', totalDuration).catch(e => console.warn('check_out log error:', e));
+                    checkInTime = null;
+                } else {
                     checkInTime = null;
                 }
+
                 setTimerState('idle');
                 syncActiveSessionToFirebase('idle');
                 localStorage.removeItem('worksync_timerState');
@@ -22918,7 +22935,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function formatTime(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return [h, m, sc].map(v => v.toString().padStart(2, '0')).join(':'); }
             function resetTimerUI() {
                 seconds = 0;
-                document.getElementById('timer-display').textContent = '00:00:00';
+                const timerDisp = document.getElementById('timer-display');
+                if (timerDisp) timerDisp.textContent = '00:00:00';
                 const headerDisplay = document.getElementById('header-timer-display');
                 if (headerDisplay) headerDisplay.textContent = '00:00:00';
             }
