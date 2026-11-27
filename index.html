@@ -31551,7 +31551,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             }
             window.renderTaskTimeCell = renderTaskTimeCell;
 
-            // Same project-key rule the Jira list uses (only the active Jira project, e.g. NOV)
+            // Show all registered non-reporting-only Jira project keys (e.g. NOV, DEC); excludes reporting-only keys
             function isActiveProjectJiraTask(t) {
                 if (isInternalTask(t)) return false;
                 if (t.manual) return true;
@@ -31559,8 +31559,18 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 const dash = tIdUp.indexOf('-');
                 if (dash === -1) return true;
                 const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
-                const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
-                return pKey === activePKey || !pKey;
+                if (!pKey) return true;
+                const mappings = (typeof jiraProjectMappings !== 'undefined' && Array.isArray(jiraProjectMappings)) ? jiraProjectMappings : [];
+                const visibleKeys = new Set(
+                    mappings
+                        .filter(m => m && m.projectKey && !m.forReportingOnly)
+                        .map(m => String(m.projectKey).toUpperCase().trim())
+                );
+                if (visibleKeys.size === 0) {
+                    const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase().trim() : 'NOV';
+                    if (activePKey) visibleKeys.add(activePKey);
+                }
+                return visibleKeys.has(pKey);
             }
 
             window.taskSourceMode = ['all', 'jira', 'internal'].includes(activeTasksTab) ? activeTasksTab : 'all';
@@ -31855,17 +31865,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 scheduleTasksHubRefresh();
                 const tbody = document.getElementById('tasks-tbody');
                 const kanban = document.getElementById('task-kanban-container');
-                let filtered = tasks.filter(t => !isInternalTask(t));
-                // Tasks Hub only shows active project key tasks (e.g. NOV); OCT is reporting-only
-                filtered = filtered.filter(t => {
-                    if (t.manual) return true;
-                    const tIdUp = String(t.id || '').toUpperCase().trim();
-                    const dash = tIdUp.indexOf('-');
-                    if (dash === -1) return true;
-                    const pKey = t.project ? String(t.project).toUpperCase().trim() : tIdUp.substring(0, dash);
-                    const activePKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
-                    return pKey === activePKey || !pKey;
-                });
+                let filtered = tasks.filter(isActiveProjectJiraTask);
                 if (currentStatusFilter !== 'all') {
                     if (currentStatusFilter.length > 0) {
                         filtered = filtered.filter(t => currentStatusFilter.includes(t.status) || (activeTaskId && t.id === activeTaskId));
