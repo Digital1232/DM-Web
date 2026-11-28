@@ -17785,7 +17785,7 @@
             }
             window.isPlanDateInPeriod = isPlanDateInPeriod;
 
-            function isCurrentMonthTask(t, refDateStr) {
+            function isCurrentMonthTask(t, refDateStr, allowFutureMonths) {
                 if (!t || !t.id) return false;
                 const curMonthKey = (refDateStr || (typeof todayIso === 'function' ? todayIso() : new Date().toLocalYMD())).slice(0, 7); // 'YYYY-MM'
                 const tIdUp = String(t.id).toUpperCase().trim();
@@ -17798,7 +17798,7 @@
                     if (entry) {
                         if (entry.forReportingOnly) return false;
                         const entryYM = String(entry.year || '2026').padStart(4, '0') + '-' + String(entry.month || '').padStart(2, '0');
-                        return entryYM === curMonthKey;
+                        return allowFutureMonths ? entryYM >= curMonthKey : entryYM === curMonthKey;
                     }
                     const activeKey = (typeof JIRA !== 'undefined' && JIRA.projectKey) ? String(JIRA.projectKey).toUpperCase() : 'NOV';
                     return taskPrefix === activeKey;
@@ -20033,8 +20033,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 function _isCurrentMonthTask(t, planDateStr) {
                     return typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(t, planDateStr || dateStr) : true;
                 }
+                // Explicitly planned tasks: allow upcoming-month projects (e.g. DEC tasks planned in late Nov),
+                // but still hide tasks from past-month project keys.
                 function _isCurrentMonthJiraTask(t) {
-                    return _isCurrentMonthTask(t);
+                    return typeof isCurrentMonthTask === 'function' ? isCurrentMonthTask(t, dateStr, true) : true;
                 }
 
                 // Fast O(1) task lookup map
