@@ -24306,16 +24306,12 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                 }
 
                 // Populating owners dropdown in modal
-                const ownerSelect = document.getElementById('strategy-owner');
-                if (ownerSelect) {
-                    if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
-                        allUsersMap = await getAllUsers();
-                        window.allUsersMap = allUsersMap;
-                    }
-                    const users = Array.from(allUsersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u => `
-                    <option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} (${escapeHtml(u.email)})</option>
-                `).join('');
+                populateStrategyOwnerDropdown();
+                if (!allUsersMap.size || !Array.from(allUsersMap.values()).some(u => u.profilePicture)) {
+                    getAllUsers().then(m => {
+                        allUsersMap = m; window.allUsersMap = m;
+                        populateStrategyOwnerDropdown();
+                    }).catch(e => console.warn('[initStrategyCalendar] getAllUsers failed:', e));
                 }
 
                 // Populating clients dropdown in modal
@@ -27802,8 +27798,26 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             window.handleWeeklyTaskModalDateChange = handleWeeklyTaskModalDateChange;
 
 
+            // Fill the Strategy Event "Assignee" select without waiting on Firebase:
+            // uses the loaded users map, falling back to the built-in USERS list. Keeps the current selection.
+            function populateStrategyOwnerDropdown() {
+                const ownerSelect = document.getElementById('strategy-owner');
+                if (!ownerSelect) return;
+                const current = ownerSelect.value;
+                const src = (typeof allUsersMap !== 'undefined' && allUsersMap && allUsersMap.size)
+                    ? Array.from(allUsersMap.values())
+                    : (typeof USERS !== 'undefined' ? USERS : []);
+                const users = src.filter(u => u && u.email).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                ownerSelect.innerHTML = '<option value="">Unassigned</option>' + users.map(u =>
+                    `<option value="${escapeHtml(u.email)}">${escapeHtml(u.name || u.email)} (${escapeHtml(u.email)})</option>`
+                ).join('');
+                if (current) ownerSelect.value = current;
+            }
+            window.populateStrategyOwnerDropdown = populateStrategyOwnerDropdown;
+
             function openAddStrategyEventModal(dateStr, clientStr) {
                 try {
+                    populateStrategyOwnerDropdown();
                     if (typeof canViewStrategyCalendar === 'function' && !canViewStrategyCalendar()) {
                         return typeof toast === 'function' ? toast('You do not have permission to schedule strategy events.', 'error') : alert('Permission denied');
                     }
@@ -27927,6 +27941,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                     document.getElementById('strategy-event-id').value = realEventId;
                     document.getElementById('strategy-title').value = ev.title || '';
                     document.getElementById('strategy-date').value = ev.date || '';
+                    populateStrategyOwnerDropdown();
                     document.getElementById('strategy-owner').value = ev.owner || '';
                     updateStrategyFolderUI(ev ? (ev.folderPath || ev.sourceFolder || '') : '');
 
@@ -28083,6 +28098,19 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             async function saveStrategyEvent() {
                 if (!canViewStrategyCalendar()) return toast('Access Denied', 'error');
 
+                // Wait at most 4s for Firebase to confirm; after that the write keeps going in the
+                // background (Firebase queues it) and any later failure is reported in a toast.
+                const saveWithTimeout = (p, ms = 4000) => Promise.race([
+                    Promise.resolve(p).catch(err => {
+                        toast('Strategy event could not be saved: ' + (err?.message || 'Unknown error'), 'error');
+                        throw err;
+                    }),
+                    new Promise(resolve => setTimeout(() => {
+                        console.warn('[saveStrategyEvent] Firebase slow — continuing, write is queued');
+                        resolve();
+                    }, ms))
+                ]);
+
                 const saveBtn = document.getElementById('strategy-save-btn');
                 const origBtnText = saveBtn ? saveBtn.innerHTML : 'Save Event';
 
@@ -28146,7 +28174,7 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         const targetJiraId = jiraId || (existingEv ? existingEv.jiraId : null);
 
                         // Update Strategy Event in Firebase
-                        await update(ref(db, `worksync/strategy_events/${id}`), evPayload);
+                        await saveWithTimeout(update(ref(db, `worksync/strategy_events/${id}`), evPayload));
                         toast('Strategy event updated!', 'success');
 
                         // Close modal immediately so UI is snappy!
@@ -28288,8 +28316,10 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
                         // Create
                         evPayload.createdAt = Date.now();
                         evPayload.createdBy = currentUser.email;
-                        const newEventRef = await push(ref(db, 'worksync/strategy_events'), evPayload);
-                        const newEventId = newEventRef?.key;
+                        // push() gives the new key immediately; don't block the modal on the server ack
+                        const pushPromise = push(ref(db, 'worksync/strategy_events'), evPayload);
+                        await saveWithTimeout(pushPromise);
+                        const newEventId = pushPromise?.key;
                         toast('Strategy event scheduled!', 'success');
 
                         // Close modal IMMEDIATELY so popup closes without delay!
