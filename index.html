@@ -16497,6 +16497,13 @@
                     shortDesc: 'Access lead pipeline, sales inquiries, deal statuses, and client outreach',
                     icon: 'solar:hand-stars-bold-duotone',
                     color: 'text-teal-600 bg-teal-50 border-teal-100'
+                },
+                {
+                    key: 'late-checkin',
+                    name: 'Late Check-in',
+                    shortDesc: 'Allow checking in after 10:00 PM',
+                    icon: 'solar:moon-bold-duotone',
+                    color: 'text-slate-600 bg-slate-50 border-slate-200'
                 }
             ];
             window.MANAGEABLE_FEATURES = MANAGEABLE_FEATURES;
@@ -16513,6 +16520,7 @@
                         if (currentUser && typeof applyUserUI === 'function') {
                             applyUserUI();
                         }
+                        if (typeof updateCheckinGate === 'function') updateCheckinGate();
                         if (typeof activeView !== 'undefined' && activeView === 'users') {
                             if (typeof renderUserPermissionsTable === 'function') renderUserPermissionsTable();
                         }
@@ -22173,8 +22181,8 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             let checkInInFlight = false;
             async function doCheckIn() {
                 const now = new Date();
-                if (now.getHours() >= 22) {
-                    toast('Cannot check in after 10:00 PM', 'error');
+                if (now.getHours() >= 22 && !canLateCheckIn()) {
+                    toast('Check-in after 10:00 PM needs "Late Check-in" permission. Please ask your admin.', 'error');
                     return;
                 }
                 if (isCheckedIn || checkInInFlight) return;
@@ -22631,14 +22639,23 @@ Task Status Automatically Moved: From Client Sent to Quality Check for re-evalua
             function updateCheckinGate() {
                 const gate = document.getElementById('checkin-gate');
                 if (!gate) return;
-                const afterCutoff = new Date().getHours() >= 22; // check-in is not allowed after 10 PM
-                const show = checkinGateArmed && !!currentUser && !isCheckedIn && !afterCutoff;
+                const show = checkinGateArmed && !!currentUser && !isCheckedIn;
                 gate.classList.toggle('hidden', !show);
                 gate.classList.toggle('flex', show);
                 if (show) {
                     const nm = document.getElementById('checkin-gate-name');
                     if (nm) nm.textContent = (currentUser.name || '').split(' ')[0] || 'there';
+                    // After 10 PM only users with the "Late Check-in" permission can check in
+                    const blocked = new Date().getHours() >= 22 && !canLateCheckIn();
+                    document.getElementById('checkin-gate-btn')?.classList.toggle('hidden', blocked);
+                    const msg = document.getElementById('checkin-gate-msg');
+                    if (msg) msg.textContent = blocked
+                        ? 'Check-in is closed after 10:00 PM. Ask your admin to give you "Late Check-in" permission — once added, you can check in here.'
+                        : 'You need to check in for today before you can use One Desk.';
                 }
+            }
+            function canLateCheckIn() {
+                return !!currentUser && typeof hasUserFeatureAccess === 'function' && hasUserFeatureAccess(currentUser.email, 'late-checkin');
             }
             window.updateCheckinGate = updateCheckinGate;
             setInterval(updateCheckinGate, 30000);
@@ -71893,8 +71910,8 @@ async function openNewGroupModal() {
                 <iconify-icon icon="solar:clock-circle-bold" class="text-indigo-600" width="30"></iconify-icon>
             </div>
             <h2 class="text-lg font-bold text-slate-800">Hi <span id="checkin-gate-name">there</span>, please check in</h2>
-            <p class="mt-2 text-sm text-slate-500">You need to check in for today before you can use One Desk.</p>
-            <button onclick="doCheckIn()" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+            <p id="checkin-gate-msg" class="mt-2 text-sm text-slate-500">You need to check in for today before you can use One Desk.</p>
+            <button id="checkin-gate-btn" onclick="doCheckIn()" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
                 <iconify-icon icon="solar:play-circle-bold" width="18"></iconify-icon> Check In
             </button>
             <button onclick="logout()" class="mt-3 w-full text-sm text-slate-500 hover:text-slate-700 py-2">Logout</button>
